@@ -37,7 +37,7 @@ subagentStop:
 # Pre-tool-use hook - file protection and tool validation
 preToolUse:
   # Prevent files at repository root
-  preventRootAdditions: true
+  preventRootAdditions: false
   # Custom message for root additions block (supports {file_path} and {tool} placeholders)
   # Example: "Files must go in src/. Cannot create {file_path} using {tool}."
   preventRootAdditionsMessage: null
@@ -107,11 +107,10 @@ preToolUse:
 # System notifications
 notifications:
   enabled: false
-  hooks: []  # ["*"] for all, or ["Stop", "PreToolUse"]
+  hooks: [] # ["*"] for all, or ["Stop", "PreToolUse"]
   showErrors: false
   showSuccess: false
   showSystemEvents: true
-
 # Permission request hook - auto-approve/deny tools
 # Uncomment to enable:
 #
