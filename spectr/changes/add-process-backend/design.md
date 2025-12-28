@@ -1294,6 +1294,7 @@ require (
     github.com/parquet-go/parquet-go v0.x.x    // Parquet format
     github.com/google/uuid v1.x.x               // UUID parsing
     github.com/mitchellh/mapstructure v1.x.x    // Composite[T] scanning
+    github.com/coder/quartz v0.1.x              // Deterministic time testing
 )
 ```
 
@@ -1334,6 +1335,358 @@ var typeInferenceOrder = []Type{
     TYPE_DATE,
     TYPE_BOOLEAN,
     TYPE_VARCHAR,  // Final fallback
+}
+```
+
+### Decision 17: Deterministic Simulation Testing with Quartz
+
+**What:** All time-dependent code uses `github.com/coder/quartz` Clock interface from day one. Zero flaky tests policy.
+
+**Why:** Database drivers have many time-dependent operations (timeouts, timestamps, intervals, WAL, checkpoints). Traditional time mocking leads to flaky tests. Quartz provides deterministic control.
+
+**Clock Interface Injection (using Option pattern):**
+```go
+// Option configures Engine
+type Option func(*Engine)
+
+// WithClock injects a clock for testing
+func WithClock(clk quartz.Clock) Option {
+    return func(e *Engine) {
+        e.clock = clk
+    }
+}
+
+// Engine accepts clock for all time operations
+type Engine struct {
+    catalog  *Catalog
+    storage  *Storage
+    txnMgr   *TransactionManager
+    clock    quartz.Clock  // Injected clock for all time operations
+}
+
+// NewEngine creates engine with real clock (production)
+// Optional WithClock() for testing
+func NewEngine(opts ...Option) *Engine {
+    e := &Engine{
+        clock: quartz.NewReal(),  // Default: real clock
+        // ...
+    }
+    for _, o := range opts {
+        o(e)
+    }
+    return e
+}
+
+// Test usage:
+// mClock := quartz.NewMock(t)
+// engine := NewEngine(WithClock(mClock))
+```
+
+**Time-Dependent Operations (all use injected clock):**
+
+1. **Query Timeouts:**
+```go
+func (c *EngineConn) Query(ctx context.Context, query string, args []driver.NamedValue) ([]map[string]any, []string, error) {
+    // Use clock for timeout checking
+    deadline, hasDeadline := ctx.Deadline()
+    if hasDeadline {
+        remaining := c.engine.clock.Until(deadline)
+        if remaining <= 0 {
+            return nil, nil, context.DeadlineExceeded
+        }
+    }
+    // ...
+}
+```
+
+2. **Transaction Timestamps:**
+```go
+func (tm *TransactionManager) Begin(readOnly bool) (*Transaction, error) {
+    txn := &Transaction{
+        ID:        tm.nextTxnID,
+        StartTime: tm.clock.Now(),  // Use clock, not time.Now()
+        // ...
+    }
+    // ...
+}
+```
+
+3. **TIMESTAMP Values:**
+```go
+// current_timestamp() function uses injected clock
+func builtinCurrentTimestamp(ctx *ExecutionContext) time.Time {
+    return ctx.clock.Now()
+}
+```
+
+4. **WAL/Checkpoint Timing:**
+```go
+type WALManager struct {
+    clock           quartz.Clock
+    lastCheckpoint  time.Time
+    checkpointTimer quartz.Timer
+}
+
+func (w *WALManager) Start(ctx context.Context) {
+    // Use TickerFunc for deterministic testing
+    w.clock.TickerFunc(ctx, checkpointInterval, func() error {
+        return w.maybeCheckpoint()
+    })
+}
+```
+
+5. **Connection Pool Idle Timeout:**
+```go
+type ConnPool struct {
+    clock       quartz.Clock
+    idleTimeout time.Duration
+}
+
+func (p *ConnPool) cleanupIdle(ctx context.Context) {
+    p.clock.TickerFunc(ctx, cleanupInterval, func() error {
+        now := p.clock.Now()
+        for conn := range p.idle {
+            if now.Sub(conn.lastUsed) > p.idleTimeout {
+                conn.Close()
+            }
+        }
+        return nil
+    })
+}
+```
+
+**Testing Patterns:**
+
+1. **Basic Time Advancement:**
+```go
+func TestQueryTimeout(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    engine := NewEngineWithClock(mClock)
+
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    // Start a slow query
+    trap := mClock.Trap().Now()
+    go engine.Query(ctx, "SELECT * FROM large_table", nil)
+
+    // Advance past timeout
+    c := trap.Wait(ctx)
+    mClock.Advance(6 * time.Second)
+    c.Release()
+
+    // Assert timeout error
+}
+```
+
+2. **Transaction Timestamp Testing:**
+```go
+func TestTransactionTimestamp(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    engine := NewEngineWithClock(mClock)
+
+    // Set clock to specific time
+    specificTime := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+    mClock.Set(specificTime)
+
+    txn, _ := engine.txnMgr.Begin(false)
+
+    // Transaction start time is deterministic
+    assert.Equal(t, specificTime, txn.StartTime)
+}
+```
+
+3. **Checkpoint Timing:**
+```go
+func TestWALCheckpoint(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    wal := NewWALManagerWithClock(mClock)
+
+    ctx := context.Background()
+    trap := mClock.Trap().TickerFunc()
+
+    go wal.Start(ctx)
+
+    // Wait for ticker to be created
+    call := trap.Wait(ctx)
+    call.Release()
+    trap.Close()
+
+    // Advance to trigger checkpoint
+    w := mClock.Advance(checkpointInterval)
+    w.MustWait(ctx)
+
+    // Assert checkpoint occurred
+    assert.True(t, wal.checkpointCalled)
+}
+```
+
+4. **CURRENT_TIMESTAMP Determinism:**
+```go
+func TestCurrentTimestamp(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    engine := NewEngineWithClock(mClock)
+
+    fixedTime := time.Date(2024, 6, 15, 14, 30, 45, 123456000, time.UTC)
+    mClock.Set(fixedTime)
+
+    result, _ := engine.Query(ctx, "SELECT current_timestamp", nil)
+
+    // Result is deterministic
+    assert.Equal(t, fixedTime, result[0]["current_timestamp"])
+}
+```
+
+**Zero Flaky Tests Policy:**
+
+1. **No `time.Sleep()` in tests** - Use `mClock.Advance()` instead
+2. **No `runtime.Gosched()`** - Use traps for synchronization
+3. **No polling/Eventually** - Use `Advance().MustWait()` for determinism
+4. **No real timeouts in unit tests** - All timeouts through mock clock
+5. **Tag clock calls** for precise trap matching in complex scenarios
+
+**Tagging Convention (for trap matching):**
+```go
+// Tag format: "Component", "Method", ["phase"]
+// This makes tests robust against code changes
+
+func (tm *TransactionManager) Begin(readOnly bool) (*Transaction, error) {
+    txn := &Transaction{
+        ID:        tm.nextTxnID,
+        StartTime: tm.clock.Now("TransactionManager", "Begin"),
+        // ...
+    }
+    // ...
+}
+
+func (c *EngineConn) Query(ctx context.Context, query string, args []driver.NamedValue) {
+    start := c.engine.clock.Now("EngineConn", "Query", "start")
+    // ... execute query ...
+    end := c.engine.clock.Now("EngineConn", "Query", "end")
+    // duration = end.Sub(start)
+}
+
+func (w *WALManager) maybeCheckpoint() error {
+    now := w.clock.Now("WALManager", "maybeCheckpoint")
+    elapsed := now.Sub(w.lastCheckpoint)
+    if elapsed < checkpointInterval {
+        next := w.clock.Until(w.lastCheckpoint.Add(checkpointInterval), "WALManager", "maybeCheckpoint", "until")
+        // ...
+    }
+    // ...
+}
+```
+
+**Trap Matching with Tags:**
+```go
+func TestWALCheckpointTiming(t *testing.T) {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    mClock := quartz.NewMock(t)
+
+    // Only trap the "until" call, not the "Now" call
+    trap := mClock.Trap().Until("WALManager", "maybeCheckpoint", "until")
+    defer trap.Close()
+
+    wal := NewWALManager(WithClock(mClock))
+    go wal.Start(ctx)
+
+    // Wait for the until call to be trapped
+    call := trap.MustWait(ctx)
+
+    // Advance clock WHILE the call is trapped
+    mClock.Advance(3 * time.Millisecond)
+
+    // Now release - the Until() will use the advanced time
+    call.MustRelease(ctx)
+
+    // Verify behavior with edge case timing
+}
+```
+
+**Advance Restriction (important Quartz behavior):**
+```go
+// Quartz only allows advancing to the NEXT timer/ticker event
+// This ensures deterministic behavior
+
+// WRONG - will fail if timer is at 1 second:
+mClock.AfterFunc(time.Second, func() { ... })
+mClock.Advance(2*time.Second)  // ERROR: advances past event
+
+// CORRECT - advance exactly to event:
+mClock.AfterFunc(time.Second, func() { ... })
+mClock.Advance(time.Second).MustWait(ctx)
+
+// For multiple events, loop:
+for i := 0; i < 10; i++ {
+    mClock.Advance(time.Second).MustWait(ctx)
+}
+
+// Or use AdvanceNext() when duration unknown:
+d, w := mClock.AdvanceNext()
+w.MustWait(ctx)
+// d contains actual duration advanced
+```
+
+**MustWait Pattern (standard idiom):**
+```go
+// Always wait for triggered events to complete
+mClock.Advance(5*time.Second).MustWait(ctx)
+
+// MustWait = Wait + fail test on error
+// Equivalent to:
+w := mClock.Advance(5*time.Second)
+err := w.Wait(ctx)
+if err != nil {
+    t.Fatal("timer/ticker never completed")
+}
+```
+
+**Clock Propagation:**
+```go
+// ExecutionContext carries clock for all operations
+type ExecutionContext struct {
+    ctx       context.Context
+    txn       *Transaction
+    allocator *ChunkAllocator
+    clock     quartz.Clock  // Propagated to all operators
+}
+
+// Operators receive clock via context
+func (s *SeqScanOperator) GetData(ctx *ExecutionContext, chunk *DataChunk, state LocalOperatorState) (bool, error) {
+    // Any time-dependent operation uses ctx.clock
+    if deadline, ok := ctx.ctx.Deadline(); ok {
+        if ctx.clock.Until(deadline) <= 0 {
+            return false, context.DeadlineExceeded
+        }
+    }
+    // ...
+}
+```
+
+**Integration Test Time Control:**
+```go
+func TestComplexWorkflow(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    engine := NewEngineWithClock(mClock)
+
+    // Create table, insert data
+    engine.Execute(ctx, "CREATE TABLE t (id INT, ts TIMESTAMP)", nil)
+
+    // Insert with deterministic timestamp
+    mClock.Set(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+    engine.Execute(ctx, "INSERT INTO t VALUES (1, current_timestamp)", nil)
+
+    // Advance time
+    mClock.Advance(24 * time.Hour)
+    engine.Execute(ctx, "INSERT INTO t VALUES (2, current_timestamp)", nil)
+
+    // Query with deterministic results
+    result, _ := engine.Query(ctx, "SELECT * FROM t ORDER BY ts", nil)
+
+    // Assertions are fully deterministic
+    assert.Equal(t, "2024-01-01 00:00:00", result[0]["ts"])
+    assert.Equal(t, "2024-01-02 00:00:00", result[1]["ts"])
 }
 ```
 
