@@ -38,15 +38,19 @@ type Conn struct {
 }
 ```
 
-### Decision 2: Metric Collection
+### Decision 2: Metric Collection with Clock Injection
 
-**What**: Collect metrics during operator execution
+**What**: Collect metrics during operator execution using injected clock
 
-**Why**: Must capture timing and row counts as they happen
+**Why**:
+- Must capture timing and row counts as they happen
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Enables deterministic testing of profiling metrics
 
 **Implementation**:
 ```go
 type operatorMetrics struct {
+    clock      quartz.Clock  // Injected clock for timing
     startTime  time.Time
     endTime    time.Time
     rowsIn     int64
@@ -55,10 +59,42 @@ type operatorMetrics struct {
 
 func (op *operator) execute(ctx context.Context) error {
     if profiling {
-        op.metrics.startTime = time.Now()
-        defer func() { op.metrics.endTime = time.Now() }()
+        op.metrics.startTime = op.metrics.clock.Now()
+        defer func() { op.metrics.endTime = op.metrics.clock.Now() }()
     }
     // ... execution
+}
+
+// ProfilingContext captures timing with injected clock
+type ProfilingContext struct {
+    clock     quartz.Clock
+    startTime time.Time
+}
+
+func NewProfilingContext(clock quartz.Clock) *ProfilingContext {
+    return &ProfilingContext{clock: clock}
+}
+
+func (p *ProfilingContext) Start() {
+    p.startTime = p.clock.Now()
+}
+
+func (p *ProfilingContext) Elapsed() time.Duration {
+    return p.clock.Since(p.startTime)
+}
+
+// Tests use mock clock for deterministic timing
+func TestProfilingTiming(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC))
+
+    ctx := NewProfilingContext(mClock)
+    ctx.Start()
+
+    mClock.Advance(500*time.Millisecond).MustWait()
+
+    elapsed := ctx.Elapsed()
+    assert.Equal(t, 500*time.Millisecond, elapsed)
 }
 ```
 

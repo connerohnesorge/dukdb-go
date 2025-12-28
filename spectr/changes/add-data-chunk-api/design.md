@@ -233,6 +233,57 @@ This is a new capability with no migration required. The implementation adds new
 
 **Rollback**: Remove new files; no existing functionality affected.
 
+### Decision 6: Clock Injection for Temporal Types
+
+**What**: Inject `quartz.Clock` for all temporal type operations
+
+**Why**: Per deterministic-testing spec, all time-dependent code must use injected clock for testability
+
+**Implementation**:
+```go
+type DataChunk struct {
+    columns []vector
+    clock   quartz.Clock  // Default: quartz.NewReal()
+}
+
+func NewDataChunk(types []TypeInfo) *DataChunk {
+    return &DataChunk{
+        columns: initColumns(types),
+        clock:   quartz.NewReal(),
+    }
+}
+
+func (c *DataChunk) WithClock(clk quartz.Clock) *DataChunk {
+    c.clock = clk
+    // Propagate to temporal vectors
+    for i := range c.columns {
+        if c.columns[i].isTemporal() {
+            c.columns[i].clock = clk
+        }
+    }
+    return c
+}
+
+// Temporal vector uses injected clock
+func (vec *vector) initTimestamp() {
+    vec.getFn = func(v *vector, rowIdx int) any {
+        // Uses v.clock for any time-relative operations
+        return v.getTimestamp(rowIdx)
+    }
+}
+```
+
+**Test Pattern**:
+```go
+func TestTimestampVectorDeterministic(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 6, 15, 14, 30, 45, 123456000, time.UTC))
+
+    chunk := NewDataChunk([]TypeInfo{TimestampType}).WithClock(mClock)
+    // All timestamp operations are now deterministic
+}
+```
+
 ## Open Questions
 
 1. **Chunk pooling**: Should we implement chunk reuse for repeated operations?

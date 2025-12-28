@@ -83,10 +83,42 @@ func RegisterTableUDF[T TableFunction](c *sql.Conn, name string, f T) error
 
 ## Impact
 
-- **Affected specs**: Depends on data-chunk-api (required for DataChunk)
+- **Affected specs**: Depends on data-chunk-api, **deterministic-testing**
 - **Affected code**: New file `table_udf.go`, `table_source.go`
-- **Dependencies**: data-chunk-api must be implemented first
+- **Dependencies**: data-chunk-api must be implemented first; quartz.Clock for streaming timeouts
 - **Consumers**: Users creating custom data sources
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, Table UDF execution must support clock injection:
+
+```go
+// TableFunctionContext provides deterministic timing
+type TableFunctionContext struct {
+    ctx   context.Context
+    clock quartz.Clock  // For timeout checking in streaming
+}
+
+// Parallel execution uses clock for worker coordination
+func (p *ParallelExecutor) runWorkers(clock quartz.Clock) {
+    ticker := clock.TickerFunc(ctx, 100*time.Millisecond, func() error {
+        return p.checkProgress()
+    })
+    defer ticker.Stop()
+}
+
+// Tests use mock clock for deterministic parallel behavior
+func TestParallelTableUDF(t *testing.T) {
+    mClock := quartz.NewMock(t)
+
+    // Advance worker ticks deterministically
+    for i := 0; i < 10; i++ {
+        mClock.Advance(100*time.Millisecond).MustWait()
+    }
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` or `runtime.Gosched` for synchronization. Use `quartz.Mock` traps for async coordination.
 
 ## Breaking Changes
 

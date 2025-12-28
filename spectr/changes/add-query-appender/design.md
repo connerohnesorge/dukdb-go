@@ -212,6 +212,39 @@ func (ti TypeInfo) SQLType() string {
 }
 ```
 
+### Decision 5: Clock Injection for Timeout Handling
+
+**What**: Use injected quartz.Clock for timeout checking during query execution
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Query appender flush operations may have deadlines
+- Enables deterministic testing of timeout scenarios
+
+**Implementation**:
+```go
+type appenderContext struct {
+    ctx   context.Context
+    clock quartz.Clock
+}
+
+func (a *Appender) flushWithClock(actx appenderContext) error {
+    // Check deadline before expensive operations
+    if deadline, ok := actx.ctx.Deadline(); ok {
+        if actx.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+
+    // Proceed with flush
+    if err := a.createTempTable(); err != nil {
+        return err
+    }
+    // ... rest of flush logic
+    return nil
+}
+```
+
 ## Risks / Trade-offs
 
 ### Risk 1: Temporary Table Collision

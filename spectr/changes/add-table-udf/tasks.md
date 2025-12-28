@@ -74,9 +74,22 @@
 - [ ] 11.2 Use cardinality for parallelism decisions
 - [ ] 11.3 Document optimizer integration
 
-## 12. Validation
+## 12. Deterministic Testing Integration
 
-- [ ] 12.1 Run `go test -race` for thread safety
-- [ ] 12.2 Run `golangci-lint`
-- [ ] 12.3 Create benchmarks for different variants
-- [ ] 12.4 Verify API matches duckdb-go
+- [ ] 12.1 Add quartz.Clock field to TableFunctionContext struct
+- [ ] 12.2 Add quartz.Clock field to parallelTableExecutor
+- [ ] 12.3 Implement WithClock() method for clock injection
+- [ ] 12.4 Use clock.TickerFunc() for worker progress monitoring
+- [ ] 12.5 Use clock.Until() for all timeout checking
+- [ ] 12.6 Write deterministic tests for parallel execution using quartz.Mock
+- [ ] 12.7 Write deterministic tests for streaming timeouts
+- [ ] 12.8 Verify zero time.Sleep calls in test files
+- [ ] 12.9 Verify zero polling loops or runtime.Gosched for synchronization
+
+## 13. Validation
+
+- [ ] 13.1 Run `go test -race` for thread safety
+- [ ] 13.2 Run `golangci-lint`
+- [ ] 13.3 Create benchmarks for different variants
+- [ ] 13.4 Verify API matches duckdb-go
+- [ ] 13.5 Verify compliance with deterministic-testing spec

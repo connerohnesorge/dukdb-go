@@ -140,6 +140,59 @@ func (f *tableFunction[T]) bind(ctx context.Context, named map[string]any, args 
 }
 ```
 
+### Decision 5: Clock Injection for Parallel Coordination
+
+**What**: Use injected quartz.Clock for parallel execution timing
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Enables deterministic testing of parallel worker coordination
+- Ensures zero flaky tests for streaming timeouts
+
+**Implementation**:
+```go
+type TableFunctionContext struct {
+    ctx   context.Context
+    clock quartz.Clock  // For timeout checking in streaming
+}
+
+// Parallel executor with deterministic timing
+type parallelTableExecutor struct {
+    source   ParallelChunkTableSource
+    workers  int
+    clock    quartz.Clock  // Injected clock
+}
+
+func (e *parallelTableExecutor) execute(ctx context.Context) error {
+    // Use clock.TickerFunc for deterministic worker progress monitoring
+    ticker := e.clock.TickerFunc(ctx, 100*time.Millisecond, func() error {
+        return e.checkProgress()
+    })
+    defer ticker.Stop()
+
+    var wg sync.WaitGroup
+    for i := 0; i < e.workers; i++ {
+        wg.Add(1)
+        go func(workerID int) {
+            defer wg.Done()
+            e.runWorker(workerID)
+        }(i)
+    }
+    wg.Wait()
+    return nil
+}
+
+// Timeout checking with injected clock
+func (c *TableFunctionContext) checkTimeout() error {
+    if deadline, ok := c.ctx.Deadline(); ok {
+        if c.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+    return nil
+}
+```
+
 ## Risks / Trade-offs
 
 ### Risk 1: Goroutine Overhead for Small Tables

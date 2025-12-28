@@ -110,6 +110,42 @@ func (r *recordReader) Release() { /* decrement and cleanup */ }
 
 **Note**: Uses pull-based fetching via `mapping.FetchChunk()`, NOT Go channels. This matches the synchronous DuckDB chunk streaming model.
 
+### Decision 4: Clock Injection for Temporal Conversions
+
+**What**: Use injected quartz.Clock for temporal type conversions
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Timezone-aware conversions may depend on current time offset
+- Enables deterministic testing of temporal Arrow columns
+
+**Implementation**:
+```go
+// ArrowContext provides clock for temporal conversions
+type ArrowContext struct {
+    clock quartz.Clock
+}
+
+func (a *Arrow) WithClock(clock quartz.Clock) *Arrow {
+    return &Arrow{conn: a.conn, clock: clock}
+}
+
+func convertTimestampWithClock(
+    builder *array.TimestampBuilder,
+    chunk *DataChunk,
+    colIdx int,
+    clock quartz.Clock,
+) {
+    for rowIdx := 0; rowIdx < chunk.GetSize(); rowIdx++ {
+        val, _ := chunk.GetValue(colIdx, rowIdx)
+        if ts, ok := val.(time.Time); ok {
+            // Use clock for any timezone-aware operations
+            builder.Append(arrow.Timestamp(ts.UnixNano()))
+        }
+    }
+}
+```
+
 ## Risks / Trade-offs
 
 ### Risk 1: Dependency Size

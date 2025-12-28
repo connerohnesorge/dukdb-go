@@ -52,10 +52,36 @@ func SetRowValue[T any](row Row, colIdx int, val T) error
 
 ## Impact
 
-- **Affected specs**: execution-engine, appender-api, type-system
+- **Affected specs**: execution-engine, appender-api, type-system, **deterministic-testing**
 - **Affected code**: New files `data_chunk.go`, `vector.go`, `row.go`; modifications to appender and result handling
-- **Dependencies**: Requires existing TypeInfo system from type-system spec
+- **Dependencies**: Requires existing TypeInfo system from type-system spec; quartz.Clock for temporal type operations
 - **Consumers**: Scalar UDFs, Table UDFs, Query Appender, Appender optimizations
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, all temporal vector operations must support clock injection:
+
+```go
+// DataChunk accepts optional clock for timestamp operations
+type DataChunk struct {
+    columns []vector
+    clock   quartz.Clock  // Injected clock for CURRENT_TIMESTAMP, etc.
+}
+
+// WithClock configures the clock for temporal operations
+func (c *DataChunk) WithClock(clk quartz.Clock) *DataChunk
+
+// Tests use mock clock for deterministic results
+func TestTimestampVector(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC))
+
+    chunk := NewDataChunk(types).WithClock(mClock)
+    // TIMESTAMP operations now use mClock.Now()
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` or polling loops in DataChunk tests. All timing-dependent tests use `quartz.Mock` with trap-based synchronization.
 
 ## Breaking Changes
 

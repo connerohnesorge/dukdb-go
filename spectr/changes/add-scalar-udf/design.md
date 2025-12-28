@@ -177,7 +177,50 @@ func executeScalarUDF(
 }
 ```
 
-### Decision 5: Constant Folding Support
+### Decision 5: Clock Injection for Timeout Checking
+
+**What**: Use injected quartz.Clock for all timeout operations
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Enables deterministic testing of timeout behavior
+- Ensures zero flaky tests for timeout scenarios
+
+**Implementation**:
+```go
+type ScalarFuncContext struct {
+    ctx   context.Context
+    clock quartz.Clock  // Injected clock for timeouts
+}
+
+// checkTimeout uses clock.Until() instead of time.Until()
+func (c *ScalarFuncContext) checkTimeout() error {
+    if deadline, ok := c.ctx.Deadline(); ok {
+        if c.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+    return nil
+}
+
+// Execute with deterministic timeout checking
+func executeScalarUDFWithContext(
+    ctx ScalarFuncContext,
+    udf *registeredScalarFunc,
+    input *DataChunk,
+    output *vector,
+) error {
+    for rowIdx := 0; rowIdx < input.GetSize(); rowIdx++ {
+        if err := ctx.checkTimeout(); err != nil {
+            return fmt.Errorf("UDF execution timeout at row %d: %w", rowIdx, err)
+        }
+        // ... execute row
+    }
+    return nil
+}
+```
+
+### Decision 6: Constant Folding Support
 
 **What**: Optional ScalarBinder for compile-time optimization
 

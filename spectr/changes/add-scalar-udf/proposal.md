@@ -57,10 +57,46 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 ## Impact
 
-- **Affected specs**: Depends on data-chunk-api (required for DataChunk access)
+- **Affected specs**: Depends on data-chunk-api, **deterministic-testing**
 - **Affected code**: New file `scalar_udf.go`
-- **Dependencies**: data-chunk-api must be implemented first
+- **Dependencies**: data-chunk-api must be implemented first; quartz.Clock for timeout and timing operations
 - **Consumers**: Users extending DuckDB with custom functions
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, UDF execution must support clock injection:
+
+```go
+// ScalarFuncContext provides deterministic time access
+type ScalarFuncContext struct {
+    ctx   context.Context
+    clock quartz.Clock  // Injected clock for timeouts
+}
+
+// Timeout checking uses clock.Until() not time.Until()
+func (c *ScalarFuncContext) checkTimeout() error {
+    if deadline, ok := c.ctx.Deadline(); ok {
+        if c.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+    return nil
+}
+
+// Tests use mock clock for deterministic timeout testing
+func TestUDFTimeout(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    ctx, cancel := context.WithDeadline(context.Background(),
+        mClock.Now().Add(5*time.Second))
+    defer cancel()
+
+    // UDF starts
+    mClock.Advance(6*time.Second).MustWait()
+    // UDF returns DeadlineExceeded deterministically
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` in UDF tests. Use `quartz.Mock` for all timing scenarios.
 
 ## Breaking Changes
 

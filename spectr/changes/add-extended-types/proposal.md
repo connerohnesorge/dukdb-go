@@ -148,10 +148,38 @@ func (s *Stmt) bindParameter(idx int, val any) error {
 
 ## Impact
 
-- **Affected specs**: Extends type-system capability
+- **Affected specs**: Extends type-system capability, **deterministic-testing**
 - **Affected code**: `types.go`, `rows.go`, `statement.go`, `appender.go`
-- **Dependencies**: Existing type system, *big.Int for Uhugeint
+- **Dependencies**: Existing type system, *big.Int for Uhugeint, quartz.Clock for TIME_NS
 - **Consumers**: Cryptography apps, IoT systems, high-precision time applications
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, TIME_NS operations must use injected clock:
+
+```go
+// TimeNS operations that reference "now" use injected clock
+func CurrentTimeNS(clock quartz.Clock) TimeNS {
+    now := clock.Now()
+    return NewTimeNS(now.Hour(), now.Minute(), now.Second(), int64(now.Nanosecond()))
+}
+
+// Tests use mock clock for deterministic time values
+func TestTimeNSDeterministic(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 14, 30, 45, 123456789, time.UTC))
+
+    timeNS := CurrentTimeNS(mClock)
+    h, m, s, ns := timeNS.Components()
+
+    assert.Equal(t, 14, h)
+    assert.Equal(t, 30, m)
+    assert.Equal(t, 45, s)
+    assert.Equal(t, int64(123456789), ns)
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Now()` in TIME_NS tests. All tests use `quartz.Mock` for reproducible nanosecond values.
 
 ## Breaking Changes
 

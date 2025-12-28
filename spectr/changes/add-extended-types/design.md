@@ -178,7 +178,39 @@ func (t TimeNS) String() string {
 }
 ```
 
-### Decision 4: Backend SQL Generation
+### Decision 4: Clock Injection for TIME_NS "Now" Operations
+
+**What**: Use injected quartz.Clock for operations that reference current time
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Enables deterministic testing of TIME_NS values
+- Ensures zero flaky tests for time-based operations
+
+**Implementation**:
+```go
+// CurrentTimeNS creates a TimeNS from the current time using injected clock
+func CurrentTimeNS(clock quartz.Clock) TimeNS {
+    now := clock.Now()
+    return NewTimeNS(now.Hour(), now.Minute(), now.Second(), int64(now.Nanosecond()))
+}
+
+// Tests use mock clock for deterministic time values
+func TestTimeNSDeterministic(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 14, 30, 45, 123456789, time.UTC))
+
+    timeNS := CurrentTimeNS(mClock)
+    h, m, s, ns := timeNS.Components()
+
+    assert.Equal(t, 14, h)
+    assert.Equal(t, 30, m)
+    assert.Equal(t, 45, s)
+    assert.Equal(t, int64(123456789), ns)
+}
+```
+
+### Decision 5: Backend SQL Generation
 
 **What**: Generate SQL literals for parameter binding
 

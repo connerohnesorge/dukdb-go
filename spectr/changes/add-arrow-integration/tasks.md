@@ -39,9 +39,20 @@
 - [ ] 6.3 Implement Release() for memory management
 - [ ] 6.4 Write tests for streaming
 
-## 7. Validation
+## 7. Deterministic Testing Integration
 
-- [ ] 7.1 Run tests with and without build tag
-- [ ] 7.2 Run `golangci-lint`
-- [ ] 7.3 Verify API matches duckdb-go
-- [ ] 7.4 Document build tag usage
+- [ ] 7.1 Add quartz.Clock field to Arrow struct
+- [ ] 7.2 Implement WithClock() method for clock injection
+- [ ] 7.3 Pass clock to temporal type conversion functions
+- [ ] 7.4 Write deterministic tests for timestamp conversions using quartz.Mock
+- [ ] 7.5 Write deterministic tests for date/time conversions
+- [ ] 7.6 Verify zero time.Now() calls in Arrow production code
+- [ ] 7.7 Verify zero time.Sleep calls in test files
+
+## 8. Validation
+
+- [ ] 8.1 Run tests with and without build tag
+- [ ] 8.2 Run `golangci-lint`
+- [ ] 8.3 Verify API matches duckdb-go
+- [ ] 8.4 Verify compliance with deterministic-testing spec
+- [ ] 8.5 Document build tag usage

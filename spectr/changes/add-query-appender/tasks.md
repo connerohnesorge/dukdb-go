@@ -38,8 +38,17 @@
 - [ ] 5.7 Test auto-flush threshold behavior
 - [ ] 5.8 Test error cleanup scenarios
 
-## 6. Validation
+## 6. Deterministic Testing Integration
 
-- [ ] 6.1 Run `go test -race`
-- [ ] 6.2 Run `golangci-lint`
-- [ ] 6.3 Verify API matches duckdb-go NewQueryAppender
+- [ ] 6.1 Add quartz.Clock field to appenderContext struct
+- [ ] 6.2 Implement WithClock() method for clock injection
+- [ ] 6.3 Use clock.Until() for deadline checking in FlushWithContext
+- [ ] 6.4 Write deterministic tests for flush timeout using quartz.Mock
+- [ ] 6.5 Verify zero time.Sleep calls in test files
+
+## 7. Validation
+
+- [ ] 7.1 Run `go test -race`
+- [ ] 7.2 Run `golangci-lint`
+- [ ] 7.3 Verify API matches duckdb-go NewQueryAppender
+- [ ] 7.4 Verify compliance with deterministic-testing spec

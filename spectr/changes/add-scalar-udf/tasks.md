@@ -83,10 +83,21 @@
 - [ ] 11.3 Proper error propagation through query execution
 - [ ] 11.4 Write tests for error scenarios
 
-## 12. Validation
+## 12. Deterministic Testing Integration
 
-- [ ] 12.1 Run `go test -race` to verify thread safety
-- [ ] 12.2 Run `golangci-lint` and fix any issues
-- [ ] 12.3 Verify API matches duckdb-go exactly
-- [ ] 12.4 Create benchmark comparing to built-in functions
-- [ ] 12.5 Document performance characteristics
+- [ ] 12.1 Add quartz.Clock field to ScalarFuncContext struct
+- [ ] 12.2 Implement WithClock() method for clock injection
+- [ ] 12.3 Use clock.Until() for all timeout checking
+- [ ] 12.4 Write deterministic tests for UDF timeout scenarios using quartz.Mock
+- [ ] 12.5 Write deterministic tests for context cancellation
+- [ ] 12.6 Verify zero time.Sleep calls in test files
+- [ ] 12.7 Verify zero polling loops in test files
+
+## 13. Validation
+
+- [ ] 13.1 Run `go test -race` to verify thread safety
+- [ ] 13.2 Run `golangci-lint` and fix any issues
+- [ ] 13.3 Verify API matches duckdb-go exactly
+- [ ] 13.4 Verify compliance with deterministic-testing spec
+- [ ] 13.5 Create benchmark comparing to built-in functions
+- [ ] 13.6 Document performance characteristics

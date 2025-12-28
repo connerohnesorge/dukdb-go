@@ -70,10 +70,46 @@ func (s *Stmt) QueryBound() (driver.Rows, error)
 
 ## Impact
 
-- **Affected specs**: Extends prepared-statements capability
+- **Affected specs**: Extends prepared-statements capability, **deterministic-testing**
 - **Affected code**: Modifications to `statement.go`
-- **Dependencies**: None
+- **Dependencies**: quartz.Clock for bound execution timeout testing
 - **Consumers**: Query analysis tools, ORMs, debugging tools
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, bound execution must support clock injection:
+
+```go
+// ExecBoundContext executes with bound parameters and clock-aware timeout
+func (s *Stmt) ExecBoundContext(ctx context.Context, clock quartz.Clock) (driver.Result, error) {
+    // Check deadline before execution
+    if deadline, ok := ctx.Deadline(); ok {
+        if clock.Until(deadline) <= 0 {
+            return nil, context.DeadlineExceeded
+        }
+    }
+    return s.execBoundInternal()
+}
+
+// Tests use mock clock for deterministic timeout behavior
+func TestBoundExecTimeout(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    ctx, cancel := context.WithDeadline(context.Background(),
+        mClock.Now().Add(1*time.Second))
+    defer cancel()
+
+    stmt := prepareTestStatement(t)
+    stmt.Bind(1, "value")
+
+    // Advance past deadline
+    mClock.Advance(2*time.Second).MustWait()
+
+    _, err := stmt.ExecBoundContext(ctx, mClock)
+    assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` in statement introspection tests. Use `quartz.Mock` for timeout testing.
 
 ## Breaking Changes
 

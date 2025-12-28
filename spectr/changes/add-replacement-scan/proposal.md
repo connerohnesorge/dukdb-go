@@ -47,10 +47,53 @@ Other types (bool, float64, etc.) are NOT supported and will cause errors.
 
 ## Impact
 
-- **Affected specs**: Depends on binder integration
+- **Affected specs**: Depends on binder integration, **deterministic-testing**
 - **Affected code**: New file `replacement_scan.go`, binder modifications
-- **Dependencies**: Table UDFs (for function replacement)
+- **Dependencies**: Table UDFs (for function replacement); quartz.Clock for callback timeout testing
 - **Consumers**: Users implementing custom data sources
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, replacement scan callbacks that involve timeouts must use injected clock:
+
+```go
+// ReplacementScanContext provides clock for timeout checking
+type ReplacementScanContext struct {
+    ctx   context.Context
+    clock quartz.Clock
+}
+
+// Execute callback with timeout checking
+func (c *ReplacementScanContext) executeCallback(
+    callback ReplacementScanCallback,
+    tableName string,
+) (string, []any, error) {
+    if deadline, ok := c.ctx.Deadline(); ok {
+        if c.clock.Until(deadline) <= 0 {
+            return "", nil, context.DeadlineExceeded
+        }
+    }
+    return callback(tableName)
+}
+
+// Tests use mock clock for deterministic timeout behavior
+func TestReplacementScanTimeout(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    ctx, cancel := context.WithDeadline(context.Background(),
+        mClock.Now().Add(1*time.Second))
+    defer cancel()
+
+    scanCtx := NewReplacementScanContext(ctx, mClock)
+
+    // Advance past deadline
+    mClock.Advance(2*time.Second).MustWait()
+
+    _, _, err := scanCtx.executeCallback(callback, "test_table")
+    assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` in replacement scan tests. Use `quartz.Mock` for timeout testing.
 
 ## Breaking Changes
 

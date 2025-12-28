@@ -22,8 +22,17 @@
 - [ ] 4.2 Handle nil/empty function name return
 - [ ] 4.3 Write tests for error scenarios
 
-## 5. Validation
+## 5. Deterministic Testing Integration
 
-- [ ] 5.1 Run `go test -race`
-- [ ] 5.2 Run `golangci-lint`
-- [ ] 5.3 Verify API matches duckdb-go
+- [ ] 5.1 Add quartz.Clock field to ReplacementScanContext struct
+- [ ] 5.2 Implement WithClock() method for clock injection
+- [ ] 5.3 Use clock.Until() for deadline checking
+- [ ] 5.4 Write deterministic tests for callback timeout using quartz.Mock
+- [ ] 5.5 Verify zero time.Sleep calls in test files
+
+## 6. Validation
+
+- [ ] 6.1 Run `go test -race`
+- [ ] 6.2 Run `golangci-lint`
+- [ ] 6.3 Verify API matches duckdb-go
+- [ ] 6.4 Verify compliance with deterministic-testing spec

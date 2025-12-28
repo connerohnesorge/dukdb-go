@@ -97,9 +97,20 @@
 - [ ] 13.3 Profile and optimize hot paths
 - [ ] 13.4 Document performance characteristics
 
-## 14. Validation
+## 14. Deterministic Testing Integration
 
-- [ ] 14.1 Run `go test -race` to verify thread safety
-- [ ] 14.2 Run `golangci-lint` and fix any issues
-- [ ] 14.3 Verify API matches duckdb-go exactly
-- [ ] 14.4 Update CLAUDE.md if needed
+- [ ] 14.1 Add quartz.Clock field to DataChunk struct
+- [ ] 14.2 Implement WithClock() method for clock injection
+- [ ] 14.3 Propagate clock to temporal vector types
+- [ ] 14.4 Write deterministic tests for TIMESTAMP vectors using quartz.Mock
+- [ ] 14.5 Write deterministic tests for DATE/TIME vectors
+- [ ] 14.6 Verify zero time.Sleep calls in test files
+- [ ] 14.7 Verify zero polling loops in test files
+
+## 15. Validation
+
+- [ ] 15.1 Run `go test -race` to verify thread safety
+- [ ] 15.2 Run `golangci-lint` and fix any issues
+- [ ] 15.3 Verify API matches duckdb-go exactly
+- [ ] 15.4 Verify compliance with deterministic-testing spec
+- [ ] 15.5 Update CLAUDE.md if needed

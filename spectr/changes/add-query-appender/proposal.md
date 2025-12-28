@@ -82,10 +82,53 @@ func (a *Appender) Close() error
 
 ## Impact
 
-- **Affected specs**: Extends appender capability
+- **Affected specs**: Extends appender capability, **deterministic-testing**
 - **Affected code**: Modifications to `appender.go`
-- **Dependencies**: Requires existing Appender infrastructure, TypeInfo system
+- **Dependencies**: Requires existing Appender infrastructure, TypeInfo system; quartz.Clock for flush timing
 - **Consumers**: ETL pipelines, data synchronization tools, batch processing applications
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, query appender operations must support clock injection:
+
+```go
+// AppenderContext provides clock for timeout and timing operations
+type AppenderContext struct {
+    ctx   context.Context
+    clock quartz.Clock
+}
+
+// FlushWithContext executes flush with timeout checking
+func (a *Appender) FlushWithContext(ctx AppenderContext) error {
+    // Check deadline before executing query
+    if deadline, ok := ctx.ctx.Deadline(); ok {
+        if ctx.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+    return a.flushQueryAppender()
+}
+
+// Tests use mock clock for deterministic timeout behavior
+func TestQueryAppenderTimeout(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    ctx, cancel := context.WithDeadline(context.Background(),
+        mClock.Now().Add(5*time.Second))
+    defer cancel()
+
+    appender := createTestAppender(t)
+    appender.AppendRow(1, "test")
+
+    // Advance past deadline
+    mClock.Advance(10*time.Second).MustWait()
+
+    appCtx := NewAppenderContext(ctx, mClock)
+    err := appender.FlushWithContext(appCtx)
+    assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+```
+
+**Zero Flaky Tests Policy**: No `time.Sleep` in appender tests. Use `quartz.Mock` for timeout testing.
 
 ## Breaking Changes
 

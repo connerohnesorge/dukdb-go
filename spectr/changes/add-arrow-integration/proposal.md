@@ -38,10 +38,43 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 
 ## Impact
 
-- **Affected specs**: Depends on data-chunk-api
+- **Affected specs**: Depends on data-chunk-api, **deterministic-testing**
 - **Affected code**: New file `arrow.go` with build tags
-- **Dependencies**: apache/arrow-go library (heavy dependency)
+- **Dependencies**: apache/arrow-go library; quartz.Clock for temporal type testing
 - **Consumers**: Data science applications, analytics pipelines
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, temporal type conversions must be testable deterministically:
+
+```go
+// Arrow temporal conversion uses clock from DataChunk context
+func dataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, clock quartz.Clock) arrow.Record {
+    // Temporal columns use clock for timezone-aware conversions
+    for i, field := range schema.Fields() {
+        switch field.Type.(type) {
+        case *arrow.TimestampType:
+            // Timezone conversions use clock for consistent offset calculation
+            convertTimestampWithClock(builders[i], chunk, colIdx, clock)
+        }
+    }
+    // ...
+}
+
+// Tests use mock clock for deterministic temporal assertions
+func TestArrowTimestampConversion(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC))
+
+    chunk := NewDataChunkWithClock(types, mClock)
+    // Set timestamp values
+
+    record := dataChunkToRecordBatch(chunk, schema, mClock)
+    // Assert exact timestamp values without timezone drift
+}
+```
+
+**Zero Flaky Tests Policy**: All temporal conversions tested with `quartz.Mock`. No reliance on system time for timezone calculations.
 
 ## Breaking Changes
 

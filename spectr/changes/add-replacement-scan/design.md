@@ -69,6 +69,32 @@ func (b *Binder) resolveTable(name string) (BoundExpr, error) {
 }
 ```
 
+### Decision 3: Clock Injection for Timeout Handling
+
+**What**: Use injected quartz.Clock for callback timeout checking
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Replacement scan callbacks may have timeout deadlines
+- Enables deterministic testing of timeout scenarios
+
+**Implementation**:
+```go
+type replacementScanContext struct {
+    ctx   context.Context
+    clock quartz.Clock
+}
+
+func (c *replacementScanContext) checkDeadline() error {
+    if deadline, ok := c.ctx.Deadline(); ok {
+        if c.clock.Until(deadline) <= 0 {
+            return context.DeadlineExceeded
+        }
+    }
+    return nil
+}
+```
+
 ## Risks / Trade-offs
 
 ### Risk 1: Performance Overhead

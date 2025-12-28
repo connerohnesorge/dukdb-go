@@ -34,7 +34,8 @@
 - [ ] 3.5 Implement sql.Scanner interface
 - [ ] 3.6 Implement driver.Valuer interface
 - [ ] 3.7 Implement String() with nanosecond formatting
-- [ ] 3.8 Write unit tests for precision edge cases
+- [ ] 3.8 Implement CurrentTimeNS(clock quartz.Clock) for "now" operations
+- [ ] 3.9 Write unit tests for precision edge cases
 
 ## 4. Row Scanning Integration
 
@@ -69,9 +70,18 @@
 - [ ] 7.6 Add setTimeNS vector setter
 - [ ] 7.7 Write DataChunk tests for new types
 
-## 8. Validation
+## 8. Deterministic Testing Integration
 
-- [ ] 8.1 Run `go test -race`
-- [ ] 8.2 Run `golangci-lint`
-- [ ] 8.3 Benchmark operations vs big.Int baseline
-- [ ] 8.4 Test roundtrip for all types
+- [ ] 8.1 Add quartz.Clock parameter to CurrentTimeNS function
+- [ ] 8.2 Write deterministic tests for TIME_NS using quartz.Mock
+- [ ] 8.3 Verify nanosecond precision in test assertions
+- [ ] 8.4 Verify zero time.Now() calls in TIME_NS production code
+- [ ] 8.5 Verify zero time.Sleep calls in test files
+
+## 9. Validation
+
+- [ ] 9.1 Run `go test -race`
+- [ ] 9.2 Run `golangci-lint`
+- [ ] 9.3 Benchmark operations vs big.Int baseline
+- [ ] 9.4 Test roundtrip for all types
+- [ ] 9.5 Verify compliance with deterministic-testing spec

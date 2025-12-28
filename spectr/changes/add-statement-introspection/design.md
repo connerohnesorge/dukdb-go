@@ -80,6 +80,36 @@ func (s *Stmt) ExecBound() (driver.Result, error) {
 }
 ```
 
+### Decision 4: Clock Injection for Bound Execution
+
+**What**: Use injected quartz.Clock for timeout checking in bound execution
+
+**Why**:
+- Per deterministic-testing spec, all time-dependent code must use injected clock
+- Bound execution may have context deadlines
+- Enables deterministic testing of timeout scenarios
+
+**Implementation**:
+```go
+func (s *Stmt) ExecBoundContext(ctx context.Context, clock quartz.Clock) (driver.Result, error) {
+    if deadline, ok := ctx.Deadline(); ok {
+        if clock.Until(deadline) <= 0 {
+            return nil, context.DeadlineExceeded
+        }
+    }
+    return s.execBoundInternal()
+}
+
+func (s *Stmt) QueryBoundContext(ctx context.Context, clock quartz.Clock) (driver.Rows, error) {
+    if deadline, ok := ctx.Deadline(); ok {
+        if clock.Until(deadline) <= 0 {
+            return nil, context.DeadlineExceeded
+        }
+    }
+    return s.queryBoundInternal()
+}
+```
+
 ## Risks / Trade-offs
 
 ### Risk 1: Memory for Bound Parameters

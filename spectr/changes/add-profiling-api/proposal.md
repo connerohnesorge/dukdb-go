@@ -39,10 +39,46 @@ Note: Memory usage metrics mentioned in goals are NOT currently provided by the 
 
 ## Impact
 
-- **Affected specs**: None (standalone feature)
+- **Affected specs**: **deterministic-testing** (timing metrics must use injected clock)
 - **Affected code**: New file `profiling.go`
-- **Dependencies**: Query execution engine
+- **Dependencies**: Query execution engine; quartz.Clock for timing measurements
 - **Consumers**: Performance tuning, debugging tools
+
+## Deterministic Testing Requirements
+
+Per `spectr/specs/deterministic-testing/spec.md`, profiling metrics must use injected clock:
+
+```go
+// ProfilingContext captures timing with injected clock
+type ProfilingContext struct {
+    clock     quartz.Clock
+    startTime time.Time
+}
+
+func (p *ProfilingContext) Start() {
+    p.startTime = p.clock.Now()
+}
+
+func (p *ProfilingContext) Elapsed() time.Duration {
+    return p.clock.Since(p.startTime)
+}
+
+// Profiling metrics are deterministic in tests
+func TestProfilingTiming(t *testing.T) {
+    mClock := quartz.NewMock(t)
+    mClock.Set(time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC))
+
+    ctx := NewProfilingContext(mClock)
+    ctx.Start()
+
+    mClock.Advance(500*time.Millisecond).MustWait()
+
+    info := ctx.GetProfilingInfo()
+    assert.Equal(t, "500ms", info.Metrics["TOTAL_TIME"])
+}
+```
+
+**Zero Flaky Tests Policy**: All timing metrics use `clock.Since()` not `time.Since()`. Tests verify exact durations.
 
 ## Breaking Changes
 
