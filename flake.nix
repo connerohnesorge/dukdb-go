@@ -150,6 +150,7 @@ nix fmt
             pprof
             graphviz
             goreleaser
+            gofumpt
           ]
           ++ builtins.attrValues scriptPackages;
       };
