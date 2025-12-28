@@ -1,194 +1,258 @@
-## 1. Process Management
+## 1. Core Engine Structure
 
-- [ ] 1.1 Create `internal/process/process.go` with Process struct:
-  - Fields: `cmd *exec.Cmd`, `stdin io.WriteCloser`, `stdout io.ReadCloser`, `stderr io.ReadCloser`
-  - Fields: `crashed atomic.Bool`, `crashOnce sync.Once`, `crashErr error`, `waiter chan struct{}`
-  - Fields: `mu sync.Mutex` (protects stdin/stdout access)
-  - **Acceptance:** Struct compiles with all required fields
+- [ ] 1.1 Create `internal/engine/engine.go` with Engine struct:
+  - Fields: `catalog *Catalog`, `storage *Storage`, `txnMgr *TransactionManager`
+  - Implement Backend interface from project-foundation
+  - **Acceptance:** `var _ Backend = (*Engine)(nil)` compiles
 
-- [ ] 1.2 Implement `NewProcess(binaryPath, dbPath string, config *ProcessBackendConfig) (*Process, error)`:
-  - Spawn process with flags: `-json`, `-noheader`, `-nullvalue`, `NULL`, database path
-  - Capture stdin, stdout, stderr pipes via `cmd.StdinPipe()`, `cmd.StdoutPipe()`, `cmd.StderrPipe()`
-  - Start background goroutine calling `cmd.Wait()` that closes waiter channel and sets crashed flag
-  - Execute health check `SELECT 1` to verify process is responsive
-  - **Acceptance:** Process spawns and health check returns within StartupTimeout (default 10 seconds)
+- [ ] 1.2 Create `internal/engine/conn.go` with EngineConn struct:
+  - Implement BackendConn interface
+  - Methods: Execute, Query, Prepare, Close, Ping
+  - **Acceptance:** `var _ BackendConn = (*EngineConn)(nil)` compiles
 
-- [ ] 1.3 Implement `Process.Shutdown() error` with two-phase termination:
-  - Send `.quit\n` to stdin
-  - Wait up to 5 seconds for clean exit via select on waiter channel
-  - If still running, send SIGTERM via `cmd.Process.Signal(syscall.SIGTERM)` and wait 2 seconds
-  - If still running, send SIGKILL via `cmd.Process.Kill()`
-  - Close all pipes: `stdin.Close()`, `stdout.Close()`, `stderr.Close()`
-  - **Acceptance:** Process terminates within 7 seconds guaranteed
+## 2. SQL Parser
 
-- [ ] 1.4 Implement crash detection via exit monitoring:
-  - Background goroutine waits on `cmd.Wait()`
-  - When cmd.Wait() returns, close waiter channel
-  - Set `crashed.Store(true)` via crashOnce.Do()
-  - Set crashErr to `&Error{Type: ErrorTypeConnection, Msg: "process exited unexpectedly"}`
-  - **Acceptance:** Crash detected when `cmd.Wait()` returns (no specific timing guarantee)
+- [ ] 2.1 Create `internal/parser/parser.go`:
+  - Use github.com/auxten/postgresql-parser for PostgreSQL dialect
+  - Wrap parser to return our AST types
+  - **Acceptance:** `SELECT 1` parses successfully
 
-- [ ] 1.5 Implement `Process.IsAlive() bool`:
-  - Return `!crashed.Load()`
-  - **Acceptance:** Returns false after process exits, true otherwise
+- [ ] 2.2 Create `internal/parser/ast.go` with AST node types:
+  - Statement: SelectStmt, InsertStmt, UpdateStmt, DeleteStmt, CreateTableStmt, DropTableStmt
+  - Expr: ColumnRef, Literal, BinaryExpr, UnaryExpr, FunctionCall
+  - **Acceptance:** All node types defined with String() method
 
-## 2. Communication Layer
+- [ ] 2.3 Implement parser for SELECT statements:
+  - Support: SELECT, FROM, WHERE, ORDER BY, LIMIT, OFFSET
+  - Support: column aliases, table aliases
+  - **Acceptance:** Parse `SELECT a, b FROM t WHERE x > 1 ORDER BY a LIMIT 10`
 
-- [ ] 2.1 Implement `Process.WriteCommand(sql string) error`:
-  - Acquire mutex lock
-  - Write SQL followed by newline to stdin: `stdin.Write([]byte(sql + "\n"))`
-  - Return `&Error{Type: ErrorTypeConnection, Msg: "stdin pipe closed"}` if write fails
-  - Keep mutex locked (released by ReadResult)
-  - **Acceptance:** Command written to process stdin
+- [ ] 2.4 Implement parser for DML statements:
+  - INSERT INTO ... VALUES (...)
+  - UPDATE ... SET ... WHERE
+  - DELETE FROM ... WHERE
+  - **Acceptance:** All three statement types parse correctly
 
-- [ ] 2.2 Implement `Process.ReadResult(markerID string) ([]map[string]any, error)`:
-  - Mutex already held from WriteCommand
-  - Read JSON lines from stdout using `bufio.Scanner`
-  - Each line is a complete JSON object, parse with `json.Unmarshal`
-  - Skip lines until find row with `__marker__` == `__DUKDB_START_<markerID>__`
-  - Collect all subsequent rows until find row with `__marker__` == `__DUKDB_END_<markerID>__`
-  - Return collected rows (excluding marker rows)
-  - Release mutex lock
-  - **Acceptance:** Query results correctly parsed and isolated
+- [ ] 2.5 Implement parser for DDL statements:
+  - CREATE TABLE with column definitions and constraints
+  - DROP TABLE
+  - **Acceptance:** `CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR)` parses
 
-- [ ] 2.3 Implement stderr capture:
-  - Background goroutine reads stderr into circular buffer (last 4KB)
-  - Use `ring.Ring` or `[]byte` with wrap-around index
-  - Provide `GetStderr() string` method to retrieve buffered stderr
-  - **Acceptance:** Last 4KB of stderr accessible via GetStderr()
+## 3. Catalog
 
-- [ ] 2.4 Implement marker generation:
-  - Generate UUID v4 using `github.com/google/uuid` package: `uuid.New().String()`
-  - Format markers: `__DUKDB_START_<uuid>__` and `__DUKDB_END_<uuid>__`
-  - **Acceptance:** Each call to generateMarker() returns unique UUID-based marker
+- [ ] 3.1 Create `internal/catalog/catalog.go`:
+  - Thread-safe schema/table registry
+  - Methods: CreateSchema, DropSchema, GetSchema
+  - Default "main" schema
+  - **Acceptance:** Create and retrieve schemas
 
-- [ ] 2.5 Implement error classification from stderr:
-  - Parse stderr content using classifyError() function (see design.md Decision 5b)
-  - Map "Parser Error" → ErrorTypeParser
-  - Map "Binder Error" → ErrorTypeBinder
-  - Map "Catalog Error" → ErrorTypeCatalog
-  - Map "division by zero" → ErrorTypeDivideByZero
-  - Map "constraint" → ErrorTypeConstraint
-  - Map process crash → ErrorTypeConnection
-  - Default → ErrorTypeUnknown
-  - **Acceptance:** Each error pattern maps to correct ErrorType
+- [ ] 3.2 Create `internal/catalog/table.go`:
+  - TableDef with columns, constraints, indexes
+  - Methods: CreateTable, DropTable, GetTable
+  - **Acceptance:** Create and retrieve table definitions
 
-## 3. Backend Interface Implementation
+- [ ] 3.3 Create `internal/catalog/column.go`:
+  - ColumnDef with name, type, nullable, default
+  - Support all DuckDB types from add-type-system
+  - **Acceptance:** Column definitions with all type variants
 
-- [ ] 3.1 Create `internal/process/backend.go` with ProcessBackend struct:
-  - Implements `Backend` interface from project-foundation
-  - Fields: `config ProcessBackendConfig`, `processes sync.Map` (keyed by db path)
-  - Fields: `closed atomic.Bool`
-  - **Acceptance:** `var _ Backend = (*ProcessBackend)(nil)` compiles
+## 4. Storage
 
-- [ ] 3.2 Implement `ProcessBackend.Open(path string, config *Config) (BackendConn, error)`:
-  - If closed.Load() == true, return `&Error{Type: ErrorTypeConnection, Msg: "backend is closed"}`
-  - Normalize path: "" and ":memory:" both become ":memory:"
-  - Get existing Process from processes map, or create new one
-  - Create ProcessConn wrapping the Process
-  - Execute `SELECT 1` health check via ProcessConn
-  - **Acceptance:** Returns usable BackendConn or error with clear message
+- [ ] 4.1 Create `internal/storage/column.go`:
+  - Column struct with typed data slices
+  - Null bitmap for NULL handling
+  - Methods: Append, Get, Length
+  - **Acceptance:** Store and retrieve typed column data
 
-- [ ] 3.3 Implement `ProcessBackend.Close() error`:
-  - Set closed.Store(true)
-  - Iterate processes map and call Shutdown() on each
-  - Clear processes map
-  - **Acceptance:** All processes terminated, no goroutine leaks
+- [ ] 4.2 Create `internal/storage/chunk.go`:
+  - Chunk as vector of columns (default 2048 rows)
+  - Methods: AddRow, GetRow, Size
+  - **Acceptance:** Store multiple rows across columns
 
-- [ ] 3.4 Implement `ProcessConn.Execute(ctx, query string, args []any) (int64, error)`:
-  - Check ctx.Err() first - return context.Canceled or context.DeadlineExceeded if set
-  - Format query with parameter substitution (delegated to add-query-execution's FormatValue)
-  - Generate marker ID
-  - Write marker + query + marker via WriteCommand
-  - Read result via ReadResult with timeout from context
-  - Parse result to extract affected row count from DuckDB's "Count" or similar field
-  - **Acceptance:** INSERT/UPDATE/DELETE returns correct row count
+- [ ] 4.3 Create `internal/storage/table.go`:
+  - Table as collection of chunks
+  - Methods: Insert, Scan, Delete
+  - **Acceptance:** Insert rows, scan all rows
 
-- [ ] 3.5 Implement `ProcessConn.Query(ctx, query string, args []any) ([]map[string]any, []string, error)`:
-  - Check ctx.Err() first
-  - Format query with parameter substitution
-  - Generate marker ID
-  - Write marker + query + marker
-  - Read result with timeout
-  - Extract column names from first row's keys (sorted alphabetically for consistency)
-  - Return parsed JSON rows and column names
-  - **Acceptance:** SELECT returns correct data and column names
+- [ ] 4.4 Create `internal/storage/storage.go`:
+  - Storage manager for all tables
+  - In-memory storage implementation
+  - **Acceptance:** Create/drop tables, access by name
 
-## 4. Concurrency Support
+## 5. Binder
 
-- [ ] 4.1 Add mutex to Process for stdin/stdout serialization:
-  - `sync.Mutex` in Process struct
-  - Lock in WriteCommand, unlock in ReadResult
-  - Ensures only one query cycle runs at a time
-  - **Acceptance:** 100 concurrent queries complete without data mixing
+- [ ] 5.1 Create `internal/binder/binder.go`:
+  - Resolve table/column names against catalog
+  - Type checking for expressions
+  - **Acceptance:** Bind `SELECT a FROM t` resolves column types
 
-- [ ] 4.2 Implement query timeout via context:
-  - Use `select` with `ctx.Done()` and result channel
-  - On timeout, return context.DeadlineExceeded
-  - Note: underlying CLI query continues - no way to cancel
-  - Log warning if query completes after timeout
-  - **Acceptance:** Query times out at context deadline
+- [ ] 5.2 Implement expression binding:
+  - Resolve ColumnRef to table.column with type
+  - Check type compatibility for operators
+  - Infer result types
+  - **Acceptance:** `a + b` binds with correct result type
 
-- [ ] 4.3 Implement context cancellation check:
-  - Check `ctx.Err()` before starting query
-  - Return context.Canceled immediately if context cancelled
-  - **Acceptance:** Cancelled context returns immediately without executing query
+- [ ] 5.3 Implement aggregate binding:
+  - Validate aggregate functions (COUNT, SUM, etc.)
+  - Check GROUP BY columns match
+  - **Acceptance:** `SELECT COUNT(*) FROM t GROUP BY a` binds correctly
 
-## 5. Configuration
+## 6. Planner
 
-- [ ] 5.1 Implement ProcessBackendConfig with defaults:
-  - QueryTimeout: 30 seconds (via `applyDefaults()` function)
-  - StartupTimeout: 10 seconds
-  - MaxRetries: 3
-  - RetryBackoff: 100 milliseconds
-  - **Acceptance:** Zero-value config uses documented defaults
+- [ ] 6.1 Create `internal/planner/logical.go`:
+  - Logical plan node interfaces and types
+  - LogicalScan, LogicalFilter, LogicalProject, LogicalJoin, LogicalAggregate
+  - **Acceptance:** Build logical plan for SELECT query
 
-- [ ] 5.2 Implement binary path resolution:
-  1. Check config.BinaryPath - if non-empty, use it
-  2. Check `os.Getenv("DUCKDB_PATH")` - if non-empty, use it
-  3. Search PATH for "duckdb" using `exec.LookPath("duckdb")`
-  - Return `&Error{Type: ErrorTypeConnection, Msg: "DuckDB CLI binary not found..."}` if not found
-  - **Acceptance:** Binary found via each method, or clear error message
+- [ ] 6.2 Create `internal/planner/physical.go`:
+  - Physical plan node types
+  - Convert logical to physical plans
+  - **Acceptance:** Logical plan converts to physical plan
 
-- [ ] 5.3 Implement DuckDB version check:
-  - Run `duckdb --version`, capture stdout
-  - Parse version number from output (format: "v0.9.2 abc123")
-  - Extract major.minor.patch numbers
-  - Require version >= 0.9.0
-  - Return `&Error{Type: ErrorTypeConnection, Msg: "requires DuckDB 0.9.0 or later, found X.Y.Z"}` if too old
-  - **Acceptance:** Old versions rejected with upgrade instructions
+- [ ] 6.3 Implement SELECT planning:
+  - FROM → Scan
+  - WHERE → Filter
+  - SELECT list → Project
+  - ORDER BY → Sort
+  - LIMIT → Limit
+  - **Acceptance:** Full SELECT statement plans correctly
 
-## 6. Testing
+- [ ] 6.4 Implement JOIN planning:
+  - Hash join for equality conditions
+  - Nested loop join for complex conditions
+  - **Acceptance:** `SELECT * FROM a JOIN b ON a.id = b.id` plans
 
-- [ ] 6.1 Unit tests for process lifecycle:
-  - TestProcessSpawn: verify process starts and health check passes
-  - TestProcessShutdown: verify graceful shutdown within 7 seconds
-  - TestProcessCrashDetection: kill process, verify crash detected
-  - **Acceptance:** All pass, no goroutine leaks (check runtime.NumGoroutine before/after)
+## 7. Executor
 
-- [ ] 6.2 Integration tests with real DuckDB CLI:
-  - Skip if DuckDB not installed: `if _, err := exec.LookPath("duckdb"); err != nil { t.Skip(...) }`
-  - TestSimpleQuery: SELECT 1 returns expected result
-  - TestQueryWithNulls: verify NULL handling
-  - TestQueryWithNestedTypes: verify STRUCT/LIST parsing
-  - **Acceptance:** All pass when DuckDB installed
+- [ ] 7.1 Create `internal/executor/operator.go`:
+  - Operator interface: Init, Next, Close
+  - Base operator implementation
+  - **Acceptance:** Interface compiles
 
-- [ ] 6.3 Concurrent query tests:
-  - Spawn 10 goroutines each running 10 queries with unique identifiers
-  - Each query: `SELECT <goroutine_id> * 1000 + <query_id> AS result`
-  - Verify each goroutine receives its correct results
-  - **Acceptance:** 100 total queries complete with correct results
+- [ ] 7.2 Implement ScanOperator:
+  - Iterate table chunks
+  - Return chunks via Next()
+  - **Acceptance:** Scan returns all rows
 
-- [ ] 6.4 Error handling tests:
-  - TestBinaryNotFound: verify ErrorTypeConnection with correct message
-  - TestInvalidSQL: verify ErrorTypeParser for syntax errors
-  - TestTimeout: verify context.DeadlineExceeded for slow queries
-  - TestDivideByZero: verify ErrorTypeDivideByZero
-  - **Acceptance:** Each error case returns expected error type
+- [ ] 7.3 Implement FilterOperator:
+  - Evaluate predicate on each row
+  - Filter out non-matching rows
+  - **Acceptance:** WHERE clause filters correctly
 
-- [ ] 6.5 Edge case tests:
-  - TestEmptyResultSet: SELECT with WHERE false returns empty slice
-  - TestLargeResultSet: 100,000 rows parse successfully
-  - TestNullsInAllColumns: all-NULL row handled correctly
-  - TestUnicodeInQuery: Unicode strings round-trip correctly
-  - **Acceptance:** All edge cases handled correctly
+- [ ] 7.4 Implement ProjectOperator:
+  - Evaluate SELECT expressions
+  - Build output columns
+  - **Acceptance:** SELECT a+1 computes correctly
+
+- [ ] 7.5 Implement HashAggregateOperator:
+  - Build hash table by GROUP BY keys
+  - Compute aggregate values
+  - **Acceptance:** COUNT, SUM, AVG work correctly
+
+- [ ] 7.6 Implement SortOperator:
+  - Sort chunks by ORDER BY columns
+  - Support ASC/DESC, NULLS FIRST/LAST
+  - **Acceptance:** Results sorted correctly
+
+- [ ] 7.7 Implement LimitOperator:
+  - Track row count
+  - Stop after LIMIT reached
+  - Skip OFFSET rows
+  - **Acceptance:** LIMIT 10 OFFSET 5 works
+
+- [ ] 7.8 Implement HashJoinOperator:
+  - Build hash table on smaller relation
+  - Probe with larger relation
+  - **Acceptance:** INNER JOIN produces correct results
+
+## 8. Expression Evaluation
+
+- [ ] 8.1 Create `internal/executor/expr.go`:
+  - Vectorized expression evaluation
+  - Evaluate on Chunk, return Column
+  - **Acceptance:** Literal expression evaluates
+
+- [ ] 8.2 Implement arithmetic expressions:
+  - +, -, *, /, % for numeric types
+  - Handle NULL propagation
+  - **Acceptance:** `1 + 2` returns 3
+
+- [ ] 8.3 Implement comparison expressions:
+  - =, <>, <, >, <=, >= for all comparable types
+  - Return boolean column
+  - **Acceptance:** `a > 5` filters correctly
+
+- [ ] 8.4 Implement logical expressions:
+  - AND, OR, NOT
+  - Short-circuit evaluation
+  - **Acceptance:** `a > 5 AND b < 10` works
+
+- [ ] 8.5 Implement aggregate functions:
+  - COUNT, SUM, AVG, MIN, MAX
+  - COUNT(*) vs COUNT(column)
+  - **Acceptance:** All aggregates compute correctly
+
+## 9. DML Execution
+
+- [ ] 9.1 Implement INSERT execution:
+  - Parse VALUES list
+  - Type check against table schema
+  - Append to storage
+  - **Acceptance:** INSERT adds rows
+
+- [ ] 9.2 Implement UPDATE execution:
+  - Scan with WHERE filter
+  - Modify matching rows in place
+  - **Acceptance:** UPDATE modifies rows
+
+- [ ] 9.3 Implement DELETE execution:
+  - Scan with WHERE filter
+  - Remove matching rows
+  - **Acceptance:** DELETE removes rows
+
+## 10. DDL Execution
+
+- [ ] 10.1 Implement CREATE TABLE:
+  - Parse column definitions
+  - Add to catalog
+  - Create storage table
+  - **Acceptance:** Table created and queryable
+
+- [ ] 10.2 Implement DROP TABLE:
+  - Remove from catalog
+  - Release storage
+  - **Acceptance:** Table no longer exists
+
+## 11. Integration
+
+- [ ] 11.1 Wire parser → binder → planner → executor:
+  - Engine.Execute() runs full pipeline
+  - Engine.Query() returns results as []map[string]any
+  - **Acceptance:** `SELECT 1` returns correct result
+
+- [ ] 11.2 Implement connection management:
+  - Open/Close connections
+  - Transaction boundaries
+  - **Acceptance:** Multiple connections work
+
+## 12. Testing
+
+- [ ] 12.1 Unit tests for parser:
+  - Test each statement type
+  - Test expression parsing
+  - **Acceptance:** Parser tests pass
+
+- [ ] 12.2 Unit tests for executor:
+  - Test each operator type
+  - Test expression evaluation
+  - **Acceptance:** Executor tests pass
+
+- [ ] 12.3 Integration tests:
+  - End-to-end query tests
+  - TPC-H subset queries
+  - **Acceptance:** All integration tests pass
+
+- [ ] 12.4 Concurrent query tests:
+  - Multiple goroutines querying
+  - No race conditions
+  - **Acceptance:** `go test -race` passes

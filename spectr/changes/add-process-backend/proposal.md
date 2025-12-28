@@ -1,22 +1,65 @@
-# Change: Implement Subprocess-Based Backend
+# Change: Implement Native Go Execution Engine
 
 ## Why
 
-DuckDB is an embedded database without a native client/server wire protocol. To achieve a pure Go implementation without CGO, we need an alternative communication mechanism. The subprocess approach spawns the official DuckDB CLI binary and communicates via stdin/stdout, providing full SQL compatibility without any C bindings.
+To achieve a truly pure Go DuckDB-compatible driver, we implement the core database engine natively in Go. This provides full DuckDB SQL compatibility without any external dependencies - no CGO, no WASM, no subprocess, no external binaries.
 
 ## What Changes
 
-- Implement `ProcessBackend` type satisfying the `Backend` interface from `add-project-foundation`
-- Create process lifecycle management (spawn, monitor, terminate)
-- Implement stdin/stdout communication protocol with the DuckDB CLI
-- Parse CLI output into structured Go types
-- Handle concurrent query execution safely
-- Implement connection pooling at the process level
+- Implement `Engine` type as the core execution engine
+- Create SQL parser (leveraging existing Go SQL parsing libraries)
+- Implement catalog for schema/table/column metadata
+- Create query binder for name resolution and type checking
+- Implement query planner for logical/physical plans
+- Create vectorized executor for columnar query execution
+- Implement in-memory columnar storage
+
+## Architecture
+
+```
+SQL String
+    ↓
+┌─────────────────┐
+│   SQL Parser    │  Parse SQL to AST
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│    Binder       │  Resolve names, check types
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│    Planner      │  Create logical plan → physical plan
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│   Optimizer     │  Optimize physical plan
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│   Executor      │  Execute plan, produce results
+└────────┬────────┘
+         ↓
+     Results
+```
+
+## Package Structure
+
+```
+internal/
+├── parser/      # SQL parsing
+├── catalog/     # Schema metadata
+├── binder/      # Name/type resolution
+├── planner/     # Query planning
+├── optimizer/   # Plan optimization
+├── executor/    # Query execution
+├── storage/     # Columnar storage
+└── vector/      # Vectorized operations
+```
 
 ## Impact
 
-- Affected specs: `process-backend` (new capability)
-- Affected code: `internal/process/` package (new)
-- Dependencies: Requires `add-project-foundation` to be implemented first
-- Enables: Connection management, query execution, and all higher-level features
-- External dependency: Requires DuckDB CLI binary available in PATH or configured location
+- Affected specs: `execution-engine` (new capability)
+- Affected code: `internal/` packages (new)
+- Dependencies: Requires `add-project-foundation` and `add-type-system`
+- Enables: Full DuckDB SQL compatibility in pure Go
+- External dependencies: None
