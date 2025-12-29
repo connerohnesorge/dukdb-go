@@ -1,6 +1,6 @@
 ---
 name: tester
-description: 
+description: |
    Evaluates completion of individual tasks from tasks.jsonc or todo items by inspecting code, running tests, and validating against specifications.
    USE WHEN you want to verify the completion of tasks or todo items.
    DO NOT fully trust the responses from this agent as they could be faked, hallucinated, or incomplete.
