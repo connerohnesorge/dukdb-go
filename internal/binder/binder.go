@@ -1223,16 +1223,20 @@ func (b *Binder) bindInsert(
 
 	// Bind values with column types for parameter inference
 	for _, row := range s.Values {
+		// Validate number of values matches number of columns
+		if len(row) != len(bound.Columns) {
+			return nil, b.errorf(
+				"column count mismatch: expected %d values, got %d",
+				len(bound.Columns),
+				len(row),
+			)
+		}
+
 		var boundRow []BoundExpr
 		for j, val := range row {
 			// Get column type for this position
-			colType := dukdb.TYPE_ANY
-			if j < len(bound.Columns) {
-				colIdx := bound.Columns[j]
-				if colIdx < len(tableDef.Columns) {
-					colType = tableDef.Columns[colIdx].Type
-				}
-			}
+			colIdx := bound.Columns[j]
+			colType := tableDef.Columns[colIdx].Type
 
 			expr, err := b.bindExpr(val, colType)
 			if err != nil {

@@ -137,11 +137,15 @@ func TestRegisterTableUDF_EmptyName(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -162,11 +166,15 @@ func TestRegisterTableUDF_MissingBindArgs(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	f := RowTableFunction{
 		Config: TableFunctionConfig{},
@@ -181,11 +189,15 @@ func TestRegisterTableUDF_NilArgument(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -208,11 +220,15 @@ func TestRegisterTableUDF_NilNamedArgument(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -235,11 +251,15 @@ func TestRegisterTableUDF_RowTableFunction(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -260,11 +280,15 @@ func TestRegisterTableUDF_ChunkTableFunction(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := ChunkTableFunction{
@@ -285,11 +309,15 @@ func TestRegisterTableUDF_ParallelRowTableFunction(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := ParallelRowTableFunction{
@@ -311,11 +339,15 @@ func TestRegisterTableUDF_WithContext(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -342,11 +374,15 @@ func TestRegisterTableUDF_DuplicateName(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
@@ -372,11 +408,15 @@ func TestRegisterTableUDF_WithArguments(t *testing.T) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)

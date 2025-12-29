@@ -25,7 +25,9 @@ func TestRowsColumns(t *testing.T) {
 	}
 
 	rows := NewRows(columns, colTypes, data)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	assert.Equal(t, columns, rows.Columns())
 }
@@ -40,7 +42,9 @@ func TestRowsNext(t *testing.T) {
 	}
 
 	rows := NewRows(columns, colTypes, data)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	dest := make([]driver.Value, 2)
 
@@ -96,7 +100,9 @@ func TestRowsScan(t *testing.T) {
 	}
 
 	rows := NewRows(columns, colTypes, data)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	dest := make([]driver.Value, 3)
 	err := rows.Next(dest)
@@ -120,11 +126,13 @@ func TestRowsScanAfterClose(t *testing.T) {
 		[][]any{{int32(1)}},
 	)
 	dest := make([]driver.Value, 1)
-	rows.Next(dest)
-	rows.Close()
+	err := rows.Next(dest)
+	require.NoError(t, err)
+	err = rows.Close()
+	require.NoError(t, err)
 
 	var id int
-	err := rows.Scan(&id)
+	err = rows.Scan(&id)
 	require.Error(t, err)
 
 	var dukErr *Error
@@ -139,7 +147,9 @@ func TestRowsScanNoCurrentRow(t *testing.T) {
 		[]Type{TYPE_INTEGER},
 		[][]any{{int32(1)}},
 	)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	// Scan before Next
 	var id int
@@ -164,14 +174,17 @@ func TestRowsScanWrongDestCount(t *testing.T) {
 	}
 
 	rows := NewRows(columns, colTypes, data)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	dest := make([]driver.Value, 2)
-	rows.Next(dest)
+	err := rows.Next(dest)
+	require.NoError(t, err)
 
 	// Try to scan with wrong number of destinations
 	var id int
-	err := rows.Scan(&id)
+	err = rows.Scan(&id)
 	require.Error(t, err)
 
 	var dukErr *Error
@@ -246,7 +259,9 @@ func TestRowsColumnTypeScanType(t *testing.T) {
 					[]Type{tt.colType},
 					nil,
 				)
-				defer rows.Close()
+				t.Cleanup(func() {
+					assert.NoError(t, rows.Close())
+				})
 
 				result := rows.ColumnTypeScanType(
 					0,
@@ -282,7 +297,9 @@ func TestRowsColumnTypeDatabaseTypeName(
 				[]Type{tt.colType},
 				nil,
 			)
-			defer rows.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, rows.Close())
+			})
 
 			result := rows.ColumnTypeDatabaseTypeName(
 				0,
@@ -298,7 +315,9 @@ func TestRowsColumnTypeNullable(t *testing.T) {
 		[]Type{TYPE_INTEGER},
 		nil,
 	)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	nullable, ok := rows.ColumnTypeNullable(0)
 	assert.True(t, nullable)
@@ -311,7 +330,9 @@ func TestRowsEmptyResultSet(t *testing.T) {
 		[]Type{TYPE_INTEGER, TYPE_VARCHAR},
 		[][]any{},
 	)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	dest := make([]driver.Value, 2)
 	err := rows.Next(dest)
@@ -330,7 +351,9 @@ func TestRowsZeroColumnResult(t *testing.T) {
 		[]Type{},
 		[][]any{},
 	)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	assert.Empty(t, rows.Columns())
 }
@@ -347,7 +370,9 @@ func TestRowsLargeResultSet(t *testing.T) {
 		[]Type{TYPE_INTEGER, TYPE_VARCHAR},
 		data,
 	)
-	defer rows.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, rows.Close())
+	})
 
 	dest := make([]driver.Value, 2)
 	count := 0

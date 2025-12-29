@@ -347,7 +347,8 @@ func TestScalarFuncExecution(t *testing.T) {
 		err = chunk.SetValue(0, 1, int32(10))
 		require.NoError(t, err)
 
-		chunk.SetSize(2)
+		err = chunk.SetSize(2)
+		require.NoError(t, err)
 
 		// Create output vector
 		output, err := createTestVector(intType, VectorSize)
@@ -392,7 +393,8 @@ func TestScalarFuncExecution(t *testing.T) {
 		err = chunk.SetValue(0, 1, int32(42))
 		require.NoError(t, err)
 
-		chunk.SetSize(2)
+		err = chunk.SetSize(2)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -440,7 +442,8 @@ func TestScalarFuncExecution(t *testing.T) {
 		err = chunk.SetValue(0, 1, int32(42))
 		require.NoError(t, err)
 
-		chunk.SetSize(2)
+		err = chunk.SetSize(2)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -482,7 +485,8 @@ func TestScalarFuncExecution(t *testing.T) {
 		err = chunk.SetValue(0, 0, int32(1))
 		require.NoError(t, err)
 
-		chunk.SetSize(1)
+		err = chunk.SetSize(1)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -518,7 +522,8 @@ func TestScalarFuncExecution(t *testing.T) {
 		err = chunk.SetValue(0, 0, int32(1))
 		require.NoError(t, err)
 
-		chunk.SetSize(1)
+		err = chunk.SetSize(1)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -628,7 +633,8 @@ func TestDeterministicTimeout(t *testing.T) {
 			err = chunk.SetValue(0, i, int32(i))
 			require.NoError(t, err)
 		}
-		chunk.SetSize(10)
+		err = chunk.SetSize(10)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -682,7 +688,8 @@ func TestRowContextExecutor(t *testing.T) {
 		err = chunk.SetValue(0, 0, int32(42))
 		require.NoError(t, err)
 
-		chunk.SetSize(1)
+		err = chunk.SetSize(1)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -740,7 +747,8 @@ func TestScalarFuncPrimitiveTypes(t *testing.T) {
 			err = chunk.SetValue(0, 0, tc.inputVal)
 			require.NoError(t, err)
 
-			chunk.SetSize(1)
+			err = chunk.SetSize(1)
+			require.NoError(t, err)
 
 			output, err := createTestVector(typeInfo, VectorSize)
 			require.NoError(t, err)
@@ -789,7 +797,8 @@ func TestScalarFuncMultipleInputs(t *testing.T) {
 		err = chunk.SetValue(1, 1, int32(200))
 		require.NoError(t, err)
 
-		chunk.SetSize(2)
+		err = chunk.SetSize(2)
+		require.NoError(t, err)
 
 		output, err := createTestVector(intType, VectorSize)
 		require.NoError(t, err)
@@ -833,7 +842,8 @@ func TestScalarFuncMultipleInputs(t *testing.T) {
 		err = chunk.SetValue(1, 0, "World!")
 		require.NoError(t, err)
 
-		chunk.SetSize(1)
+		err = chunk.SetSize(1)
+		require.NoError(t, err)
 
 		output, err := createTestVector(varcharType, VectorSize)
 		require.NoError(t, err)

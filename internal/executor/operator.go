@@ -853,6 +853,14 @@ func (e *Executor) executeInsert(
 	} else {
 		// INSERT ... VALUES
 		for _, valueRow := range plan.Values {
+			if len(valueRow) != len(plan.Columns) {
+				return nil, fmt.Errorf(
+					"column count mismatch: expected %d values, got %d",
+					len(plan.Columns),
+					len(valueRow),
+				)
+			}
+
 			values := make([]any, len(plan.TableDef.Columns))
 			for i, expr := range valueRow {
 				val, err := e.evaluateExpr(ctx, expr, nil)

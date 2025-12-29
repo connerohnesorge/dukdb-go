@@ -537,8 +537,7 @@ func TestScanUnion(t *testing.T) {
 
 func TestScanNullToPointer(t *testing.T) {
 	t.Run("*int to nil", func(t *testing.T) {
-		var dest *int
-		dest = new(int)
+		dest := new(int)
 		*dest = 42
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
@@ -546,8 +545,7 @@ func TestScanNullToPointer(t *testing.T) {
 	})
 
 	t.Run("*string to nil", func(t *testing.T) {
-		var dest *string
-		dest = new(string)
+		dest := new(string)
 		*dest = "hello"
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
@@ -557,28 +555,28 @@ func TestScanNullToPointer(t *testing.T) {
 
 func TestScanNullToValue(t *testing.T) {
 	t.Run("int to zero", func(t *testing.T) {
-		var dest int = 42
+		dest := 42
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
 		assert.Equal(t, 0, dest)
 	})
 
 	t.Run("string to empty", func(t *testing.T) {
-		var dest string = "hello"
+		dest := "hello"
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
 		assert.Equal(t, "", dest)
 	})
 
 	t.Run("bool to false", func(t *testing.T) {
-		var dest bool = true
+		dest := true
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
 		assert.False(t, dest)
 	})
 
 	t.Run("float64 to zero", func(t *testing.T) {
-		var dest float64 = 3.14
+		dest := 3.14
 		err := scanValue(nil, &dest)
 		require.NoError(t, err)
 		assert.Equal(t, float64(0), dest)
@@ -636,7 +634,7 @@ var _ sql.Scanner = (*customScanner)(nil)
 
 func TestScanErrorCases(t *testing.T) {
 	t.Run("dest not pointer", func(t *testing.T) {
-		var dest int = 0
+		dest := 0
 		err := scanValue(
 			42,
 			dest,

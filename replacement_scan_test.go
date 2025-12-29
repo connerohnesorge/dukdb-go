@@ -168,7 +168,7 @@ func TestReplacementScanRegistry_GetNil(t *testing.T) {
 func TestRegisterReplacementScan_NewConnector(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	callback := func(tableName string) (string, []any, error) {
 		return "read_csv", []any{tableName + ".csv"}, nil
@@ -189,7 +189,7 @@ func TestRegisterReplacementScan_NewConnector(t *testing.T) {
 func TestRegisterReplacementScan_ReplaceExisting(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	callback1 := func(tableName string) (string, []any, error) {
 		return "func1", nil, nil
@@ -293,7 +293,7 @@ func TestTryReplacementScan_NilConnector(t *testing.T) {
 func TestTryReplacementScan_NoCallback(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	result := TryReplacementScan(connector, "test_table")
 	assert.False(t, result.Replaced)
@@ -303,7 +303,7 @@ func TestTryReplacementScan_NoCallback(t *testing.T) {
 func TestTryReplacementScan_Success(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		if tableName == "csv_data" {
@@ -322,7 +322,7 @@ func TestTryReplacementScan_Success(t *testing.T) {
 func TestTryReplacementScan_NoMatch(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		// Only handle tables starting with "csv_"
@@ -340,7 +340,7 @@ func TestTryReplacementScan_NoMatch(t *testing.T) {
 func TestTryReplacementScan_CallbackError(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		return "", nil, errors.New("file not found")
@@ -355,7 +355,7 @@ func TestTryReplacementScan_CallbackError(t *testing.T) {
 func TestTryReplacementScan_UnsupportedParamType(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		// Return unsupported type (float64)
@@ -372,7 +372,7 @@ func TestTryReplacementScanWithContext_Success(t *testing.T) {
 	mClock := quartz.NewMock(t)
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		return "read_parquet", []any{tableName + ".parquet"}, nil
@@ -393,7 +393,7 @@ func TestTryReplacementScanWithContext_DeadlineExceeded(t *testing.T) {
 
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		return "read_csv", nil, nil
@@ -412,7 +412,7 @@ func TestTryReplacementScanWithContext_DeadlineExceeded(t *testing.T) {
 func TestTryReplacementScan_WithAllSupportedTypes(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		return "multi_param_func", []any{
@@ -484,7 +484,7 @@ func TestReplacementScanResult_IsSuccess(t *testing.T) {
 func TestReplacementScan_EmptyFunctionNameWithParams(t *testing.T) {
 	connector, err := NewConnector(":memory:", nil)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { assert.NoError(t, connector.Close()) }()
 
 	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		// Return empty function name with params (should be treated as no replacement)
