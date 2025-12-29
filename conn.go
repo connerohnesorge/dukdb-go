@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"reflect"
 	"sync"
+
+	"github.com/coder/quartz"
 )
 
 // Conn implements the database/sql/driver connection interfaces.
@@ -17,6 +19,18 @@ type Conn struct {
 	backendConn BackendConn
 	closed      bool
 	tx          bool
+
+	// scalarFuncs holds registered scalar UDFs for this connection.
+	scalarFuncs *scalarFuncRegistry
+
+	// tableUDFs holds registered table UDFs for this connection.
+	tableUDFs *tableFunctionRegistry
+
+	// profiling holds the profiling context for this connection.
+	profiling *ProfilingContext
+
+	// replacementScan holds the replacement scan context for this connection.
+	replacementScan *ReplacementScanContext
 }
 
 // Prepare returns a prepared statement, bound to this connection.
@@ -361,6 +375,7 @@ type Stmt struct {
 	conn        *Conn
 	backendStmt BackendStmt
 	closed      bool
+	boundParams map[int]any // Bound parameters for Bind/ExecBound/QueryBound
 }
 
 // Close closes the statement.
@@ -464,8 +479,21 @@ func (s *Stmt) ParamName(n int) (string, error) {
 	if s.closed {
 		return "", errClosedStmt
 	}
-	// This is a stub - actual implementation depends on backend
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ParamName(n), nil
+	}
 	return "", nil
+}
+
+// ParamType returns the type of the parameter at the given index (1-based).
+func (s *Stmt) ParamType(n int) (Type, error) {
+	if s.closed {
+		return TYPE_INVALID, errClosedStmt
+	}
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ParamType(n), nil
+	}
+	return TYPE_ANY, nil
 }
 
 // ColumnCount returns the number of columns in the result set.
@@ -473,7 +501,9 @@ func (s *Stmt) ColumnCount() (int, error) {
 	if s.closed {
 		return 0, errClosedStmt
 	}
-	// This is a stub - actual implementation depends on backend
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ColumnCount(), nil
+	}
 	return 0, nil
 }
 
@@ -482,7 +512,9 @@ func (s *Stmt) ColumnName(n int) (string, error) {
 	if s.closed {
 		return "", errClosedStmt
 	}
-	// This is a stub - actual implementation depends on backend
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ColumnName(n), nil
+	}
 	return "", nil
 }
 
@@ -491,8 +523,21 @@ func (s *Stmt) ColumnType(n int) (Type, error) {
 	if s.closed {
 		return TYPE_INVALID, errClosedStmt
 	}
-	// This is a stub - actual implementation depends on backend
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ColumnType(n), nil
+	}
 	return TYPE_INVALID, nil
+}
+
+// ColumnTypeInfo returns extended type info for the column at the given index (0-based).
+func (s *Stmt) ColumnTypeInfo(n int) (TypeInfo, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.ColumnTypeInfo(n), nil
+	}
+	return nil, nil
 }
 
 // StatementType returns the type of the statement.
@@ -500,8 +545,137 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	if s.closed {
 		return STATEMENT_TYPE_INVALID, errClosedStmt
 	}
-	// This is a stub - actual implementation depends on backend
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		return intro.StatementType(), nil
+	}
 	return STATEMENT_TYPE_INVALID, nil
+}
+
+// Bind binds a value to the parameter at the given index (1-based).
+// Bound parameters are used by ExecBound and QueryBound.
+func (s *Stmt) Bind(index int, value any) error {
+	if s.closed {
+		return errClosedStmt
+	}
+	if index < 1 {
+		return &Error{
+			Type: ErrorTypeInvalidInput,
+			Msg:  "parameter index must be >= 1",
+		}
+	}
+	numInput := s.NumInput()
+	if numInput > 0 && index > numInput {
+		return &Error{
+			Type: ErrorTypeInvalidInput,
+			Msg:  "parameter index out of range",
+		}
+	}
+	if s.boundParams == nil {
+		s.boundParams = make(map[int]any)
+	}
+	s.boundParams[index] = value
+	return nil
+}
+
+// ClearBound clears all bound parameters.
+func (s *Stmt) ClearBound() {
+	s.boundParams = nil
+}
+
+// ExecBound executes the statement with bound parameters.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) ExecBound() (driver.Result, error) {
+	return s.ExecBoundContext(context.Background())
+}
+
+// ExecBoundContext executes the statement with bound parameters and context.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) ExecBoundContext(ctx context.Context) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+
+	args := s.boundParamsToNamedValues()
+	return s.ExecContext(ctx, args)
+}
+
+// QueryBound executes the statement with bound parameters and returns rows.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) QueryBound() (driver.Rows, error) {
+	return s.QueryBoundContext(context.Background())
+}
+
+// QueryBoundContext executes the statement with bound parameters and context.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) QueryBoundContext(ctx context.Context) (driver.Rows, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+
+	args := s.boundParamsToNamedValues()
+	return s.QueryContext(ctx, args)
+}
+
+// ExecBoundContextClock executes the statement with bound parameters using a clock
+// for deterministic deadline checking. This is primarily for testing.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) ExecBoundContextClock(ctx context.Context, clock quartz.Clock) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+
+	// Check deadline using the injected clock for deterministic testing
+	if deadline, ok := ctx.Deadline(); ok {
+		if clock.Until(deadline) <= 0 {
+			return nil, context.DeadlineExceeded
+		}
+	}
+
+	args := s.boundParamsToNamedValues()
+	return s.ExecContext(ctx, args)
+}
+
+// QueryBoundContextClock executes the statement with bound parameters using a clock
+// for deterministic deadline checking. This is primarily for testing.
+// Parameters must be bound using Bind before calling this method.
+func (s *Stmt) QueryBoundContextClock(ctx context.Context, clock quartz.Clock) (driver.Rows, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+
+	// Check deadline using the injected clock for deterministic testing
+	if deadline, ok := ctx.Deadline(); ok {
+		if clock.Until(deadline) <= 0 {
+			return nil, context.DeadlineExceeded
+		}
+	}
+
+	args := s.boundParamsToNamedValues()
+	return s.QueryContext(ctx, args)
+}
+
+// boundParamsToNamedValues converts bound parameters to driver.NamedValue slice.
+func (s *Stmt) boundParamsToNamedValues() []driver.NamedValue {
+	if len(s.boundParams) == 0 {
+		return nil
+	}
+
+	// Find the maximum index to size the slice
+	maxIndex := 0
+	for idx := range s.boundParams {
+		if idx > maxIndex {
+			maxIndex = idx
+		}
+	}
+
+	args := make([]driver.NamedValue, maxIndex)
+	for idx, val := range s.boundParams {
+		args[idx-1] = driver.NamedValue{
+			Ordinal: idx,
+			Value:   val,
+		}
+	}
+	return args
 }
 
 // valuesToNamedValues converts driver.Value slice to driver.NamedValue slice.

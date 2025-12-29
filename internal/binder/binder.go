@@ -22,10 +22,26 @@ type BoundExpr interface {
 	ResultType() dukdb.Type
 }
 
+// ScalarUDFResolver is the interface for resolving scalar UDFs.
+// This is used to decouple the binder from the dukdb package.
+type ScalarUDFResolver interface {
+	// LookupScalarUDF looks up a scalar UDF by name and argument types.
+	// Returns the UDF info (opaque), result type, and whether it was found.
+	LookupScalarUDF(name string, argTypes []dukdb.Type) (udfInfo any, resultType dukdb.Type, found bool)
+	// BindScalarUDF calls the ScalarBinder callback if present.
+	// Returns the bind context to be used during execution.
+	// For volatile functions, this returns nil to prevent caching.
+	BindScalarUDF(udfInfo any, args []dukdb.ScalarUDFArg) (bindCtx any, err error)
+	// IsVolatile returns true if the UDF is marked as volatile.
+	// Volatile functions produce different results each invocation and cannot be cached.
+	IsVolatile(udfInfo any) bool
+}
+
 // Binder resolves names and checks types in parsed statements.
 type Binder struct {
-	catalog *catalog.Catalog
-	scope   *BindScope
+	catalog     *catalog.Catalog
+	scope       *BindScope
+	udfResolver ScalarUDFResolver
 }
 
 // BindScope represents the current binding scope with available tables and columns.
@@ -60,6 +76,12 @@ func NewBinder(cat *catalog.Catalog) *Binder {
 		catalog: cat,
 		scope:   newBindScope(nil),
 	}
+}
+
+// WithUDFResolver sets the scalar UDF resolver and returns the binder.
+func (b *Binder) WithUDFResolver(resolver ScalarUDFResolver) *Binder {
+	b.udfResolver = resolver
+	return b
 }
 
 func newBindScope(parent *BindScope) *BindScope {
@@ -286,6 +308,24 @@ type BoundFunctionCall struct {
 func (*BoundFunctionCall) boundExprNode() {}
 
 func (f *BoundFunctionCall) ResultType() dukdb.Type { return f.ResType }
+
+// BoundScalarUDF represents a bound scalar user-defined function call.
+type BoundScalarUDF struct {
+	Name    string
+	Args    []BoundExpr
+	ResType dukdb.Type
+	// UDFInfo contains the registered UDF metadata for execution.
+	// This is an opaque pointer to dukdb.registeredScalarFunc.
+	UDFInfo any
+	// ArgInfo contains metadata about each argument for constant folding.
+	ArgInfo []dukdb.ScalarUDFArg
+	// BindCtx contains the context returned from ScalarBinder callback.
+	BindCtx any
+}
+
+func (*BoundScalarUDF) boundExprNode() {}
+
+func (f *BoundScalarUDF) ResultType() dukdb.Type { return f.ResType }
 
 // BoundCastExpr represents a bound CAST expression.
 type BoundCastExpr struct {
@@ -820,7 +860,7 @@ func (b *Binder) bindUnaryExpr(
 
 func (b *Binder) bindFunctionCall(
 	f *parser.FunctionCall,
-) (*BoundFunctionCall, error) {
+) (BoundExpr, error) {
 	var args []BoundExpr
 	for _, arg := range f.Args {
 		bound, err := b.bindExpr(arg)
@@ -830,7 +870,47 @@ func (b *Binder) bindFunctionCall(
 		args = append(args, bound)
 	}
 
-	// Determine result type based on function
+	// Check for scalar UDF first
+	if b.udfResolver != nil {
+		argTypes := make([]dukdb.Type, len(args))
+		for i, arg := range args {
+			argTypes[i] = arg.ResultType()
+		}
+
+		if udfInfo, resType, found := b.udfResolver.LookupScalarUDF(f.Name, argTypes); found {
+			// Build argument info for constant folding.
+			// For volatile functions, skip foldability detection to prevent caching.
+			argInfo := make([]dukdb.ScalarUDFArg, len(args))
+			isVolatile := b.udfResolver.IsVolatile(udfInfo)
+			if !isVolatile {
+				for i, arg := range args {
+					if lit, ok := arg.(*BoundLiteral); ok {
+						argInfo[i] = dukdb.ScalarUDFArg{
+							Foldable: true,
+							Value:    lit.Value,
+						}
+					}
+				}
+			}
+
+			// Call ScalarBinder callback if present (skipped for volatile functions)
+			bindCtx, err := b.udfResolver.BindScalarUDF(udfInfo, argInfo)
+			if err != nil {
+				return nil, fmt.Errorf("scalar UDF '%s' bind error: %w", f.Name, err)
+			}
+
+			return &BoundScalarUDF{
+				Name:    f.Name,
+				Args:    args,
+				ResType: resType,
+				UDFInfo: udfInfo,
+				ArgInfo: argInfo,
+				BindCtx: bindCtx,
+			}, nil
+		}
+	}
+
+	// Fall back to built-in function
 	resType := inferFunctionResultType(
 		f.Name,
 		args,

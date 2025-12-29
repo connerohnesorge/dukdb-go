@@ -11,15 +11,16 @@ import (
 // It holds the database configuration and can create new connections.
 // The backend is initialized lazily on the first Connect call using sync.Once.
 type Connector struct {
-	config      *Config
-	driver      *Driver
-	backend     Backend
-	backendConn BackendConn
-	connInitFn  func(driver.ExecerContext) error
-	once        sync.Once
-	initErr     error
-	closed      bool
-	mu          sync.RWMutex
+	config           *Config
+	driver           *Driver
+	backend          Backend
+	backendConn      BackendConn
+	connInitFn       func(driver.ExecerContext) error
+	once             sync.Once
+	initErr          error
+	closed           bool
+	mu               sync.RWMutex
+	replacementScans *replacementScanRegistry
 }
 
 // NewConnector creates a new Connector for a DuckDB database.

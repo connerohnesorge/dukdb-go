@@ -377,6 +377,32 @@ func FormatValue(v any) (string, error) {
 		}
 		return val.String(), nil
 
+	case Uhugeint:
+		return val.String(), nil
+	case *Uhugeint:
+		if val == nil {
+			return "NULL", nil
+		}
+		return val.String(), nil
+
+	case Bit:
+		// Format as bit literal: B'10110'.
+		return fmt.Sprintf("B'%s'", val.String()), nil
+	case *Bit:
+		if val == nil {
+			return "NULL", nil
+		}
+		return fmt.Sprintf("B'%s'", val.String()), nil
+
+	case TimeNS:
+		// Format as time literal: TIME 'HH:MM:SS.nnnnnnnnn'.
+		return fmt.Sprintf("TIME '%s'", val.String()), nil
+	case *TimeNS:
+		if val == nil {
+			return "NULL", nil
+		}
+		return fmt.Sprintf("TIME '%s'", val.String()), nil
+
 	case driver.Valuer:
 		// Handle types that implement driver.Valuer
 		dv, err := val.Value()

@@ -131,15 +131,48 @@ func (c *EngineConn) Prepare(
 		return nil, err
 	}
 
-	// Count parameters
+	// Count and collect parameters
 	numParams := parser.CountParameters(stmt)
+	params := parser.CollectParameters(stmt)
 
-	return &EngineStmt{
+	engineStmt := &EngineStmt{
 		conn:      c,
 		query:     query,
 		stmt:      stmt,
 		numParams: numParams,
-	}, nil
+		params:    params,
+	}
+
+	// For SELECT statements, bind to get column metadata
+	if selectStmt, ok := stmt.(*parser.SelectStmt); ok {
+		_ = selectStmt // Use selectStmt for binding
+		b := binder.NewBinder(c.engine.catalog)
+		boundStmt, bindErr := b.Bind(stmt)
+		if bindErr == nil {
+			if boundSelect, ok := boundStmt.(*binder.BoundSelectStmt); ok {
+				engineStmt.columns = make([]columnInfo, 0, len(boundSelect.Columns))
+				for _, col := range boundSelect.Columns {
+					name := col.Alias
+					if name == "" && col.Expr != nil {
+						// Try to infer name from expression
+						if colRef, ok := col.Expr.(*binder.BoundColumnRef); ok {
+							name = colRef.Column
+						}
+					}
+					var colType dukdb.Type
+					if col.Expr != nil {
+						colType = col.Expr.ResultType()
+					}
+					engineStmt.columns = append(engineStmt.columns, columnInfo{
+						name:    name,
+						colType: colType,
+					})
+				}
+			}
+		}
+	}
+
+	return engineStmt, nil
 }
 
 // Close closes the connection.
@@ -183,6 +216,16 @@ type EngineStmt struct {
 	stmt      parser.Statement
 	numParams int
 	closed    bool
+
+	// Introspection metadata
+	params  []parser.ParameterInfo
+	columns []columnInfo // Populated after binding for SELECT statements
+}
+
+// columnInfo holds result column metadata.
+type columnInfo struct {
+	name    string
+	colType dukdb.Type
 }
 
 // Execute executes the prepared statement.
@@ -235,8 +278,93 @@ func (s *EngineStmt) NumInput() int {
 	return s.numParams
 }
 
+// StatementType returns the type of the prepared statement.
+func (s *EngineStmt) StatementType() dukdb.StmtType {
+	if s.closed || s.stmt == nil {
+		return dukdb.STATEMENT_TYPE_INVALID
+	}
+	return s.stmt.Type()
+}
+
+// ParamName returns the name of the parameter at the given index (1-based).
+// Returns empty string for positional parameters.
+func (s *EngineStmt) ParamName(index int) string {
+	if index < 1 || index > len(s.params) {
+		return ""
+	}
+	return s.params[index-1].Name
+}
+
+// ParamType returns the type of the parameter at the given index (1-based).
+// Since parameters are untyped until binding, we return TYPE_ANY.
+func (s *EngineStmt) ParamType(index int) dukdb.Type {
+	if index < 1 || index > s.numParams {
+		return dukdb.TYPE_INVALID
+	}
+	// Parameters are untyped in parsed SQL; return ANY
+	return dukdb.TYPE_ANY
+}
+
+// ColumnCount returns the number of result columns.
+// Returns 0 for non-SELECT statements.
+func (s *EngineStmt) ColumnCount() int {
+	return len(s.columns)
+}
+
+// ColumnName returns the name of the result column at the given index (0-based).
+func (s *EngineStmt) ColumnName(index int) string {
+	if index < 0 || index >= len(s.columns) {
+		return ""
+	}
+	return s.columns[index].name
+}
+
+// ColumnType returns the type of the result column at the given index (0-based).
+func (s *EngineStmt) ColumnType(index int) dukdb.Type {
+	if index < 0 || index >= len(s.columns) {
+		return dukdb.TYPE_INVALID
+	}
+	return s.columns[index].colType
+}
+
+// ColumnTypeInfo returns extended type info for the result column at the given index (0-based).
+func (s *EngineStmt) ColumnTypeInfo(index int) dukdb.TypeInfo {
+	if index < 0 || index >= len(s.columns) {
+		return nil
+	}
+	colType := s.columns[index].colType
+	// For primitive types, create TypeInfo using NewTypeInfo
+	// Complex types would need additional metadata from the binder
+	info, err := dukdb.NewTypeInfo(colType)
+	if err != nil {
+		// For complex types where NewTypeInfo fails, return a basic wrapper
+		// This is a limitation - full complex type info requires binder enhancement
+		return &basicTypeInfo{typ: colType}
+	}
+	return info
+}
+
+// basicTypeInfo is a simple TypeInfo wrapper for types that don't have
+// specialized constructors available.
+type basicTypeInfo struct {
+	typ dukdb.Type
+}
+
+func (b *basicTypeInfo) InternalType() dukdb.Type {
+	return b.typ
+}
+
+func (b *basicTypeInfo) Details() dukdb.TypeDetails {
+	return nil
+}
+
+func (b *basicTypeInfo) SQLType() string {
+	return b.typ.String()
+}
+
 // Verify interface implementations
 var (
-	_ dukdb.BackendConn = (*EngineConn)(nil)
-	_ dukdb.BackendStmt = (*EngineStmt)(nil)
+	_ dukdb.BackendConn            = (*EngineConn)(nil)
+	_ dukdb.BackendStmt            = (*EngineStmt)(nil)
+	_ dukdb.BackendStmtIntrospector = (*EngineStmt)(nil)
 )

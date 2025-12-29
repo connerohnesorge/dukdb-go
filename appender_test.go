@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/coder/quartz"
 )
 
 // appenderMockState holds state for appender-specific mock testing
@@ -1280,5 +1282,570 @@ func TestAppenderColumnTypes(t *testing.T) {
 				expected[i],
 			)
 		}
+	}
+}
+
+// === Query Appender Tests ===
+
+// TestNewQueryAppender_EmptyQuery tests error for empty query
+func TestNewQueryAppender_EmptyQuery(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	_, err := NewQueryAppender(
+		conn,
+		"", // empty query
+		"appended_data",
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+	)
+
+	if err == nil {
+		t.Fatal("expected error for empty query")
+	}
+	var dukErr *Error
+	if errors.As(err, &dukErr) {
+		if dukErr.Type != ErrorTypeInvalid {
+			t.Errorf(
+				"error type: got %v, want ErrorTypeInvalid",
+				dukErr.Type,
+			)
+		}
+	}
+}
+
+// TestNewQueryAppender_EmptyColTypes tests error for empty column types
+func TestNewQueryAppender_EmptyColTypes(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	_, err := NewQueryAppender(
+		conn,
+		"INSERT INTO test SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{}, // empty column types
+		[]string{},
+	)
+
+	if err == nil {
+		t.Fatal("expected error for empty column types")
+	}
+	var dukErr *Error
+	if errors.As(err, &dukErr) {
+		if dukErr.Type != ErrorTypeInvalid {
+			t.Errorf(
+				"error type: got %v, want ErrorTypeInvalid",
+				dukErr.Type,
+			)
+		}
+	}
+}
+
+// TestNewQueryAppender_ColNamesMismatch tests error for column name/type mismatch
+func TestNewQueryAppender_ColNamesMismatch(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	_, err := NewQueryAppender(
+		conn,
+		"INSERT INTO test SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo},      // 1 type
+		[]string{"col1", "col2"}, // 2 names - mismatch
+	)
+
+	if err == nil {
+		t.Fatal("expected error for column names/types mismatch")
+	}
+	var dukErr *Error
+	if errors.As(err, &dukErr) {
+		if dukErr.Type != ErrorTypeInvalid {
+			t.Errorf(
+				"error type: got %v, want ErrorTypeInvalid",
+				dukErr.Type,
+			)
+		}
+	}
+}
+
+// TestNewQueryAppender_DefaultTableName tests default table name
+func TestNewQueryAppender_DefaultTableName(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO test SELECT * FROM appended_data",
+		"", // empty table name - should default to "appended_data"
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	if appender.tempTableName != "appended_data" {
+		t.Errorf(
+			"tempTableName: got %q, want %q",
+			appender.tempTableName,
+			"appended_data",
+		)
+	}
+}
+
+// TestNewQueryAppender_DefaultColumnNames tests default column names
+func TestNewQueryAppender_DefaultColumnNames(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO test SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{}, // empty column names - should default to col1, col2
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	if len(appender.queryColNames) != 2 {
+		t.Fatalf("expected 2 column names, got %d", len(appender.queryColNames))
+	}
+	if appender.queryColNames[0] != "col1" {
+		t.Errorf("column 0: got %q, want %q", appender.queryColNames[0], "col1")
+	}
+	if appender.queryColNames[1] != "col2" {
+		t.Errorf("column 1: got %q, want %q", appender.queryColNames[1], "col2")
+	}
+}
+
+// TestNewQueryAppender_Valid tests valid query appender creation
+func TestNewQueryAppender_Valid(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO target SELECT * FROM my_data",
+		"my_data",
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"id", "name"},
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	if !appender.isQueryAppender {
+		t.Error("expected isQueryAppender to be true")
+	}
+	if appender.query != "INSERT INTO target SELECT * FROM my_data" {
+		t.Errorf("query: got %q", appender.query)
+	}
+	if appender.tempTableName != "my_data" {
+		t.Errorf("tempTableName: got %q, want %q", appender.tempTableName, "my_data")
+	}
+	if len(appender.queryColTypes) != 2 {
+		t.Errorf("queryColTypes length: got %d, want %d", len(appender.queryColTypes), 2)
+	}
+	if len(appender.queryColNames) != 2 {
+		t.Errorf("queryColNames length: got %d, want %d", len(appender.queryColNames), 2)
+	}
+}
+
+// TestQueryAppender_FlushWithInsert tests flush with INSERT query
+func TestQueryAppender_FlushWithInsert(t *testing.T) {
+	mock, state := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"id", "name"},
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	// Append rows
+	err = appender.AppendRow(1, "Alice")
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+	err = appender.AppendRow(2, "Bob")
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+
+	// Flush
+	err = appender.Flush()
+	if err != nil {
+		t.Fatalf("Flush failed: %v", err)
+	}
+
+	// Verify the sequence of queries executed:
+	// 1. CREATE TEMP TABLE
+	// 2. DELETE FROM (truncate)
+	// 3. INSERT INTO temp table
+	// 4. Execute user query
+	if state.execCount != 4 {
+		t.Errorf("exec count: got %d, want 4 (CREATE, DELETE, INSERT, user query)", state.execCount)
+	}
+
+	// Verify buffer is cleared
+	if appender.BufferSize() != 0 {
+		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+	}
+}
+
+// TestQueryAppender_Close tests proper cleanup on close
+func TestQueryAppender_Close(t *testing.T) {
+	mock, state := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	// Append a row and flush to create the temp table
+	err = appender.AppendRow(1)
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+	err = appender.Flush()
+	if err != nil {
+		t.Fatalf("Flush failed: %v", err)
+	}
+
+	// Now close - should drop the temp table
+	initialExecCount := state.execCount
+	err = appender.Close()
+	if err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Verify DROP TABLE was executed
+	if state.execCount <= initialExecCount {
+		t.Error("expected DROP TABLE to be executed on close")
+	}
+	if !strings.Contains(state.lastQuery, "DROP TABLE") {
+		t.Errorf("expected DROP TABLE in last query, got: %s", state.lastQuery)
+	}
+}
+
+// TestQueryAppender_AutoFlush tests auto-flush behavior
+func TestQueryAppender_AutoFlush(t *testing.T) {
+	mock, state := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	appender, err := NewQueryAppenderWithThreshold(
+		conn,
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+		3, // threshold of 3
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppenderWithThreshold failed: %v", err)
+	}
+
+	// Append 3 rows - at threshold but not exceeded
+	for i := 0; i < 3; i++ {
+		err = appender.AppendRow(i)
+		if err != nil {
+			t.Fatalf("AppendRow %d failed: %v", i, err)
+		}
+	}
+
+	if state.execCount != 0 {
+		t.Errorf("exec count before threshold exceeded: got %d, want 0", state.execCount)
+	}
+
+	// Append one more - should trigger auto-flush
+	err = appender.AppendRow(3)
+	if err != nil {
+		t.Fatalf("AppendRow 3 failed: %v", err)
+	}
+
+	if state.execCount == 0 {
+		t.Error("expected auto-flush to execute queries")
+	}
+}
+
+// TestQueryAppender_NestedTypesSchema tests temp table creation with nested types
+func TestQueryAppender_NestedTypesSchema(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	listInfo, _ := NewListInfo(intInfo)
+	mapInfo, _ := NewMapInfo(varcharInfo, intInfo)
+
+	// Verify that query appender creation works with nested types
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo, listInfo, mapInfo},
+		[]string{"id", "numbers", "metadata"},
+	)
+
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	// Verify the types are stored correctly
+	if len(appender.queryColTypes) != 3 {
+		t.Errorf("queryColTypes length: got %d, want 3", len(appender.queryColTypes))
+	}
+
+	// Verify SQLType() produces correct strings for nested types
+	expected := []string{"INTEGER", "INTEGER[]", "MAP(VARCHAR, INTEGER)"}
+	for i, typeInfo := range appender.queryColTypes {
+		sqlType := typeInfo.SQLType()
+		if sqlType != expected[i] {
+			t.Errorf("SQLType[%d]: got %q, want %q", i, sqlType, expected[i])
+		}
+	}
+}
+
+// TestQueryAppender_InvalidConnection tests error for non-*Conn
+func TestQueryAppender_InvalidConnection(t *testing.T) {
+	// Create a mock that doesn't implement driver.Conn properly
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	_, err := NewQueryAppender(
+		nil, // nil connection
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+	)
+
+	if err == nil {
+		t.Fatal("expected error for nil connection")
+	}
+	var dukErr *Error
+	if errors.As(err, &dukErr) {
+		if dukErr.Type != ErrorTypeConnection {
+			t.Errorf(
+				"error type: got %v, want ErrorTypeConnection",
+				dukErr.Type,
+			)
+		}
+	}
+}
+
+// === Deterministic Testing Integration Tests ===
+
+// TestFlushWithContext_Timeout tests deterministic timeout behavior using quartz.Mock
+func TestFlushWithContext_Timeout(t *testing.T) {
+	mock, state := newAppenderMock()
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
+	conn := createAppenderTestConn(mock)
+
+	appender, err := NewAppenderFromConn(
+		conn,
+		"main",
+		"test_table",
+	)
+	if err != nil {
+		t.Fatalf("NewAppenderFromConn failed: %v", err)
+	}
+
+	// Append a row
+	err = appender.AppendRow(1)
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+
+	// Create a mock clock
+	mClock := quartz.NewMock(t)
+
+	// Create a deadline based on mock clock time
+	deadline := mClock.Now().Add(1 * time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	// Advance the clock past the deadline
+	mClock.Advance(2 * time.Second)
+
+	// Now the clock says we're past the deadline
+	appCtx := NewAppenderContext(ctx, mClock)
+	err = appender.FlushWithContext(appCtx)
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
+	}
+
+	// Buffer should be preserved
+	if appender.BufferSize() != 1 {
+		t.Errorf("buffer size after timeout: got %d, want 1", appender.BufferSize())
+	}
+}
+
+// TestFlushWithContext_Success tests successful flush with context
+func TestFlushWithContext_Success(t *testing.T) {
+	mock, state := newAppenderMock()
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
+	conn := createAppenderTestConn(mock)
+
+	appender, err := NewAppenderFromConn(
+		conn,
+		"main",
+		"test_table",
+	)
+	if err != nil {
+		t.Fatalf("NewAppenderFromConn failed: %v", err)
+	}
+
+	// Append a row
+	err = appender.AppendRow(1)
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+
+	// Use context without deadline - should succeed
+	mClock := quartz.NewMock(t)
+	ctx := context.Background()
+	appCtx := NewAppenderContext(ctx, mClock)
+
+	err = appender.FlushWithContext(appCtx)
+	if err != nil {
+		t.Fatalf("FlushWithContext failed: %v", err)
+	}
+
+	// Buffer should be cleared
+	if appender.BufferSize() != 0 {
+		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+	}
+}
+
+// TestFlushWithContext_BeforeDeadline tests that flush succeeds before deadline
+func TestFlushWithContext_BeforeDeadline(t *testing.T) {
+	mock, state := newAppenderMock()
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
+	conn := createAppenderTestConn(mock)
+
+	appender, err := NewAppenderFromConn(
+		conn,
+		"main",
+		"test_table",
+	)
+	if err != nil {
+		t.Fatalf("NewAppenderFromConn failed: %v", err)
+	}
+
+	// Append a row
+	err = appender.AppendRow(1)
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+
+	// Create a mock clock
+	mClock := quartz.NewMock(t)
+
+	// Create a deadline in the future (1 hour from mock clock now)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Hour))
+	defer cancel()
+
+	// Don't advance the clock - we're still before deadline
+	appCtx := NewAppenderContext(ctx, mClock)
+	err = appender.FlushWithContext(appCtx)
+	if err != nil {
+		t.Fatalf("FlushWithContext failed: %v", err)
+	}
+
+	// Buffer should be cleared
+	if appender.BufferSize() != 0 {
+		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+	}
+}
+
+// TestFlushWithContext_QueryAppenderTimeout tests timeout for query appender
+func TestFlushWithContext_QueryAppenderTimeout(t *testing.T) {
+	mock, _ := newAppenderMock()
+	conn := createAppenderTestConn(mock)
+
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	appender, err := NewQueryAppender(
+		conn,
+		"INSERT INTO target SELECT * FROM appended_data",
+		"appended_data",
+		[]TypeInfo{intInfo},
+		[]string{"id"},
+	)
+	if err != nil {
+		t.Fatalf("NewQueryAppender failed: %v", err)
+	}
+
+	// Append a row
+	err = appender.AppendRow(1)
+	if err != nil {
+		t.Fatalf("AppendRow failed: %v", err)
+	}
+
+	// Create a mock clock
+	mClock := quartz.NewMock(t)
+
+	// Create a deadline and advance past it
+	deadline := mClock.Now().Add(1 * time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	mClock.Advance(2 * time.Second)
+
+	appCtx := NewAppenderContext(ctx, mClock)
+	err = appender.FlushWithContext(appCtx)
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
+	}
+}
+
+// TestAppenderContext_NilClock tests that nil clock uses real clock
+func TestAppenderContext_NilClock(t *testing.T) {
+	ctx := context.Background()
+	appCtx := NewAppenderContext(ctx, nil)
+
+	// Verify that the clock is not nil (uses real clock)
+	if appCtx.clock == nil {
+		t.Error("expected non-nil clock when passing nil")
 	}
 }

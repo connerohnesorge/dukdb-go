@@ -74,6 +74,36 @@ type BackendStmt interface {
 	NumInput() int
 }
 
+// BackendStmtIntrospector is an optional interface for backends that support
+// statement introspection. Backends can implement this to provide metadata
+// about prepared statements.
+type BackendStmtIntrospector interface {
+	BackendStmt
+
+	// StatementType returns the type of the prepared statement.
+	StatementType() StmtType
+
+	// ParamName returns the name of the parameter at the given index (1-based).
+	// Returns empty string for positional parameters.
+	ParamName(index int) string
+
+	// ParamType returns the type of the parameter at the given index (1-based).
+	ParamType(index int) Type
+
+	// ColumnCount returns the number of result columns.
+	// Returns 0 for non-SELECT statements.
+	ColumnCount() int
+
+	// ColumnName returns the name of the result column at the given index (0-based).
+	ColumnName(index int) string
+
+	// ColumnType returns the type of the result column at the given index (0-based).
+	ColumnType(index int) Type
+
+	// ColumnTypeInfo returns extended type info for the result column at the given index (0-based).
+	ColumnTypeInfo(index int) TypeInfo
+}
+
 // Config holds configuration options for a DuckDB connection.
 type Config struct {
 	// Path specifies the database path.

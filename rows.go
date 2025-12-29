@@ -275,6 +275,24 @@ var (
 	)
 )
 
+// columnTypes returns TypeInfo for each column.
+// For simple types, this creates a basic TypeInfo wrapper.
+// For complex types (LIST, STRUCT, etc.), full type info would need
+// to be stored separately during query execution.
+func (r *Rows) columnTypes() []TypeInfo {
+	result := make([]TypeInfo, len(r.colTypes))
+	for i, t := range r.colTypes {
+		info, err := NewTypeInfo(t)
+		if err != nil {
+			// For complex types, create a minimal wrapper
+			result[i] = &typeInfo{typ: t}
+		} else {
+			result[i] = info
+		}
+	}
+	return result
+}
+
 // Interface assertions to verify Rows implements the expected interfaces.
 var (
 	_ driver.Rows = (*Rows)(

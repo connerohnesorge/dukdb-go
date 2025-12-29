@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/coder/quartz"
 )
 
 // DefaultAppenderThreshold is the default number of rows buffered before auto-flush.
@@ -15,6 +17,10 @@ const DefaultAppenderThreshold = 1024
 // Appender provides efficient bulk data loading via batched INSERTs.
 // It buffers rows in memory and flushes them as multi-row INSERT statements.
 // Appender is thread-safe and can be used from multiple goroutines.
+//
+// There are two modes of operation:
+//   - Table appender: Created via NewAppender, directly inserts into an existing table
+//   - Query appender: Created via NewQueryAppender, executes a custom query with batched data
 type Appender struct {
 	conn      *Conn    // Database connection
 	catalog   string   // Database catalog (defaults to "memory")
@@ -26,6 +32,14 @@ type Appender struct {
 	threshold int      // Auto-flush threshold
 	closed    bool     // Whether the appender has been closed
 	mu        sync.Mutex
+
+	// Query appender fields (only set when created via NewQueryAppender)
+	isQueryAppender bool       // True if this is a query appender
+	query           string     // The SQL query to execute (INSERT, UPDATE, DELETE, MERGE INTO)
+	tempTableName   string     // Name of the temporary table for batched data
+	queryColTypes   []TypeInfo // Column types for the temp table
+	queryColNames   []string   // Column names for the temp table
+	tempTableExists bool       // Whether the temp table has been created
 }
 
 // NewAppenderFromConn creates a new Appender for the specified table.
@@ -104,6 +118,123 @@ func NewAppenderWithThreshold(
 	}, nil
 }
 
+// NewQueryAppender creates a query Appender that executes a custom query with batched rows.
+// The batched rows are treated as a temporary table.
+//
+// Parameters:
+//   - driverConn: The database connection (must be a *Conn)
+//   - query: The SQL query to execute (INSERT, DELETE, UPDATE, or MERGE INTO)
+//   - table: The name of the temporary table for batched data (defaults to "appended_data" if empty)
+//   - colTypes: The column types for the temporary table
+//   - colNames: The column names for the temporary table (defaults to "col1", "col2", ... if empty)
+//
+// Returns ErrorTypeInvalid if:
+//   - query is empty
+//   - colTypes is empty
+//   - colNames length doesn't match colTypes length (when colNames is not empty)
+func NewQueryAppender(
+	driverConn driver.Conn,
+	query, table string,
+	colTypes []TypeInfo,
+	colNames []string,
+) (*Appender, error) {
+	return NewQueryAppenderWithThreshold(
+		driverConn,
+		query,
+		table,
+		colTypes,
+		colNames,
+		DefaultAppenderThreshold,
+	)
+}
+
+// NewQueryAppenderWithThreshold creates a query Appender with a custom auto-flush threshold.
+// See NewQueryAppender for parameter documentation.
+func NewQueryAppenderWithThreshold(
+	driverConn driver.Conn,
+	query, table string,
+	colTypes []TypeInfo,
+	colNames []string,
+	threshold int,
+) (*Appender, error) {
+	// Extract *Conn from driver.Conn
+	conn, ok := driverConn.(*Conn)
+	if !ok {
+		return nil, &Error{
+			Type: ErrorTypeConnection,
+			Msg:  "invalid connection type: expected *Conn",
+		}
+	}
+
+	// Validate threshold
+	if threshold < 1 {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg:  "threshold must be >= 1",
+		}
+	}
+
+	// Validate query
+	if query == "" {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg:  "query cannot be empty",
+		}
+	}
+
+	// Validate colTypes
+	if len(colTypes) == 0 {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg:  "column types cannot be empty",
+		}
+	}
+
+	// Validate colNames length if provided
+	if len(colNames) != 0 && len(colNames) != len(colTypes) {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg: fmt.Sprintf(
+				"column names length (%d) must match column types length (%d)",
+				len(colNames),
+				len(colTypes),
+			),
+		}
+	}
+
+	// Apply default table name
+	if table == "" {
+		table = "appended_data"
+	}
+
+	// Generate default column names if not provided
+	columns := colNames
+	if len(columns) == 0 {
+		columns = make([]string, len(colTypes))
+		for i := range colTypes {
+			columns[i] = fmt.Sprintf("col%d", i+1)
+		}
+	}
+
+	return &Appender{
+		conn:            conn,
+		catalog:         "memory",
+		schema:          "main",
+		table:           table, // Used as temp table name
+		columns:         columns,
+		colTypes:        nil, // Not used for query appender
+		buffer:          make([][]any, 0, threshold),
+		threshold:       threshold,
+		closed:          false,
+		isQueryAppender: true,
+		query:           query,
+		tempTableName:   table,
+		queryColTypes:   colTypes,
+		queryColNames:   columns,
+		tempTableExists: false,
+	}, nil
+}
+
 // getTableColumns retrieves the column names and types for a table using duckdb_columns().
 // Returns ErrorTypeCatalog if the table does not exist.
 func getTableColumns(
@@ -131,7 +262,9 @@ ORDER BY column_index`
 	if err != nil {
 		return nil, nil, err
 	}
-	defer driverRows.Close()
+	defer func() {
+		_ = driverRows.Close()
+	}()
 
 	var columns []string
 	var colTypes []Type
@@ -260,6 +393,72 @@ func parseDataType(dataType string) Type {
 	}
 }
 
+// createTempTable creates the temporary table for query appender mode.
+func (a *Appender) createTempTable() error {
+	if a.tempTableExists {
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("CREATE TEMP TABLE ")
+	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(" (")
+	for i, colName := range a.queryColNames {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(quoteIdentifier(colName))
+		sb.WriteString(" ")
+		sb.WriteString(a.queryColTypes[i].SQLType())
+	}
+	sb.WriteString(")")
+
+	_, err := a.conn.ExecContext(
+		context.Background(),
+		sb.String(),
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	a.tempTableExists = true
+	return nil
+}
+
+// truncateTempTable clears all data from the temporary table.
+func (a *Appender) truncateTempTable() error {
+	if !a.tempTableExists {
+		return nil
+	}
+
+	query := "DELETE FROM " + quoteIdentifier(a.tempTableName)
+	_, err := a.conn.ExecContext(
+		context.Background(),
+		query,
+		nil,
+	)
+	return err
+}
+
+// dropTempTable removes the temporary table.
+func (a *Appender) dropTempTable() error {
+	if !a.tempTableExists {
+		return nil
+	}
+
+	query := "DROP TABLE IF EXISTS " + quoteIdentifier(a.tempTableName)
+	_, err := a.conn.ExecContext(
+		context.Background(),
+		query,
+		nil,
+	)
+	if err == nil {
+		a.tempTableExists = false
+	}
+	return err
+}
+
 // AppendRow adds a row to the buffer. If the buffer reaches the threshold,
 // it automatically flushes the data.
 // Returns ErrorTypeClosed if the appender is closed.
@@ -324,6 +523,15 @@ func (a *Appender) flushLocked() error {
 		return nil // Nothing to flush
 	}
 
+	if a.isQueryAppender {
+		return a.flushQueryAppender()
+	}
+
+	return a.flushTableAppender()
+}
+
+// flushTableAppender performs a direct INSERT flush for table appender mode.
+func (a *Appender) flushTableAppender() error {
 	insert, err := a.buildInsert()
 	if err != nil {
 		// Buffer preserved for retry
@@ -343,6 +551,87 @@ func (a *Appender) flushLocked() error {
 	// Clear buffer only on success
 	a.buffer = a.buffer[:0]
 	return nil
+}
+
+// flushQueryAppender performs a three-phase flush for query appender mode:
+// 1. Create/truncate temp table
+// 2. Insert buffered data into temp table
+// 3. Execute user query
+func (a *Appender) flushQueryAppender() error {
+	// Phase 1: Create temp table if it doesn't exist
+	if err := a.createTempTable(); err != nil {
+		return err
+	}
+
+	// Phase 1b: Clear any existing data from temp table
+	if err := a.truncateTempTable(); err != nil {
+		return err
+	}
+
+	// Phase 2: Insert buffered data into temp table
+	insert, err := a.buildTempTableInsert()
+	if err != nil {
+		return err
+	}
+
+	_, err = a.conn.ExecContext(
+		context.Background(),
+		insert,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Phase 3: Execute the user query
+	_, err = a.conn.ExecContext(
+		context.Background(),
+		a.query,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Clear buffer only on success
+	a.buffer = a.buffer[:0]
+	return nil
+}
+
+// buildTempTableInsert constructs a multi-row INSERT statement for the temp table.
+func (a *Appender) buildTempTableInsert() (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("INSERT INTO ")
+	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(" (")
+	for i, col := range a.queryColNames {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(quoteIdentifier(col))
+	}
+	sb.WriteString(") VALUES ")
+
+	for i, row := range a.buffer {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("(")
+		for j, val := range row {
+			if j > 0 {
+				sb.WriteString(", ")
+			}
+			formatted, err := FormatValue(val)
+			if err != nil {
+				return "", err
+			}
+			sb.WriteString(formatted)
+		}
+		sb.WriteString(")")
+	}
+
+	return sb.String(), nil
 }
 
 // buildInsert constructs a multi-row INSERT statement from the buffer.
@@ -416,14 +705,168 @@ func (a *Appender) Close() error {
 	}
 
 	// Flush any remaining data
-	if err := a.flushLocked(); err != nil {
-		// Still mark as closed, but return the error
-		a.closed = true
-		return err
+	flushErr := a.flushLocked()
+
+	// For query appenders, drop the temp table (cleanup)
+	var dropErr error
+	if a.isQueryAppender {
+		dropErr = a.dropTempTable()
 	}
 
 	a.closed = true
+
+	// Return first error encountered
+	if flushErr != nil {
+		return flushErr
+	}
+	return dropErr
+}
+
+// AppenderContext provides context and clock for flush operations.
+// Used for deterministic testing with mock clocks.
+type AppenderContext struct {
+	ctx   context.Context
+	clock quartz.Clock
+}
+
+// NewAppenderContext creates an AppenderContext with the given context and clock.
+// If clock is nil, the real system clock is used.
+func NewAppenderContext(ctx context.Context, clock quartz.Clock) AppenderContext {
+	if clock == nil {
+		clock = quartz.NewReal()
+	}
+	return AppenderContext{
+		ctx:   ctx,
+		clock: clock,
+	}
+}
+
+// FlushWithContext writes all buffered rows to the database with deadline checking.
+// Uses the injected clock for deadline comparison to enable deterministic testing.
+// On error, the buffer is preserved for retry.
+// Returns context.DeadlineExceeded if the deadline has passed.
+// Returns ErrorTypeClosed if the appender is closed.
+func (a *Appender) FlushWithContext(appCtx AppenderContext) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.closed {
+		return &Error{
+			Type: ErrorTypeClosed,
+			Msg:  "appender is closed",
+		}
+	}
+
+	// Check deadline using the injected clock
+	if deadline, ok := appCtx.ctx.Deadline(); ok {
+		if appCtx.clock.Until(deadline) <= 0 {
+			return context.DeadlineExceeded
+		}
+	}
+
+	return a.flushLockedWithContext(appCtx.ctx)
+}
+
+// flushLockedWithContext performs the actual flush with context. Caller must hold the mutex.
+func (a *Appender) flushLockedWithContext(ctx context.Context) error {
+	if len(a.buffer) == 0 {
+		return nil // Nothing to flush
+	}
+
+	if a.isQueryAppender {
+		return a.flushQueryAppenderWithContext(ctx)
+	}
+
+	return a.flushTableAppenderWithContext(ctx)
+}
+
+// flushTableAppenderWithContext performs a direct INSERT flush with context.
+func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
+	insert, err := a.buildInsert()
+	if err != nil {
+		return err
+	}
+
+	_, err = a.conn.ExecContext(ctx, insert, nil)
+	if err != nil {
+		return err
+	}
+
+	a.buffer = a.buffer[:0]
 	return nil
+}
+
+// flushQueryAppenderWithContext performs a three-phase flush with context.
+func (a *Appender) flushQueryAppenderWithContext(ctx context.Context) error {
+	// Phase 1: Create temp table if it doesn't exist
+	if err := a.createTempTableWithContext(ctx); err != nil {
+		return err
+	}
+
+	// Phase 1b: Clear any existing data from temp table
+	if err := a.truncateTempTableWithContext(ctx); err != nil {
+		return err
+	}
+
+	// Phase 2: Insert buffered data into temp table
+	insert, err := a.buildTempTableInsert()
+	if err != nil {
+		return err
+	}
+
+	_, err = a.conn.ExecContext(ctx, insert, nil)
+	if err != nil {
+		return err
+	}
+
+	// Phase 3: Execute the user query
+	_, err = a.conn.ExecContext(ctx, a.query, nil)
+	if err != nil {
+		return err
+	}
+
+	a.buffer = a.buffer[:0]
+	return nil
+}
+
+// createTempTableWithContext creates the temp table with context.
+func (a *Appender) createTempTableWithContext(ctx context.Context) error {
+	if a.tempTableExists {
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("CREATE TEMP TABLE ")
+	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(" (")
+	for i, colName := range a.queryColNames {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(quoteIdentifier(colName))
+		sb.WriteString(" ")
+		sb.WriteString(a.queryColTypes[i].SQLType())
+	}
+	sb.WriteString(")")
+
+	_, err := a.conn.ExecContext(ctx, sb.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	a.tempTableExists = true
+	return nil
+}
+
+// truncateTempTableWithContext clears temp table data with context.
+func (a *Appender) truncateTempTableWithContext(ctx context.Context) error {
+	if !a.tempTableExists {
+		return nil
+	}
+
+	query := "DELETE FROM " + quoteIdentifier(a.tempTableName)
+	_, err := a.conn.ExecContext(ctx, query, nil)
+	return err
 }
 
 // Columns returns the column names for the table.
