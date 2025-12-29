@@ -387,6 +387,53 @@ func (*PhysicalDummyScan) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalDummyScan) OutputColumns() []ColumnBinding { return nil }
 
+// PhysicalVirtualTableScan represents a physical virtual table scan.
+type PhysicalVirtualTableScan struct {
+	Schema       string
+	TableName    string
+	Alias        string
+	VirtualTable *catalog.VirtualTableDef
+	Projections  []int
+	columns      []ColumnBinding
+}
+
+func (*PhysicalVirtualTableScan) physicalPlanNode() {}
+
+func (*PhysicalVirtualTableScan) Children() []PhysicalPlan { return nil }
+
+func (s *PhysicalVirtualTableScan) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+
+	cols := s.VirtualTable.Columns()
+	if s.Projections != nil {
+		s.columns = make(
+			[]ColumnBinding,
+			len(s.Projections),
+		)
+		for i, idx := range s.Projections {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    cols[idx].Name,
+				Type:      cols[idx].Type,
+				ColumnIdx: idx,
+			}
+		}
+	} else {
+		s.columns = make([]ColumnBinding, len(cols))
+		for i, col := range cols {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    col.Name,
+				Type:      col.Type,
+				ColumnIdx: i,
+			}
+		}
+	}
+	return s.columns
+}
+
 // Planner converts bound statements to physical plans.
 type Planner struct {
 	catalog *catalog.Catalog
@@ -443,19 +490,21 @@ func (p *Planner) planSelect(
 	if len(s.From) > 0 {
 		// First table
 		plan = &LogicalScan{
-			Schema:    s.From[0].Schema,
-			TableName: s.From[0].TableName,
-			Alias:     s.From[0].Alias,
-			TableDef:  s.From[0].TableDef,
+			Schema:       s.From[0].Schema,
+			TableName:    s.From[0].TableName,
+			Alias:        s.From[0].Alias,
+			TableDef:     s.From[0].TableDef,
+			VirtualTable: s.From[0].VirtualTable,
 		}
 
 		// Additional tables (implicit cross join)
 		for i := 1; i < len(s.From); i++ {
 			right := &LogicalScan{
-				Schema:    s.From[i].Schema,
-				TableName: s.From[i].TableName,
-				Alias:     s.From[i].Alias,
-				TableDef:  s.From[i].TableDef,
+				Schema:       s.From[i].Schema,
+				TableName:    s.From[i].TableName,
+				Alias:        s.From[i].Alias,
+				TableDef:     s.From[i].TableDef,
+				VirtualTable: s.From[i].VirtualTable,
 			}
 			plan = &LogicalJoin{
 				Left:     plan,
@@ -467,10 +516,11 @@ func (p *Planner) planSelect(
 		// Explicit JOINs
 		for _, join := range s.Joins {
 			right := &LogicalScan{
-				Schema:    join.Table.Schema,
-				TableName: join.Table.TableName,
-				Alias:     join.Table.Alias,
-				TableDef:  join.Table.TableDef,
+				Schema:       join.Table.Schema,
+				TableName:    join.Table.TableName,
+				Alias:        join.Table.Alias,
+				TableDef:     join.Table.TableDef,
+				VirtualTable: join.Table.VirtualTable,
 			}
 
 			joinType := JoinType(join.Type)
@@ -682,6 +732,16 @@ func (p *Planner) createPhysicalPlan(
 ) (PhysicalPlan, error) {
 	switch l := logical.(type) {
 	case *LogicalScan:
+		// Check if this is a virtual table scan
+		if l.VirtualTable != nil {
+			return &PhysicalVirtualTableScan{
+				Schema:       l.Schema,
+				TableName:    l.TableName,
+				Alias:        l.Alias,
+				VirtualTable: l.VirtualTable,
+				Projections:  l.Projections,
+			}, nil
+		}
 		return &PhysicalScan{
 			Schema:      l.Schema,
 			TableName:   l.TableName,

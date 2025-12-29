@@ -23,6 +23,9 @@ type Conn struct {
 	// scalarFuncs holds registered scalar UDFs for this connection.
 	scalarFuncs *scalarFuncRegistry
 
+	// aggregateFuncs holds registered aggregate UDFs for this connection.
+	aggregateFuncs *aggregateFuncRegistry
+
 	// tableUDFs holds registered table UDFs for this connection.
 	tableUDFs *tableFunctionRegistry
 
@@ -257,6 +260,19 @@ func (c *Conn) ResetSession(
 // Implements the driver.Validator interface.
 func (c *Conn) IsValid() bool {
 	return !c.closed && c.backendConn != nil
+}
+
+// getVirtualTableRegistry returns the virtual table registry from the backend connection if supported.
+// Returns nil if the backend does not support virtual table registration.
+func (c *Conn) getVirtualTableRegistry() VirtualTableRegistry {
+	if catalogConn, ok := c.backendConn.(BackendConnCatalog); ok {
+		if registry := catalogConn.GetCatalog(); registry != nil {
+			if typedRegistry, ok := registry.(VirtualTableRegistry); ok {
+				return typedRegistry
+			}
+		}
+	}
+	return nil
 }
 
 // tx implements the driver.Tx interface.
@@ -549,6 +565,51 @@ func (s *Stmt) StatementType() (StmtType, error) {
 		return intro.StatementType(), nil
 	}
 	return STATEMENT_TYPE_INVALID, nil
+}
+
+// Properties returns metadata about the statement's behavior.
+func (s *Stmt) Properties() (StmtProperties, error) {
+	if s.closed {
+		return StmtProperties{}, errClosedStmt
+	}
+	// First, try BackendStmtProperties interface
+	if props, ok := s.backendStmt.(BackendStmtProperties); ok {
+		return props.Properties(), nil
+	}
+	// Fallback: compute from StatementType if introspector available
+	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
+		stmtType := intro.StatementType()
+		return StmtProperties{
+			Type:        stmtType,
+			ReturnType:  stmtType.ReturnType(),
+			IsReadOnly:  !stmtType.ModifiesData(),
+			IsStreaming: stmtType.IsQuery(),
+			ColumnCount: intro.ColumnCount(),
+			ParamCount:  intro.NumInput(),
+		}, nil
+	}
+	return StmtProperties{}, &Error{
+		Type: ErrorTypeNotImplemented,
+		Msg:  "statement properties not supported",
+	}
+}
+
+// IsReadOnly returns true if the statement doesn't modify data.
+func (s *Stmt) IsReadOnly() (bool, error) {
+	props, err := s.Properties()
+	if err != nil {
+		return false, err
+	}
+	return props.IsReadOnly, nil
+}
+
+// IsQuery returns true if the statement returns a result set.
+func (s *Stmt) IsQuery() (bool, error) {
+	props, err := s.Properties()
+	if err != nil {
+		return false, err
+	}
+	return props.ReturnType == RETURN_QUERY_RESULT, nil
 }
 
 // Bind binds a value to the parameter at the given index (1-based).

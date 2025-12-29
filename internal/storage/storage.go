@@ -69,3 +69,24 @@ func (s *Storage) Close() error {
 	s.tables = make(map[string]*Table)
 	return nil
 }
+
+// Tables returns a copy of the tables map for serialization
+func (s *Storage) Tables() map[string]*Table {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tables := make(map[string]*Table)
+	for name, table := range s.tables {
+		tables[name] = table
+	}
+	return tables
+}
+
+// ImportTable imports a table into storage
+func (s *Storage) ImportTable(name string, table *Table) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tables[name] = table
+	return nil
+}

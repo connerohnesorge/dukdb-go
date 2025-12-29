@@ -50,15 +50,17 @@ type BindScope struct {
 	tables     map[string]*BoundTableRef
 	aliases    map[string]string // alias -> table name
 	paramCount int
+	params     map[int]dukdb.Type // position -> inferred type
 }
 
 // BoundTableRef represents a bound table reference.
 type BoundTableRef struct {
-	Schema    string
-	TableName string
-	Alias     string
-	TableDef  *catalog.TableDef
-	Columns   []*BoundColumn
+	Schema       string
+	TableName    string
+	Alias        string
+	TableDef     *catalog.TableDef
+	VirtualTable *catalog.VirtualTableDef // Set for virtual tables
+	Columns      []*BoundColumn
 }
 
 // BoundColumn represents a bound column reference.
@@ -89,6 +91,7 @@ func newBindScope(parent *BindScope) *BindScope {
 		parent:  parent,
 		tables:  make(map[string]*BoundTableRef),
 		aliases: make(map[string]string),
+		params:  make(map[int]dukdb.Type),
 	}
 }
 
@@ -421,7 +424,15 @@ func (b *Binder) bindSelect(
 	// Push new scope
 	oldScope := b.scope
 	b.scope = newBindScope(oldScope)
-	defer func() { b.scope = oldScope }()
+	defer func() {
+		// Merge parameters from inner scope to outer scope before restoring
+		for pos, typ := range b.scope.params {
+			oldScope.params[pos] = typ
+		}
+		// Also update paramCount
+		oldScope.paramCount = b.scope.paramCount
+		b.scope = oldScope
+	}()
 
 	// Bind FROM clause first to establish table bindings
 	if s.From != nil {
@@ -469,7 +480,7 @@ func (b *Binder) bindSelect(
 				}
 			}
 		} else {
-			expr, err := b.bindExpr(col.Expr)
+			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
 			if err != nil {
 				return nil, err
 			}
@@ -482,7 +493,7 @@ func (b *Binder) bindSelect(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where)
+		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
@@ -491,7 +502,7 @@ func (b *Binder) bindSelect(
 
 	// Bind GROUP BY
 	for _, g := range s.GroupBy {
-		expr, err := b.bindExpr(g)
+		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
 		if err != nil {
 			return nil, err
 		}
@@ -503,7 +514,7 @@ func (b *Binder) bindSelect(
 
 	// Bind HAVING
 	if s.Having != nil {
-		having, err := b.bindExpr(s.Having)
+		having, err := b.bindExpr(s.Having, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +523,7 @@ func (b *Binder) bindSelect(
 
 	// Bind ORDER BY
 	for _, o := range s.OrderBy {
-		expr, err := b.bindExpr(o.Expr)
+		expr, err := b.bindExpr(o.Expr, dukdb.TYPE_ANY)
 		if err != nil {
 			return nil, err
 		}
@@ -527,7 +538,7 @@ func (b *Binder) bindSelect(
 
 	// Bind LIMIT
 	if s.Limit != nil {
-		limit, err := b.bindExpr(s.Limit)
+		limit, err := b.bindExpr(s.Limit, dukdb.TYPE_BIGINT)
 		if err != nil {
 			return nil, err
 		}
@@ -536,7 +547,7 @@ func (b *Binder) bindSelect(
 
 	// Bind OFFSET
 	if s.Offset != nil {
-		offset, err := b.bindExpr(s.Offset)
+		offset, err := b.bindExpr(s.Offset, dukdb.TYPE_BIGINT)
 		if err != nil {
 			return nil, err
 		}
@@ -597,6 +608,44 @@ func (b *Binder) bindTableRef(
 		schema = "main"
 	}
 
+	alias := ref.Alias
+	if alias == "" {
+		alias = ref.TableName
+	}
+
+	// First check for virtual tables (they take precedence in the main schema)
+	if schema == "main" {
+		if vtDef, ok := b.catalog.GetVirtualTableDef(ref.TableName); ok {
+			boundRef := &BoundTableRef{
+				Schema:       schema,
+				TableName:    ref.TableName,
+				Alias:        alias,
+				VirtualTable: vtDef,
+				TableDef:     vtDef.ToTableDef(),
+			}
+
+			// Create bound columns from virtual table
+			for i, col := range vtDef.Columns() {
+				boundRef.Columns = append(
+					boundRef.Columns,
+					&BoundColumn{
+						Table:      alias,
+						Column:     col.Name,
+						ColumnIdx:  i,
+						Type:       col.Type,
+						SourceType: "virtual",
+					},
+				)
+			}
+
+			b.scope.tables[alias] = boundRef
+			b.scope.aliases[alias] = ref.TableName
+
+			return boundRef, nil
+		}
+	}
+
+	// Fall back to regular table lookup
 	tableDef, ok := b.catalog.GetTableInSchema(
 		schema,
 		ref.TableName,
@@ -606,11 +655,6 @@ func (b *Binder) bindTableRef(
 			"table not found: %s",
 			ref.TableName,
 		)
-	}
-
-	alias := ref.Alias
-	if alias == "" {
-		alias = ref.TableName
 	}
 
 	boundRef := &BoundTableRef{
@@ -650,7 +694,7 @@ func (b *Binder) bindJoin(
 
 	var cond BoundExpr
 	if join.Condition != nil {
-		cond, err = b.bindExpr(join.Condition)
+		cond, err = b.bindExpr(join.Condition, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
@@ -665,6 +709,7 @@ func (b *Binder) bindJoin(
 
 func (b *Binder) bindExpr(
 	expr parser.Expr,
+	expectedType dukdb.Type,
 ) (BoundExpr, error) {
 	if expr == nil {
 		return nil, nil
@@ -681,21 +726,29 @@ func (b *Binder) bindExpr(
 		if pos == 0 {
 			pos = b.scope.paramCount
 		}
-		return &BoundParameter{Position: pos, ParamType: dukdb.TYPE_ANY}, nil
+		// Use expected type if available, otherwise TYPE_ANY
+		inferredType := expectedType
+		if inferredType == dukdb.TYPE_INVALID || inferredType == 0 {
+			inferredType = dukdb.TYPE_ANY
+		}
+		// Store in scope for later retrieval
+		b.scope.params[pos] = inferredType
+		return &BoundParameter{Position: pos, ParamType: inferredType}, nil
 	case *parser.BinaryExpr:
 		return b.bindBinaryExpr(e)
 	case *parser.UnaryExpr:
-		return b.bindUnaryExpr(e)
+		return b.bindUnaryExpr(e, expectedType)
 	case *parser.FunctionCall:
 		return b.bindFunctionCall(e)
 	case *parser.CastExpr:
-		inner, err := b.bindExpr(e.Expr)
+		// For CAST, the inner expression type is not constrained by outer context
+		inner, err := b.bindExpr(e.Expr, e.TargetType)
 		if err != nil {
 			return nil, err
 		}
 		return &BoundCastExpr{Expr: inner, TargetType: e.TargetType}, nil
 	case *parser.CaseExpr:
-		return b.bindCaseExpr(e)
+		return b.bindCaseExpr(e, expectedType)
 	case *parser.BetweenExpr:
 		return b.bindBetweenExpr(e)
 	case *parser.InListExpr:
@@ -785,14 +838,36 @@ func (b *Binder) bindColumnRef(
 func (b *Binder) bindBinaryExpr(
 	e *parser.BinaryExpr,
 ) (*BoundBinaryExpr, error) {
-	left, err := b.bindExpr(e.Left)
+	// Bind left first without expectation
+	left, err := b.bindExpr(e.Left, dukdb.TYPE_ANY)
 	if err != nil {
 		return nil, err
 	}
 
-	right, err := b.bindExpr(e.Right)
+	// For comparison and LIKE operators, use left's type as expected for right
+	var rightExpected dukdb.Type
+	switch e.Op {
+	case parser.OpEq, parser.OpNe, parser.OpLt, parser.OpLe, parser.OpGt, parser.OpGe:
+		rightExpected = left.ResultType()
+	case parser.OpLike, parser.OpILike, parser.OpNotLike, parser.OpNotILike:
+		rightExpected = dukdb.TYPE_VARCHAR
+	case parser.OpAdd, parser.OpSub, parser.OpMul, parser.OpDiv, parser.OpMod:
+		rightExpected = dukdb.TYPE_DOUBLE // arithmetic context
+	default:
+		rightExpected = dukdb.TYPE_ANY
+	}
+
+	right, err := b.bindExpr(e.Right, rightExpected)
 	if err != nil {
 		return nil, err
+	}
+
+	// If left was parameter with TYPE_ANY and right has concrete type, update left
+	if leftParam, ok := left.(*BoundParameter); ok {
+		if leftParam.ParamType == dukdb.TYPE_ANY && right.ResultType() != dukdb.TYPE_ANY {
+			leftParam.ParamType = right.ResultType()
+			b.scope.params[leftParam.Position] = right.ResultType()
+		}
 	}
 
 	// Determine result type
@@ -835,8 +910,9 @@ func (b *Binder) bindBinaryExpr(
 
 func (b *Binder) bindUnaryExpr(
 	e *parser.UnaryExpr,
+	expectedType dukdb.Type,
 ) (*BoundUnaryExpr, error) {
-	inner, err := b.bindExpr(e.Expr)
+	inner, err := b.bindExpr(e.Expr, expectedType)
 	if err != nil {
 		return nil, err
 	}
@@ -861,9 +937,16 @@ func (b *Binder) bindUnaryExpr(
 func (b *Binder) bindFunctionCall(
 	f *parser.FunctionCall,
 ) (BoundExpr, error) {
+	// Get expected argument types from function signature if available
+	argTypes := getFunctionArgTypes(f.Name, len(f.Args))
+
 	var args []BoundExpr
-	for _, arg := range f.Args {
-		bound, err := b.bindExpr(arg)
+	for i, arg := range f.Args {
+		expectedType := dukdb.TYPE_ANY
+		if i < len(argTypes) {
+			expectedType = argTypes[i]
+		}
+		bound, err := b.bindExpr(arg, expectedType)
 		if err != nil {
 			return nil, err
 		}
@@ -927,11 +1010,12 @@ func (b *Binder) bindFunctionCall(
 
 func (b *Binder) bindCaseExpr(
 	e *parser.CaseExpr,
+	expectedType dukdb.Type,
 ) (*BoundCaseExpr, error) {
 	bound := &BoundCaseExpr{}
 
 	if e.Operand != nil {
-		operand, err := b.bindExpr(e.Operand)
+		operand, err := b.bindExpr(e.Operand, dukdb.TYPE_ANY)
 		if err != nil {
 			return nil, err
 		}
@@ -939,11 +1023,11 @@ func (b *Binder) bindCaseExpr(
 	}
 
 	for _, w := range e.Whens {
-		cond, err := b.bindExpr(w.Condition)
+		cond, err := b.bindExpr(w.Condition, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
-		result, err := b.bindExpr(w.Result)
+		result, err := b.bindExpr(w.Result, expectedType)
 		if err != nil {
 			return nil, err
 		}
@@ -957,7 +1041,7 @@ func (b *Binder) bindCaseExpr(
 	}
 
 	if e.Else != nil {
-		elseExpr, err := b.bindExpr(e.Else)
+		elseExpr, err := b.bindExpr(e.Else, expectedType)
 		if err != nil {
 			return nil, err
 		}
@@ -979,17 +1063,21 @@ func (b *Binder) bindCaseExpr(
 func (b *Binder) bindBetweenExpr(
 	e *parser.BetweenExpr,
 ) (*BoundBetweenExpr, error) {
-	expr, err := b.bindExpr(e.Expr)
+	// Bind expr first to get its type
+	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
 	if err != nil {
 		return nil, err
 	}
 
-	low, err := b.bindExpr(e.Low)
+	// Use expr's type as expected type for low and high bounds
+	exprType := expr.ResultType()
+
+	low, err := b.bindExpr(e.Low, exprType)
 	if err != nil {
 		return nil, err
 	}
 
-	high, err := b.bindExpr(e.High)
+	high, err := b.bindExpr(e.High, exprType)
 	if err != nil {
 		return nil, err
 	}
@@ -1005,14 +1093,18 @@ func (b *Binder) bindBetweenExpr(
 func (b *Binder) bindInListExpr(
 	e *parser.InListExpr,
 ) (*BoundInListExpr, error) {
-	expr, err := b.bindExpr(e.Expr)
+	// Bind expr first to get its type
+	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
 	if err != nil {
 		return nil, err
 	}
 
+	// Use expr's type as expected type for IN list values
+	exprType := expr.ResultType()
+
 	var values []BoundExpr
 	for _, v := range e.Values {
-		bound, err := b.bindExpr(v)
+		bound, err := b.bindExpr(v, exprType)
 		if err != nil {
 			return nil, err
 		}
@@ -1029,7 +1121,7 @@ func (b *Binder) bindInListExpr(
 func (b *Binder) bindInSubqueryExpr(
 	e *parser.InSubqueryExpr,
 ) (*BoundInSubqueryExpr, error) {
-	expr, err := b.bindExpr(e.Expr)
+	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
 	if err != nil {
 		return nil, err
 	}
@@ -1129,11 +1221,20 @@ func (b *Binder) bindInsert(
 		}
 	}
 
-	// Bind values
+	// Bind values with column types for parameter inference
 	for _, row := range s.Values {
 		var boundRow []BoundExpr
-		for _, val := range row {
-			expr, err := b.bindExpr(val)
+		for j, val := range row {
+			// Get column type for this position
+			colType := dukdb.TYPE_ANY
+			if j < len(bound.Columns) {
+				colIdx := bound.Columns[j]
+				if colIdx < len(tableDef.Columns) {
+					colType = tableDef.Columns[colIdx].Type
+				}
+			}
+
+			expr, err := b.bindExpr(val, colType)
 			if err != nil {
 				return nil, err
 			}
@@ -1202,7 +1303,7 @@ func (b *Binder) bindUpdate(
 		TableDef: tableDef,
 	}
 
-	// Bind SET clauses
+	// Bind SET clauses with column types for parameter inference
 	for _, set := range s.Set {
 		idx, ok := tableDef.GetColumnIndex(
 			set.Column,
@@ -1213,7 +1314,11 @@ func (b *Binder) bindUpdate(
 				set.Column,
 			)
 		}
-		val, err := b.bindExpr(set.Value)
+
+		// Get column type for parameter inference
+		colType := tableDef.Columns[idx].Type
+
+		val, err := b.bindExpr(set.Value, colType)
 		if err != nil {
 			return nil, err
 		}
@@ -1228,7 +1333,7 @@ func (b *Binder) bindUpdate(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where)
+		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
@@ -1285,7 +1390,7 @@ func (b *Binder) bindDelete(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where)
+		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
 		if err != nil {
 			return nil, err
 		}
@@ -1499,4 +1604,65 @@ func inferFunctionResultType(
 	default:
 		return dukdb.TYPE_ANY
 	}
+}
+
+// getFunctionArgTypes returns expected argument types for known functions.
+// This is used for parameter type inference in function calls.
+func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
+	name = strings.ToUpper(name)
+	switch name {
+	case "ABS", "SUM", "AVG", "MIN", "MAX":
+		// Numeric functions - first arg should be numeric
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH":
+		// String functions
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "SUBSTR", "SUBSTRING":
+		// SUBSTR(string, start, [length])
+		types := make([]dukdb.Type, argCount)
+		if argCount >= 1 {
+			types[0] = dukdb.TYPE_VARCHAR
+		}
+		if argCount >= 2 {
+			types[1] = dukdb.TYPE_INTEGER
+		}
+		if argCount >= 3 {
+			types[2] = dukdb.TYPE_INTEGER
+		}
+		return types
+	case "REPLACE":
+		// REPLACE(string, from, to)
+		if argCount >= 3 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "CONCAT":
+		// CONCAT accepts varargs of VARCHAR
+		types := make([]dukdb.Type, argCount)
+		for i := range types {
+			types[i] = dukdb.TYPE_VARCHAR
+		}
+		return types
+	case "COALESCE":
+		// COALESCE accepts homogeneous types - first arg determines type
+		// Return empty to let the first arg drive inference
+		return nil
+	case "COUNT":
+		// COUNT can take any type
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_ANY}
+		}
+	}
+	return nil
+}
+
+// GetParamTypes returns the inferred parameter types after binding.
+func (b *Binder) GetParamTypes() map[int]dukdb.Type {
+	if b.scope == nil {
+		return nil
+	}
+	return b.scope.params
 }

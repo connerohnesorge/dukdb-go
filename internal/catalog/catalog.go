@@ -9,14 +9,16 @@ import (
 
 // Catalog manages database metadata including schemas and tables.
 type Catalog struct {
-	mu      sync.RWMutex
-	schemas map[string]*Schema
+	mu            sync.RWMutex
+	schemas       map[string]*Schema
+	virtualTables map[string]*VirtualTableDef // name -> virtual table
 }
 
 // NewCatalog creates a new Catalog instance.
 func NewCatalog() *Catalog {
 	c := &Catalog{
-		schemas: make(map[string]*Schema),
+		schemas:       make(map[string]*Schema),
+		virtualTables: make(map[string]*VirtualTableDef),
 	}
 	// Create default schema
 	c.schemas["main"] = NewSchema("main")
@@ -164,6 +166,91 @@ func (c *Catalog) ListTablesInSchema(
 	return schema.ListTables()
 }
 
+// RegisterVirtualTable registers a virtual table in the catalog.
+// Virtual tables appear as regular tables for query resolution but
+// read data from external sources.
+func (c *Catalog) RegisterVirtualTable(vt dukdb.VirtualTable) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	name := vt.Name()
+	if name == "" {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: virtual table name cannot be empty",
+		}
+	}
+
+	// Check for conflicts with existing virtual tables
+	if _, exists := c.virtualTables[name]; exists {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: virtual table already exists: " + name,
+		}
+	}
+
+	// Check for conflicts with existing regular tables in main schema
+	if schema, ok := c.schemas["main"]; ok {
+		if _, exists := schema.tables[name]; exists {
+			return &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  "Catalog Error: table already exists: " + name,
+			}
+		}
+	}
+
+	c.virtualTables[name] = NewVirtualTableDef(vt)
+	return nil
+}
+
+// UnregisterVirtualTable removes a virtual table from the catalog.
+func (c *Catalog) UnregisterVirtualTable(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, exists := c.virtualTables[name]; !exists {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: virtual table not found: " + name,
+		}
+	}
+
+	delete(c.virtualTables, name)
+	return nil
+}
+
+// GetVirtualTableDef returns a virtual table definition by name.
+// This is used internally for query binding.
+func (c *Catalog) GetVirtualTableDef(name string) (*VirtualTableDef, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	vt, ok := c.virtualTables[name]
+	return vt, ok
+}
+
+// GetVirtualTable returns a virtual table as the dukdb.VirtualTable interface.
+// This method satisfies the dukdb.VirtualTableRegistry interface.
+func (c *Catalog) GetVirtualTable(name string) (dukdb.VirtualTable, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	vt, ok := c.virtualTables[name]
+	if !ok {
+		return nil, false
+	}
+	return vt.VirtualTable(), true
+}
+
+// IsVirtualTable returns true if the given table name is a virtual table.
+func (c *Catalog) IsVirtualTable(name string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	_, ok := c.virtualTables[name]
+	return ok
+}
+
 // Schema represents a database schema (namespace for tables).
 type Schema struct {
 	mu     sync.RWMutex
@@ -234,3 +321,6 @@ func (s *Schema) ListTables() []*TableDef {
 	}
 	return tables
 }
+
+// Compile-time assertion that Catalog implements dukdb.VirtualTableRegistry
+var _ dukdb.VirtualTableRegistry = (*Catalog)(nil)

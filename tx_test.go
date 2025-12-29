@@ -64,6 +64,20 @@ func (m *mockBackendConn) Ping(
 	return nil
 }
 
+func (m *mockBackendConn) AppendDataChunk(
+	ctx context.Context,
+	schema, table string,
+	chunk *DataChunk,
+) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockBackendConn) GetTableTypeInfos(
+	schema, table string,
+) ([]TypeInfo, []string, error) {
+	return nil, nil, nil
+}
+
 // mockBackendStmt implements BackendStmt for testing
 type mockBackendStmt struct {
 	executeFunc func(ctx context.Context, args []driver.NamedValue) (int64, error)

@@ -100,6 +100,20 @@ func (m *testMockBackendConn) Ping(
 	return nil
 }
 
+func (m *testMockBackendConn) AppendDataChunk(
+	ctx context.Context,
+	schema, table string,
+	chunk *DataChunk,
+) (int64, error) {
+	return 0, nil
+}
+
+func (m *testMockBackendConn) GetTableTypeInfos(
+	schema, table string,
+) ([]TypeInfo, []string, error) {
+	return nil, nil, nil
+}
+
 // testMockBackendStmt implements BackendStmt for testing purposes.
 // Named with test prefix to avoid conflict with tx_test.go
 type testMockBackendStmt struct {

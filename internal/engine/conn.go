@@ -10,6 +10,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/executor"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/storage"
 )
 
 // EngineConn represents a connection to the engine.
@@ -136,38 +137,40 @@ func (c *EngineConn) Prepare(
 	params := parser.CollectParameters(stmt)
 
 	engineStmt := &EngineStmt{
-		conn:      c,
-		query:     query,
-		stmt:      stmt,
-		numParams: numParams,
-		params:    params,
+		conn:       c,
+		query:      query,
+		stmt:       stmt,
+		numParams:  numParams,
+		params:     params,
+		paramTypes: make(map[int]dukdb.Type),
 	}
 
-	// For SELECT statements, bind to get column metadata
-	if selectStmt, ok := stmt.(*parser.SelectStmt); ok {
-		_ = selectStmt // Use selectStmt for binding
-		b := binder.NewBinder(c.engine.catalog)
-		boundStmt, bindErr := b.Bind(stmt)
-		if bindErr == nil {
-			if boundSelect, ok := boundStmt.(*binder.BoundSelectStmt); ok {
-				engineStmt.columns = make([]columnInfo, 0, len(boundSelect.Columns))
-				for _, col := range boundSelect.Columns {
-					name := col.Alias
-					if name == "" && col.Expr != nil {
-						// Try to infer name from expression
-						if colRef, ok := col.Expr.(*binder.BoundColumnRef); ok {
-							name = colRef.Column
-						}
+	// Bind the statement to get parameter types and column metadata
+	b := binder.NewBinder(c.engine.catalog)
+	boundStmt, bindErr := b.Bind(stmt)
+	if bindErr == nil {
+		// Extract inferred parameter types from binder
+		engineStmt.paramTypes = b.GetParamTypes()
+
+		// For SELECT statements, also extract column metadata
+		if boundSelect, ok := boundStmt.(*binder.BoundSelectStmt); ok {
+			engineStmt.columns = make([]columnInfo, 0, len(boundSelect.Columns))
+			for _, col := range boundSelect.Columns {
+				name := col.Alias
+				if name == "" && col.Expr != nil {
+					// Try to infer name from expression
+					if colRef, ok := col.Expr.(*binder.BoundColumnRef); ok {
+						name = colRef.Column
 					}
-					var colType dukdb.Type
-					if col.Expr != nil {
-						colType = col.Expr.ResultType()
-					}
-					engineStmt.columns = append(engineStmt.columns, columnInfo{
-						name:    name,
-						colType: colType,
-					})
 				}
+				var colType dukdb.Type
+				if col.Expr != nil {
+					colType = col.Expr.ResultType()
+				}
+				engineStmt.columns = append(engineStmt.columns, columnInfo{
+					name:    name,
+					colType: colType,
+				})
 			}
 		}
 	}
@@ -208,6 +211,91 @@ func (c *EngineConn) Ping(
 	return nil
 }
 
+// AppendDataChunk appends a DataChunk directly to a table, bypassing SQL parsing.
+// This provides efficient bulk data loading for the Appender.
+func (c *EngineConn) AppendDataChunk(
+	ctx context.Context,
+	schema, table string,
+	chunk *dukdb.DataChunk,
+) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return 0, dukdb.ErrConnectionClosed
+	}
+
+	// Get the table from storage
+	tableKey := schema + "." + table
+	storageTable, ok := c.engine.storage.GetTable(tableKey)
+	if !ok {
+		return 0, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "table not found: " + tableKey,
+		}
+	}
+
+	// Convert dukdb.DataChunk to storage.DataChunk
+	// Get the number of rows in the chunk
+	rowCount := chunk.GetSize()
+	if rowCount == 0 {
+		return 0, nil
+	}
+
+	// Create a storage DataChunk with the same column types
+	colTypes := storageTable.ColumnTypes()
+	storageChunk := storage.NewDataChunkWithCapacity(colTypes, rowCount)
+
+	// Copy data from dukdb.DataChunk to storage.DataChunk
+	colCount := chunk.GetColumnCount()
+	for row := 0; row < rowCount; row++ {
+		values := make([]any, colCount)
+		for col := 0; col < colCount; col++ {
+			val, err := chunk.GetValue(col, row)
+			if err != nil {
+				return 0, err
+			}
+			values[col] = val
+		}
+		storageChunk.AppendRow(values)
+	}
+
+	// Append the storage chunk to the table
+	if err := storageTable.AppendChunk(storageChunk); err != nil {
+		return 0, err
+	}
+
+	return int64(rowCount), nil
+}
+
+// GetTableTypeInfos returns the TypeInfo for all columns in a table.
+// This is used by the Appender to create DataChunks with the correct types.
+func (c *EngineConn) GetTableTypeInfos(
+	schema, table string,
+) ([]dukdb.TypeInfo, []string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, nil, dukdb.ErrConnectionClosed
+	}
+
+	// Get the table definition from catalog
+	tableDef, ok := c.engine.catalog.GetTableInSchema(schema, table)
+	if !ok {
+		return nil, nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "table not found: " + schema + "." + table,
+		}
+	}
+
+	// Get TypeInfos and column names
+	typeInfos := tableDef.ColumnTypeInfos()
+	colNames := tableDef.ColumnNames()
+
+	return typeInfos, colNames, nil
+}
+
 // EngineStmt represents a prepared statement.
 type EngineStmt struct {
 	mu        sync.Mutex
@@ -218,8 +306,9 @@ type EngineStmt struct {
 	closed    bool
 
 	// Introspection metadata
-	params  []parser.ParameterInfo
-	columns []columnInfo // Populated after binding for SELECT statements
+	params     []parser.ParameterInfo
+	paramTypes map[int]dukdb.Type // position -> inferred type
+	columns    []columnInfo       // Populated after binding for SELECT statements
 }
 
 // columnInfo holds result column metadata.
@@ -295,13 +384,15 @@ func (s *EngineStmt) ParamName(index int) string {
 	return s.params[index-1].Name
 }
 
-// ParamType returns the type of the parameter at the given index (1-based).
-// Since parameters are untyped until binding, we return TYPE_ANY.
+// ParamType returns the inferred type of the parameter at the given index (1-based).
+// Returns TYPE_ANY if the type could not be inferred from context.
 func (s *EngineStmt) ParamType(index int) dukdb.Type {
 	if index < 1 || index > s.numParams {
 		return dukdb.TYPE_INVALID
 	}
-	// Parameters are untyped in parsed SQL; return ANY
+	if typ, ok := s.paramTypes[index]; ok {
+		return typ
+	}
 	return dukdb.TYPE_ANY
 }
 
@@ -362,9 +453,43 @@ func (b *basicTypeInfo) SQLType() string {
 	return b.typ.String()
 }
 
+// Properties returns metadata about the prepared statement.
+func (s *EngineStmt) Properties() dukdb.StmtProperties {
+	stmtType := s.StatementType()
+
+	return dukdb.StmtProperties{
+		Type:        stmtType,
+		ReturnType:  stmtType.ReturnType(),
+		IsReadOnly:  s.isReadOnly(),
+		IsStreaming: stmtType.ReturnType() == dukdb.RETURN_QUERY_RESULT,
+		ColumnCount: s.ColumnCount(),
+		ParamCount:  s.NumInput(),
+	}
+}
+
+// isReadOnly returns true if the statement doesn't modify any data.
+func (s *EngineStmt) isReadOnly() bool {
+	switch s.StatementType() {
+	case dukdb.STATEMENT_TYPE_SELECT, dukdb.STATEMENT_TYPE_EXPLAIN,
+		dukdb.STATEMENT_TYPE_PRAGMA, dukdb.STATEMENT_TYPE_PREPARE,
+		dukdb.STATEMENT_TYPE_RELATION, dukdb.STATEMENT_TYPE_LOGICAL_PLAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetCatalog returns the catalog for virtual table registration.
+// Implements the BackendConnCatalog interface.
+func (c *EngineConn) GetCatalog() any {
+	return c.engine.Catalog()
+}
+
 // Verify interface implementations
 var (
-	_ dukdb.BackendConn            = (*EngineConn)(nil)
-	_ dukdb.BackendStmt            = (*EngineStmt)(nil)
+	_ dukdb.BackendConn        = (*EngineConn)(nil)
+	_ dukdb.BackendConnCatalog = (*EngineConn)(nil)
+	_ dukdb.BackendStmt        = (*EngineStmt)(nil)
 	_ dukdb.BackendStmtIntrospector = (*EngineStmt)(nil)
+	_ dukdb.BackendStmtProperties   = (*EngineStmt)(nil)
 )

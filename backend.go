@@ -49,6 +49,30 @@ type BackendConn interface {
 
 	// Ping verifies that the connection is still alive.
 	Ping(ctx context.Context) error
+
+	// AppendDataChunk appends a DataChunk directly to a table, bypassing SQL parsing.
+	// This provides efficient bulk data loading for the Appender.
+	// Returns the number of rows appended.
+	AppendDataChunk(
+		ctx context.Context,
+		schema, table string,
+		chunk *DataChunk,
+	) (int64, error)
+
+	// GetTableTypeInfos returns the TypeInfo for all columns in a table.
+	// This is used by the Appender to create DataChunks with the correct types.
+	GetTableTypeInfos(
+		schema, table string,
+	) ([]TypeInfo, []string, error)
+}
+
+// BackendConnCatalog is an optional interface for backends that provide
+// access to the catalog. This is needed for virtual table registration.
+type BackendConnCatalog interface {
+	BackendConn
+	// GetCatalog returns the catalog for this connection.
+	// Returns nil if catalog access is not supported.
+	GetCatalog() any
 }
 
 // BackendStmt represents a prepared statement from a backend.
@@ -157,10 +181,43 @@ const (
 	STATEMENT_TYPE_RELATION     StmtType = 22
 	STATEMENT_TYPE_EXTENSION    StmtType = 23
 	STATEMENT_TYPE_LOGICAL_PLAN StmtType = 24
-	STATEMENT_TYPE_ATTACH       StmtType = 25
-	STATEMENT_TYPE_DETACH       StmtType = 26
-	STATEMENT_TYPE_MULTI        StmtType = 27
+	STATEMENT_TYPE_ATTACH            StmtType = 25
+	STATEMENT_TYPE_DETACH            StmtType = 26
+	STATEMENT_TYPE_MULTI             StmtType = 27
+	STATEMENT_TYPE_MERGE_INTO        StmtType = 28
+	STATEMENT_TYPE_UPDATE_EXTENSIONS StmtType = 29
+	STATEMENT_TYPE_COPY_DATABASE     StmtType = 30
 )
+
+// StmtReturnType indicates what a statement returns when executed.
+type StmtReturnType uint8
+
+const (
+	// RETURN_QUERY_RESULT - Statement returns rows (SELECT, PRAGMA, SHOW, EXPLAIN)
+	RETURN_QUERY_RESULT StmtReturnType = iota
+
+	// RETURN_CHANGED_ROWS - Statement returns affected row count (INSERT, UPDATE, DELETE)
+	RETURN_CHANGED_ROWS
+
+	// RETURN_NOTHING - Statement returns nothing (DDL, SET, ATTACH, etc.)
+	RETURN_NOTHING
+)
+
+// StmtProperties provides metadata about statement behavior.
+type StmtProperties struct {
+	Type        StmtType       // Statement type (SELECT, INSERT, etc.)
+	ReturnType  StmtReturnType // What the statement returns
+	IsReadOnly  bool           // True if statement doesn't modify data
+	IsStreaming bool           // True if result can be streamed
+	ColumnCount int            // Number of result columns (0 for non-query)
+	ParamCount  int            // Number of parameters
+}
+
+// BackendStmtProperties extends BackendStmt with properties access.
+type BackendStmtProperties interface {
+	BackendStmt
+	Properties() StmtProperties
+}
 
 // defaultBackend holds the registered backend implementation.
 var defaultBackend Backend

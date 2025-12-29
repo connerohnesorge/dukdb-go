@@ -34,6 +34,13 @@ func TestDriverImplementsInterface(t *testing.T) {
 }
 
 func TestDriverOpenWithoutBackend(t *testing.T) {
+	// Clear any registered backend first
+	RegisterBackend(nil)
+	defer func() {
+		// Restore the engine backend by importing the engine package
+		// The engine package auto-registers via init()
+	}()
+
 	// Without a backend registered, Open should fail
 	d := Driver{}
 	_, err := d.Open(":memory:")

@@ -524,11 +524,34 @@ func (t TimeNS) Value() (driver.Value, error) {
 	return t.String(), nil
 }
 
+// NowNS returns the current time as TimeNS using the provided clock.
+// This is an alias for CurrentTimeNS, providing a more intuitive name.
+// This enables deterministic testing by using quartz.Mock instead of real time.
+func NowNS(clock quartz.Clock) TimeNS {
+	if clock == nil {
+		clock = quartz.NewReal()
+	}
+	now := clock.Now()
+	return TimeNSFromTime(now)
+}
+
 // CurrentTimeNS returns the current time as TimeNS using the provided clock.
 // This enables deterministic testing by using quartz.Mock instead of real time.
 func CurrentTimeNS(clock quartz.Clock) TimeNS {
+	if clock == nil {
+		clock = quartz.NewReal()
+	}
 	now := clock.Now()
 	return TimeNSFromTime(now)
+}
+
+// CurrentTimestampNS returns the current timestamp in nanoseconds since epoch.
+// This enables deterministic testing by using quartz.Mock instead of real time.
+func CurrentTimestampNS(clock quartz.Clock) int64 {
+	if clock == nil {
+		clock = quartz.NewReal()
+	}
+	return clock.Now().UnixNano()
 }
 
 // Interface assertions.

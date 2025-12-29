@@ -1003,3 +1003,161 @@ func TestColumnTypeInfo(t *testing.T) {
 		}
 	})
 }
+
+func TestParameterTypeInference(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Create a test table with various column types
+	_, err = conn.Execute(
+		context.Background(),
+		`CREATE TABLE test_types (
+			id INTEGER,
+			name VARCHAR,
+			value DOUBLE,
+			active BOOLEAN
+		)`,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	testCases := []struct {
+		name         string
+		sql          string
+		paramIndex   int
+		expectedType dukdb.Type
+	}{
+		// Column comparison inference
+		{"WHERE id = ?", "SELECT * FROM test_types WHERE id = ?", 1, dukdb.TYPE_INTEGER},
+		{"WHERE name = ?", "SELECT * FROM test_types WHERE name = $1", 1, dukdb.TYPE_VARCHAR},
+		{"WHERE value > ?", "SELECT * FROM test_types WHERE value > ?", 1, dukdb.TYPE_DOUBLE},
+
+		// INSERT value inference
+		{"INSERT id", "INSERT INTO test_types (id) VALUES (?)", 1, dukdb.TYPE_INTEGER},
+		{"INSERT name", "INSERT INTO test_types (name) VALUES (?)", 1, dukdb.TYPE_VARCHAR},
+		{"INSERT value", "INSERT INTO test_types (value) VALUES (?)", 1, dukdb.TYPE_DOUBLE},
+
+		// UPDATE value inference
+		{"UPDATE SET value", "UPDATE test_types SET value = ? WHERE id = 1", 1, dukdb.TYPE_DOUBLE},
+		{"UPDATE SET name", "UPDATE test_types SET name = ? WHERE id = 1", 1, dukdb.TYPE_VARCHAR},
+		{"UPDATE WHERE id", "UPDATE test_types SET name = 'x' WHERE id = ?", 1, dukdb.TYPE_INTEGER},
+
+		// Arithmetic context inference
+		{"arithmetic", "SELECT ? + ?", 1, dukdb.TYPE_DOUBLE},
+		{"arithmetic second param", "SELECT ? + ?", 2, dukdb.TYPE_DOUBLE},
+
+		// No context (standalone expressions) - should return ANY
+		{"standalone param", "SELECT ?", 1, dukdb.TYPE_ANY},
+
+		// LIMIT/OFFSET inference
+		{"LIMIT", "SELECT * FROM test_types LIMIT ?", 1, dukdb.TYPE_BIGINT},
+		{"OFFSET", "SELECT * FROM test_types LIMIT 10 OFFSET ?", 1, dukdb.TYPE_BIGINT},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := conn.Prepare(context.Background(), tc.sql)
+			if err != nil {
+				t.Fatalf("Prepare failed: %v", err)
+			}
+			defer stmt.Close()
+
+			intro := stmt.(dukdb.BackendStmtIntrospector)
+			actualType := intro.ParamType(tc.paramIndex)
+
+			if actualType != tc.expectedType {
+				t.Errorf("ParamType(%d) = %v, want %v for SQL: %s",
+					tc.paramIndex, actualType, tc.expectedType, tc.sql)
+			}
+		})
+	}
+}
+
+func TestParameterTypeInferenceBETWEEN(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Execute(
+		context.Background(),
+		"CREATE TABLE nums (val INTEGER)",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// BETWEEN should infer from the column type
+	stmt, err := conn.Prepare(
+		context.Background(),
+		"SELECT * FROM nums WHERE val BETWEEN ? AND ?",
+	)
+	if err != nil {
+		t.Fatalf("Prepare failed: %v", err)
+	}
+	defer stmt.Close()
+
+	intro := stmt.(dukdb.BackendStmtIntrospector)
+
+	type1 := intro.ParamType(1)
+	if type1 != dukdb.TYPE_INTEGER {
+		t.Errorf("ParamType(1) = %v, want INTEGER for BETWEEN low bound", type1)
+	}
+
+	type2 := intro.ParamType(2)
+	if type2 != dukdb.TYPE_INTEGER {
+		t.Errorf("ParamType(2) = %v, want INTEGER for BETWEEN high bound", type2)
+	}
+}
+
+func TestParameterTypeInferenceINList(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Execute(
+		context.Background(),
+		"CREATE TABLE items (name VARCHAR)",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// IN list values should infer from the column type
+	stmt, err := conn.Prepare(
+		context.Background(),
+		"SELECT * FROM items WHERE name IN (?, ?, ?)",
+	)
+	if err != nil {
+		t.Fatalf("Prepare failed: %v", err)
+	}
+	defer stmt.Close()
+
+	intro := stmt.(dukdb.BackendStmtIntrospector)
+
+	for i := 1; i <= 3; i++ {
+		typ := intro.ParamType(i)
+		if typ != dukdb.TYPE_VARCHAR {
+			t.Errorf("ParamType(%d) = %v, want VARCHAR for IN list value", i, typ)
+		}
+	}
+}

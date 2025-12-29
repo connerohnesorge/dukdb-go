@@ -111,6 +111,8 @@ func (e *Executor) Execute(
 	switch p := plan.(type) {
 	case *planner.PhysicalScan:
 		return e.executeScan(execCtx, p)
+	case *planner.PhysicalVirtualTableScan:
+		return e.executeVirtualTableScan(execCtx, p)
 	case *planner.PhysicalFilter:
 		return e.executeFilter(execCtx, p)
 	case *planner.PhysicalProject:
@@ -248,6 +250,85 @@ func (e *Executor) executeScan(
 		},
 		outputCols,
 	)
+}
+
+func (e *Executor) executeVirtualTableScan(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalVirtualTableScan,
+) (*ExecutionResult, error) {
+	vt := plan.VirtualTable
+	if vt == nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "virtual table not found",
+		}
+	}
+
+	// Get the underlying virtual table and scan it
+	it, err := vt.VirtualTable().Scan()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("failed to scan virtual table: %v", err),
+		}
+	}
+	defer it.Close()
+
+	outputCols := plan.OutputColumns()
+	result := &ExecutionResult{
+		Rows:    make([]map[string]any, 0),
+		Columns: make([]string, len(outputCols)),
+	}
+
+	// Build column names
+	for i, col := range outputCols {
+		if col.Column != "" {
+			result.Columns[i] = col.Column
+		} else {
+			result.Columns[i] = ""
+		}
+	}
+
+	// Iterate over the virtual table
+	for it.Next() {
+		values := it.Values()
+		row := make(map[string]any)
+
+		// Apply projections if specified
+		if plan.Projections != nil {
+			for i, idx := range plan.Projections {
+				colName := result.Columns[i]
+				if colName == "" {
+					colName = "col" + string(rune('0'+i))
+				}
+				if idx < len(values) {
+					row[colName] = values[idx]
+				}
+			}
+		} else {
+			// No projections - use all columns
+			for i, col := range outputCols {
+				colName := col.Column
+				if colName == "" {
+					colName = "col" + string(rune('0'+i))
+				}
+				if i < len(values) {
+					row[colName] = values[i]
+				}
+			}
+		}
+
+		result.Rows = append(result.Rows, row)
+	}
+
+	if err := it.Err(); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("error iterating virtual table: %v", err),
+		}
+	}
+
+	return result, nil
 }
 
 func (e *Executor) executeFilter(

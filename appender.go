@@ -15,12 +15,13 @@ import (
 const DefaultAppenderThreshold = 1024
 
 // Appender provides efficient bulk data loading via batched INSERTs.
-// It buffers rows in memory and flushes them as multi-row INSERT statements.
+// For table appenders, it uses DataChunk-based columnar buffering for performance.
+// For query appenders, it uses row-based buffering with SQL generation.
 // Appender is thread-safe and can be used from multiple goroutines.
 //
 // There are two modes of operation:
-//   - Table appender: Created via NewAppender, directly inserts into an existing table
-//   - Query appender: Created via NewQueryAppender, executes a custom query with batched data
+//   - Table appender: Created via NewAppender, uses DataChunk-based buffering
+//   - Query appender: Created via NewQueryAppender, uses SQL-based buffering
 type Appender struct {
 	conn      *Conn    // Database connection
 	catalog   string   // Database catalog (defaults to "memory")
@@ -28,10 +29,17 @@ type Appender struct {
 	table     string   // Table name
 	columns   []string // Column names in order
 	colTypes  []Type   // Column types (for reference, validation is deferred)
-	buffer    [][]any  // Buffered rows
 	threshold int      // Auto-flush threshold
 	closed    bool     // Whether the appender has been closed
 	mu        sync.Mutex
+
+	// DataChunk-based buffering for table appenders
+	currentChunk   *DataChunk // Current DataChunk for columnar buffering
+	currentSize    int        // Number of rows in currentChunk
+	columnTypeInfo []TypeInfo // Column TypeInfo for DataChunk creation
+
+	// Row-based buffering for query appenders (and fallback)
+	buffer [][]any // Buffered rows (used by query appenders)
 
 	// Query appender fields (only set when created via NewQueryAppender)
 	isQueryAppender bool       // True if this is a query appender
@@ -105,17 +113,38 @@ func NewAppenderWithThreshold(
 		return nil, err
 	}
 
-	return &Appender{
+	// Try to get TypeInfo for DataChunk-based buffering
+	typeInfos, _, typeInfoErr := conn.backendConn.GetTableTypeInfos(schema, table)
+
+	// Create the appender
+	appender := &Appender{
 		conn:      conn,
 		catalog:   catalog,
 		schema:    schema,
 		table:     table,
 		columns:   columns,
 		colTypes:  colTypes,
-		buffer:    make([][]any, 0, threshold),
 		threshold: threshold,
 		closed:    false,
-	}, nil
+	}
+
+	// If we got TypeInfo, use DataChunk-based buffering
+	if typeInfoErr == nil && len(typeInfos) > 0 {
+		appender.columnTypeInfo = typeInfos
+		chunk, chunkErr := NewDataChunk(typeInfos)
+		if chunkErr == nil {
+			appender.currentChunk = chunk
+			appender.currentSize = 0
+		} else {
+			// Fallback to row-based buffering
+			appender.buffer = make([][]any, 0, threshold)
+		}
+	} else {
+		// Fallback to row-based buffering
+		appender.buffer = make([][]any, 0, threshold)
+	}
+
+	return appender, nil
 }
 
 // NewQueryAppender creates a query Appender that executes a custom query with batched rows.
@@ -487,6 +516,43 @@ func (a *Appender) AppendRow(
 		}
 	}
 
+	// Use DataChunk-based buffering for table appenders
+	if a.currentChunk != nil && !a.isQueryAppender {
+		return a.appendRowToChunk(values)
+	}
+
+	// Use row-based buffering for query appenders (and fallback)
+	return a.appendRowToBuffer(values)
+}
+
+// appendRowToChunk appends a row to the DataChunk (for table appenders).
+func (a *Appender) appendRowToChunk(values []any) error {
+	// Calculate effective threshold (minimum of user threshold and VectorSize)
+	effectiveThreshold := a.threshold
+	if VectorSize < effectiveThreshold {
+		effectiveThreshold = VectorSize
+	}
+
+	// Auto-flush at threshold
+	if a.currentSize >= effectiveThreshold {
+		if err := a.flushLocked(); err != nil {
+			return err
+		}
+	}
+
+	// Set values in the DataChunk
+	for i, val := range values {
+		if err := a.currentChunk.SetValue(i, a.currentSize, val); err != nil {
+			return err
+		}
+	}
+	a.currentSize++
+
+	return nil
+}
+
+// appendRowToBuffer appends a row to the row-based buffer (for query appenders).
+func (a *Appender) appendRowToBuffer(values []any) error {
 	// Auto-flush at threshold
 	if len(a.buffer) >= a.threshold {
 		if err := a.flushLocked(); err != nil {
@@ -519,18 +585,30 @@ func (a *Appender) flushLocked() error {
 		}
 	}
 
-	if len(a.buffer) == 0 {
-		return nil // Nothing to flush
-	}
-
 	if a.isQueryAppender {
+		if len(a.buffer) == 0 {
+			return nil // Nothing to flush
+		}
 		return a.flushQueryAppender()
 	}
 
+	// Table appenders: use DataChunk-based flush if available
+	if a.currentChunk != nil {
+		if a.currentSize == 0 {
+			return nil // Nothing to flush
+		}
+		return a.flushTableAppenderDataChunk()
+	}
+
+	// Fallback to row-based flush
+	if len(a.buffer) == 0 {
+		return nil // Nothing to flush
+	}
 	return a.flushTableAppender()
 }
 
 // flushTableAppender performs a direct INSERT flush for table appender mode.
+// This is the fallback path when DataChunk-based buffering is not available.
 func (a *Appender) flushTableAppender() error {
 	insert, err := a.buildInsert()
 	if err != nil {
@@ -550,6 +628,36 @@ func (a *Appender) flushTableAppender() error {
 
 	// Clear buffer only on success
 	a.buffer = a.buffer[:0]
+	return nil
+}
+
+// flushTableAppenderDataChunk performs a direct DataChunk flush for table appender mode.
+// This is the optimized path that bypasses SQL parsing.
+func (a *Appender) flushTableAppenderDataChunk() error {
+	if a.currentSize == 0 {
+		return nil
+	}
+
+	// Set the chunk size to the actual number of rows
+	if err := a.currentChunk.SetSize(a.currentSize); err != nil {
+		return err
+	}
+
+	// Append the chunk directly to storage via the backend
+	_, err := a.conn.backendConn.AppendDataChunk(
+		context.Background(),
+		a.schema,
+		a.table,
+		a.currentChunk,
+	)
+	if err != nil {
+		// Chunk preserved for retry
+		return err
+	}
+
+	// Reset chunk for reuse
+	a.currentChunk.reset()
+	a.currentSize = 0
 	return nil
 }
 
@@ -769,18 +877,30 @@ func (a *Appender) FlushWithContext(appCtx AppenderContext) error {
 
 // flushLockedWithContext performs the actual flush with context. Caller must hold the mutex.
 func (a *Appender) flushLockedWithContext(ctx context.Context) error {
-	if len(a.buffer) == 0 {
-		return nil // Nothing to flush
-	}
-
 	if a.isQueryAppender {
+		if len(a.buffer) == 0 {
+			return nil // Nothing to flush
+		}
 		return a.flushQueryAppenderWithContext(ctx)
 	}
 
+	// Table appenders: use DataChunk-based flush if available
+	if a.currentChunk != nil {
+		if a.currentSize == 0 {
+			return nil // Nothing to flush
+		}
+		return a.flushTableAppenderDataChunkWithContext(ctx)
+	}
+
+	// Fallback to row-based flush
+	if len(a.buffer) == 0 {
+		return nil // Nothing to flush
+	}
 	return a.flushTableAppenderWithContext(ctx)
 }
 
 // flushTableAppenderWithContext performs a direct INSERT flush with context.
+// This is the fallback path when DataChunk-based buffering is not available.
 func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
 	insert, err := a.buildInsert()
 	if err != nil {
@@ -793,6 +913,36 @@ func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
 	}
 
 	a.buffer = a.buffer[:0]
+	return nil
+}
+
+// flushTableAppenderDataChunkWithContext performs a direct DataChunk flush with context.
+// This is the optimized path that bypasses SQL parsing.
+func (a *Appender) flushTableAppenderDataChunkWithContext(ctx context.Context) error {
+	if a.currentSize == 0 {
+		return nil
+	}
+
+	// Set the chunk size to the actual number of rows
+	if err := a.currentChunk.SetSize(a.currentSize); err != nil {
+		return err
+	}
+
+	// Append the chunk directly to storage via the backend
+	_, err := a.conn.backendConn.AppendDataChunk(
+		ctx,
+		a.schema,
+		a.table,
+		a.currentChunk,
+	)
+	if err != nil {
+		// Chunk preserved for retry
+		return err
+	}
+
+	// Reset chunk for reuse
+	a.currentChunk.reset()
+	a.currentSize = 0
 	return nil
 }
 
@@ -883,6 +1033,13 @@ func (a *Appender) ColumnTypes() []Type {
 func (a *Appender) BufferSize() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// DataChunk-based buffering for table appenders
+	if a.currentChunk != nil && !a.isQueryAppender {
+		return a.currentSize
+	}
+
+	// Row-based buffering for query appenders (and fallback)
 	return len(a.buffer)
 }
 

@@ -27,12 +27,13 @@ type ColumnBinding struct {
 
 // LogicalScan represents a table scan.
 type LogicalScan struct {
-	Schema      string
-	TableName   string
-	Alias       string
-	TableDef    *catalog.TableDef
-	Projections []int // Column indices to project, nil for all
-	columns     []ColumnBinding
+	Schema       string
+	TableName    string
+	Alias        string
+	TableDef     *catalog.TableDef
+	VirtualTable *catalog.VirtualTableDef // Set for virtual tables
+	Projections  []int                    // Column indices to project, nil for all
+	columns      []ColumnBinding
 }
 
 func (*LogicalScan) logicalPlanNode() {}

@@ -443,6 +443,125 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 	}
 }
 
+// arrowTypeToDuckDB converts an Arrow DataType to a DuckDB TypeInfo.
+// This is the reverse of duckdbTypeToArrow.
+func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
+	switch dt.ID() {
+	case arrow.BOOL:
+		return NewTypeInfo(TYPE_BOOLEAN)
+	case arrow.INT8:
+		return NewTypeInfo(TYPE_TINYINT)
+	case arrow.INT16:
+		return NewTypeInfo(TYPE_SMALLINT)
+	case arrow.INT32:
+		return NewTypeInfo(TYPE_INTEGER)
+	case arrow.INT64:
+		return NewTypeInfo(TYPE_BIGINT)
+	case arrow.UINT8:
+		return NewTypeInfo(TYPE_UTINYINT)
+	case arrow.UINT16:
+		return NewTypeInfo(TYPE_USMALLINT)
+	case arrow.UINT32:
+		return NewTypeInfo(TYPE_UINTEGER)
+	case arrow.UINT64:
+		return NewTypeInfo(TYPE_UBIGINT)
+	case arrow.FLOAT32:
+		return NewTypeInfo(TYPE_FLOAT)
+	case arrow.FLOAT64:
+		return NewTypeInfo(TYPE_DOUBLE)
+	case arrow.STRING, arrow.LARGE_STRING:
+		return NewTypeInfo(TYPE_VARCHAR)
+	case arrow.BINARY, arrow.LARGE_BINARY:
+		return NewTypeInfo(TYPE_BLOB)
+	case arrow.DATE32, arrow.DATE64:
+		return NewTypeInfo(TYPE_DATE)
+	case arrow.TIME32, arrow.TIME64:
+		return NewTypeInfo(TYPE_TIME)
+	case arrow.TIMESTAMP:
+		tsType := dt.(*arrow.TimestampType)
+		switch tsType.Unit {
+		case arrow.Second:
+			return NewTypeInfo(TYPE_TIMESTAMP_S)
+		case arrow.Millisecond:
+			return NewTypeInfo(TYPE_TIMESTAMP_MS)
+		case arrow.Microsecond:
+			return NewTypeInfo(TYPE_TIMESTAMP)
+		case arrow.Nanosecond:
+			return NewTypeInfo(TYPE_TIMESTAMP_NS)
+		}
+		return NewTypeInfo(TYPE_TIMESTAMP)
+	case arrow.INTERVAL_MONTHS, arrow.INTERVAL_DAY_TIME, arrow.INTERVAL_MONTH_DAY_NANO:
+		return NewTypeInfo(TYPE_INTERVAL)
+	case arrow.FIXED_SIZE_BINARY:
+		fsb := dt.(*arrow.FixedSizeBinaryType)
+		if fsb.ByteWidth == 16 {
+			return NewTypeInfo(TYPE_UUID)
+		}
+		return NewTypeInfo(TYPE_BLOB)
+	case arrow.DECIMAL128:
+		dec := dt.(*arrow.Decimal128Type)
+		return NewDecimalInfo(uint8(dec.Precision), uint8(dec.Scale))
+	case arrow.LIST, arrow.LARGE_LIST:
+		var elemType arrow.DataType
+		switch lt := dt.(type) {
+		case *arrow.ListType:
+			elemType = lt.Elem()
+		case *arrow.LargeListType:
+			elemType = lt.Elem()
+		}
+		childInfo, err := arrowTypeToDuckDB(elemType)
+		if err != nil {
+			return nil, fmt.Errorf("list element: %w", err)
+		}
+		return NewListInfo(childInfo)
+	case arrow.FIXED_SIZE_LIST:
+		fsl := dt.(*arrow.FixedSizeListType)
+		childInfo, err := arrowTypeToDuckDB(fsl.Elem())
+		if err != nil {
+			return nil, fmt.Errorf("array element: %w", err)
+		}
+		return NewArrayInfo(childInfo, uint64(fsl.Len()))
+	case arrow.STRUCT:
+		st := dt.(*arrow.StructType)
+		if len(st.Fields()) == 0 {
+			return nil, errors.New("empty struct type not supported")
+		}
+		entries := make([]StructEntry, len(st.Fields()))
+		for i, field := range st.Fields() {
+			fieldInfo, err := arrowTypeToDuckDB(field.Type)
+			if err != nil {
+				return nil, fmt.Errorf("struct field %s: %w", field.Name, err)
+			}
+			entry, err := NewStructEntry(fieldInfo, field.Name)
+			if err != nil {
+				return nil, err
+			}
+			entries[i] = entry
+		}
+		return NewStructInfo(entries[0], entries[1:]...)
+	case arrow.MAP:
+		mt := dt.(*arrow.MapType)
+		keyInfo, err := arrowTypeToDuckDB(mt.KeyType())
+		if err != nil {
+			return nil, fmt.Errorf("map key: %w", err)
+		}
+		valueInfo, err := arrowTypeToDuckDB(mt.ItemType())
+		if err != nil {
+			return nil, fmt.Errorf("map value: %w", err)
+		}
+		return NewMapInfo(keyInfo, valueInfo)
+	case arrow.DICTIONARY:
+		// Dictionary-encoded types are typically ENUMs in DuckDB
+		// For simplicity, treat as VARCHAR
+		return NewTypeInfo(TYPE_VARCHAR)
+	case arrow.NULL:
+		// NULL type doesn't have a direct NewTypeInfo, use VARCHAR as fallback
+		return NewTypeInfo(TYPE_VARCHAR)
+	default:
+		return nil, fmt.Errorf("unsupported Arrow type: %s", dt.Name())
+	}
+}
+
 // appendToBuilder appends a value to an Arrow array builder.
 func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock quartz.Clock) error {
 	if val == nil {
@@ -635,5 +754,333 @@ func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock qu
 	return nil
 }
 
-// Compile-time assertion that arrowRecordReader implements array.RecordReader.
+// arrowSchemaToColumns converts an Arrow schema to a slice of VirtualColumnDef.
+func arrowSchemaToColumns(schema *arrow.Schema) ([]VirtualColumnDef, error) {
+	fields := schema.Fields()
+	columns := make([]VirtualColumnDef, len(fields))
+
+	for i, field := range fields {
+		typeInfo, err := arrowTypeToDuckDB(field.Type)
+		if err != nil {
+			return nil, fmt.Errorf("column %s: %w", field.Name, err)
+		}
+
+		columns[i] = VirtualColumnDef{
+			Name:     field.Name,
+			Type:     typeInfo.InternalType(),
+			TypeInfo: typeInfo,
+			Nullable: field.Nullable,
+		}
+	}
+
+	return columns, nil
+}
+
+// arrowVirtualTable implements VirtualTable for Arrow RecordReaders.
+type arrowVirtualTable struct {
+	name    string
+	reader  array.RecordReader
+	schema  *arrow.Schema
+	columns []VirtualColumnDef
+	clock   quartz.Clock
+	mu      sync.Mutex
+}
+
+// Name returns the table name.
+func (t *arrowVirtualTable) Name() string {
+	return t.name
+}
+
+// Schema returns the table columns.
+func (t *arrowVirtualTable) Schema() []VirtualColumnDef {
+	return t.columns
+}
+
+// Scan returns an iterator over the table rows.
+func (t *arrowVirtualTable) Scan() (RowIterator, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return &arrowRowIterator{
+		reader:  t.reader,
+		columns: t.columns,
+		clock:   t.clock,
+	}, nil
+}
+
+// arrowRowIterator implements RowIterator for Arrow RecordReaders.
+type arrowRowIterator struct {
+	reader  array.RecordReader
+	columns []VirtualColumnDef
+	clock   quartz.Clock
+
+	batch   arrow.Record
+	rowIdx  int64
+	numRows int64
+	values  []any
+	err     error
+	closed  bool
+}
+
+// Next advances to the next row. Returns false when done.
+func (it *arrowRowIterator) Next() bool {
+	if it.closed || it.err != nil {
+		return false
+	}
+
+	// Move to next row in current batch
+	it.rowIdx++
+
+	// If we've exhausted the current batch, get the next one
+	for it.batch == nil || it.rowIdx >= it.numRows {
+		// Release previous batch
+		if it.batch != nil {
+			it.batch.Release()
+			it.batch = nil
+		}
+
+		// Get next batch
+		if !it.reader.Next() {
+			if err := it.reader.Err(); err != nil {
+				it.err = err
+			}
+			return false
+		}
+
+		it.batch = it.reader.Record()
+		if it.batch != nil {
+			it.batch.Retain()
+			it.numRows = it.batch.NumRows()
+			it.rowIdx = 0
+		}
+	}
+
+	// Extract values for current row
+	it.values = it.extractRowValues()
+	return true
+}
+
+// extractRowValues extracts values from the current row in the batch.
+func (it *arrowRowIterator) extractRowValues() []any {
+	if it.batch == nil {
+		return nil
+	}
+
+	numCols := int(it.batch.NumCols())
+	values := make([]any, numCols)
+
+	for col := 0; col < numCols; col++ {
+		arr := it.batch.Column(col)
+		if arr.IsNull(int(it.rowIdx)) {
+			values[col] = nil
+			continue
+		}
+
+		values[col] = extractArrowValue(arr, int(it.rowIdx), it.columns[col].TypeInfo, it.clock)
+	}
+
+	return values
+}
+
+// extractArrowValue extracts a value from an Arrow array at the given index.
+func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz.Clock) any {
+	if arr.IsNull(idx) {
+		return nil
+	}
+
+	switch a := arr.(type) {
+	case *array.Boolean:
+		return a.Value(idx)
+	case *array.Int8:
+		return a.Value(idx)
+	case *array.Int16:
+		return a.Value(idx)
+	case *array.Int32:
+		return a.Value(idx)
+	case *array.Int64:
+		return a.Value(idx)
+	case *array.Uint8:
+		return a.Value(idx)
+	case *array.Uint16:
+		return a.Value(idx)
+	case *array.Uint32:
+		return a.Value(idx)
+	case *array.Uint64:
+		return a.Value(idx)
+	case *array.Float32:
+		return a.Value(idx)
+	case *array.Float64:
+		return a.Value(idx)
+	case *array.String:
+		return a.Value(idx)
+	case *array.LargeString:
+		return a.Value(idx)
+	case *array.Binary:
+		return a.Value(idx)
+	case *array.LargeBinary:
+		return a.Value(idx)
+	case *array.Date32:
+		days := int64(a.Value(idx))
+		return time.Unix(days*secondsPerDay, 0).UTC()
+	case *array.Date64:
+		millis := int64(a.Value(idx))
+		return time.UnixMilli(millis).UTC()
+	case *array.Time32:
+		// Time32 is in seconds or milliseconds
+		val := int64(a.Value(idx))
+		return time.UnixMicro(val * 1000).UTC()
+	case *array.Time64:
+		// Time64 is in microseconds or nanoseconds
+		val := int64(a.Value(idx))
+		return time.UnixMicro(val).UTC()
+	case *array.Timestamp:
+		ts := a.Value(idx)
+		tsType := a.DataType().(*arrow.TimestampType)
+		switch tsType.Unit {
+		case arrow.Second:
+			return time.Unix(int64(ts), 0).UTC()
+		case arrow.Millisecond:
+			return time.UnixMilli(int64(ts)).UTC()
+		case arrow.Microsecond:
+			return time.UnixMicro(int64(ts)).UTC()
+		case arrow.Nanosecond:
+			return time.Unix(0, int64(ts)).UTC()
+		}
+		return time.UnixMicro(int64(ts)).UTC()
+	case *array.Decimal128:
+		val := a.Value(idx)
+		return val.BigInt()
+	case *array.FixedSizeBinary:
+		data := a.Value(idx)
+		if len(data) == 16 {
+			var u UUID
+			copy(u[:], data)
+			return u
+		}
+		return data
+	case *array.List:
+		start, end := a.ValueOffsets(idx)
+		child := a.ListValues()
+		result := make([]any, end-start)
+		childTypeInfo := typeInfo.Details().(*ListDetails).Child
+		for i := start; i < end; i++ {
+			result[i-start] = extractArrowValue(child, int(i), childTypeInfo, clock)
+		}
+		return result
+	case *array.LargeList:
+		start, end := a.ValueOffsets(idx)
+		child := a.ListValues()
+		result := make([]any, end-start)
+		childTypeInfo := typeInfo.Details().(*ListDetails).Child
+		for i := start; i < end; i++ {
+			result[i-start] = extractArrowValue(child, int(i), childTypeInfo, clock)
+		}
+		return result
+	case *array.FixedSizeList:
+		listSize := a.DataType().(*arrow.FixedSizeListType).Len()
+		start := int64(idx) * int64(listSize)
+		child := a.ListValues()
+		result := make([]any, listSize)
+		childTypeInfo := typeInfo.Details().(*ArrayDetails).Child
+		for i := int32(0); i < listSize; i++ {
+			result[i] = extractArrowValue(child, int(start)+int(i), childTypeInfo, clock)
+		}
+		return result
+	case *array.Struct:
+		result := make(map[string]any)
+		structDetails := typeInfo.Details().(*StructDetails)
+		for i, entry := range structDetails.Entries {
+			field := a.Field(i)
+			result[entry.Name()] = extractArrowValue(field, idx, entry.Info(), clock)
+		}
+		return result
+	case *array.Map:
+		keys := a.Keys()
+		items := a.Items()
+		start, end := a.ValueOffsets(idx)
+		result := make(Map)
+		mapDetails := typeInfo.Details().(*MapDetails)
+		for i := start; i < end; i++ {
+			key := extractArrowValue(keys, int(i), mapDetails.Key, clock)
+			value := extractArrowValue(items, int(i), mapDetails.Value, clock)
+			result[key] = value
+		}
+		return result
+	default:
+		// Fallback: try to get string representation
+		return arr.ValueStr(idx)
+	}
+}
+
+// Values returns the current row values.
+func (it *arrowRowIterator) Values() []any {
+	return it.values
+}
+
+// Err returns any error that occurred during iteration.
+func (it *arrowRowIterator) Err() error {
+	return it.err
+}
+
+// Close releases resources held by the iterator.
+func (it *arrowRowIterator) Close() error {
+	if it.closed {
+		return nil
+	}
+	it.closed = true
+
+	if it.batch != nil {
+		it.batch.Release()
+		it.batch = nil
+	}
+
+	return nil
+}
+
+// RegisterView registers an Arrow RecordReader as a queryable view.
+// The view can be queried with SQL until the returned release function is called.
+// The caller must call the release function when done to free Arrow resources.
+func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release func(), err error) {
+	if name == "" {
+		return nil, errors.New("view name cannot be empty")
+	}
+
+	// Convert Arrow schema to DuckDB columns
+	columns, err := arrowSchemaToColumns(reader.Schema())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert Arrow schema: %w", err)
+	}
+
+	// Create virtual table
+	vt := &arrowVirtualTable{
+		name:    name,
+		reader:  reader,
+		schema:  reader.Schema(),
+		columns: columns,
+		clock:   a.clock,
+	}
+
+	// Get virtual table registry from connection
+	registry := a.conn.getVirtualTableRegistry()
+	if registry == nil {
+		return nil, errors.New("connection does not support virtual tables")
+	}
+
+	// Register in catalog
+	if err := registry.RegisterVirtualTable(vt); err != nil {
+		return nil, err
+	}
+
+	// Return release function
+	release = func() {
+		_ = registry.UnregisterVirtualTable(name)
+		reader.Release()
+	}
+
+	return release, nil
+}
+
+// Compile-time assertions
 var _ array.RecordReader = (*arrowRecordReader)(nil)
+var _ VirtualTable = (*arrowVirtualTable)(nil)
+var _ RowIterator = (*arrowRowIterator)(nil)
