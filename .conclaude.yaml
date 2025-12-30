@@ -7,7 +7,19 @@
 
 # Stop hook - runs when Claude is about to stop
 stop:
-  commands: []
+  commands:
+    - run: "tests"
+      showStdout: false
+      showStderr: false
+      showCommand: true # Show "Executing command X/Y: npm test" (default: true)
+      message: "Fix the failing tests via delegation."
+      maxOutputLines: 100
+    # - run: "lint"
+    #   showStdout: true
+    #   showStderr: true
+    #   showCommand: true # Show "Executing command X/Y: npm test" (default: true)
+    #   message: "Fix the linting issues via delegation."
+    #   maxOutputLines: 100
   # Example:
   # - run: "npm test"
   #   showStdout: true
@@ -46,6 +58,8 @@ preToolUse:
   uneditableFiles:
     - ".conclaude.yml"
     - ".conclaude.yaml"
+    - ".golangci.yml"
+    - ".golangci.yaml"
   # Examples:
   # - "*.lock"
   # - pattern: ".env*"
