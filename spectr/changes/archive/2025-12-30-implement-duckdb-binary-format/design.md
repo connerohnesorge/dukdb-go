@@ -681,6 +681,96 @@ func SerializeColumn(w *BinaryWriter, col *Column) error {
 4. **Recursive Serialization**: Natural fit for nested types
 5. **Optional Properties**: WritePropertyWithDefault skips defaults to save space
 
+## Implementation Decisions
+
+### Property ID Mappings
+
+The actual property ID mappings used in the implementation match the DuckDB v64 format exactly:
+
+**Base Properties (Common to All Types):**
+- Property 99: `LogicalTypeId` (uint8) - The base type enum (INTEGER, VARCHAR, DECIMAL, etc.)
+- Property 100: `TypeDiscriminator` (uint32) - ExtraTypeInfoType enum value
+- Property 101: `Alias` (string, optional) - Type alias
+- Property 102: `Modifiers` (deleted, reserved for compatibility)
+- Property 103: `ExtensionInfo` (optional) - Extension-specific data
+
+**Type-Specific Properties (200-299):**
+
+Note: Property IDs are reused across different type contexts. The discriminator (property 100) determines which type context is active.
+
+*DECIMAL (ExtraTypeInfoType_DECIMAL = 2):*
+- Property 200: `Width` (uint8) - Total digits (1-38)
+- Property 201: `Scale` (uint8) - Decimal places (0-width)
+
+*ENUM (ExtraTypeInfoType_ENUM = 6):*
+- Property 200: `Count` (uint64) - Number of enum values
+- Property 201: `Values` (list<string>) - Enum value strings (written via WriteList)
+
+*LIST (ExtraTypeInfoType_LIST = 4):*
+- Property 200: `ChildType` (LogicalType) - Recursive TypeInfo serialization
+
+*ARRAY (ExtraTypeInfoType_ARRAY = 9):*
+- Property 200: `ChildType` (LogicalType) - Recursive TypeInfo serialization
+- Property 201: `Size` (uint32) - Fixed array size
+
+*STRUCT (ExtraTypeInfoType_STRUCT = 5):*
+- Property 200: `Fields` (child_list_t<LogicalType>) - Field definitions
+  - Format: count (uint64) + for each field: (name_length, name, TypeInfo)
+
+*MAP (uses ExtraTypeInfoType_LIST = 4):*
+- Property 200: `ChildType` (LogicalType) - STRUCT<key, value>
+  - MAP is internally represented as LIST<STRUCT<key, value>>
+  - No separate MAP ExtraTypeInfoType exists in v64 format
+
+*UNION:*
+- NOT SUPPORTED in v64 format
+- Returns `ErrUnsupportedTypeForSerialization`
+- Will be added in future DuckDB format versions (v65+)
+
+**Catalog Entry Properties:**
+
+*SCHEMA (CatalogEntryType_SCHEMA = 1):*
+- Property 100: `EntryType` (uint32) - CatalogEntryType_SCHEMA
+- Property 101: `Name` (string) - Schema name
+- Property 200: `TableCount` (uint64) - Number of tables
+
+*TABLE (CatalogEntryType_TABLE = 2):*
+- Property 100: `EntryType` (uint32) - CatalogEntryType_TABLE
+- Property 101: `Name` (string) - Table name
+- Property 102: `Schema` (string) - Schema name
+- Property 200: `ColumnCount` (uint64) - Number of columns
+- Property 201: `PrimaryKey` ([]int, optional) - Primary key column indices (not yet implemented)
+
+*COLUMN:*
+- Property 100: `Name` (string) - Column name
+- Property 101: `TypeInfo` (LogicalType) - Recursive TypeInfo serialization
+- Property 102: `Nullable` (uint8, optional, default=1) - Nullability flag (0=NOT NULL, 1=NULL)
+- Property 103: `DefaultValue` (any, optional) - Default value (not yet implemented)
+
+### Implementation Differences from Design
+
+1. **Property 99 Addition**: The implementation adds property 99 for `LogicalTypeId` which stores the base type enum (TYPE_INTEGER, TYPE_DECIMAL, etc.). This was discovered during implementation to match DuckDB's actual binary format. Property 100 stores the ExtraTypeInfoType discriminator.
+
+2. **ENUM Property Layout**: Initial design showed properties in a different order. The actual implementation uses:
+   - Property 200 for count (uint64/idx_t)
+   - Property 201 for the values list (using WriteList API)
+
+   This matches DuckDB's serialize_types.cpp implementation.
+
+3. **MAP Representation**: Confirmed that MAP has no separate ExtraTypeInfoType value. It uses `ExtraTypeInfoType_LIST` (4) with a child STRUCT containing "key" and "value" fields. The LogicalTypeId (property 99) is TYPE_MAP, but the ExtraTypeInfo discriminator is LIST_TYPE_INFO.
+
+4. **Catalog Entry Property IDs**: Property IDs for catalog entries (schemas, tables, columns) reuse the 100-200 range, which is context-dependent. Unlike TypeInfo which uses property 99 and 100 for metadata, catalog entries use property 100 for the entry type discriminator.
+
+5. **Nullable Flag Representation**: The nullable flag is stored as uint8 (not bool) to match DuckDB's binary format:
+   - 0 = NOT NULL
+   - 1 = NULL (default)
+
+   This is written with WritePropertyWithDefault so it's omitted when nullable=true (default).
+
+6. **Default Values Not Implemented**: Column default values (property 103) are recognized in the format but not yet serialized/deserialized as they require type-specific value encoding which is complex and deferred to future work.
+
+7. **Primary Keys Not Implemented**: Table primary key constraints (property 201) are recognized in the format but not yet serialized/deserialized. The structure is in place for future implementation.
+
 ## Testing Strategy
 
 ### Unit Tests

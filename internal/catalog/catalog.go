@@ -35,6 +35,18 @@ func (c *Catalog) GetSchema(
 	return s, ok
 }
 
+// ListSchemas returns all schemas in the catalog.
+func (c *Catalog) ListSchemas() []*Schema {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	schemas := make([]*Schema, 0, len(c.schemas))
+	for _, s := range c.schemas {
+		schemas = append(schemas, s)
+	}
+	return schemas
+}
+
 // CreateSchema creates a new schema.
 func (c *Catalog) CreateSchema(
 	name string,

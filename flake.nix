@@ -151,6 +151,7 @@ nix fmt
             graphviz
             goreleaser
             gofumpt
+            duckdb
           ]
           ++ builtins.attrValues scriptPackages;
       };
