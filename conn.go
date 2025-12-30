@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"io"
 	"math/big"
 	"reflect"
 	"sync"
@@ -375,7 +376,7 @@ func (r *rows) Close() error {
 // Next is called to populate the next row of data into the provided slice.
 func (r *rows) Next(dest []driver.Value) error {
 	if r.pos >= len(r.data) {
-		return errors.New("EOF")
+		return io.EOF
 	}
 
 	row := r.data[r.pos]

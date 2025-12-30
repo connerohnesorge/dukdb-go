@@ -141,6 +141,12 @@ func (e *Executor) Execute(
 		return e.executeDropTable(execCtx, p)
 	case *planner.PhysicalDummyScan:
 		return e.executeDummyScan(execCtx, p)
+	case *planner.PhysicalBegin:
+		return e.executeBegin(execCtx, p)
+	case *planner.PhysicalCommit:
+		return e.executeCommit(execCtx, p)
+	case *planner.PhysicalRollback:
+		return e.executeRollback(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -164,7 +170,7 @@ func (e *Executor) collectResults(
 		if col.Column != "" {
 			result.Columns[i] = col.Column
 		} else {
-			result.Columns[i] = ""
+			result.Columns[i] = "col" + string(rune('0'+i))
 		}
 	}
 
@@ -187,13 +193,7 @@ func (e *Executor) collectResults(
 		for i := 0; i < chunk.Count(); i++ {
 			row := make(map[string]any)
 			for j := 0; j < len(outputCols); j++ {
-				colName := result.Columns[j]
-				if colName == "" {
-					colName = "col" + string(
-						rune('0'+j),
-					)
-				}
-				row[colName] = chunk.GetValue(
+				row[result.Columns[j]] = chunk.GetValue(
 					i,
 					j,
 				)
@@ -285,7 +285,7 @@ func (e *Executor) executeVirtualTableScan(
 		if col.Column != "" {
 			result.Columns[i] = col.Column
 		} else {
-			result.Columns[i] = ""
+			result.Columns[i] = "col" + string(rune('0'+i))
 		}
 	}
 
@@ -297,23 +297,15 @@ func (e *Executor) executeVirtualTableScan(
 		// Apply projections if specified
 		if plan.Projections != nil {
 			for i, idx := range plan.Projections {
-				colName := result.Columns[i]
-				if colName == "" {
-					colName = "col" + string(rune('0'+i))
-				}
 				if idx < len(values) {
-					row[colName] = values[idx]
+					row[result.Columns[i]] = values[idx]
 				}
 			}
 		} else {
 			// No projections - use all columns
-			for i, col := range outputCols {
-				colName := col.Column
-				if colName == "" {
-					colName = "col" + string(rune('0'+i))
-				}
+			for i := range outputCols {
 				if i < len(values) {
-					row[colName] = values[i]
+					row[result.Columns[i]] = values[i]
 				}
 			}
 		}
@@ -394,7 +386,7 @@ func (e *Executor) executeProject(
 			plan.Aliases[i] != "" {
 			columns[i] = plan.Aliases[i]
 		} else {
-			columns[i] = ""
+			columns[i] = "col" + string(rune('0'+i))
 		}
 	}
 
@@ -414,13 +406,7 @@ func (e *Executor) executeProject(
 			if err != nil {
 				return nil, err
 			}
-			colName := columns[j]
-			if colName == "" {
-				colName = "col" + string(
-					rune('0'+j),
-				)
-			}
-			projectedRow[colName] = val
+			projectedRow[columns[j]] = val
 		}
 		projectedRows[i] = projectedRow
 	}
@@ -631,12 +617,16 @@ func (e *Executor) executeHashAggregate(
 		if i < len(plan.Aliases) &&
 			plan.Aliases[i] != "" {
 			columns[i] = plan.Aliases[i]
+		} else {
+			columns[i] = "col" + string(rune('0'+i))
 		}
 	}
 	for i := range plan.Aggregates {
 		if numGroupBy+i < len(plan.Aliases) &&
 			plan.Aliases[numGroupBy+i] != "" {
 			columns[numGroupBy+i] = plan.Aliases[numGroupBy+i]
+		} else {
+			columns[numGroupBy+i] = "col" + string(rune('0'+numGroupBy+i))
 		}
 	}
 
@@ -661,13 +651,7 @@ func (e *Executor) executeHashAggregate(
 					expr,
 					groupRows[0],
 				)
-				colName := columns[j]
-				if colName == "" {
-					colName = "col" + string(
-						rune('0'+j),
-					)
-				}
-				row[colName] = val
+				row[columns[j]] = val
 			}
 		}
 
@@ -681,13 +665,7 @@ func (e *Executor) executeHashAggregate(
 			if err != nil {
 				return nil, err
 			}
-			colName := columns[numGroupBy+j]
-			if colName == "" {
-				colName = "col" + string(
-					rune('0'+numGroupBy+j),
-				)
-			}
-			row[colName] = val
+			row[columns[numGroupBy+j]] = val
 		}
 
 		result.Rows[i] = row
@@ -997,6 +975,33 @@ func (e *Executor) executeDummyScan(
 		Rows:    []map[string]any{{}},
 		Columns: []string{},
 	}, nil
+}
+
+func (e *Executor) executeBegin(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalBegin,
+) (*ExecutionResult, error) {
+	// BEGIN is a no-op in the executor.
+	// Transaction management is handled at the connection level.
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+func (e *Executor) executeCommit(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalCommit,
+) (*ExecutionResult, error) {
+	// COMMIT is a no-op in the executor.
+	// Transaction management is handled at the connection level.
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+func (e *Executor) executeRollback(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalRollback,
+) (*ExecutionResult, error) {
+	// ROLLBACK is a no-op in the executor.
+	// Transaction management is handled at the connection level.
+	return &ExecutionResult{RowsAffected: 0}, nil
 }
 
 // Helper functions

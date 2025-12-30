@@ -387,6 +387,33 @@ func (*PhysicalDummyScan) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalDummyScan) OutputColumns() []ColumnBinding { return nil }
 
+// PhysicalBegin represents a physical BEGIN TRANSACTION plan.
+type PhysicalBegin struct{}
+
+func (*PhysicalBegin) physicalPlanNode() {}
+
+func (*PhysicalBegin) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalBegin) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCommit represents a physical COMMIT plan.
+type PhysicalCommit struct{}
+
+func (*PhysicalCommit) physicalPlanNode() {}
+
+func (*PhysicalCommit) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCommit) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalRollback represents a physical ROLLBACK plan.
+type PhysicalRollback struct{}
+
+func (*PhysicalRollback) physicalPlanNode() {}
+
+func (*PhysicalRollback) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalRollback) OutputColumns() []ColumnBinding { return nil }
+
 // PhysicalVirtualTableScan represents a physical virtual table scan.
 type PhysicalVirtualTableScan struct {
 	Schema       string
@@ -473,6 +500,12 @@ func (p *Planner) createLogicalPlan(
 		return p.planCreateTable(s)
 	case *binder.BoundDropTableStmt:
 		return p.planDropTable(s)
+	case *binder.BoundBeginStmt:
+		return &LogicalBegin{}, nil
+	case *binder.BoundCommitStmt:
+		return &LogicalCommit{}, nil
+	case *binder.BoundRollbackStmt:
+		return &LogicalRollback{}, nil
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -906,6 +939,15 @@ func (p *Planner) createPhysicalPlan(
 
 	case *LogicalDummyScan:
 		return &PhysicalDummyScan{}, nil
+
+	case *LogicalBegin:
+		return &PhysicalBegin{}, nil
+
+	case *LogicalCommit:
+		return &PhysicalCommit{}, nil
+
+	case *LogicalRollback:
+		return &PhysicalRollback{}, nil
 
 	default:
 		return nil, &dukdb.Error{

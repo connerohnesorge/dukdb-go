@@ -602,6 +602,14 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseCreate()
 	case p.isKeyword("DROP"):
 		stmt, err = p.parseDrop()
+	case p.isKeyword("BEGIN"):
+		stmt, err = p.parseBegin()
+	case p.isKeyword("COMMIT"):
+		stmt = &CommitStmt{}
+		p.advance()
+	case p.isKeyword("ROLLBACK"):
+		stmt = &RollbackStmt{}
+		p.advance()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",
@@ -1387,6 +1395,14 @@ func (p *parser) parseDropTable() (*DropTableStmt, error) {
 	return stmt, nil
 }
 
+func (p *parser) parseBegin() (*BeginStmt, error) {
+	p.advance() // consume BEGIN
+	if p.isKeyword("TRANSACTION") {
+		p.advance() // consume TRANSACTION (optional)
+	}
+	return &BeginStmt{}, nil
+}
+
 func (p *parser) parseExprList() ([]Expr, error) {
 	var exprs []Expr
 
@@ -1756,6 +1772,40 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 		switch p.current().value {
 		case "-":
 			p.advance()
+			// Special handling: if the next token is a numeric literal,
+			// parse it as a negative literal to avoid overflow issues
+			// (e.g., -2147483648 which doesn't fit as positive int32)
+			if p.current().typ == tokenNumber {
+				tok := p.advance()
+				numStr := tok.value
+				// Parse as negative number
+				if strings.Contains(numStr, ".") ||
+					strings.ContainsAny(numStr, "eE") {
+					f, err := strconv.ParseFloat(numStr, 64)
+					if err != nil {
+						return nil, p.errorf(
+							"invalid number: %s",
+							numStr,
+						)
+					}
+					return &Literal{
+						Value: -f,
+						Type:  dukdb.TYPE_DOUBLE,
+					}, nil
+				}
+				i, err := strconv.ParseInt(numStr, 10, 64)
+				if err != nil {
+					return nil, p.errorf(
+						"invalid number: %s",
+						numStr,
+					)
+				}
+				return &Literal{
+					Value: -i,
+					Type:  dukdb.TYPE_BIGINT,
+				}, nil
+			}
+			// Non-literal expression, use UnaryExpr
 			expr, err := p.parseUnaryExpr()
 			if err != nil {
 				return nil, err
@@ -1766,6 +1816,11 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 			}, nil
 		case "+":
 			p.advance()
+			// Similar handling for unary plus with literals
+			if p.current().typ == tokenNumber {
+				tok := p.advance()
+				return p.parseNumber(tok.value)
+			}
 			expr, err := p.parseUnaryExpr()
 			if err != nil {
 				return nil, err

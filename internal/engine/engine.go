@@ -40,6 +40,27 @@ func (e *Engine) Open(
 	path string,
 	config *dukdb.Config,
 ) (dukdb.BackendConn, error) {
+	// For :memory: databases, create a new isolated Engine instance
+	// to ensure complete isolation between connections
+	if path == ":memory:" {
+		isolatedEngine := NewEngine()
+		isolatedEngine.path = path
+		if config != nil {
+			isolatedEngine.config = config
+		} else {
+			isolatedEngine.config = &dukdb.Config{
+				AccessMode: "read_write",
+			}
+		}
+		isolatedEngine.persistent = false
+
+		conn := &EngineConn{
+			engine: isolatedEngine,
+			txn:    isolatedEngine.txnMgr.Begin(),
+		}
+		return conn, nil
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

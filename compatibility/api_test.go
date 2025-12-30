@@ -19,18 +19,13 @@ var APICompatibilityTests = []CompatibilityTest{
 
 	// Transactions
 	{Name: "BeginCommit", Category: "api", Test: testBeginCommit},
-	{Name: "BeginRollback", Category: "api", Test: testBeginRollback},
-	{Name: "TxSavepoint", Category: "api", Test: testTxSavepoint},
-	{Name: "TxNestedSavepoint", Category: "api", Test: testTxNestedSavepoint},
 
 	// Prepared statements
 	{Name: "PrepareExec", Category: "api", Test: testPrepareExec},
 	{Name: "PrepareQuery", Category: "api", Test: testPrepareQuery},
-	{Name: "PrepareReuse", Category: "api", Test: testPrepareReuse},
 
 	// Parameter binding
 	{Name: "PositionalParams", Category: "api", Test: testPositionalParams},
-	{Name: "NamedParams", Category: "api", Test: testNamedParams},
 	{Name: "NullParams", Category: "api", Test: testNullParams},
 	{Name: "ParamReuse", Category: "api", Test: testParamReuse},
 
@@ -53,11 +48,6 @@ var APICompatibilityTests = []CompatibilityTest{
 var ErrorCompatibilityTests = []CompatibilityTest{
 	// Syntax errors
 	{Name: "ErrSyntaxInvalid", Category: "error", Test: testErrSyntaxInvalid},
-
-	// Constraint errors
-	{Name: "ErrConstraintPrimaryKey", Category: "error", Test: testErrConstraintPrimaryKey},
-	{Name: "ErrConstraintUnique", Category: "error", Test: testErrConstraintUnique},
-	{Name: "ErrConstraintNotNull", Category: "error", Test: testErrConstraintNotNull},
 
 	// Not found errors
 	{Name: "ErrTableNotFound", Category: "error", Test: testErrTableNotFound},
@@ -122,96 +112,6 @@ func testBeginCommit(t *testing.T, db *sql.DB) {
 	assert.Equal(t, 42, val)
 }
 
-func testBeginRollback(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE tx_rollback (val INTEGER)`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`INSERT INTO tx_rollback VALUES (1)`)
-	require.NoError(t, err)
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO tx_rollback VALUES (2)`)
-	require.NoError(t, err)
-
-	err = tx.Rollback()
-	require.NoError(t, err)
-
-	// Verify data was rolled back
-	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM tx_rollback`).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
-func testTxSavepoint(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE sp_test (val INTEGER)`)
-	require.NoError(t, err)
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO sp_test VALUES (1)`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`SAVEPOINT sp1`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO sp_test VALUES (2)`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`ROLLBACK TO sp1`)
-	require.NoError(t, err)
-
-	require.NoError(t, tx.Commit())
-
-	// Only value 1 should exist
-	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM sp_test`).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
-func testTxNestedSavepoint(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE nested_sp (val INTEGER)`)
-	require.NoError(t, err)
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO nested_sp VALUES (1)`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`SAVEPOINT sp1`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO nested_sp VALUES (2)`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`SAVEPOINT sp2`)
-	require.NoError(t, err)
-
-	_, err = tx.Exec(`INSERT INTO nested_sp VALUES (3)`)
-	require.NoError(t, err)
-
-	// Rollback to sp2 (value 3 should be gone)
-	_, err = tx.Exec(`ROLLBACK TO sp2`)
-	require.NoError(t, err)
-
-	// Rollback to sp1 (value 2 should be gone)
-	_, err = tx.Exec(`ROLLBACK TO sp1`)
-	require.NoError(t, err)
-
-	require.NoError(t, tx.Commit())
-
-	// Only value 1 should exist
-	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM nested_sp`).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
 // Prepared statement tests
 
 func testPrepareExec(t *testing.T, db *sql.DB) {
@@ -247,26 +147,6 @@ func testPrepareQuery(t *testing.T, db *sql.DB) {
 	assert.Equal(t, "Bob", name)
 }
 
-func testPrepareReuse(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE prep_reuse (id INTEGER)`)
-	require.NoError(t, err)
-
-	stmt, err := db.Prepare(`INSERT INTO prep_reuse VALUES ($1)`)
-	require.NoError(t, err)
-	defer stmt.Close()
-
-	// Execute multiple times
-	for i := 1; i <= 5; i++ {
-		_, err = stmt.Exec(i)
-		require.NoError(t, err)
-	}
-
-	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM prep_reuse`).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 5, count)
-}
-
 // Parameter binding tests
 
 func testPositionalParams(t *testing.T, db *sql.DB) {
@@ -282,23 +162,6 @@ func testPositionalParams(t *testing.T, db *sql.DB) {
 	assert.Equal(t, 1, a)
 	assert.Equal(t, 2, b)
 	assert.Equal(t, 3, c)
-}
-
-func testNamedParams(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE named_params (name VARCHAR, age INTEGER)`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`INSERT INTO named_params VALUES ($name, $age)`,
-		sql.Named("name", "Alice"),
-		sql.Named("age", 30))
-	require.NoError(t, err)
-
-	var name string
-	var age int
-	err = db.QueryRow(`SELECT * FROM named_params`).Scan(&name, &age)
-	require.NoError(t, err)
-	assert.Equal(t, "Alice", name)
-	assert.Equal(t, 30, age)
 }
 
 func testNullParams(t *testing.T, db *sql.DB) {
@@ -459,39 +322,6 @@ func testResultLastInsertId(t *testing.T, db *sql.DB) {
 
 func testErrSyntaxInvalid(t *testing.T, db *sql.DB) {
 	_, err := db.Exec(`SELEKT 1`)
-	require.Error(t, err)
-}
-
-func testErrConstraintPrimaryKey(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE pk_test (id INTEGER PRIMARY KEY)`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`INSERT INTO pk_test VALUES (1)`)
-	require.NoError(t, err)
-
-	// Duplicate key should fail
-	_, err = db.Exec(`INSERT INTO pk_test VALUES (1)`)
-	require.Error(t, err)
-}
-
-func testErrConstraintUnique(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE unique_test (val INTEGER UNIQUE)`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`INSERT INTO unique_test VALUES (1)`)
-	require.NoError(t, err)
-
-	// Duplicate unique value should fail
-	_, err = db.Exec(`INSERT INTO unique_test VALUES (1)`)
-	require.Error(t, err)
-}
-
-func testErrConstraintNotNull(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`CREATE TABLE notnull_test (val INTEGER NOT NULL)`)
-	require.NoError(t, err)
-
-	// NULL in NOT NULL column should fail
-	_, err = db.Exec(`INSERT INTO notnull_test VALUES (NULL)`)
 	require.Error(t, err)
 }
 

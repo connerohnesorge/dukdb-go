@@ -325,3 +325,24 @@ type StarExpr struct {
 }
 
 func (*StarExpr) exprNode() {}
+
+// BeginStmt represents a BEGIN TRANSACTION statement.
+type BeginStmt struct{}
+
+func (*BeginStmt) stmtNode() {}
+
+func (*BeginStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// CommitStmt represents a COMMIT statement.
+type CommitStmt struct{}
+
+func (*CommitStmt) stmtNode() {}
+
+func (*CommitStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// RollbackStmt represents a ROLLBACK statement.
+type RollbackStmt struct{}
+
+func (*RollbackStmt) stmtNode() {}
+
+func (*RollbackStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }

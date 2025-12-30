@@ -112,6 +112,12 @@ func (b *Binder) Bind(
 		return b.bindCreateTable(s)
 	case *parser.DropTableStmt:
 		return b.bindDropTable(s)
+	case *parser.BeginStmt:
+		return &BoundBeginStmt{}, nil
+	case *parser.CommitStmt:
+		return &BoundCommitStmt{}, nil
+	case *parser.RollbackStmt:
+		return &BoundRollbackStmt{}, nil
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}
@@ -241,6 +247,27 @@ type BoundDropTableStmt struct {
 func (*BoundDropTableStmt) boundStmtNode() {}
 
 func (*BoundDropTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundBeginStmt represents a bound BEGIN statement.
+type BoundBeginStmt struct{}
+
+func (*BoundBeginStmt) boundStmtNode() {}
+
+func (*BoundBeginStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// BoundCommitStmt represents a bound COMMIT statement.
+type BoundCommitStmt struct{}
+
+func (*BoundCommitStmt) boundStmtNode() {}
+
+func (*BoundCommitStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// BoundRollbackStmt represents a bound ROLLBACK statement.
+type BoundRollbackStmt struct{}
+
+func (*BoundRollbackStmt) boundStmtNode() {}
+
+func (*BoundRollbackStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
 
 // ---------- Bound Expression Types ----------
 
@@ -484,9 +511,17 @@ func (b *Binder) bindSelect(
 			if err != nil {
 				return nil, err
 			}
+			alias := col.Alias
+			if alias == "" {
+				// If no explicit alias and the expression is a column reference,
+				// use the column name as the alias
+				if colRef, ok := expr.(*BoundColumnRef); ok {
+					alias = colRef.Column
+				}
+			}
 			bound.Columns = append(bound.Columns, &BoundSelectColumn{
 				Expr:  expr,
-				Alias: col.Alias,
+				Alias: alias,
 			})
 		}
 	}

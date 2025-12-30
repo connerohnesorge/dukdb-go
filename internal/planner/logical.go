@@ -377,3 +377,30 @@ func (*LogicalDummyScan) logicalPlanNode() {}
 func (*LogicalDummyScan) Children() []LogicalPlan { return nil }
 
 func (*LogicalDummyScan) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalBegin represents a BEGIN TRANSACTION operation.
+type LogicalBegin struct{}
+
+func (*LogicalBegin) logicalPlanNode() {}
+
+func (*LogicalBegin) Children() []LogicalPlan { return nil }
+
+func (*LogicalBegin) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCommit represents a COMMIT operation.
+type LogicalCommit struct{}
+
+func (*LogicalCommit) logicalPlanNode() {}
+
+func (*LogicalCommit) Children() []LogicalPlan { return nil }
+
+func (*LogicalCommit) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalRollback represents a ROLLBACK operation.
+type LogicalRollback struct{}
+
+func (*LogicalRollback) logicalPlanNode() {}
+
+func (*LogicalRollback) Children() []LogicalPlan { return nil }
+
+func (*LogicalRollback) OutputColumns() []ColumnBinding { return nil }
