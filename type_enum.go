@@ -46,6 +46,16 @@ const (
 	TYPE_SQLNULL      Type = 36 // SQL NULL type
 )
 
+// unsupportedTypeToStringMap lists types not yet fully supported.
+// These types cannot be used with NewTypeInfo() except for TYPE_ANY.
+var unsupportedTypeToStringMap = map[Type]string{
+	TYPE_INVALID:  "INVALID",
+	TYPE_UHUGEINT: "UHUGEINT",
+	TYPE_BIT:      "BIT",
+	TYPE_ANY:      "ANY",
+	TYPE_BIGNUM:   "BIGNUM",
+}
+
 // typeToStringMap maps Type values to their string representations.
 // Note: TIME_TZ -> "TIMETZ" and TIMESTAMP_TZ -> "TIMESTAMPTZ" (no underscore)
 var typeToStringMap = map[Type]string{

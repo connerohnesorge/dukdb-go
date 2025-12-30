@@ -487,9 +487,9 @@ func (c *EngineConn) GetCatalog() any {
 
 // Verify interface implementations
 var (
-	_ dukdb.BackendConn        = (*EngineConn)(nil)
-	_ dukdb.BackendConnCatalog = (*EngineConn)(nil)
-	_ dukdb.BackendStmt        = (*EngineStmt)(nil)
+	_ dukdb.BackendConn             = (*EngineConn)(nil)
+	_ dukdb.BackendConnCatalog      = (*EngineConn)(nil)
+	_ dukdb.BackendStmt             = (*EngineStmt)(nil)
 	_ dukdb.BackendStmtIntrospector = (*EngineStmt)(nil)
 	_ dukdb.BackendStmtProperties   = (*EngineStmt)(nil)
 )

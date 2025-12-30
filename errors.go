@@ -2,6 +2,7 @@ package dukdb
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -166,6 +167,9 @@ var (
 	)
 )
 
+// maxDecimalWidth is the maximum width for DECIMAL types.
+const maxDecimalWidth = 38
+
 // Exported error variables for use by backend implementations.
 var (
 	// ErrConnectionClosed indicates the connection has been closed.
@@ -215,4 +219,77 @@ var (
 	ErrNullConstraint = errors.New(
 		"NULL constraint violation",
 	)
+
+	// ErrNotSupported indicates the feature is not supported by the backend.
+	ErrNotSupported = errors.New(
+		"not supported",
+	)
 )
+
+// TypeInfo-specific error variables (for API compatibility with duckdb-go).
+var (
+	// errAPI is the base error for API errors.
+	errAPI = errors.New("API error")
+
+	// errEmptyName indicates an empty name was provided.
+	errEmptyName = errors.New("empty name")
+
+	// errInvalidDecimalWidth indicates an invalid decimal width.
+	errInvalidDecimalWidth = fmt.Errorf(
+		"the DECIMAL width must be between 1 and %d",
+		maxDecimalWidth,
+	)
+
+	// errInvalidDecimalScale indicates an invalid decimal scale.
+	errInvalidDecimalScale = errors.New(
+		"the DECIMAL scale must be less than or equal to the width",
+	)
+
+	// errInvalidArraySize indicates an invalid array size.
+	errInvalidArraySize = errors.New(
+		"invalid ARRAY size",
+	)
+)
+
+// Error message constants for TypeInfo.
+const (
+	driverErrMsg          = "database/sql/driver"
+	unsupportedTypeErrMsg = "unsupported data type"
+	tryOtherFuncErrMsg    = "please try this function instead"
+	indexErrMsg           = "index"
+	interfaceIsNilErrMsg  = "interface is nil"
+	duplicateNameErrMsg   = "duplicate name"
+)
+
+// getError wraps an error with the driver prefix and base error.
+func getError(errDriver, err error) error {
+	if err == nil {
+		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
+	}
+	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
+}
+
+// unsupportedTypeError creates an error for unsupported types.
+func unsupportedTypeError(name string) error {
+	return fmt.Errorf("%s: %s", unsupportedTypeErrMsg, name)
+}
+
+// tryOtherFuncError creates an error suggesting a different function.
+func tryOtherFuncError(hint string) error {
+	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
+}
+
+// addIndexToError adds an index to an error message.
+func addIndexToError(err error, idx int) error {
+	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+}
+
+// interfaceIsNilError creates an error for nil interface parameters.
+func interfaceIsNilError(interfaceName string) error {
+	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
+}
+
+// duplicateNameError creates an error for duplicate names.
+func duplicateNameError(name string) error {
+	return fmt.Errorf("%s: %s", duplicateNameErrMsg, name)
+}

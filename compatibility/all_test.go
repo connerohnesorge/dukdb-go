@@ -111,11 +111,11 @@ func TestQuickCompatibility(t *testing.T) {
 
 // CompatibilityReport generates a summary of all compatibility tests.
 type CompatibilityReport struct {
-	TotalTests  int
-	PassedTests int
-	FailedTests int
+	TotalTests   int
+	PassedTests  int
+	FailedTests  int
 	SkippedTests int
-	Categories  map[string]CategoryReport
+	Categories   map[string]CategoryReport
 }
 
 // CategoryReport represents test results for a single category.
