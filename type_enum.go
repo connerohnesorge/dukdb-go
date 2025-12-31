@@ -49,11 +49,10 @@ const (
 // unsupportedTypeToStringMap lists types not yet fully supported.
 // These types cannot be used with NewTypeInfo() except for TYPE_ANY.
 var unsupportedTypeToStringMap = map[Type]string{
-	TYPE_INVALID:  "INVALID",
-	TYPE_UHUGEINT: "UHUGEINT",
-	TYPE_BIT:      "BIT",
-	TYPE_ANY:      "ANY",
-	TYPE_BIGNUM:   "BIGNUM",
+	TYPE_INVALID: "INVALID",
+	TYPE_BIT:     "BIT",
+	TYPE_ANY:     "ANY",
+	TYPE_BIGNUM:  "BIGNUM",
 }
 
 // typeToStringMap maps Type values to their string representations.

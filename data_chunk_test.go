@@ -1017,9 +1017,7 @@ func TestDataChunkCleanup(t *testing.T) {
 }
 
 // TestDataChunkUhugeint tests UHUGEINT type support in DataChunk.
-// Skipped because TYPE_UHUGEINT is in unsupportedTypeToStringMap per duckdb-go API.
 func TestDataChunkUhugeint(t *testing.T) {
-	t.Skip("TYPE_UHUGEINT is unsupported via NewTypeInfo per duckdb-go API compatibility")
 	t.Run("basic uhugeint operations", func(t *testing.T) {
 		uhugeintType, err := NewTypeInfo(TYPE_UHUGEINT)
 		require.NoError(t, err)

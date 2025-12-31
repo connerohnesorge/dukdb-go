@@ -348,7 +348,7 @@ func (info *typeInfo) SQLType() string {
 // Else, it returns nil, and an error.
 // Valid types are:
 // TYPE_[BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, UTINYINT, USMALLINT, UINTEGER,
-// UBIGINT, FLOAT, DOUBLE, TIMESTAMP, DATE, TIME, INTERVAL, HUGEINT, VARCHAR, BLOB,
+// UBIGINT, FLOAT, DOUBLE, TIMESTAMP, DATE, TIME, INTERVAL, HUGEINT, UHUGEINT, VARCHAR, BLOB,
 // TIMESTAMP_S, TIMESTAMP_MS, TIMESTAMP_NS, UUID, TIMESTAMP_TZ, TIME_TZ].
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
