@@ -998,7 +998,7 @@ func TestDataChunkReset(t *testing.T) {
 		chunk.reset()
 
 		assert.Equal(t, 3, chunk.GetColumnCount())
-		assert.Equal(t, GetDataChunkCapacity(), chunk.GetSize())
+		assert.Equal(t, 0, chunk.GetSize())
 	})
 }
 
@@ -1206,4 +1206,56 @@ func TestDataChunkBit(t *testing.T) {
 		assert.Equal(t, "00000000", val0.(Bit).String())
 		assert.Equal(t, "11111111", val1.(Bit).String())
 	})
+}
+
+func BenchmarkDataChunk_ScanThroughput(b *testing.B) {
+	intType, _ := NewTypeInfo(TYPE_INTEGER)
+	chunk, _ := NewDataChunk([]TypeInfo{intType})
+
+	// Fill the chunk with test data
+	_ = chunk.SetSize(GetDataChunkCapacity())
+	for i := 0; i < GetDataChunkCapacity(); i++ {
+		_ = chunk.SetValue(0, i, int32(i))
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		for row := 0; row < GetDataChunkCapacity(); row++ {
+			_, _ = chunk.GetValue(0, row)
+		}
+	}
+
+	b.ReportMetric(float64(GetDataChunkCapacity()), "rows/op")
+}
+
+func BenchmarkDataChunk_ScanMultiColumn(b *testing.B) {
+	intType, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharType, _ := NewTypeInfo(TYPE_VARCHAR)
+	doubleType, _ := NewTypeInfo(TYPE_DOUBLE)
+
+	chunk, _ := NewDataChunk([]TypeInfo{intType, varcharType, doubleType})
+
+	// Fill the chunk with test data
+	_ = chunk.SetSize(GetDataChunkCapacity())
+	for i := 0; i < GetDataChunkCapacity(); i++ {
+		_ = chunk.SetValue(0, i, int32(i))
+		_ = chunk.SetValue(1, i, "test string")
+		_ = chunk.SetValue(2, i, float64(i)*1.5)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		for row := 0; row < GetDataChunkCapacity(); row++ {
+			_, _ = chunk.GetValue(0, row)
+			_, _ = chunk.GetValue(1, row)
+			_, _ = chunk.GetValue(2, row)
+		}
+	}
+
+	// Report total values read per operation (3 columns * 2048 rows)
+	b.ReportMetric(float64(GetDataChunkCapacity()*3), "values/op")
 }

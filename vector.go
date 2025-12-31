@@ -1382,6 +1382,123 @@ func (vec *vector) initSQLNull() {
 	vec.Type = TYPE_SQLNULL
 }
 
+// Reset clears the vector's data to zero values and marks all entries as valid.
+// It does not reallocate slices, making it suitable for reuse from a pool.
+func (vec *vector) Reset() {
+	// Mark all entries as valid
+	vec.fillMask()
+
+	// Zero out data slices based on type
+	switch data := vec.dataSlice.(type) {
+	case []bool:
+		for i := range data {
+			data[i] = false
+		}
+	case []int8:
+		for i := range data {
+			data[i] = 0
+		}
+	case []int16:
+		for i := range data {
+			data[i] = 0
+		}
+	case []int32:
+		for i := range data {
+			data[i] = 0
+		}
+	case []int64:
+		for i := range data {
+			data[i] = 0
+		}
+	case []uint8:
+		for i := range data {
+			data[i] = 0
+		}
+	case []uint16:
+		for i := range data {
+			data[i] = 0
+		}
+	case []uint32:
+		for i := range data {
+			data[i] = 0
+		}
+	case []uint64:
+		for i := range data {
+			data[i] = 0
+		}
+	case []float32:
+		for i := range data {
+			data[i] = 0
+		}
+	case []float64:
+		for i := range data {
+			data[i] = 0
+		}
+	case []string:
+		for i := range data {
+			data[i] = ""
+		}
+	case [][]byte:
+		for i := range data {
+			data[i] = nil
+		}
+	case []Interval:
+		for i := range data {
+			data[i] = Interval{}
+		}
+	case []hugeInt:
+		for i := range data {
+			data[i] = hugeInt{}
+		}
+	case []Uhugeint:
+		for i := range data {
+			data[i] = Uhugeint{}
+		}
+	case []Bit:
+		for i := range data {
+			data[i] = Bit{}
+		}
+	}
+
+	// Reset list offsets if applicable
+	if vec.listOffsets != nil {
+		for i := range vec.listOffsets {
+			vec.listOffsets[i] = 0
+		}
+	}
+
+	// Reset child vectors recursively for nested types
+	for i := range vec.childVectors {
+		vec.childVectors[i].Reset()
+	}
+}
+
+// Close nils out all slices to allow GC and sets capacity to 0.
+// This prepares the vector for return to a pool.
+func (vec *vector) Close() {
+	// Nil out data slice
+	vec.dataSlice = nil
+
+	// Nil out mask bits
+	vec.maskBits = nil
+
+	// Nil out list offsets
+	vec.listOffsets = nil
+
+	// Close and nil out child vectors
+	for i := range vec.childVectors {
+		vec.childVectors[i].Close()
+	}
+	vec.childVectors = nil
+
+	// Clear dictionaries
+	vec.namesDict = nil
+	vec.tagDict = nil
+
+	// Reset capacity
+	vec.capacity = 0
+}
+
 // setVectorVal is a helper for type-safe value setting.
 func setVectorVal[T any](vec *vector, rowIdx int, val T) error {
 	return vec.setFn(vec, rowIdx, any(val))

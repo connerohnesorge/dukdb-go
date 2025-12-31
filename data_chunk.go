@@ -172,9 +172,9 @@ func (chunk *DataChunk) initFromTypes(types []TypeInfo) error {
 
 // reset resets the chunk for reuse, preserving the column structure.
 func (chunk *DataChunk) reset() {
-	chunk.size = GetDataChunkCapacity()
+	chunk.size = 0
 	for i := range chunk.columns {
-		chunk.columns[i].fillMask()
+		chunk.columns[i].Reset()
 	}
 }
 
@@ -184,6 +184,14 @@ func (chunk *DataChunk) close() {
 	chunk.columnNames = nil
 	chunk.projection = nil
 	chunk.closed = true
+}
+
+// Close closes all column vectors and the chunk itself.
+func (chunk *DataChunk) Close() {
+	for i := range chunk.columns {
+		chunk.columns[i].Close()
+	}
+	chunk.close()
 }
 
 // NewDataChunk creates a new DataChunk from type specifications.

@@ -1849,3 +1849,106 @@ func TestAppenderContext_NilClock(t *testing.T) {
 		t.Error("expected non-nil clock when passing nil")
 	}
 }
+
+// === Performance Benchmarks ===
+
+// BenchmarkAppender_1MRows benchmarks appending 1M rows to verify performance requirement.
+// Performance requirement: 1M rows in <1 second
+func BenchmarkAppender_1MRows(b *testing.B) {
+	mock, state := newAppenderMock()
+	state.setTableColumns([]string{"id"}, []string{"INTEGER"})
+	conn := createAppenderTestConn(mock)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Create appender with high threshold to avoid auto-flush overhead
+		appender, err := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
+		if err != nil {
+			b.Fatalf("NewAppenderWithThreshold failed: %v", err)
+		}
+
+		// Append 1 million rows
+		for j := 0; j < 1_000_000; j++ {
+			err = appender.AppendRow(j)
+			if err != nil {
+				b.Fatalf("AppendRow failed at row %d: %v", j, err)
+			}
+		}
+
+		// Flush and close
+		err = appender.Flush()
+		if err != nil {
+			b.Fatalf("Flush failed: %v", err)
+		}
+		err = appender.Close()
+		if err != nil {
+			b.Fatalf("Close failed: %v", err)
+		}
+
+		b.StopTimer()
+		// Reset state for next iteration
+		state.mu.Lock()
+		state.execCount = 0
+		state.mu.Unlock()
+		b.StartTimer()
+	}
+
+	// Report throughput
+	b.ReportMetric(float64(1_000_000), "rows/op")
+}
+
+// BenchmarkAppender_MemoryProfile benchmarks memory usage during appender operations.
+// Useful for profiling memory allocations with pprof.
+func BenchmarkAppender_MemoryProfile(b *testing.B) {
+	mock, state := newAppenderMock()
+	state.setTableColumns([]string{"id", "name", "value"}, []string{"INTEGER", "VARCHAR", "DOUBLE"})
+	conn := createAppenderTestConn(mock)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 10000)
+
+		// Append 10000 rows
+		for j := 0; j < 10000; j++ {
+			_ = appender.AppendRow(j, "test string data", float64(j)*1.5)
+		}
+		_ = appender.Flush()
+		_ = appender.Close()
+
+		b.StopTimer()
+		state.execCount = 0
+		b.StartTimer()
+	}
+	b.ReportMetric(float64(10000), "rows/op")
+}
+
+// BenchmarkAppender_10MRows_Memory benchmarks memory for 10M rows (for heap profiling).
+func BenchmarkAppender_10MRows_Memory(b *testing.B) {
+	if testing.Short() {
+		b.Skip("skipping 10M row test in short mode")
+	}
+
+	mock, state := newAppenderMock()
+	state.setTableColumns([]string{"id"}, []string{"INTEGER"})
+	conn := createAppenderTestConn(mock)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
+
+		for j := 0; j < 10_000_000; j++ {
+			_ = appender.AppendRow(j)
+		}
+		_ = appender.Flush()
+		_ = appender.Close()
+
+		b.StopTimer()
+		state.execCount = 0
+		b.StartTimer()
+	}
+	b.ReportMetric(float64(10_000_000), "rows/op")
+}
