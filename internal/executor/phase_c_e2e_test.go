@@ -1987,9 +1987,259 @@ func TestPhaseC_UpdateWithoutWhere(t *testing.T) {
 
 // TestPhaseC_DeleteWithWhere tests DELETE with WHERE clause (Task 3.54)
 func TestPhaseC_DeleteWithWhere(t *testing.T) {
-	// Note: This test is a placeholder as DELETE requires DML operator implementation
-	// For now, we test the concept using storage layer directly
-	t.Skip(
-		"DELETE operator not yet implemented in Phase C",
+	// Setup
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	// Create a table
+	tableDef := catalog.NewTableDef(
+		"users",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "age",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
 	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
+	require.NoError(t, err)
+
+	table, err := stor.CreateTable(
+		"users",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+		},
+	)
+	require.NoError(t, err)
+
+	// Insert test data
+	testData := []struct {
+		id   int32
+		name string
+		age  int32
+	}{
+		{1, "Alice", 25},
+		{2, "Bob", 30},
+		{3, "Charlie", 20},
+		{4, "Diana", 28},
+	}
+	for _, row := range testData {
+		err = table.AppendRow(
+			[]any{row.id, row.name, row.age},
+		)
+		require.NoError(t, err)
+	}
+
+	// Scan plan to find rows to delete (WHERE age < 26)
+	scanPlan := &planner.PhysicalScan{
+		TableName: "users",
+		Alias:     "users",
+		TableDef:  tableDef,
+	}
+
+	filterExpr := &binder.BoundBinaryExpr{
+		Op: 8, // OpLt
+		Left: &binder.BoundColumnRef{
+			Table:   "users",
+			Column:  "age",
+			ColType: dukdb.TYPE_INTEGER,
+		},
+		Right: &binder.BoundLiteral{
+			Value:   int32(26),
+			ValType: dukdb.TYPE_INTEGER,
+		},
+		ResType: dukdb.TYPE_BOOLEAN,
+	}
+
+	filterPlan := &planner.PhysicalFilter{
+		Child:     scanPlan,
+		Condition: filterExpr,
+	}
+
+	// Create DELETE plan: DELETE FROM users WHERE age < 26
+	deletePlan := &planner.PhysicalDelete{
+		Schema:   "main",
+		Table:    "users",
+		TableDef: tableDef,
+		Source:   filterPlan,
+	}
+
+	// Execute DELETE
+	ctx := context.Background()
+	result, err := exec.Execute(
+		ctx,
+		deletePlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have deleted 2 rows (Alice and Charlie)
+	require.Equal(t, int64(2), result.RowsAffected)
+
+	// Verify deletion by scanning the table
+	verifyScanPlan := &planner.PhysicalScan{
+		TableName: "users",
+		Alias:     "users",
+		TableDef:  tableDef,
+	}
+
+	verifyResult, err := exec.Execute(
+		ctx,
+		verifyScanPlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have 2 rows remaining (Bob and Diana)
+	require.Equal(t, 2, len(verifyResult.Rows))
+
+	// Verify remaining rows
+	// First remaining row should be Bob (id 2, age 30)
+	assert.Equal(
+		t,
+		int32(2),
+		verifyResult.Rows[0]["id"],
+		"First remaining row should be Bob (id 2)",
+	)
+	assert.Equal(
+		t,
+		"Bob",
+		verifyResult.Rows[0]["name"],
+		"First remaining row should be Bob",
+	)
+	assert.Equal(
+		t,
+		int32(30),
+		verifyResult.Rows[0]["age"],
+		"Bob's age should be 30",
+	)
+
+	// Second remaining row should be Diana (id 4, age 28)
+	assert.Equal(
+		t,
+		int32(4),
+		verifyResult.Rows[1]["id"],
+		"Second remaining row should be Diana (id 4)",
+	)
+	assert.Equal(
+		t,
+		"Diana",
+		verifyResult.Rows[1]["name"],
+		"Second remaining row should be Diana",
+	)
+	assert.Equal(
+		t,
+		int32(28),
+		verifyResult.Rows[1]["age"],
+		"Diana's age should be 28",
+	)
+}
+
+// TestPhaseC_DeleteWithoutWhere tests DELETE without WHERE clause (all rows deleted)
+func TestPhaseC_DeleteWithoutWhere(t *testing.T) {
+	// Setup
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	// Create a table
+	tableDef := catalog.NewTableDef(
+		"temp_data",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "value",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
+	require.NoError(t, err)
+
+	table, err := stor.CreateTable(
+		"temp_data",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
+	require.NoError(t, err)
+
+	// Insert test data
+	testData := []struct {
+		id    int32
+		value string
+	}{
+		{1, "first"},
+		{2, "second"},
+		{3, "third"},
+	}
+	for _, row := range testData {
+		err = table.AppendRow(
+			[]any{row.id, row.value},
+		)
+		require.NoError(t, err)
+	}
+
+	// Create DELETE plan: DELETE FROM temp_data (no WHERE)
+	deletePlan := &planner.PhysicalDelete{
+		Schema:   "main",
+		Table:    "temp_data",
+		TableDef: tableDef,
+		Source:   nil, // No filter - delete all rows
+	}
+
+	// Execute DELETE
+	ctx := context.Background()
+	result, err := exec.Execute(
+		ctx,
+		deletePlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have deleted all 3 rows
+	require.Equal(t, int64(3), result.RowsAffected)
+
+	// Verify deletion by scanning the table
+	verifyScanPlan := &planner.PhysicalScan{
+		TableName: "temp_data",
+		Alias:     "temp_data",
+		TableDef:  tableDef,
+	}
+
+	verifyResult, err := exec.Execute(
+		ctx,
+		verifyScanPlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Table should be empty
+	require.Equal(t, 0, len(verifyResult.Rows))
 }
