@@ -100,3 +100,4 @@ None - this is additive functionality completing existing partial implementation
 - MERGE statement support (not in v1.4.3)
 - Parallel DML execution (future optimization)
 - Query optimizer improvements (separate change)
+- Checkpoint auto-trigger policy (manual checkpoint required via API, automatic checkpointing is future work)

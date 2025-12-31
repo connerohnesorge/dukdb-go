@@ -98,14 +98,16 @@ The system SHALL log all DML operations (INSERT, UPDATE, DELETE) to the Write-Ah
 - THEN deserialized entry equals original entry
 - AND DataChunk data is preserved exactly
 - AND Timestamp field is preserved
+- AND serialization order: TransactionID → TableName → Chunk → Timestamp
 
 #### Scenario: WAL entry serialization - UPDATE with BeforeValues
 - GIVEN UPDATE entry with BeforeValues and AfterValues DataChunks
 - WHEN serializing entry to disk
 - AND deserializing entry from disk
-- THEN both BeforeValues and AfterValues are preserved exactly
+- THEN both BeforeValues and AfterValues are preserved exactly (CRITICAL requirement)
 - AND RowIDs array is preserved
 - AND Timestamp field is preserved
+- AND serialization order: TransactionID → TableName → RowIDs → BeforeValues → AfterValues → Timestamp
 
 #### Scenario: WAL entry serialization - DELETE with DeletedData
 - GIVEN DELETE entry with DeletedData DataChunk
@@ -114,6 +116,7 @@ The system SHALL log all DML operations (INSERT, UPDATE, DELETE) to the Write-Ah
 - THEN DeletedData DataChunk is preserved exactly
 - AND RowIDs array is preserved
 - AND Timestamp field is preserved
+- AND serialization order: TransactionID → TableName → RowIDs → DeletedData → Timestamp
 
 #### Scenario: WAL entry size efficiency
 - GIVEN INSERT of 2048 rows (full DataChunk)
@@ -178,9 +181,15 @@ The system SHALL write WAL entries with group commit optimization: buffer entrie
 #### Scenario: Transaction with multiple operations uses group commit
 - GIVEN explicit transaction with 5 INSERT operations
 - WHEN executing INSERTs
-- THEN WAL entries are buffered (no fsync per operation)
+- THEN WAL.Write() is called for each INSERT
+- AND WAL.inTransaction == true (transaction mode)
+- AND entries are appended to bufferedEntries slice (no fsync)
+- AND WAL.Write() returns immediately without calling writer.Sync()
 - WHEN executing COMMIT
-- THEN single fsync() is issued for all buffered entries
+- THEN WAL.Commit() iterates bufferedEntries
+- AND all entries are written via writeEntry()
+- AND single fsync() is issued: `w.writer.Sync()` (group commit optimization)
+- AND bufferedEntries is cleared: `w.bufferedEntries = nil`
 - AND commit latency is O(1) fsync, not O(N) fsyncs
 - AND throughput increases ~10-100x vs auto-commit for bulk operations
 
@@ -208,6 +217,7 @@ The system SHALL truncate WAL after successful checkpoint to prevent unbounded g
 - THEN entries before checkpoint marker are removed
 - AND WAL size is reduced
 - AND only uncommitted transactions remain in WAL
+- NOTE: Automatic checkpoint triggering based on WAL size/time is out of scope for this change - checkpoint must be triggered manually via API call
 
 ### Requirement: Crash Recovery Correctness
 
@@ -244,17 +254,34 @@ The system SHALL recover to a consistent state after crash, with all committed t
 - AND recovery is idempotent
 
 #### Scenario: Recovery idempotence mechanism
-- GIVEN WAL recovery algorithm
+- GIVEN WAL recovery algorithm with two-pass structure
 - WHEN replaying INSERT entry
-- THEN check if firstRowID from chunk already exists in table
-- AND if exists, skip insertion (already applied)
-- AND if not exists, apply insertion
+- THEN algorithm checks: `if !storage.ContainsRows(e.TableName, e.Chunk.FirstRowID())`
+- AND if firstRowID already exists, skip insertion (already applied)
+- AND if not exists, apply insertion via `storage.InsertChunk(e.TableName, e.Chunk)`
 - WHEN replaying UPDATE entry
-- THEN check if RowIDs still contain BeforeValues
-- AND if not, skip update (already applied)
+- THEN algorithm iterates RowIDs: `for i, rowID := range e.RowIDs`
+- AND for each row, checks: `if currentRow.Matches(e.BeforeValues.GetRow(i))`
+- AND if BeforeValues match, apply update: `storage.UpdateRow(e.TableName, rowID, e.AfterValues.GetRow(i))`
+- AND if BeforeValues don't match, skip update (already applied or modified by later transaction)
 - WHEN replaying DELETE entry
-- THEN check if RowIDs are not tombstoned
-- AND if tombstoned, skip deletion (already applied)
+- THEN algorithm iterates RowIDs: `for _, rowID := range e.RowIDs`
+- AND for each row, checks: `if !storage.IsTombstoned(e.TableName, rowID)`
+- AND if row is not tombstoned, apply deletion: `storage.DeleteRow(e.TableName, rowID)`
+- AND if row is already tombstoned, skip deletion (already applied)
+- AND all three operations use symmetrical two-pass structure: (1) identify committed transactions, (2) replay with idempotence checks
+
+#### Scenario: Zero-row operations skip WAL write
+- GIVEN table "t" with rows
+- WHEN executing "DELETE FROM t WHERE id = 999" (no matching rows)
+- THEN RowsAffected returns 0
+- AND no WAL DELETE entry is created (optimization: WAL write skipped when len(deletedRowIDs) = 0)
+- WHEN executing "UPDATE t SET x = 1 WHERE id = 999" (no matching rows)
+- THEN RowsAffected returns 0
+- AND no WAL UPDATE entry is created (optimization: WAL write skipped when len(updatedRowIDs) = 0)
+- WHEN executing "INSERT INTO t VALUES" (0 rows)
+- THEN RowsAffected returns 0
+- AND no WAL INSERT entry is created (optimization: WAL write skipped when chunk.Size() = 0)
 
 ### Requirement: Performance - WAL Write Latency
 

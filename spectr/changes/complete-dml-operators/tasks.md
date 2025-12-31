@@ -42,6 +42,7 @@
 ## Phase 2: Bulk INSERT Optimization (Performance)
 
 ### Storage Layer Enhancement
+- [ ] Define StandardVectorSize constant (2048) in storage layer for DuckDB compatibility
 - [ ] Implement InsertChunk() method in Table (bulk insert from DataChunk)
 - [ ] Test: InsertChunk with 2048-row DataChunk completes in <5ms
 - [ ] Test: InsertChunk with multi-column DataChunk preserves all values

@@ -34,7 +34,7 @@ The engine SHALL support INSERT, UPDATE, and DELETE with full WHERE clause evalu
 - WHEN executing "DELETE FROM t WHERE id = 999"
 - THEN no rows are deleted
 - AND RowsAffected returns 0
-- AND WAL contains no DELETE entry (optimization)
+- AND WAL contains no DELETE entry (optimization: WAL write skipped when len(deletedRowIDs) = 0)
 
 #### Scenario: DELETE with NULL handling (IS NULL)
 - GIVEN table "t" with rows [(1, 'a'), (2, NULL), (3, 'c')]
@@ -93,7 +93,14 @@ The engine SHALL support INSERT, UPDATE, and DELETE with full WHERE clause evalu
 - WHEN executing "UPDATE t SET name = 'x' WHERE id = 999"
 - THEN no rows are updated
 - AND RowsAffected returns 0
-- AND WAL contains no UPDATE entry (optimization)
+- AND WAL contains no UPDATE entry (optimization: WAL write skipped when len(updatedRowIDs) = 0)
+
+#### Scenario: INSERT with 0 rows (empty VALUES)
+- GIVEN empty table "t" with columns (id INT, name VARCHAR)
+- WHEN executing "INSERT INTO t VALUES" (empty VALUES clause)
+- THEN RowsAffected returns 0
+- AND WAL contains no INSERT entry (optimization: WAL write skipped when chunk.Size() = 0)
+- AND no storage operations are performed
 
 #### Scenario: Bulk INSERT with VALUES
 - GIVEN empty table "t" with columns (id INT, name VARCHAR)
@@ -171,6 +178,17 @@ The engine SHALL support INSERT, UPDATE, and DELETE with full WHERE clause evalu
 - THEN table contains only original rows [(1, 'a'), (2, 'b')]
 - AND first 3 INSERTs are undone (atomicity)
 - AND WAL recovery does not replay uncommitted operations
+
+#### Scenario: Executor initialization with clock injection
+- GIVEN storage layer and WAL writer
+- WHEN creating new Executor via `NewExecutor(storage, wal, clock)`
+- THEN Executor is initialized with:
+  - storage reference
+  - wal reference
+  - clock (quartz.Clock) for deterministic timestamps
+  - currentTx set to nil (no active transaction)
+- AND clock is injected for testability (quartz.Mock in tests, quartz.NewReal() in production)
+- AND currentTx is set by BeginTransaction() when transaction starts
 
 #### Scenario: RowID tracking across operations
 - GIVEN empty table "t"

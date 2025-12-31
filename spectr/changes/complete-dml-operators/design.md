@@ -39,8 +39,18 @@ WAL (internal/wal/) → Log operations for crash recovery
 type Executor struct {
     storage   *Storage
     wal       *WAL
-    currentTx *Transaction  // Current transaction context
-    clock     quartz.Clock  // Injected clock for deterministic timestamps
+    currentTx *Transaction  // Current transaction context (nil if auto-commit)
+    clock     quartz.Clock  // Injected clock for deterministic timestamps (quartz.NewReal() in production, quartz.Mock in tests)
+}
+
+// NewExecutor creates executor with transaction context and clock injection
+func NewExecutor(storage *Storage, wal *WAL, clock quartz.Clock) *Executor {
+    return &Executor{
+        storage:   storage,
+        wal:       wal,
+        currentTx: nil,  // Set by BeginTransaction()
+        clock:     clock, // Injected for testability
+    }
 }
 
 // PhysicalDeleteOperator execution
@@ -50,7 +60,7 @@ func (e *Executor) executeDelete(plan *PhysicalDelete) (ResultSet, error) {
 
     // 2. Iterate rows, evaluate WHERE clause, collect deleted data
     var deletedRowIDs []RowID
-    deletedDataChunk := NewDataChunk(plan.TableSchema, 2048)
+    deletedDataChunk := NewDataChunk(plan.TableSchema, StandardVectorSize)
 
     for scanner.Next() {
         row := scanner.Current()
@@ -77,16 +87,18 @@ func (e *Executor) executeDelete(plan *PhysicalDelete) (ResultSet, error) {
         return nil, err
     }
 
-    // 4. Log to WAL with explicit Write() call
-    entry := &WALDeleteEntry{
-        TransactionID: e.currentTx.ID,
-        TableName:     plan.TableName,
-        RowIDs:        deletedRowIDs,
-        DeletedData:   deletedDataChunk, // For rollback support
-        Timestamp:     e.clock.Now(),     // Deterministic testing via quartz
-    }
-    if err := e.wal.Write(entry); err != nil {
-        return nil, err
+    // 4. Log to WAL with explicit Write() call (optimization: skip if no rows affected)
+    if len(deletedRowIDs) > 0 {
+        entry := &WALDeleteEntry{
+            TransactionID: e.currentTx.ID,
+            TableName:     plan.TableName,
+            RowIDs:        deletedRowIDs,
+            DeletedData:   deletedDataChunk, // For rollback support
+            Timestamp:     e.clock.Now(),     // Deterministic testing via quartz
+        }
+        if err := e.wal.Write(entry); err != nil {
+            return nil, err
+        }
     }
 
     return ResultSet{RowsAffected: len(deletedRowIDs)}, nil
@@ -114,8 +126,8 @@ func (e *Executor) executeDelete(plan *PhysicalDelete) (ResultSet, error) {
 ```go
 // PhysicalInsertOperator with DataChunk batching
 func (e *Executor) executeInsert(plan *PhysicalInsert) (ResultSet, error) {
-    // 1. Determine batch size (consistent with all DML operations)
-    const batchSize = 2048 // DataChunk default capacity
+    // 1. Determine batch size (StandardVectorSize = 2048, DuckDB-compatible)
+    const batchSize = StandardVectorSize  // 2048 rows per chunk
 
     // 2. Convert VALUES into DataChunks
     chunks := make([]*DataChunk, 0)
@@ -152,15 +164,17 @@ func (e *Executor) executeInsert(plan *PhysicalInsert) (ResultSet, error) {
         }
         rowsInserted += count
 
-        // 5. Log to WAL with explicit Write() call (one entry per chunk)
-        entry := &WALInsertEntry{
-            TransactionID: e.currentTx.ID,
-            TableName:     plan.TableName,
-            Chunk:         chunk,
-            Timestamp:     e.clock.Now(),
-        }
-        if err := e.wal.Write(entry); err != nil {
-            return nil, err
+        // 5. Log to WAL with explicit Write() call (one entry per chunk, optimization: skip if chunk is empty)
+        if chunk.Size() > 0 {
+            entry := &WALInsertEntry{
+                TransactionID: e.currentTx.ID,
+                TableName:     plan.TableName,
+                Chunk:         chunk,
+                Timestamp:     e.clock.Now(),
+            }
+            if err := e.wal.Write(entry); err != nil {
+                return nil, err
+            }
         }
     }
 
@@ -175,9 +189,10 @@ func (e *Executor) executeInsert(plan *PhysicalInsert) (ResultSet, error) {
 
 **Trade-offs**:
 - ✅ Pro: Matches Appender API performance (verified existing benchmark)
-- ✅ Pro: Columnar format optimizes CPU cache locality
+- ✅ Pro: Columnar format provides potential cache locality improvements (to be validated empirically in Phase 4)
 - ⚠️ Con: Higher memory usage during insert (acceptable - bounded by chunk size)
 - ✅ Mitigation: Flush chunks incrementally, never buffer full dataset in memory
+- 📊 Note: Performance validation in Phase 4 will measure actual cache hit rates and memory bandwidth utilization
 
 ### 3. INSERT...SELECT Support
 
@@ -195,7 +210,7 @@ func (e *Executor) executeInsertSelect(plan *PhysicalInsert) (ResultSet, error) 
     }
 
     // 2. Stream results into DataChunks
-    currentChunk := NewDataChunk(plan.ColumnTypes, 2048)
+    currentChunk := NewDataChunk(plan.ColumnTypes, StandardVectorSize)
     rowsInserted := 0
 
     for selectResults.Next() {
@@ -203,21 +218,23 @@ func (e *Executor) executeInsertSelect(plan *PhysicalInsert) (ResultSet, error) 
         currentChunk.AppendRow(row)
 
         // Flush chunk when full
-        if currentChunk.Size() == 2048 {
+        if currentChunk.Size() == StandardVectorSize {
             count, err := storage.InsertChunk(plan.TableName, currentChunk)
             if err != nil {
                 return nil, err
             }
 
-            // Log to WAL with explicit Write() call
-            entry := &WALInsertEntry{
-                TransactionID: e.currentTx.ID,
-                TableName:     plan.TableName,
-                Chunk:         currentChunk,
-                Timestamp:     e.clock.Now(),
-            }
-            if err := e.wal.Write(entry); err != nil {
-                return nil, err
+            // Log to WAL with explicit Write() call (optimization: skip if chunk is empty)
+            if count > 0 {
+                entry := &WALInsertEntry{
+                    TransactionID: e.currentTx.ID,
+                    TableName:     plan.TableName,
+                    Chunk:         currentChunk,
+                    Timestamp:     e.clock.Now(),
+                }
+                if err := e.wal.Write(entry); err != nil {
+                    return nil, err
+                }
             }
 
             rowsInserted += count
@@ -232,15 +249,17 @@ func (e *Executor) executeInsertSelect(plan *PhysicalInsert) (ResultSet, error) 
             return nil, err
         }
 
-        // Log to WAL with explicit Write() call
-        entry := &WALInsertEntry{
-            TransactionID: e.currentTx.ID,
-            TableName:     plan.TableName,
-            Chunk:         currentChunk,
-            Timestamp:     e.clock.Now(),
-        }
-        if err := e.wal.Write(entry); err != nil {
-            return nil, err
+        // Log to WAL with explicit Write() call (optimization: skip if chunk is empty)
+        if count > 0 {
+            entry := &WALInsertEntry{
+                TransactionID: e.currentTx.ID,
+                TableName:     plan.TableName,
+                Chunk:         currentChunk,
+                Timestamp:     e.clock.Now(),
+            }
+            if err := e.wal.Write(entry); err != nil {
+                return nil, err
+            }
         }
 
         rowsInserted += count
@@ -269,6 +288,37 @@ func (e *Executor) executeInsertSelect(plan *PhysicalInsert) (ResultSet, error) 
 
 **WAL Synchronization Strategy**: Group commit - buffer WAL writes within a transaction and issue a single fsync() at COMMIT time. This batches fsync overhead across multiple operations while maintaining ACID durability guarantees. For auto-commit statements (single INSERT/UPDATE/DELETE outside explicit transaction), fsync occurs immediately after the operation.
 
+**Group Commit Implementation**:
+
+```go
+type WAL struct {
+    writer          *os.File
+    bufferedEntries []*WALEntry  // Buffer for group commit
+    inTransaction   bool         // Tracks transaction mode
+}
+
+func (w *WAL) Write(entry WALEntry) error {
+    // Auto-commit mode: immediate fsync
+    if !w.inTransaction {
+        w.writeEntry(entry)
+        return w.writer.Sync()  // Immediate fsync for durability
+    }
+
+    // Transaction mode: buffer entry (no fsync yet)
+    w.bufferedEntries = append(w.bufferedEntries, entry)
+    return nil
+}
+
+func (w *WAL) Commit() error {
+    // Flush all buffered entries with single fsync
+    for _, entry := range w.bufferedEntries {
+        w.writeEntry(entry)
+    }
+    w.bufferedEntries = nil
+    return w.writer.Sync()  // Single fsync for entire transaction (group commit optimization)
+}
+```
+
 **WAL Entry Formats**:
 
 **INSERT Entry**:
@@ -287,8 +337,8 @@ type WALUpdateEntry struct {
     TransactionID uint64
     TableName     string
     RowIDs        []RowID
-    BeforeValues  *DataChunk  // For rollback (MVCC before-image)
-    AfterValues   *DataChunk  // For redo (updated values)
+    BeforeValues  *DataChunk  // BEFORE-image for rollback (CRITICAL for MVCC and idempotent recovery)
+    AfterValues   *DataChunk  // AFTER-image for redo (updated values)
     Timestamp     time.Time   // Deterministic via clock injection
 }
 ```
@@ -299,8 +349,45 @@ type WALDeleteEntry struct {
     TransactionID uint64
     TableName     string
     RowIDs        []RowID
-    DeletedData   *DataChunk  // For rollback (deleted row data)
+    DeletedData   *DataChunk  // Deleted row data for rollback (CRITICAL for undo and idempotent recovery)
     Timestamp     time.Time   // Deterministic via clock injection
+}
+```
+
+**Serialization Examples**:
+
+```go
+// WALInsertEntry serialization
+func (e *WALInsertEntry) Serialize() []byte {
+    buf := new(bytes.Buffer)
+    binary.Write(buf, binary.LittleEndian, e.TransactionID)
+    writeString(buf, e.TableName)
+    writeDataChunk(buf, e.Chunk)  // Serialize columnar data
+    binary.Write(buf, binary.LittleEndian, e.Timestamp.UnixNano())  // Serialize timestamp
+    return buf.Bytes()
+}
+
+// WALUpdateEntry serialization
+func (e *WALUpdateEntry) Serialize() []byte {
+    buf := new(bytes.Buffer)
+    binary.Write(buf, binary.LittleEndian, e.TransactionID)
+    writeString(buf, e.TableName)
+    writeRowIDs(buf, e.RowIDs)
+    writeDataChunk(buf, e.BeforeValues)  // Serialize before-image (CRITICAL for rollback)
+    writeDataChunk(buf, e.AfterValues)   // Serialize after-image (for redo)
+    binary.Write(buf, binary.LittleEndian, e.Timestamp.UnixNano())  // Serialize timestamp
+    return buf.Bytes()
+}
+
+// WALDeleteEntry serialization
+func (e *WALDeleteEntry) Serialize() []byte {
+    buf := new(bytes.Buffer)
+    binary.Write(buf, binary.LittleEndian, e.TransactionID)
+    writeString(buf, e.TableName)
+    writeRowIDs(buf, e.RowIDs)
+    writeDataChunk(buf, e.DeletedData)  // Serialize deleted data (CRITICAL for rollback)
+    binary.Write(buf, binary.LittleEndian, e.Timestamp.UnixNano())  // Serialize timestamp
+    return buf.Bytes()
 }
 ```
 
@@ -311,8 +398,8 @@ func (e *Executor) executeUpdate(plan *PhysicalUpdate) (ResultSet, error) {
     scanner := storage.GetScanner(plan.TableName)
 
     var updatedRowIDs []RowID
-    beforeValuesChunk := NewDataChunk(plan.TableSchema, 2048)
-    afterValuesChunk := NewDataChunk(plan.TableSchema, 2048)
+    beforeValuesChunk := NewDataChunk(plan.TableSchema, StandardVectorSize)
+    afterValuesChunk := NewDataChunk(plan.TableSchema, StandardVectorSize)
 
     for scanner.Next() {
         row := scanner.Current()
@@ -350,17 +437,19 @@ func (e *Executor) executeUpdate(plan *PhysicalUpdate) (ResultSet, error) {
         return nil, err
     }
 
-    // Write to WAL with explicit Write() call
-    entry := &WALUpdateEntry{
-        TransactionID: e.currentTx.ID,
-        TableName:     plan.TableName,
-        RowIDs:        updatedRowIDs,
-        BeforeValues:  beforeValuesChunk, // For rollback
-        AfterValues:   afterValuesChunk,  // For redo
-        Timestamp:     e.clock.Now(),
-    }
-    if err := e.wal.Write(entry); err != nil {
-        return nil, err
+    // Write to WAL with explicit Write() call (optimization: skip if no rows affected)
+    if len(updatedRowIDs) > 0 {
+        entry := &WALUpdateEntry{
+            TransactionID: e.currentTx.ID,
+            TableName:     plan.TableName,
+            RowIDs:        updatedRowIDs,
+            BeforeValues:  beforeValuesChunk, // For rollback
+            AfterValues:   afterValuesChunk,  // For redo
+            Timestamp:     e.clock.Now(),
+        }
+        if err := e.wal.Write(entry); err != nil {
+            return nil, err
+        }
     }
 
     return ResultSet{RowsAffected: len(updatedRowIDs)}, nil
@@ -391,18 +480,29 @@ func (w *WAL) Recover(storage *Storage) error {
         switch e := entry.(type) {
         case *WALInsertEntry:
             if committedTxns[e.TransactionID] {
-                // Check if already applied (idempotence)
+                // Idempotence: check if firstRowID already exists
                 if !storage.ContainsRows(e.TableName, e.Chunk.FirstRowID()) {
                     storage.InsertChunk(e.TableName, e.Chunk)
                 }
             }
-        case *WALDeleteEntry:
-            if committedTxns[e.TransactionID] {
-                storage.DeleteRows(e.TableName, e.RowIDs)
-            }
         case *WALUpdateEntry:
             if committedTxns[e.TransactionID] {
-                storage.UpdateRows(e.TableName, e.RowIDs, e.AfterValues)
+                // Idempotence: check if RowIDs still contain BeforeValues
+                for i, rowID := range e.RowIDs {
+                    currentRow := storage.GetRow(e.TableName, rowID)
+                    if currentRow.Matches(e.BeforeValues.GetRow(i)) {
+                        storage.UpdateRow(e.TableName, rowID, e.AfterValues.GetRow(i))
+                    }
+                }
+            }
+        case *WALDeleteEntry:
+            if committedTxns[e.TransactionID] {
+                // Idempotence: check if RowIDs are not tombstoned
+                for _, rowID := range e.RowIDs {
+                    if !storage.IsTombstoned(e.TableName, rowID) {
+                        storage.DeleteRow(e.TableName, rowID)
+                    }
+                }
             }
         }
     }
@@ -425,6 +525,18 @@ func (w *WAL) Recover(storage *Storage) error {
 - `/internal/storage/table.go` - Table storage with row-oriented layout
 
 **Required Enhancements**:
+
+**DataChunk Configuration**:
+```go
+// StandardVectorSize is the DuckDB-compatible vector size for DataChunk batching
+const StandardVectorSize = 2048  // DuckDB standard vector size
+
+type DataChunk struct {
+    columns   []*Vector
+    capacity  int  // StandardVectorSize (2048)
+    count     int  // Current row count (0 to capacity)
+}
+```
 
 1. **RowID Generation and Tracking**:
 ```go
