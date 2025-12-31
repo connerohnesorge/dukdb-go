@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
@@ -819,6 +820,44 @@ func (e *Executor) executeInsert(
 	}
 
 	rowsAffected := int64(0)
+	var pkIndices []int
+	var pkColumns []*catalog.ColumnDef
+	if plan.TableDef != nil && plan.TableDef.HasPrimaryKey() {
+		pkIndices = plan.TableDef.PrimaryKey
+		pkColumns = plan.TableDef.Columns
+	}
+	var pkKeys map[string]struct{}
+	if len(pkIndices) > 0 {
+		pkKeys = loadPrimaryKeyKeys(table, pkIndices)
+	}
+
+	checkPrimaryKey := func(values []any) error {
+		if len(pkIndices) == 0 {
+			return nil
+		}
+		pkValues, hasNull := extractPrimaryKeyValues(values, pkIndices)
+		detail := formatPrimaryKeyDetail(
+			pkValues,
+			pkIndices,
+			pkColumns,
+		)
+		if hasNull {
+			return constraintErrorf(
+				"NULL constraint violation on primary key (%s)",
+				detail,
+			)
+		}
+		key := primaryKeyKey(pkValues)
+		if _, exists := pkKeys[key]; exists {
+			return constraintErrorf(
+				"duplicate key \"%s\" violates primary key constraint",
+				detail,
+			)
+		}
+		pkKeys[key] = struct{}{}
+
+		return nil
+	}
 
 	if plan.Source != nil {
 		// INSERT ... SELECT
@@ -838,6 +877,9 @@ func (e *Executor) executeInsert(
 			)
 			for i, col := range sourceResult.Columns {
 				values[plan.Columns[i]] = row[col]
+			}
+			if err := checkPrimaryKey(values); err != nil {
+				return nil, err
 			}
 			if err := table.AppendRow(values); err != nil {
 				return nil, err
@@ -862,6 +904,9 @@ func (e *Executor) executeInsert(
 					return nil, err
 				}
 				values[plan.Columns[i]] = val
+			}
+			if err := checkPrimaryKey(values); err != nil {
+				return nil, err
 			}
 			if err := table.AppendRow(values); err != nil {
 				return nil, err
@@ -1063,4 +1108,96 @@ func formatValue(v any) string {
 	}
 
 	return fmt.Sprintf("%v", v)
+}
+
+func constraintErrorf(
+	format string,
+	args ...any,
+) error {
+	return &dukdb.Error{
+		Type: dukdb.ErrorTypeConstraint,
+		Msg: fmt.Sprintf(
+			"Constraint Error: "+format,
+			args...,
+		),
+	}
+}
+
+func loadPrimaryKeyKeys(
+	table *storage.Table,
+	indices []int,
+) map[string]struct{} {
+	keys := make(map[string]struct{})
+	scanner := table.Scan()
+	for {
+		chunk := scanner.Next()
+		if chunk == nil {
+			break
+		}
+		for row := 0; row < chunk.Count(); row++ {
+			pkValues := make([]any, len(indices))
+			for i, idx := range indices {
+				pkValues[i] = chunk.GetValue(row, idx)
+			}
+			keys[primaryKeyKey(pkValues)] = struct{}{}
+		}
+	}
+
+	return keys
+}
+
+func extractPrimaryKeyValues(
+	values []any,
+	indices []int,
+) ([]any, bool) {
+	pkValues := make([]any, len(indices))
+	hasNull := false
+	for i, idx := range indices {
+		if idx < 0 || idx >= len(values) {
+			pkValues[i] = nil
+			hasNull = true
+
+			continue
+		}
+		val := values[idx]
+		if val == nil {
+			hasNull = true
+		}
+		pkValues[i] = val
+	}
+
+	return pkValues, hasNull
+}
+
+func primaryKeyKey(
+	values []any,
+) string {
+	return fmt.Sprintf("%#v", values)
+}
+
+func formatPrimaryKeyDetail(
+	values []any,
+	indices []int,
+	columns []*catalog.ColumnDef,
+) string {
+	parts := make([]string, len(indices))
+	for i, idx := range indices {
+		name := fmt.Sprintf("col%d", idx)
+		if idx >= 0 && idx < len(columns) {
+			if columns[idx].Name != "" {
+				name = columns[idx].Name
+			}
+		}
+		var val any
+		if i < len(values) {
+			val = values[i]
+		}
+		parts[i] = fmt.Sprintf(
+			"%s: %s",
+			name,
+			formatValue(val),
+		)
+	}
+
+	return strings.Join(parts, ", ")
 }
