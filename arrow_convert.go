@@ -41,7 +41,7 @@ func DataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, alloc memory
 		}
 	}()
 
-	for i := 0; i < numCols; i++ {
+	for i := range numCols {
 		arr, err := vectorToArrowArray(chunk, i, schema.Field(i).Type, alloc)
 		if err != nil {
 			return nil, fmt.Errorf("column %d (%s): %w", i, schema.Field(i).Name, err)
@@ -69,7 +69,7 @@ func vectorToArrowArray(chunk *DataChunk, colIdx int, dt arrow.DataType, alloc m
 
 	builder.Reserve(size)
 
-	for rowIdx := 0; rowIdx < size; rowIdx++ {
+	for rowIdx := range size {
 		val, err := chunk.GetValue(colIdx, rowIdx)
 		if err != nil {
 			return nil, fmt.Errorf("row %d: %w", rowIdx, err)
@@ -87,6 +87,7 @@ func vectorToArrowArray(chunk *DataChunk, colIdx int, dt arrow.DataType, alloc m
 func appendValueToBuilder(builder array.Builder, val any, dt arrow.DataType) error {
 	if val == nil {
 		builder.AppendNull()
+
 		return nil
 	}
 
@@ -353,6 +354,7 @@ func appendValueToBuilder(builder array.Builder, val any, dt arrow.DataType) err
 			if field.Name == u.Tag {
 				typeCode = int8(i)
 				childType = field.Type
+
 				break
 			}
 		}
@@ -398,7 +400,7 @@ func RecordBatchToDataChunk(record arrow.Record, chunk *DataChunk) error {
 		return err
 	}
 
-	for colIdx := 0; colIdx < numCols; colIdx++ {
+	for colIdx := range numCols {
 		arr := record.Column(colIdx)
 		if err := arrowArrayToChunkColumn(arr, chunk, colIdx); err != nil {
 			return fmt.Errorf("column %d: %w", colIdx, err)
@@ -416,6 +418,7 @@ func arrowArrayToChunkColumn(arr arrow.Array, chunk *DataChunk, colIdx int) erro
 			return fmt.Errorf("row %d: %w", rowIdx, err)
 		}
 	}
+
 	return nil
 }
 
@@ -459,15 +462,19 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		return a.Value(idx)
 	case *array.Date32:
 		days := int64(a.Value(idx))
+
 		return time.Unix(days*secondsPerDay, 0).UTC()
 	case *array.Date64:
 		millis := int64(a.Value(idx))
+
 		return time.UnixMilli(millis).UTC()
 	case *array.Time32:
 		val := int64(a.Value(idx))
+
 		return time.UnixMicro(val * 1000).UTC()
 	case *array.Time64:
 		val := int64(a.Value(idx))
+
 		return time.UnixMicro(val).UTC()
 	case *array.Timestamp:
 		ts := a.Value(idx)
@@ -482,9 +489,11 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		case arrow.Nanosecond:
 			return time.Unix(0, int64(ts)).UTC()
 		}
+
 		return time.UnixMicro(int64(ts)).UTC()
 	case *array.MonthDayNanoInterval:
 		val := a.Value(idx)
+
 		return Interval{
 			Months: val.Months,
 			Days:   val.Days,
@@ -492,14 +501,17 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		}
 	case *array.Decimal128:
 		val := a.Value(idx)
+
 		return val.BigInt()
 	case *array.FixedSizeBinary:
 		data := a.Value(idx)
 		if len(data) == 16 {
 			var u UUID
 			copy(u[:], data)
+
 			return u
 		}
+
 		return data
 	case *array.List:
 		start, end := a.ValueOffsets(idx)
@@ -508,6 +520,7 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		for i := start; i < end; i++ {
 			result[i-start] = extractArrowValueForConversion(child, int(i))
 		}
+
 		return result
 	case *array.LargeList:
 		start, end := a.ValueOffsets(idx)
@@ -516,15 +529,17 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		for i := start; i < end; i++ {
 			result[i-start] = extractArrowValueForConversion(child, int(i))
 		}
+
 		return result
 	case *array.FixedSizeList:
 		listSize := a.DataType().(*arrow.FixedSizeListType).Len()
 		start := int64(idx) * int64(listSize)
 		child := a.ListValues()
 		result := make([]any, listSize)
-		for i := int32(0); i < listSize; i++ {
+		for i := range listSize {
 			result[i] = extractArrowValueForConversion(child, int(start)+int(i))
 		}
+
 		return result
 	case *array.Struct:
 		structType := a.DataType().(*arrow.StructType)
@@ -533,6 +548,7 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 			fieldArr := a.Field(i)
 			result[field.Name] = extractArrowValueForConversion(fieldArr, idx)
 		}
+
 		return result
 	case *array.Map:
 		keys := a.Keys()
@@ -544,6 +560,7 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 			value := extractArrowValueForConversion(items, int(i))
 			result[key] = value
 		}
+
 		return result
 	case *array.DenseUnion:
 		typeCode := a.TypeCode(idx)
@@ -553,6 +570,7 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 		unionType := a.DataType().(*arrow.DenseUnionType)
 		tagName := unionType.Fields()[typeCode].Name
 		value := extractArrowValueForConversion(childArr, int(childIdx))
+
 		return Union{Tag: tagName, Value: value}
 	default:
 		// Fallback: try to get string representation

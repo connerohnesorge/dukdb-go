@@ -56,6 +56,7 @@ func (e *CreateTableEntry) Serialize(w io.Writer) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -89,6 +90,7 @@ func (e *CreateTableEntry) Deserialize(r io.Reader) error {
 		e.Columns[i].Nullable = flags&0x01 != 0
 		e.Columns[i].HasDefault = flags&0x02 != 0
 	}
+
 	return nil
 }
 
@@ -108,6 +110,7 @@ func (e *DropTableEntry) Serialize(w io.Writer) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
+
 	return writeString(w, e.Name)
 }
 
@@ -118,6 +121,7 @@ func (e *DropTableEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	e.Name, err = readString(r)
+
 	return err
 }
 
@@ -140,6 +144,7 @@ func (e *CreateSchemaEntry) Serialize(w io.Writer) error {
 func (e *CreateSchemaEntry) Deserialize(r io.Reader) error {
 	var err error
 	e.Name, err = readString(r)
+
 	return err
 }
 
@@ -162,6 +167,7 @@ func (e *DropSchemaEntry) Serialize(w io.Writer) error {
 func (e *DropSchemaEntry) Deserialize(r io.Reader) error {
 	var err error
 	e.Name, err = readString(r)
+
 	return err
 }
 
@@ -185,6 +191,7 @@ func (e *CreateViewEntry) Serialize(w io.Writer) error {
 	if err := writeString(w, e.Name); err != nil {
 		return err
 	}
+
 	return writeString(w, e.Query)
 }
 
@@ -198,6 +205,7 @@ func (e *CreateViewEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	e.Query, err = readString(r)
+
 	return err
 }
 
@@ -217,6 +225,7 @@ func (e *DropViewEntry) Serialize(w io.Writer) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
+
 	return writeString(w, e.Name)
 }
 
@@ -227,6 +236,7 @@ func (e *DropViewEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	e.Name, err = readString(r)
+
 	return err
 }
 
@@ -271,6 +281,7 @@ func (e *CreateIndexEntry) Serialize(w io.Writer) error {
 	if e.IsPrimary {
 		flags |= 0x02
 	}
+
 	return binary.Write(w, binary.LittleEndian, flags)
 }
 
@@ -302,6 +313,7 @@ func (e *CreateIndexEntry) Deserialize(r io.Reader) error {
 	}
 	e.IsUnique = flags&0x01 != 0
 	e.IsPrimary = flags&0x02 != 0
+
 	return nil
 }
 
@@ -325,6 +337,7 @@ func (e *DropIndexEntry) Serialize(w io.Writer) error {
 	if err := writeString(w, e.Table); err != nil {
 		return err
 	}
+
 	return writeString(w, e.Name)
 }
 
@@ -338,5 +351,6 @@ func (e *DropIndexEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	e.Name, err = readString(r)
+
 	return err
 }

@@ -307,6 +307,7 @@ ORDER BY column_index`
 				err.Error() == "EOF" {
 				break
 			}
+
 			return nil, nil, err
 		}
 		colName, _ := dest[0].(string)
@@ -452,6 +453,7 @@ func (a *Appender) createTempTable() error {
 	}
 
 	a.tempTableExists = true
+
 	return nil
 }
 
@@ -467,6 +469,7 @@ func (a *Appender) truncateTempTable() error {
 		query,
 		nil,
 	)
+
 	return err
 }
 
@@ -485,6 +488,7 @@ func (a *Appender) dropTempTable() error {
 	if err == nil {
 		a.tempTableExists = false
 	}
+
 	return err
 }
 
@@ -564,6 +568,7 @@ func (a *Appender) appendRowToBuffer(values []any) error {
 	row := make([]any, len(values))
 	copy(row, values)
 	a.buffer = append(a.buffer, row)
+
 	return nil
 }
 
@@ -573,6 +578,7 @@ func (a *Appender) appendRowToBuffer(values []any) error {
 func (a *Appender) Flush() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	return a.flushLocked()
 }
 
@@ -589,6 +595,7 @@ func (a *Appender) flushLocked() error {
 		if len(a.buffer) == 0 {
 			return nil // Nothing to flush
 		}
+
 		return a.flushQueryAppender()
 	}
 
@@ -597,6 +604,7 @@ func (a *Appender) flushLocked() error {
 		if a.currentSize == 0 {
 			return nil // Nothing to flush
 		}
+
 		return a.flushTableAppenderDataChunk()
 	}
 
@@ -604,6 +612,7 @@ func (a *Appender) flushLocked() error {
 	if len(a.buffer) == 0 {
 		return nil // Nothing to flush
 	}
+
 	return a.flushTableAppender()
 }
 
@@ -628,6 +637,7 @@ func (a *Appender) flushTableAppender() error {
 
 	// Clear buffer only on success
 	a.buffer = a.buffer[:0]
+
 	return nil
 }
 
@@ -658,6 +668,7 @@ func (a *Appender) flushTableAppenderDataChunk() error {
 	// Reset chunk for reuse
 	a.currentChunk.reset()
 	a.currentSize = 0
+
 	return nil
 }
 
@@ -703,6 +714,7 @@ func (a *Appender) flushQueryAppender() error {
 
 	// Clear buffer only on success
 	a.buffer = a.buffer[:0]
+
 	return nil
 }
 
@@ -795,6 +807,7 @@ func quoteIdentifier(name string) string {
 		"\"",
 		"\"\"",
 	)
+
 	return "\"" + escaped + "\""
 }
 
@@ -827,6 +840,7 @@ func (a *Appender) Close() error {
 	if flushErr != nil {
 		return flushErr
 	}
+
 	return dropErr
 }
 
@@ -843,6 +857,7 @@ func NewAppenderContext(ctx context.Context, clock quartz.Clock) AppenderContext
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
+
 	return AppenderContext{
 		ctx:   ctx,
 		clock: clock,
@@ -881,6 +896,7 @@ func (a *Appender) flushLockedWithContext(ctx context.Context) error {
 		if len(a.buffer) == 0 {
 			return nil // Nothing to flush
 		}
+
 		return a.flushQueryAppenderWithContext(ctx)
 	}
 
@@ -889,6 +905,7 @@ func (a *Appender) flushLockedWithContext(ctx context.Context) error {
 		if a.currentSize == 0 {
 			return nil // Nothing to flush
 		}
+
 		return a.flushTableAppenderDataChunkWithContext(ctx)
 	}
 
@@ -896,6 +913,7 @@ func (a *Appender) flushLockedWithContext(ctx context.Context) error {
 	if len(a.buffer) == 0 {
 		return nil // Nothing to flush
 	}
+
 	return a.flushTableAppenderWithContext(ctx)
 }
 
@@ -913,6 +931,7 @@ func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
 	}
 
 	a.buffer = a.buffer[:0]
+
 	return nil
 }
 
@@ -943,6 +962,7 @@ func (a *Appender) flushTableAppenderDataChunkWithContext(ctx context.Context) e
 	// Reset chunk for reuse
 	a.currentChunk.reset()
 	a.currentSize = 0
+
 	return nil
 }
 
@@ -976,6 +996,7 @@ func (a *Appender) flushQueryAppenderWithContext(ctx context.Context) error {
 	}
 
 	a.buffer = a.buffer[:0]
+
 	return nil
 }
 
@@ -1005,6 +1026,7 @@ func (a *Appender) createTempTableWithContext(ctx context.Context) error {
 	}
 
 	a.tempTableExists = true
+
 	return nil
 }
 
@@ -1016,6 +1038,7 @@ func (a *Appender) truncateTempTableWithContext(ctx context.Context) error {
 
 	query := "DELETE FROM " + quoteIdentifier(a.tempTableName)
 	_, err := a.conn.ExecContext(ctx, query, nil)
+
 	return err
 }
 
@@ -1052,5 +1075,6 @@ func (a *Appender) Threshold() int {
 func (a *Appender) IsClosed() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	return a.closed
 }

@@ -27,7 +27,7 @@ func BenchmarkComparison_ValidityMaskOps(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			for row := 0; row < GetDataChunkCapacity(); row++ {
 				_, _ = chunk.GetValue(0, row)
 			}
@@ -48,7 +48,7 @@ func BenchmarkComparison_IntegerOps(b *testing.B) {
 
 	b.Run("SetValue", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			for row := 0; row < GetDataChunkCapacity(); row++ {
 				_ = chunk.SetValue(0, row, int32(row))
 			}
@@ -66,7 +66,7 @@ func BenchmarkComparison_IntegerOps(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			for row := 0; row < GetDataChunkCapacity(); row++ {
 				_, _ = chunk.GetValue(0, row)
 			}
@@ -88,9 +88,9 @@ func BenchmarkComparison_BulkAppend(b *testing.B) {
 	const rowCount = 100000
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", rowCount)
-		for j := 0; j < rowCount; j++ {
+		for j := range rowCount {
 			_ = appender.AppendRow(j)
 		}
 		_ = appender.Flush()

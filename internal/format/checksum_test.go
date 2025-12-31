@@ -181,6 +181,7 @@ func TestReadAndVerifyChecksumCorruption(t *testing.T) {
 				copy(corrupted, data)
 				// Flip a bit in the middle of data (not in checksum)
 				corrupted[len(originalData)/2] ^= 0x01
+
 				return corrupted
 			},
 			expectError:  true,
@@ -194,6 +195,7 @@ func TestReadAndVerifyChecksumCorruption(t *testing.T) {
 				// Flip multiple bits
 				corrupted[0] ^= 0xFF
 				corrupted[len(originalData)-1] ^= 0xFF
+
 				return corrupted
 			},
 			expectError:  true,
@@ -207,6 +209,7 @@ func TestReadAndVerifyChecksumCorruption(t *testing.T) {
 				// Flip a bit in the checksum (last 8 bytes)
 				checksumStart := len(originalData)
 				corrupted[checksumStart] ^= 0x01
+
 				return corrupted
 			},
 			expectError:  true,
@@ -219,6 +222,7 @@ func TestReadAndVerifyChecksumCorruption(t *testing.T) {
 				copy(corrupted, data)
 				// Change a byte value
 				corrupted[10] = 'X'
+
 				return corrupted
 			},
 			expectError:  true,
@@ -280,6 +284,7 @@ func TestReadAndVerifyChecksumInsufficientData(t *testing.T) {
 				_ = WriteWithChecksum(&buf, data)
 				// Return only partial data
 				truncated := buf.Bytes()[:5]
+
 				return bytes.NewReader(truncated)
 			},
 			expectedLen: 11, // "hello world" length
@@ -293,6 +298,7 @@ func TestReadAndVerifyChecksumInsufficientData(t *testing.T) {
 				_ = WriteWithChecksum(&buf, data)
 				// Remove checksum (last 8 bytes)
 				withoutChecksum := buf.Bytes()[:len(data)]
+
 				return bytes.NewReader(withoutChecksum)
 			},
 			expectedLen: 11,
@@ -306,6 +312,7 @@ func TestReadAndVerifyChecksumInsufficientData(t *testing.T) {
 				_ = WriteWithChecksum(&buf, data)
 				// Keep data but only partial checksum
 				partial := buf.Bytes()[:len(data)+4]
+
 				return bytes.NewReader(partial)
 			},
 			expectedLen: 11,
@@ -345,9 +352,11 @@ func TestWriteWithChecksumWriteError(t *testing.T) {
 		canWrite := fw.failAfter - fw.written
 		if len(p) <= canWrite {
 			fw.written += len(p)
+
 			return len(p), nil
 		}
 		fw.written = fw.failAfter
+
 		return canWrite, io.ErrShortWrite
 	}
 
@@ -386,7 +395,7 @@ func TestChecksumLittleEndian(t *testing.T) {
 	// Verify little-endian byte order
 	// In little-endian, least significant byte comes first
 	var readChecksum uint64
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		readChecksum |= uint64(checksumBytes[i]) << (8 * i)
 	}
 
@@ -407,7 +416,7 @@ func BenchmarkCalculateChecksum(b *testing.B) {
 		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = CalculateChecksum(data)
 			}
 		})
@@ -424,7 +433,7 @@ func BenchmarkWriteWithChecksum(b *testing.B) {
 	b.SetBytes(int64(len(data)))
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		var buf bytes.Buffer
 		_ = WriteWithChecksum(&buf, data)
 	}
@@ -445,7 +454,7 @@ func BenchmarkReadAndVerifyChecksum(b *testing.B) {
 	b.SetBytes(int64(len(data)))
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		reader := bytes.NewReader(checksummedData)
 		_, _ = ReadAndVerifyChecksum(reader, len(data))
 	}

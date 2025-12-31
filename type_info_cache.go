@@ -34,6 +34,7 @@ func getCachedPrimitiveTypeInfo(t Type) (TypeInfo, error) {
 
 	// Store and return (LoadOrStore handles race conditions)
 	actual, _ := primitiveTypeInfoCache.LoadOrStore(t, info)
+
 	return actual.(TypeInfo), nil
 }
 
@@ -42,6 +43,7 @@ func getCachedPrimitiveTypeInfo(t Type) (TypeInfo, error) {
 func ClearTypeInfoCache() {
 	primitiveTypeInfoCache.Range(func(key, value any) bool {
 		primitiveTypeInfoCache.Delete(key)
+
 		return true
 	})
 }
@@ -52,7 +54,9 @@ func TypeInfoCacheSize() int {
 	count := 0
 	primitiveTypeInfoCache.Range(func(key, value any) bool {
 		count++
+
 		return true
 	})
+
 	return count
 }

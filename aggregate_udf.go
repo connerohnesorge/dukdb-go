@@ -12,11 +12,9 @@ import (
 	"github.com/coder/quartz"
 )
 
-// =============================================================================
-// Core Types (Phase 1.1)
-// =============================================================================
+// Core Types
 
-// AggregateFuncConfig defines aggregate function signature and behavior.
+// ArgregateFuncConfig defines aggregate function signature and behavior.
 type AggregateFuncConfig struct {
 	// InputTypeInfos contains Type information for each input parameter of the aggregate function.
 	// Cannot be empty, and each element cannot be nil.
@@ -117,6 +115,7 @@ func NewAggregateFuncContext(ctx context.Context, clock quartz.Clock) *Aggregate
 	if clock == nil {
 		clock = quartz.NewReal() // Default to real clock if nil (matches scalar UDF)
 	}
+
 	return &AggregateFuncContext{
 		ctx:   ctx,
 		clock: clock,
@@ -166,9 +165,7 @@ func (c *AggregateFuncContext) checkTimeout() error {
 	}
 }
 
-// =============================================================================
-// Aggregate Function Registry (Phase 1.3 & 1.4)
-// =============================================================================
+// Aggregate Function Registry
 
 // registeredAggregateFunc holds a registered aggregate function with its metadata.
 type registeredAggregateFunc struct {
@@ -234,6 +231,7 @@ func (r *aggregateFuncRegistry) register(name string, f AggregateFunc) error {
 		executor: f.Executor,
 	}
 	r.functions[name] = append(r.functions[name], reg)
+
 	return nil
 }
 
@@ -252,6 +250,7 @@ func (r *aggregateFuncRegistry) lookup(name string, argTypes []Type) *registered
 			return fn
 		}
 	}
+
 	return nil
 }
 
@@ -290,6 +289,7 @@ func (r *aggregateFuncRegistry) LookupAggregateUDF(name string, argTypes []Type)
 	if fn == nil {
 		return nil, TYPE_INVALID, false
 	}
+
 	return fn, fn.config.ResultTypeInfo.InternalType(), true
 }
 
@@ -298,6 +298,7 @@ func (r *aggregateFuncRegistry) IsVolatile(udfInfo any) bool {
 	if fn, ok := udfInfo.(*registeredAggregateFunc); ok {
 		return fn.config.Volatile
 	}
+
 	return false
 }
 
@@ -333,6 +334,7 @@ func NewAggregateExecutionState(udf *registeredAggregateFunc, ctx context.Contex
 	if clock == nil {
 		clock = quartz.NewReal() // Default to real clock (matches scalar UDF)
 	}
+
 	return &AggregateExecutionState{
 		udf:    udf,
 		groups: make(map[string]*GroupState),
@@ -365,6 +367,7 @@ func (s *AggregateExecutionState) ProcessChunk(chunk *DataChunk, groupCols []int
 	}
 
 	_ = s.clock.Now() // Tag: "aggregate", "process", "chunk_end"
+
 	return nil
 }
 
@@ -376,8 +379,10 @@ func (s *AggregateExecutionState) updateState(gs *GroupState, values []driver.Va
 			clock:    s.clock,
 			groupKey: gs.key,
 		}
+
 		return safeAggregateUpdate(s.udf.executor.UpdateCtx, ctx, gs.state, values)
 	}
+
 	return safeAggregateUpdateSimple(s.udf.executor.Update, gs.state, values)
 }
 
@@ -408,6 +413,7 @@ func (s *AggregateExecutionState) CombineWith(other *AggregateExecutionState) er
 	}
 
 	_ = s.clock.Now() // Tag: "aggregate", "combine", "end"
+
 	return nil
 }
 
@@ -436,6 +442,7 @@ func (s *AggregateExecutionState) Finalize() ([]GroupResult, error) {
 	}
 
 	_ = s.clock.Now() // Tag: "aggregate", "finalize", "end"
+
 	return results, nil
 }
 
@@ -447,8 +454,10 @@ func (s *AggregateExecutionState) finalizeGroup(gs *GroupState) (driver.Value, e
 			clock:    s.clock,
 			groupKey: gs.key,
 		}
+
 		return safeAggregateFinalize(s.udf.executor.FinalizeCtx, ctx, gs.state)
 	}
+
 	return safeAggregateFinalizeSimple(s.udf.executor.Finalize, gs.state)
 }
 
@@ -484,6 +493,7 @@ func (s *AggregateExecutionState) extractGroupKey(chunk *DataChunk, rowIdx int, 
 		val, _ := chunk.GetValue(col, rowIdx)
 		key[i] = val
 	}
+
 	return key
 }
 
@@ -497,6 +507,7 @@ func (s *AggregateExecutionState) getOrCreateState(groupKey []any) *GroupState {
 				state: s.udf.executor.Init(),
 			}
 		}
+
 		return s.noGroupKey
 	}
 
@@ -510,6 +521,7 @@ func (s *AggregateExecutionState) getOrCreateState(groupKey []any) *GroupState {
 		state: s.udf.executor.Init(),
 	}
 	s.groups[keyStr] = gs
+
 	return gs
 }
 
@@ -522,6 +534,7 @@ func serializeGroupKey(key []any) string {
 		}
 		fmt.Fprintf(&buf, "%v", v)
 	}
+
 	return buf.String()
 }
 
@@ -532,6 +545,7 @@ func (s *AggregateExecutionState) extractValues(chunk *DataChunk, rowIdx int, va
 		val, _ := chunk.GetValue(col, rowIdx)
 		values[i] = val
 	}
+
 	return values
 }
 
@@ -542,6 +556,7 @@ func (s *AggregateExecutionState) hasNull(values []driver.Value) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -556,6 +571,7 @@ func safeAggregateUpdate(fn UpdateContextFn, ctx *AggregateFuncContext, state Ag
 			err = fmt.Errorf("panic in aggregate UDF Update: %v", r)
 		}
 	}()
+
 	return fn(ctx, state, values...)
 }
 
@@ -566,6 +582,7 @@ func safeAggregateUpdateSimple(fn UpdateFn, state AggregateFuncState, values []d
 			err = fmt.Errorf("panic in aggregate UDF Update: %v", r)
 		}
 	}()
+
 	return fn(state, values...)
 }
 
@@ -576,6 +593,7 @@ func safeAggregateCombine(fn CombineFn, target, source AggregateFuncState) (err 
 			err = fmt.Errorf("panic in aggregate UDF Combine: %v", r)
 		}
 	}()
+
 	return fn(target, source)
 }
 
@@ -586,6 +604,7 @@ func safeAggregateFinalize(fn FinalizeContextFn, ctx *AggregateFuncContext, stat
 			err = fmt.Errorf("panic in aggregate UDF Finalize: %v", r)
 		}
 	}()
+
 	return fn(ctx, state)
 }
 
@@ -596,6 +615,7 @@ func safeAggregateFinalizeSimple(fn FinalizeFn, state AggregateFuncState) (resul
 			err = fmt.Errorf("panic in aggregate UDF Finalize: %v", r)
 		}
 	}()
+
 	return fn(state)
 }
 
@@ -640,5 +660,6 @@ func RegisterAggregateUDFSet(c *sql.Conn, name string, functions ...AggregateFun
 			return fmt.Errorf("registering aggregate UDF %s overload %d: %w", name, i, err)
 		}
 	}
+
 	return nil
 }

@@ -35,6 +35,7 @@ func (e *TxnBeginEntry) Serialize(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
+
 	return binary.Write(w, binary.LittleEndian, e.Timestamp)
 }
 
@@ -43,6 +44,7 @@ func (e *TxnBeginEntry) Deserialize(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
+
 	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
 }
 
@@ -75,6 +77,7 @@ func (e *TxnCommitEntry) Serialize(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
+
 	return binary.Write(w, binary.LittleEndian, e.Timestamp)
 }
 
@@ -83,6 +86,7 @@ func (e *TxnCommitEntry) Deserialize(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
+
 	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
 }
 
@@ -110,6 +114,7 @@ func (e *CheckpointEntry) Serialize(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, e.Iteration); err != nil {
 		return err
 	}
+
 	return binary.Write(w, binary.LittleEndian, e.Timestamp)
 }
 
@@ -118,6 +123,7 @@ func (e *CheckpointEntry) Deserialize(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.Iteration); err != nil {
 		return err
 	}
+
 	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
 }
 
@@ -177,6 +183,7 @@ func (e *VersionEntry) Serialize(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, e.Iteration); err != nil {
 		return err
 	}
+
 	return binary.Write(w, binary.LittleEndian, e.Timestamp)
 }
 
@@ -188,5 +195,6 @@ func (e *VersionEntry) Deserialize(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.Iteration); err != nil {
 		return err
 	}
+
 	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
 }

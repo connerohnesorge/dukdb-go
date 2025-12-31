@@ -91,6 +91,7 @@ CREATE TABLE test_types (
 				normalizedExpected := normalizeTypeString(expectedType)
 				assert.Contains(t, normalizedLine, normalizedExpected,
 					"Type mismatch for column %s", colName)
+
 				break
 			}
 		}
@@ -124,9 +125,9 @@ CREATE TABLE test_types (
 	require.NoError(t, err10)
 
 	testCases := []struct {
-		name         string
-		typeInfo     dukdb.TypeInfo
-		expectedSQL  string
+		name        string
+		typeInfo    dukdb.TypeInfo
+		expectedSQL string
 	}{
 		{
 			name:        "INTEGER",
@@ -334,6 +335,7 @@ func documentPropertyStructure(t *testing.T, data []byte) {
 
 	if len(data) == 0 {
 		t.Log("  Empty data")
+
 		return
 	}
 
@@ -341,6 +343,7 @@ func documentPropertyStructure(t *testing.T, data []byte) {
 	err := reader.Load()
 	if err != nil {
 		t.Logf("  Error loading properties: %v", err)
+
 		return
 	}
 
@@ -360,11 +363,12 @@ func documentPropertyStructure(t *testing.T, data []byte) {
 		propName := knownProps[id]
 		if propName == "" {
 			// For reused property IDs, just show the numeric value
-			if id == 200 {
+			switch id {
+			case 200:
 				propName = "Property200(context-specific)"
-			} else if id == 201 {
+			case 201:
 				propName = "Property201(context-specific)"
-			} else {
+			default:
 				propName = fmt.Sprintf("Unknown(%d)", id)
 			}
 		}
@@ -546,7 +550,7 @@ func BenchmarkDuckDBCompatibility(b *testing.B) {
 	dbPath := filepath.Join(tmpDir, "bench.duckdb")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		cmd := exec.Command("duckdb", dbPath, "-c", "SELECT 1;")
 		_, err := cmd.CombinedOutput()
 		if err != nil {
@@ -574,10 +578,10 @@ func TestTypeInfoSerializationMatchesDuckDBSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name            string
-		typeInfo        dukdb.TypeInfo
-		expectedProps   map[uint64]interface{} // property ID -> expected value (nil means just check exists)
-		description     string
+		name          string
+		typeInfo      dukdb.TypeInfo
+		expectedProps map[uint64]interface{} // property ID -> expected value (nil means just check exists)
+		description   string
 	}{
 		{
 			name:     "DECIMAL(18,4)",

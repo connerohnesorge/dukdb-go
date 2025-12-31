@@ -47,6 +47,7 @@ func (s *simpleRowSource) FillRow(row Row) (bool, error) {
 		return false, err
 	}
 	s.current++
+
 	return true, nil
 }
 
@@ -83,12 +84,13 @@ func (s *simpleChunkSource) FillChunk(chunk *DataChunk) error {
 		toFill = GetDataChunkCapacity()
 	}
 
-	for i := 0; i < toFill; i++ {
+	for i := range toFill {
 		if err := chunk.SetValue(0, i, s.filled+i); err != nil {
 			return err
 		}
 	}
 	s.filled += toFill
+
 	return chunk.SetSize(toFill)
 }
 
@@ -115,6 +117,7 @@ func (s *parallelRowSource) Cardinality() *CardinalityInfo {
 
 func (s *parallelRowSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.current, 0)
+
 	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
 }
 
@@ -130,6 +133,7 @@ func (s *parallelRowSource) FillRow(localState any, row Row) (bool, error) {
 	if err := row.SetRowValue(0, int(current)); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -359,6 +363,7 @@ func TestRegisterTableUDF_WithContext(t *testing.T) {
 				return nil, ctx.Err()
 			default:
 			}
+
 			return &simpleRowSource{
 				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 				rowCount: 5,
@@ -438,6 +443,7 @@ func TestRegisterTableUDF_WithArguments(t *testing.T) {
 					count = l
 				}
 			}
+
 			return &simpleRowSource{
 				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 				rowCount: count,
@@ -669,6 +675,7 @@ func (s *twoColumnRowSource) FillRow(row Row) (bool, error) {
 		}
 	}
 	s.current++
+
 	return true, nil
 }
 
@@ -842,6 +849,7 @@ func (s *slowParallelRowSource) Cardinality() *CardinalityInfo {
 
 func (s *slowParallelRowSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.current, 0)
+
 	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
 }
 
@@ -863,6 +871,7 @@ func (s *slowParallelRowSource) FillRow(localState any, row Row) (bool, error) {
 	if err := row.SetRowValue(0, int(current)); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -907,6 +916,7 @@ func (s *parallelChunkSource) Cardinality() *CardinalityInfo {
 
 func (s *parallelChunkSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.filled, 0)
+
 	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
 }
 
@@ -931,11 +941,12 @@ func (s *parallelChunkSource) FillChunk(localState any, chunk *DataChunk) error 
 	}
 
 	actualFill := int(toFill)
-	for i := 0; i < actualFill; i++ {
+	for i := range actualFill {
 		if err := chunk.SetValue(0, i, int(start)+i); err != nil {
 			return err
 		}
 	}
+
 	return chunk.SetSize(actualFill)
 }
 
@@ -1011,6 +1022,7 @@ func (s *benchmarkRowSource) FillRow(row Row) (bool, error) {
 		return false, err
 	}
 	s.current++
+
 	return true, nil
 }
 
@@ -1035,12 +1047,13 @@ func (s *benchmarkChunkSource) FillChunk(chunk *DataChunk) error {
 	if toFill > GetDataChunkCapacity() {
 		toFill = GetDataChunkCapacity()
 	}
-	for i := 0; i < toFill; i++ {
+	for i := range toFill {
 		if err := chunk.SetValue(0, i, s.filled+i); err != nil {
 			return err
 		}
 	}
 	s.filled += toFill
+
 	return chunk.SetSize(toFill)
 }
 
@@ -1049,7 +1062,7 @@ func BenchmarkExecuteRowSource_Small(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &benchmarkRowSource{
 			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 			rowCount: 100,
@@ -1063,7 +1076,7 @@ func BenchmarkExecuteRowSource_Large(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &benchmarkRowSource{
 			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 			rowCount: 10000,
@@ -1077,7 +1090,7 @@ func BenchmarkExecuteChunkSource_Small(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &benchmarkChunkSource{
 			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 			rowCount: 100,
@@ -1091,7 +1104,7 @@ func BenchmarkExecuteChunkSource_Large(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &benchmarkChunkSource{
 			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
 			rowCount: 10000,
@@ -1105,7 +1118,7 @@ func BenchmarkExecuteParallelRowSource_SingleThread(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &parallelRowSource{
 			cols:       []ColumnInfo{{Name: "id", T: intInfo}},
 			maxThreads: 1,
@@ -1120,7 +1133,7 @@ func BenchmarkExecuteParallelRowSource_MultiThread(b *testing.B) {
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		source := &parallelRowSource{
 			cols:       []ColumnInfo{{Name: "id", T: intInfo}},
 			maxThreads: 4,

@@ -1111,9 +1111,7 @@ func TestDataChunkUhugeint(t *testing.T) {
 }
 
 // TestDataChunkBit tests BIT type support in DataChunk.
-// Skipped because TYPE_BIT is in unsupportedTypeToStringMap per duckdb-go API.
 func TestDataChunkBit(t *testing.T) {
-	t.Skip("TYPE_BIT is unsupported via NewTypeInfo per duckdb-go API compatibility")
 	t.Run("basic bit operations", func(t *testing.T) {
 		bitType, err := NewTypeInfo(TYPE_BIT)
 		require.NoError(t, err)
@@ -1219,7 +1217,7 @@ func BenchmarkDataChunk_ScanThroughput(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		for row := 0; row < GetDataChunkCapacity(); row++ {
 			_, _ = chunk.GetValue(0, row)
 		}
@@ -1246,7 +1244,7 @@ func BenchmarkDataChunk_ScanMultiColumn(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		for row := 0; row < GetDataChunkCapacity(); row++ {
 			_, _ = chunk.GetValue(0, row)
 			_, _ = chunk.GetValue(1, row)

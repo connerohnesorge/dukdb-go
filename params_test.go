@@ -393,6 +393,7 @@ func TestBindParams(t *testing.T) {
 						"expected error, got nil",
 					)
 				}
+
 				return
 			}
 
@@ -616,6 +617,7 @@ func TestFormatValue(t *testing.T) {
 						"expected error, got nil",
 					)
 				}
+
 				return
 			}
 

@@ -137,6 +137,7 @@ func isInsideStringLiteral(
 				query[i+1] == '\'' {
 				// Skip the escaped quote
 				i += 2
+
 				continue
 			}
 			inString = !inString
@@ -309,6 +310,7 @@ func FormatValue(v any) (string, error) {
 		if val {
 			return "TRUE", nil
 		}
+
 		return "FALSE", nil
 
 	case int:
@@ -353,6 +355,7 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return formatString(val.String()), nil
 
 	case Decimal:
@@ -361,6 +364,7 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return val.String(), nil
 
 	case Interval:
@@ -369,12 +373,14 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return formatInterval(*val), nil
 
 	case *big.Int:
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return val.String(), nil
 
 	case Uhugeint:
@@ -383,6 +389,7 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return val.String(), nil
 
 	case Bit:
@@ -392,6 +399,7 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return fmt.Sprintf("B'%s'", val.String()), nil
 
 	case TimeNS:
@@ -401,6 +409,7 @@ func FormatValue(v any) (string, error) {
 		if val == nil {
 			return "NULL", nil
 		}
+
 		return fmt.Sprintf("TIME '%s'", val.String()), nil
 
 	case driver.Valuer:
@@ -409,6 +418,7 @@ func FormatValue(v any) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		return FormatValue(dv)
 
 	default:
@@ -424,6 +434,7 @@ func FormatValue(v any) (string, error) {
 func formatString(s string) string {
 	// Escape single quotes by doubling them
 	escaped := strings.ReplaceAll(s, "'", "''")
+
 	return "'" + escaped + "'"
 }
 
@@ -450,6 +461,7 @@ func formatFloat(f float64) (string, error) {
 			Msg:  "NaN not supported in SQL literals",
 		}
 	}
+
 	return strconv.FormatFloat(
 		f,
 		'g',

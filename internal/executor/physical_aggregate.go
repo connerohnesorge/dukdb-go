@@ -206,6 +206,7 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 	}
 
 	op.resultChunk = outputChunk
+
 	return outputChunk, nil
 }
 
@@ -255,6 +256,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 				}
 			}
 		}
+
 		return count, nil
 
 	case "SUM":
@@ -298,6 +300,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if count == 0 {
 			return nil, nil
 		}
+
 		return sum / float64(count), nil
 
 	case "MIN":
@@ -316,6 +319,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 				}
 			}
 		}
+
 		return minVal, nil
 
 	case "MAX":
@@ -334,6 +338,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 				}
 			}
 		}
+
 		return maxVal, nil
 
 	default:

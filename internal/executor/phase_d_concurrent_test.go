@@ -36,7 +36,7 @@ func TestPhaseD_Concurrent_SelectsSameTable(t *testing.T) {
 	errors := make(chan error, numGoroutines)
 	results := make(chan int, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 
@@ -44,12 +44,14 @@ func TestPhaseD_Concurrent_SelectsSameTable(t *testing.T) {
 			result, err := executeQuery(t, exec, cat, "SELECT * FROM users")
 			if err != nil {
 				errors <- fmt.Errorf("goroutine %d: %w", id, err)
+
 				return
 			}
 
 			// Verify we got 3 rows
 			if len(result.Rows) != 3 {
 				errors <- fmt.Errorf("goroutine %d: expected 3 rows, got %d", id, len(result.Rows))
+
 				return
 			}
 
@@ -99,7 +101,7 @@ func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
 
 	// Run alternating SELECT and INSERT operations concurrently
 	wg.Add(numOps)
-	for i := 0; i < numOps; i++ {
+	for i := range numOps {
 		if i%2 == 0 {
 			// SELECT
 			go func(id int) {
@@ -108,12 +110,14 @@ func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
 				result, err := executeQuery(t, exec, cat, "SELECT * FROM products")
 				if err != nil {
 					errors <- fmt.Errorf("SELECT %d: %w", id, err)
+
 					return
 				}
 
 				// Should have at least 1 row
 				if len(result.Rows) < 1 {
 					errors <- fmt.Errorf("SELECT %d: expected at least 1 row, got %d", id, len(result.Rows))
+
 					return
 				}
 			}(i)
@@ -127,6 +131,7 @@ func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
 				_, err := executeQuery(t, exec, cat, sql)
 				if err != nil {
 					errors <- fmt.Errorf("INSERT %d: %w", id, err)
+
 					return
 				}
 			}(i)
@@ -168,16 +173,17 @@ func TestPhaseD_Concurrent_Inserts(t *testing.T) {
 	errors := make(chan error, numGoroutines)
 
 	// Run concurrent inserts
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(goroutineID int) {
 			defer wg.Done()
 
-			for j := 0; j < insertsPerGoroutine; j++ {
+			for j := range insertsPerGoroutine {
 				insertID := goroutineID*100 + j
 				sql := fmt.Sprintf("INSERT INTO logs (id, message) VALUES (%d, 'Log%d')", insertID, insertID)
 				_, err := executeQuery(t, exec, cat, sql)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d iteration %d: %w", goroutineID, j, err)
+
 					return
 				}
 			}
@@ -222,16 +228,17 @@ func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
 	errors := make(chan error, numGoroutines)
 
 	// Mix of reads and writes
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		if i%2 == 0 {
 			// Reader
 			go func(id int) {
 				defer wg.Done()
 
-				for j := 0; j < 10; j++ {
+				for range 10 {
 					_, err := executeQuery(t, exec, cat, "SELECT * FROM counter")
 					if err != nil {
 						errors <- fmt.Errorf("reader %d: %w", id, err)
+
 						return
 					}
 				}
@@ -241,12 +248,13 @@ func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 
-				for j := 0; j < 5; j++ {
+				for j := range 5 {
 					insertID := id*100 + j + 10
 					sql := fmt.Sprintf("INSERT INTO counter (id, value) VALUES (%d, %d)", insertID, insertID)
 					_, err := executeQuery(t, exec, cat, sql)
 					if err != nil {
 						errors <- fmt.Errorf("writer %d: %w", id, err)
+
 						return
 					}
 				}
@@ -287,7 +295,7 @@ func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
 	panicChan := make(chan interface{}, numGoroutines)
 	errors := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 			defer func() {
@@ -297,11 +305,12 @@ func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
 			}()
 
 			// Only INSERT operations to avoid data races with concurrent reads/writes
-			for j := 0; j < 10; j++ {
+			for j := range 10 {
 				sql := fmt.Sprintf("INSERT INTO stress (id, data) VALUES (%d, 'data%d')", id*100+j, id*100+j)
 				_, err := executeQuery(t, exec, cat, sql)
 				if err != nil {
 					errors <- err
+
 					return
 				}
 			}
@@ -360,7 +369,7 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 	done := make(chan bool)
 
 	go func() {
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(id int) {
 				defer wg.Done()
 
@@ -370,11 +379,13 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 					_, err := executeQuery(t, exec, cat, "SELECT * FROM table_a")
 					if err != nil {
 						errors <- err
+
 						return
 					}
 					_, err = executeQuery(t, exec, cat, "SELECT * FROM table_b")
 					if err != nil {
 						errors <- err
+
 						return
 					}
 				} else {
@@ -382,11 +393,13 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 					_, err := executeQuery(t, exec, cat, "SELECT * FROM table_b")
 					if err != nil {
 						errors <- err
+
 						return
 					}
 					_, err = executeQuery(t, exec, cat, "SELECT * FROM table_a")
 					if err != nil {
 						errors <- err
+
 						return
 					}
 				}

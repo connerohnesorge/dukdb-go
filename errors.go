@@ -124,6 +124,7 @@ func (e *Error) Is(err error) bool {
 	if errors.As(err, &other) {
 		return other.Msg == e.Msg
 	}
+
 	return false
 }
 
@@ -266,6 +267,7 @@ func getError(errDriver, err error) error {
 	if err == nil {
 		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
 	}
+
 	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
 }
 

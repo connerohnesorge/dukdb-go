@@ -37,6 +37,7 @@ func NewProfilingContext(clock quartz.Clock) *ProfilingContext {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
+
 	return &ProfilingContext{
 		clock:   clock,
 		enabled: false,
@@ -76,6 +77,7 @@ func (p *ProfilingContext) Disable() {
 func (p *ProfilingContext) IsEnabled() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	return p.enabled
 }
 
@@ -100,6 +102,7 @@ func (p *ProfilingContext) Elapsed() time.Duration {
 	if p.startTime.IsZero() {
 		return 0
 	}
+
 	return p.clock.Since(p.startTime)
 }
 
@@ -150,6 +153,7 @@ func (p *ProfilingContext) GetInfo() (*ProfilingInfo, error) {
 	info := p.root
 	p.root = nil // Clear after retrieval
 	p.startTime = time.Time{}
+
 	return info, nil
 }
 
@@ -179,6 +183,7 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 		}
 
 		info = *profInfo
+
 		return nil
 	})
 
@@ -225,6 +230,7 @@ func (m *operatorMetrics) Duration() time.Duration {
 	if m.endTime.IsZero() {
 		return m.clock.Since(m.startTime)
 	}
+
 	return m.endTime.Sub(m.startTime)
 }
 

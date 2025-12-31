@@ -11,9 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Phase 5.1: Unit Tests for Core Types
-// =============================================================================
+// Unit Tests for Core Types
 
 func TestAggregateFuncConfig(t *testing.T) {
 	intType, err := NewTypeInfo(TYPE_INTEGER)
@@ -56,16 +54,19 @@ func TestAggregateFuncExecutor(t *testing.T) {
 					s.sum += v
 				}
 			}
+
 			return nil
 		},
 		Combine: func(target, source AggregateFuncState) error {
 			t := target.(*sumState)
 			s := source.(*sumState)
 			t.sum += s.sum
+
 			return nil
 		},
 		Finalize: func(state AggregateFuncState) (driver.Value, error) {
 			s := state.(*sumState)
+
 			return s.sum, nil
 		},
 	}
@@ -96,9 +97,7 @@ func TestAggregateFuncExecutor(t *testing.T) {
 	assert.Equal(t, int64(35), result)
 }
 
-// =============================================================================
-// Phase 5.2: Unit Tests for Registry
-// =============================================================================
+// Unit Tests for Registry
 
 func TestAggregateRegistryValidation(t *testing.T) {
 	registry := newAggregateFuncRegistry()
@@ -280,9 +279,7 @@ func TestAggregateRegistryVariadic(t *testing.T) {
 	assert.Nil(t, fn)
 }
 
-// =============================================================================
-// Phase 5.3: Unit Tests for Execution Engine
-// =============================================================================
+// Unit Tests for Execution Engine
 
 func TestAggregateExecutionStateBasic(t *testing.T) {
 	intType, _ := NewTypeInfo(TYPE_INTEGER)
@@ -309,16 +306,19 @@ func TestAggregateExecutionStateBasic(t *testing.T) {
 						s.sum += int64(v)
 					}
 				}
+
 				return nil
 			},
 			Combine: func(target, source AggregateFuncState) error {
 				t := target.(*sumState)
 				s := source.(*sumState)
 				t.sum += s.sum
+
 				return nil
 			},
 			Finalize: func(state AggregateFuncState) (driver.Value, error) {
 				s := state.(*sumState)
+
 				return s.sum, nil
 			},
 		},
@@ -335,7 +335,7 @@ func TestAggregateExecutionStateBasic(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add test data
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err = chunk.SetValue(0, i, int32(i+1))
 		require.NoError(t, err)
 	}
@@ -381,16 +381,19 @@ func TestAggregateExecutionStateCombine(t *testing.T) {
 						s.sum += int64(v)
 					}
 				}
+
 				return nil
 			},
 			Combine: func(target, source AggregateFuncState) error {
 				t := target.(*sumState)
 				s := source.(*sumState)
 				t.sum += s.sum
+
 				return nil
 			},
 			Finalize: func(state AggregateFuncState) (driver.Value, error) {
 				s := state.(*sumState)
+
 				return s.sum, nil
 			},
 		},
@@ -406,12 +409,12 @@ func TestAggregateExecutionStateCombine(t *testing.T) {
 	chunk1, _ := NewDataChunk([]TypeInfo{intType})
 	chunk2, _ := NewDataChunk([]TypeInfo{intType})
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_ = chunk1.SetValue(0, i, int32(i+1)) // 1, 2, 3
 	}
 	_ = chunk1.SetSize(3)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		_ = chunk2.SetValue(0, i, int32(i+10)) // 10, 11
 	}
 	_ = chunk2.SetSize(2)
@@ -454,16 +457,19 @@ func TestAggregateExecutionStateNullHandling(t *testing.T) {
 			Update: func(state AggregateFuncState, args ...driver.Value) error {
 				s := state.(*countState)
 				s.count++
+
 				return nil
 			},
 			Combine: func(target, source AggregateFuncState) error {
 				t := target.(*countState)
 				s := source.(*countState)
 				t.count += s.count
+
 				return nil
 			},
 			Finalize: func(state AggregateFuncState) (driver.Value, error) {
 				s := state.(*countState)
+
 				return s.count, nil
 			},
 		},
@@ -504,9 +510,7 @@ func TestAggregateExecutionStateNullHandling(t *testing.T) {
 	assert.Equal(t, int64(3), results2[0].Value) // All values counted including NULL
 }
 
-// =============================================================================
-// Phase 5.5: Deterministic Tests with Mock Clock
-// =============================================================================
+// Deterministic Tests with Mock Clock
 
 func TestAggregateFuncContextWithClock(t *testing.T) {
 	mClock := quartz.NewMock(t)
@@ -560,9 +564,7 @@ func TestAggregateFuncContextDefaultClock(t *testing.T) {
 	assert.WithinDuration(t, time.Now(), now, 5*time.Second)
 }
 
-// =============================================================================
-// Phase 5.6: Panic Recovery Tests
-// =============================================================================
+// Panic Recovery Tests
 
 func TestAggregateUDFPanicRecoveryUpdate(t *testing.T) {
 	// Test Update panic recovery
@@ -629,9 +631,7 @@ func TestAggregateUDFPanicRecoveryDestroy(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Phase 5.7: Context Timeout Tests
-// =============================================================================
+// Context Timeout Tests
 
 func TestAggregateFuncContextTimeout(t *testing.T) {
 	mClock := quartz.NewMock(t)
@@ -682,9 +682,7 @@ func TestAggregateFuncContextCancellation(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
-// =============================================================================
 // Helper Tests
-// =============================================================================
 
 func TestSerializeGroupKey(t *testing.T) {
 	tests := []struct {
@@ -805,9 +803,7 @@ func TestMatchesTypesForAggregate(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Validation Criteria Tests (Phase 6)
-// =============================================================================
+// Validation Criteria Tests
 
 func TestAllCallbackTypesWork(t *testing.T) {
 	// Test that all 7 callback types work correctly
@@ -843,6 +839,7 @@ func TestAllCallbackTypesWork(t *testing.T) {
 						st.sum += int64(v)
 					}
 				}
+
 				return nil
 			},
 			Combine: func(target, source AggregateFuncState) error {
@@ -850,11 +847,13 @@ func TestAllCallbackTypesWork(t *testing.T) {
 				s := source.(*state)
 				t.sum += s.sum
 				t.calls = append(t.calls, "combine")
+
 				return nil
 			},
 			Finalize: func(s AggregateFuncState) (driver.Value, error) {
 				st := s.(*state)
 				st.calls = append(st.calls, "finalize")
+
 				return st.sum, nil
 			},
 		},
@@ -918,12 +917,14 @@ func TestContextAwareCallbacks(t *testing.T) {
 						st.sum += int64(v)
 					}
 				}
+
 				return nil
 			},
 			Combine: func(target, source AggregateFuncState) error {
 				t := target.(*state)
 				s := source.(*state)
 				t.sum += s.sum
+
 				return nil
 			},
 			FinalizeCtx: func(ctx *AggregateFuncContext, s AggregateFuncState) (driver.Value, error) {
@@ -932,6 +933,7 @@ func TestContextAwareCallbacks(t *testing.T) {
 				if !st.clockUsed {
 					return nil, nil
 				}
+
 				return st.sum, nil
 			},
 		},

@@ -32,7 +32,7 @@ func TestVectorPool_GetFromEmpty(t *testing.T) {
 		v := pool.Get(testTypeInteger, 2048)
 
 		// All entries should be NULL (validity mask cleared)
-		for i := uint64(0); i < 2048; i++ {
+		for i := range uint64(2048) {
 			assert.False(t, v.Mask.IsValid(i), "entry %d should be NULL", i)
 		}
 		assert.Equal(t, uint64(0), v.Mask.CountValid())
@@ -157,7 +157,7 @@ func TestVectorPool_Concurrent(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(id int) {
 				defer wg.Done()
 
@@ -167,7 +167,7 @@ func TestVectorPool_Concurrent(t *testing.T) {
 					typ = testTypeVarchar
 				}
 
-				for j := 0; j < iterations; j++ {
+				for range iterations {
 					// Get vector
 					v := pool.Get(typ, 2048)
 					require.NotNil(t, v)
@@ -202,7 +202,7 @@ func TestVectorPool_Concurrent(t *testing.T) {
 		wg.Add(numGoroutines * len(types))
 
 		for _, typ := range types {
-			for i := 0; i < numGoroutines; i++ {
+			for range numGoroutines {
 				go func(vType VectorType) {
 					defer wg.Done()
 
@@ -235,7 +235,7 @@ func BenchmarkVectorPool_GetPut(b *testing.B) {
 	pool := NewVectorPool()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		v := pool.Get(testTypeInteger, 2048)
 		pool.Put(v)
 	}
@@ -262,7 +262,7 @@ func BenchmarkVectorPool_MultiType(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		typ := types[i%len(types)]
 		v := pool.Get(typ, 2048)
 		pool.Put(v)

@@ -52,6 +52,7 @@ func (r *Rows) Close() error {
 	}
 	r.closed = true
 	r.data = nil // Release memory
+
 	return nil
 }
 
@@ -193,6 +194,7 @@ func (r *Rows) ColumnTypeDatabaseTypeName(
 	if index < 0 || index >= len(r.colTypes) {
 		return "UNKNOWN"
 	}
+
 	return r.colTypes[index].String()
 }
 
@@ -290,6 +292,7 @@ func (r *Rows) columnTypes() []TypeInfo {
 			result[i] = info
 		}
 	}
+
 	return result
 }
 

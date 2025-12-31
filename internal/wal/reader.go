@@ -50,6 +50,7 @@ func NewReader(path string, clock quartz.Clock) (*Reader, error) {
 	r.header = &FileHeader{}
 	if err := r.header.Deserialize(r.reader); err != nil {
 		_ = file.Close()
+
 		return nil, fmt.Errorf("failed to read WAL header: %w", err)
 	}
 	r.position = HeaderSize
@@ -70,6 +71,7 @@ func (r *Reader) ReadEntry() (Entry, error) {
 		if err == io.EOF {
 			return nil, io.EOF
 		}
+
 		return nil, fmt.Errorf("failed to read entry size: %w", err)
 	}
 
@@ -78,6 +80,7 @@ func (r *Reader) ReadEntry() (Entry, error) {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
+
 		return nil, fmt.Errorf("failed to read entry checksum: %w", err)
 	}
 
@@ -86,6 +89,7 @@ func (r *Reader) ReadEntry() (Entry, error) {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
+
 		return nil, fmt.Errorf("failed to read entry type: %w", err)
 	}
 
@@ -95,6 +99,7 @@ func (r *Reader) ReadEntry() (Entry, error) {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
+
 		return nil, fmt.Errorf("failed to read entry data: %w", err)
 	}
 
@@ -129,6 +134,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryDropTable:
@@ -136,6 +142,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryCreateSchema:
@@ -143,6 +150,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryDropSchema:
@@ -150,6 +158,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryCreateView:
@@ -157,6 +166,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryDropView:
@@ -164,6 +174,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryCreateIndex:
@@ -171,6 +182,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryDropIndex:
@@ -178,6 +190,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	// Data entries
@@ -186,6 +199,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryDelete:
@@ -193,6 +207,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryUpdate:
@@ -200,6 +215,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryUseTable:
@@ -207,6 +223,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	// Control entries
@@ -215,6 +232,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryTxnCommit:
@@ -222,6 +240,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryCheckpoint:
@@ -229,6 +248,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryFlush:
@@ -236,6 +256,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	case EntryVersion:
@@ -243,6 +264,7 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		if err := entry.Deserialize(reader); err != nil {
 			return nil, err
 		}
+
 		return entry, nil
 
 	default:
@@ -277,6 +299,7 @@ func (r *Reader) ReadAll() ([]Entry, error) {
 		}
 		entries = append(entries, entry)
 	}
+
 	return entries, nil
 }
 

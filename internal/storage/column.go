@@ -39,6 +39,7 @@ func (v *ValidityMask) IsValid(idx int) bool {
 	}
 	entry := idx / 64
 	bit := uint64(1) << (idx % 64)
+
 	return v.mask[entry]&bit != 0
 }
 
@@ -64,7 +65,7 @@ func (v *ValidityMask) SetInvalid(idx int) {
 
 // AllValid returns whether all values are valid.
 func (v *ValidityMask) AllValid() bool {
-	for i := 0; i < len(v.mask); i++ {
+	for i := range len(v.mask) {
 		if i == len(v.mask)-1 {
 			// Check only the bits up to count for the last entry
 			lastBits := v.count % 64
@@ -81,17 +82,19 @@ func (v *ValidityMask) AllValid() bool {
 			}
 		}
 	}
+
 	return true
 }
 
 // CountValid returns the number of valid entries.
 func (v *ValidityMask) CountValid() int {
 	count := 0
-	for i := 0; i < v.count; i++ {
+	for i := range v.count {
 		if v.IsValid(i) {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -99,6 +102,7 @@ func (v *ValidityMask) CountValid() int {
 func (v *ValidityMask) Clone() *ValidityMask {
 	mask := make([]uint64, len(v.mask))
 	copy(mask, v.mask)
+
 	return &ValidityMask{
 		mask:  mask,
 		count: v.count,
@@ -129,9 +133,10 @@ func NewSelectionVectorFromRange(
 		indices: make([]uint32, count),
 		count:   count,
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		sv.indices[i] = uint32(i)
 	}
+
 	return sv
 }
 
@@ -175,6 +180,7 @@ func (sv *SelectionVector) Reset() {
 func (sv *SelectionVector) Clone() *SelectionVector {
 	indices := make([]uint32, len(sv.indices))
 	copy(indices, sv.indices)
+
 	return &SelectionVector{
 		indices: indices,
 		count:   sv.count,
@@ -312,6 +318,7 @@ func (v *Vector) SetValue(idx int, val any) {
 
 	if val == nil {
 		v.validity.SetInvalid(idx)
+
 		return
 	}
 
@@ -391,8 +398,11 @@ func (v *Vector) Clone() *Vector {
 	case []string:
 		copy(newVec.data.([]string), data[:v.count])
 	case [][]byte:
-		newData := newVec.data.([][]byte)
-		for i := 0; i < v.count; i++ {
+		newData, ok := newVec.data.([][]byte)
+		if !ok {
+			return newVec
+		}
+		for i := range v.count {
 			if data[i] != nil {
 				newData[i] = make([]byte, len(data[i]))
 				copy(newData[i], data[i])

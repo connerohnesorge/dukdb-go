@@ -303,6 +303,7 @@ func TestTypeInfoSQLTypeValidity(t *testing.T) {
 			name: "LIST[INTEGER]",
 			setup: func() (TypeInfo, error) {
 				child, _ := NewTypeInfo(TYPE_INTEGER)
+
 				return NewListInfo(child)
 			},
 			expected: "INTEGER[]",
@@ -311,6 +312,7 @@ func TestTypeInfoSQLTypeValidity(t *testing.T) {
 			name: "INTEGER[5]",
 			setup: func() (TypeInfo, error) {
 				child, _ := NewTypeInfo(TYPE_INTEGER)
+
 				return NewArrayInfo(child, 5)
 			},
 			expected: "INTEGER[5]",
@@ -320,6 +322,7 @@ func TestTypeInfoSQLTypeValidity(t *testing.T) {
 			setup: func() (TypeInfo, error) {
 				key, _ := NewTypeInfo(TYPE_VARCHAR)
 				value, _ := NewTypeInfo(TYPE_INTEGER)
+
 				return NewMapInfo(key, value)
 			},
 			expected: "MAP(VARCHAR, INTEGER)",
@@ -329,6 +332,7 @@ func TestTypeInfoSQLTypeValidity(t *testing.T) {
 			setup: func() (TypeInfo, error) {
 				intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 				entry, _ := NewStructEntry(intInfo, "field")
+
 				return NewStructInfo(entry)
 			},
 			expected: `STRUCT("field" INTEGER)`,
@@ -338,6 +342,7 @@ func TestTypeInfoSQLTypeValidity(t *testing.T) {
 			setup: func() (TypeInfo, error) {
 				intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 				strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+
 				return NewUnionInfo([]TypeInfo{intInfo, strInfo}, []string{"a", "b"})
 			},
 			expected: `UNION("a" INTEGER, "b" VARCHAR)`,

@@ -295,11 +295,11 @@ func TestEngineConcurrentQueries(t *testing.T) {
 	numGoroutines := 10
 	numQueries := 100
 
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numQueries; j++ {
+			for range numQueries {
 				_, _, err := conn.Query(
 					context.Background(),
 					"SELECT * FROM counters",
@@ -310,6 +310,7 @@ func TestEngineConcurrentQueries(t *testing.T) {
 						"Concurrent query failed: %v",
 						err,
 					)
+
 					return
 				}
 			}
@@ -325,7 +326,7 @@ func TestEngineMultipleConnections(t *testing.T) {
 
 	// Open multiple connections
 	var conns []dukdb.BackendConn
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		conn, err := engine.Open(":memory:", nil)
 		if err != nil {
 			t.Fatalf("Open failed: %v", err)

@@ -32,7 +32,7 @@ func benchmarkSequentialScan(b *testing.B, rowCount int) {
 	}
 
 	// Insert test data
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		err := table.AppendRow([]any{int32(i), float64(i) * 1.5, "value_" + string(rune('0'+i%10))})
 		if err != nil {
 			b.Fatalf("Failed to insert row: %v", err)
@@ -55,7 +55,7 @@ func benchmarkSequentialScan(b *testing.B, rowCount int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		scanOp, err := NewPhysicalScanOperator(plan, stor)
 		if err != nil {
 			b.Fatalf("Failed to create scan operator: %v", err)
@@ -105,7 +105,7 @@ func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
 	}
 
 	// Insert test data
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		err := table.AppendRow([]any{int32(i)})
 		if err != nil {
 			b.Fatalf("Failed to insert row: %v", err)
@@ -150,7 +150,7 @@ func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		scanOp, err := NewPhysicalScanOperator(scanPlan, stor)
 		if err != nil {
 			b.Fatalf("Failed to create scan operator: %v", err)
@@ -233,7 +233,7 @@ func benchmarkAggregation(b *testing.B, aggFunc string, rowCount int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Reset mock operator for each iteration
 		mockChild.index = 0
 
@@ -305,7 +305,7 @@ func benchmarkAggregationCount(b *testing.B, rowCount int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Reset mock operator for each iteration
 		mockChild.index = 0
 
@@ -356,7 +356,7 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 		b.Fatalf("Failed to create left table: %v", err)
 	}
 
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		err := leftTable.AppendRow([]any{int64(i), "left_" + string(rune('0'+i%10))})
 		if err != nil {
 			b.Fatalf("Failed to insert into left table: %v", err)
@@ -370,7 +370,7 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 		b.Fatalf("Failed to create right table: %v", err)
 	}
 
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		err := rightTable.AppendRow([]any{int64(i), "right_" + string(rune('0'+i%10))})
 		if err != nil {
 			b.Fatalf("Failed to insert into right table: %v", err)
@@ -447,7 +447,7 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Reset scanners for each iteration
 		leftScan.scanner = leftTable.Scan()
 		rightScan.scanner = rightTable.Scan()
@@ -535,7 +535,7 @@ func benchmarkSort(b *testing.B, rowCount int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Reset mock operator for each iteration
 		mockChild.index = 0
 

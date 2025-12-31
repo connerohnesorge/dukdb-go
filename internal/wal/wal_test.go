@@ -496,7 +496,7 @@ func TestAutoCheckpoint(t *testing.T) {
 	cm.SetThreshold(500)
 
 	// Write enough data to trigger auto-checkpoint
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		entry := &CreateTableEntry{
 			Schema: "main",
 			Name:   "table_" + string(rune('a'+i)),

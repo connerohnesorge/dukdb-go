@@ -163,6 +163,7 @@ func (w parallelRowTSWrapper) Cardinality() *CardinalityInfo {
 
 func (w parallelRowTSWrapper) Init() ParallelTableSourceInfo {
 	w.s.Init()
+
 	return ParallelTableSourceInfo{MaxThreads: 1}
 }
 
@@ -189,6 +190,7 @@ func (w parallelChunkTSWrapper) Cardinality() *CardinalityInfo {
 
 func (w parallelChunkTSWrapper) Init() ParallelTableSourceInfo {
 	w.s.Init()
+
 	return ParallelTableSourceInfo{MaxThreads: 1}
 }
 
@@ -212,6 +214,7 @@ func wrapRowTF(f RowTableFunction) ParallelRowTableFunction {
 			if err != nil {
 				return nil, err
 			}
+
 			return parallelRowTSWrapper{s: rts}, nil
 		}
 	}
@@ -222,6 +225,7 @@ func wrapRowTF(f RowTableFunction) ParallelRowTableFunction {
 			if err != nil {
 				return nil, err
 			}
+
 			return parallelRowTSWrapper{s: rts}, nil
 		}
 	}
@@ -241,6 +245,7 @@ func wrapChunkTF(f ChunkTableFunction) ParallelChunkTableFunction {
 			if err != nil {
 				return nil, err
 			}
+
 			return parallelChunkTSWrapper{s: rts}, nil
 		}
 	}
@@ -251,6 +256,7 @@ func wrapChunkTF(f ChunkTableFunction) ParallelChunkTableFunction {
 			if err != nil {
 				return nil, err
 			}
+
 			return parallelChunkTSWrapper{s: rts}, nil
 		}
 	}
@@ -279,6 +285,7 @@ func NewTableFunctionContext(ctx context.Context, clock quartz.Clock) *TableFunc
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
+
 	return &TableFunctionContext{
 		ctx:   ctx,
 		clock: clock,
@@ -322,6 +329,7 @@ func (r *tableFunctionRegistry) register(name string, f any) error {
 		return fmt.Errorf("table function %q already registered", name)
 	}
 	r.functions[name] = f
+
 	return nil
 }
 
@@ -332,6 +340,7 @@ func (r *tableFunctionRegistry) Get(name string) (any, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	f, ok := r.functions[name]
+
 	return f, ok
 }
 
@@ -412,12 +421,14 @@ func NewTableSourceExecutor() *TableSourceExecutor {
 // Columns not in the projection list will not be populated.
 func (e *TableSourceExecutor) WithProjection(projection []int) *TableSourceExecutor {
 	e.projection = projection
+
 	return e
 }
 
 // WithClock sets the clock for the executor to enable deterministic testing.
 func (e *TableSourceExecutor) WithClock(clock quartz.Clock) *TableSourceExecutor {
 	e.clock = clock
+
 	return e
 }
 
@@ -467,6 +478,7 @@ func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataCh
 				}
 				chunks = append(chunks, currentChunk)
 			}
+
 			break
 		}
 
@@ -599,6 +611,7 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 					}
 					chunks = append(chunks, currentChunk)
 				}
+
 				break
 			}
 
@@ -650,6 +663,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 		for result := range results {
 			if result.err != nil {
 				collectionErr = result.err
+
 				continue
 			}
 			if result.chunk != nil && result.chunk.GetSize() > 0 {
@@ -671,6 +685,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 		}
 		if err != nil {
 			results <- workerResult{err: err}
+
 			return
 		}
 
@@ -680,6 +695,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 			hasMore, fillErr := source.FillRow(localState, row)
 			if fillErr != nil {
 				results <- workerResult{err: fillErr}
+
 				return
 			}
 
@@ -687,10 +703,12 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 				if rowIdx > 0 {
 					if err := currentChunk.SetSize(rowIdx); err != nil {
 						results <- workerResult{err: err}
+
 						return
 					}
 					results <- workerResult{chunk: currentChunk}
 				}
+
 				return
 			}
 
@@ -698,6 +716,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 			if rowIdx >= GetDataChunkCapacity() {
 				if err := currentChunk.SetSize(rowIdx); err != nil {
 					results <- workerResult{err: err}
+
 					return
 				}
 				results <- workerResult{chunk: currentChunk}
@@ -709,6 +728,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 				}
 				if err != nil {
 					results <- workerResult{err: err}
+
 					return
 				}
 				rowIdx = 0
@@ -718,7 +738,7 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 
 	// Start workers
 	var wg sync.WaitGroup
-	for i := 0; i < maxThreads; i++ {
+	for range maxThreads {
 		wg.Add(1)
 		localState := source.NewLocalState()
 		go func() {
@@ -818,6 +838,7 @@ func (e *TableSourceExecutor) executeParallelChunkSourceMultiThreaded(
 		for result := range results {
 			if result.err != nil {
 				collectionErr = result.err
+
 				continue
 			}
 			if result.chunk != nil && result.chunk.GetSize() > 0 {
@@ -839,16 +860,19 @@ func (e *TableSourceExecutor) executeParallelChunkSourceMultiThreaded(
 			}
 			if err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
 			if err := chunk.SetSize(GetDataChunkCapacity()); err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
 			if err := source.FillChunk(localState, chunk); err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
@@ -861,7 +885,7 @@ func (e *TableSourceExecutor) executeParallelChunkSourceMultiThreaded(
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < maxThreads; i++ {
+	for range maxThreads {
 		wg.Add(1)
 		localState := source.NewLocalState()
 		go func() {
@@ -1002,6 +1026,7 @@ func (e *TableSourceExecutor) executeSequentialRowWithContext(
 				}
 				chunks = append(chunks, currentChunk)
 			}
+
 			break
 		}
 
@@ -1050,6 +1075,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 		for result := range results {
 			if result.err != nil {
 				collectionErr = result.err
+
 				continue
 			}
 			if result.chunk != nil && result.chunk.GetSize() > 0 {
@@ -1071,6 +1097,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 		}
 		if err != nil {
 			results <- workerResult{err: err}
+
 			return
 		}
 
@@ -1082,6 +1109,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 				return
 			case <-tfCtx.ctx.Done():
 				results <- workerResult{err: tfCtx.ctx.Err()}
+
 				return
 			default:
 			}
@@ -1090,6 +1118,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 			hasMore, fillErr := source.FillRow(localState, row)
 			if fillErr != nil {
 				results <- workerResult{err: fillErr}
+
 				return
 			}
 
@@ -1097,10 +1126,12 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 				if rowIdx > 0 {
 					if err := currentChunk.SetSize(rowIdx); err != nil {
 						results <- workerResult{err: err}
+
 						return
 					}
 					results <- workerResult{chunk: currentChunk}
 				}
+
 				return
 			}
 
@@ -1108,6 +1139,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 			if rowIdx >= GetDataChunkCapacity() {
 				if err := currentChunk.SetSize(rowIdx); err != nil {
 					results <- workerResult{err: err}
+
 					return
 				}
 				results <- workerResult{chunk: currentChunk}
@@ -1119,6 +1151,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 				}
 				if err != nil {
 					results <- workerResult{err: err}
+
 					return
 				}
 				rowIdx = 0
@@ -1128,7 +1161,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 
 	// Start workers
 	var wg sync.WaitGroup
-	for i := 0; i < maxThreads; i++ {
+	for range maxThreads {
 		wg.Add(1)
 		localState := source.NewLocalState()
 		go func() {
@@ -1153,6 +1186,7 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 		<-workersDone // Wait for workers to acknowledge
 		close(results)
 		<-done
+
 		return nil, tfCtx.ctx.Err()
 	}
 
@@ -1281,6 +1315,7 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 		for result := range results {
 			if result.err != nil {
 				collectionErr = result.err
+
 				continue
 			}
 			if result.chunk != nil && result.chunk.GetSize() > 0 {
@@ -1298,6 +1333,7 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 				return
 			case <-tfCtx.ctx.Done():
 				results <- workerResult{err: tfCtx.ctx.Err()}
+
 				return
 			default:
 			}
@@ -1312,16 +1348,19 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 			}
 			if err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
 			if err := chunk.SetSize(GetDataChunkCapacity()); err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
 			if err := source.FillChunk(localState, chunk); err != nil {
 				results <- workerResult{err: err}
+
 				return
 			}
 
@@ -1334,7 +1373,7 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < maxThreads; i++ {
+	for range maxThreads {
 		wg.Add(1)
 		localState := source.NewLocalState()
 		go func() {
@@ -1359,6 +1398,7 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 		<-workersDone
 		close(results)
 		<-done
+
 		return nil, tfCtx.ctx.Err()
 	}
 

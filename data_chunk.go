@@ -48,6 +48,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 		return fmt.Errorf("size %d exceeds capacity %d", size, GetDataChunkCapacity())
 	}
 	chunk.size = size
+
 	return nil
 }
 
@@ -67,6 +68,7 @@ func (chunk *DataChunk) GetValue(colIdx, rowIdx int) (any, error) {
 	}
 
 	column := &chunk.columns[actualCol]
+
 	return column.getFn(column, rowIdx), nil
 }
 
@@ -84,6 +86,7 @@ func (chunk *DataChunk) SetValue(colIdx, rowIdx int, val any) error {
 		if errors.Is(err, errUnprojectedColumn) {
 			return nil // Silently ignore unprojected columns.
 		}
+
 		return err
 	}
 
@@ -114,6 +117,7 @@ func SetChunkValue[T any](chunk DataChunk, colIdx, rowIdx int, val T) error {
 		if errors.Is(err, errUnprojectedColumn) {
 			return nil
 		}
+
 		return err
 	}
 
@@ -125,6 +129,7 @@ func (chunk *DataChunk) GetColumnCount() int {
 	if chunk.projection != nil {
 		return len(chunk.projection)
 	}
+
 	return len(chunk.columns)
 }
 
@@ -138,6 +143,7 @@ func (chunk *DataChunk) verifyAndRewriteColIdx(colIdx int) (int, error) {
 		if colIdx < 0 || colIdx >= len(chunk.columns) {
 			return colIdx, fmt.Errorf("column index %d out of range [0, %d)", colIdx, len(chunk.columns))
 		}
+
 		return colIdx, nil
 	}
 
@@ -158,7 +164,7 @@ func (chunk *DataChunk) initFromTypes(types []TypeInfo) error {
 	columnCount := len(types)
 
 	chunk.columns = make([]vector, columnCount)
-	for i := 0; i < columnCount; i++ {
+	for i := range columnCount {
 		chunk.columns[i] = *newVector(GetDataChunkCapacity())
 		if err := chunk.columns[i].init(types[i], i); err != nil {
 			return err
@@ -167,6 +173,7 @@ func (chunk *DataChunk) initFromTypes(types []TypeInfo) error {
 
 	chunk.size = 0
 	chunk.closed = false
+
 	return nil
 }
 
@@ -200,6 +207,7 @@ func NewDataChunk(types []TypeInfo) (*DataChunk, error) {
 	if err := chunk.initFromTypes(types); err != nil {
 		return nil, err
 	}
+
 	return chunk, nil
 }
 
@@ -212,5 +220,6 @@ func NewDataChunkWithProjection(types []TypeInfo, projection []int) (*DataChunk,
 		return nil, err
 	}
 	chunk.projection = projection
+
 	return chunk, nil
 }

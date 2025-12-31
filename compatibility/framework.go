@@ -86,6 +86,7 @@ func (a *dukdbAdapter) OpenWithConfig(dsn string, config map[string]string) (*sq
 			first = false
 		}
 	}
+
 	return sql.Open("dukdb", fullDSN)
 }
 
@@ -133,6 +134,7 @@ func NewTestRunner(clock quartz.Clock) *TestRunner {
 	if clock != nil {
 		adapter = adapter.WithClock(clock).(*dukdbAdapter)
 	}
+
 	return &TestRunner{
 		adapter: adapter,
 		clock:   clock,
@@ -147,7 +149,7 @@ func (r *TestRunner) OpenDB() (*sql.DB, error) {
 // RunTests executes the given tests against the adapter.
 func (r *TestRunner) RunTests(t *testing.T, tests []CompatibilityTest) {
 	for _, test := range tests {
-		test := test // capture range variable
+		// capture range variable
 		t.Run(test.Name, func(t *testing.T) {
 			// Skip if needed
 			if test.SkipDukdb {
@@ -184,7 +186,7 @@ func (r *TestRunner) RunTests(t *testing.T, tests []CompatibilityTest) {
 // RunTestsParallel executes the given tests in parallel.
 func (r *TestRunner) RunTestsParallel(t *testing.T, tests []CompatibilityTest) {
 	for _, test := range tests {
-		test := test // capture range variable
+		// capture range variable
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 

@@ -59,6 +59,7 @@ func (s *PhysicalScan) OutputColumns() []ColumnBinding {
 			}
 		}
 	}
+
 	return s.columns
 }
 
@@ -108,6 +109,7 @@ func (p *PhysicalProject) OutputColumns() []ColumnBinding {
 			ColumnIdx: i,
 		}
 	}
+
 	return p.columns
 }
 
@@ -306,6 +308,7 @@ func (i *PhysicalInsert) Children() []PhysicalPlan {
 	if i.Source != nil {
 		return []PhysicalPlan{i.Source}
 	}
+
 	return nil
 }
 
@@ -326,6 +329,7 @@ func (u *PhysicalUpdate) Children() []PhysicalPlan {
 	if u.Source != nil {
 		return []PhysicalPlan{u.Source}
 	}
+
 	return nil
 }
 
@@ -345,6 +349,7 @@ func (d *PhysicalDelete) Children() []PhysicalPlan {
 	if d.Source != nil {
 		return []PhysicalPlan{d.Source}
 	}
+
 	return nil
 }
 
@@ -458,6 +463,7 @@ func (s *PhysicalVirtualTableScan) OutputColumns() []ColumnBinding {
 			}
 		}
 	}
+
 	return s.columns
 }
 
@@ -775,6 +781,7 @@ func (p *Planner) createPhysicalPlan(
 				Projections:  l.Projections,
 			}, nil
 		}
+
 		return &PhysicalScan{
 			Schema:      l.Schema,
 			TableName:   l.TableName,
@@ -788,6 +795,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalFilter{
 			Child:     child,
 			Condition: l.Condition,
@@ -798,6 +806,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalProject{
 			Child:       child,
 			Expressions: l.Expressions,
@@ -823,6 +832,7 @@ func (p *Planner) createPhysicalPlan(
 				Condition: l.Condition,
 			}, nil
 		}
+
 		return &PhysicalNestedLoopJoin{
 			Left:      left,
 			Right:     right,
@@ -835,6 +845,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalHashAggregate{
 			Child:      child,
 			GroupBy:    l.GroupBy,
@@ -847,6 +858,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalSort{
 			Child:   child,
 			OrderBy: l.OrderBy,
@@ -857,6 +869,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalLimit{
 			Child:  child,
 			Limit:  l.Limit,
@@ -868,6 +881,7 @@ func (p *Planner) createPhysicalPlan(
 		if err != nil {
 			return nil, err
 		}
+
 		return &PhysicalDistinct{Child: child}, nil
 
 	case *LogicalInsert:
@@ -879,6 +893,7 @@ func (p *Planner) createPhysicalPlan(
 				return nil, err
 			}
 		}
+
 		return &PhysicalInsert{
 			Schema:   l.Schema,
 			Table:    l.Table,
@@ -897,6 +912,7 @@ func (p *Planner) createPhysicalPlan(
 				return nil, err
 			}
 		}
+
 		return &PhysicalUpdate{
 			Schema:   l.Schema,
 			Table:    l.Table,
@@ -914,6 +930,7 @@ func (p *Planner) createPhysicalPlan(
 				return nil, err
 			}
 		}
+
 		return &PhysicalDelete{
 			Schema:   l.Schema,
 			Table:    l.Table,
@@ -967,6 +984,7 @@ func hasAggregates(
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -981,6 +999,7 @@ func containsAggregate(
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1000,6 +1019,7 @@ func extractAggregates(
 			}
 		}
 	}
+
 	return aggs
 }
 
@@ -1010,6 +1030,7 @@ func extractAliases(
 	for i, col := range columns {
 		aliases[i] = col.Alias
 	}
+
 	return aliases
 }
 
@@ -1028,6 +1049,7 @@ func isEquiJoin(condition binder.BoundExpr) bool {
 		// Check if both sides are column references
 		_, leftIsCol := binExpr.Left.(*binder.BoundColumnRef)
 		_, rightIsCol := binExpr.Right.(*binder.BoundColumnRef)
+
 		return leftIsCol && rightIsCol
 	}
 

@@ -309,6 +309,7 @@ func TestTryReplacementScan_Success(t *testing.T) {
 		if tableName == "csv_data" {
 			return "read_csv", []any{"data.csv"}, nil
 		}
+
 		return "", nil, nil
 	})
 
@@ -329,6 +330,7 @@ func TestTryReplacementScan_NoMatch(t *testing.T) {
 		if len(tableName) > 4 && tableName[:4] == "csv_" {
 			return "read_csv", []any{tableName[4:] + ".csv"}, nil
 		}
+
 		return "", nil, nil
 	})
 

@@ -81,9 +81,10 @@ func TestEnumRoundTripComprehensive(t *testing.T) {
 		{"ENUM with Unicode", []string{"😀", "😁", "😂", "🎉", "🚀"}},
 		{"ENUM 100 values", func() []string {
 			vals := make([]string, 100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				vals[i] = fmt.Sprintf("VAL_%d", i)
 			}
+
 			return vals
 		}()},
 		{"ENUM with special chars", []string{"a b", "c\td", "e\nf"}},
@@ -130,6 +131,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 			"LIST<INTEGER>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 		},
@@ -137,6 +139,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 			"LIST<VARCHAR>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 		},
@@ -144,6 +147,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 			"LIST<DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 		},
@@ -152,6 +156,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 			func() dukdb.TypeInfo {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
+
 				return listType
 			},
 		},
@@ -161,6 +166,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 				list1, _ := dukdb.NewListInfo(varcharType)
 				list2, _ := dukdb.NewListInfo(list1)
+
 				return list2
 			},
 		},
@@ -170,6 +176,7 @@ func TestListRoundTripComprehensive(t *testing.T) {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				list1, _ := dukdb.NewListInfo(intType)
 				list2, _ := dukdb.NewListInfo(list1)
+
 				return list2
 			},
 		},
@@ -216,6 +223,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			"INTEGER[1]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			1,
@@ -224,6 +232,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			"INTEGER[10]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			10,
@@ -232,6 +241,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			"VARCHAR[100]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			100,
@@ -240,6 +250,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			"INTEGER[1000]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			1000,
@@ -248,6 +259,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			"DECIMAL(18,4)[5]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 			5,
@@ -260,6 +272,7 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 				entry1, _ := dukdb.NewStructEntry(intType, "x")
 				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+
 				return structType
 			},
 			20,
@@ -310,6 +323,7 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 			func() []dukdb.StructEntry {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				entry, _ := dukdb.NewStructEntry(intType, "x")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -320,6 +334,7 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 				entry1, _ := dukdb.NewStructEntry(intType, "x")
 				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
+
 				return []dukdb.StructEntry{entry1, entry2}
 			},
 		},
@@ -327,11 +342,12 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 			"STRUCT with 20 fields",
 			func() []dukdb.StructEntry {
 				entries := make([]dukdb.StructEntry, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 					entry, _ := dukdb.NewStructEntry(intType, fmt.Sprintf("field_%d", i))
 					entries[i] = entry
 				}
+
 				return entries
 			},
 		},
@@ -339,11 +355,12 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 			"STRUCT with 50 fields",
 			func() []dukdb.StructEntry {
 				entries := make([]dukdb.StructEntry, 50)
-				for i := 0; i < 50; i++ {
+				for i := range 50 {
 					varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 					entry, _ := dukdb.NewStructEntry(varcharType, fmt.Sprintf("col_%d", i))
 					entries[i] = entry
 				}
+
 				return entries
 			},
 		},
@@ -356,6 +373,7 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 				innerEntry2, _ := dukdb.NewStructEntry(varcharType, "b")
 				innerStruct, _ := dukdb.NewStructInfo(innerEntry1, innerEntry2)
 				entry, _ := dukdb.NewStructEntry(innerStruct, "x")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -365,6 +383,7 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
 				entry, _ := dukdb.NewStructEntry(listType, "items")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -417,10 +436,12 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			"MAP<VARCHAR, INTEGER>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 		},
@@ -428,10 +449,12 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			"MAP<INTEGER, VARCHAR>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 		},
@@ -439,10 +462,12 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			"MAP<VARCHAR, DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 		},
@@ -450,11 +475,13 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			"MAP<VARCHAR, LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
+
 				return listType
 			},
 		},
@@ -462,6 +489,7 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			"MAP<VARCHAR, STRUCT(x INTEGER, y VARCHAR)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
@@ -470,6 +498,7 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 				entry1, _ := dukdb.NewStructEntry(intType, "x")
 				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+
 				return structType
 			},
 		},
@@ -525,6 +554,7 @@ func TestUnionNotSerializableExtended(t *testing.T) {
 			func() ([]dukdb.TypeInfo, []string) {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return []dukdb.TypeInfo{intType, varcharType}, []string{"x", "y"}
 			},
 		},
@@ -535,6 +565,7 @@ func TestUnionNotSerializableExtended(t *testing.T) {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return []dukdb.TypeInfo{decimalType, listType, varcharType}, []string{"a", "b", "c"}
 			},
 		},
@@ -570,6 +601,7 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 				list1, _ := dukdb.NewListInfo(intType)
 				list2, _ := dukdb.NewListInfo(list1)
 				list3, _ := dukdb.NewListInfo(list2)
+
 				return list3
 			},
 		},
@@ -583,6 +615,7 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 				struct2, _ := dukdb.NewStructInfo(entry2)
 				entry3, _ := dukdb.NewStructEntry(struct2, "x")
 				struct3, _ := dukdb.NewStructInfo(entry3)
+
 				return struct3
 			},
 		},
@@ -596,6 +629,7 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 				entry2, _ := dukdb.NewStructEntry(listType, "y")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
 				listStruct, _ := dukdb.NewListInfo(structType)
+
 				return listStruct
 			},
 		},
@@ -610,6 +644,7 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 				entry1, _ := dukdb.NewStructEntry(mapType, "a")
 				entry2, _ := dukdb.NewStructEntry(listType, "b")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+
 				return structType
 			},
 		},
@@ -714,10 +749,10 @@ func TestUnsupportedVersion(t *testing.T) {
 // Covers: Task 5.20 (Test checksum mismatch detection)
 func TestChecksumMismatch(t *testing.T) {
 	tests := []struct {
-		name             string
-		data             []byte
-		corruptChecksum  bool
-		wrongChecksum    uint64
+		name            string
+		data            []byte
+		corruptChecksum bool
+		wrongChecksum   uint64
 	}{
 		{"Corrupt checksum", []byte("test data"), true, 0x1234567890ABCDEF},
 		{"Zero checksum", []byte("hello world"), true, 0x0000000000000000},
@@ -759,6 +794,7 @@ func TestTruncatedFile(t *testing.T) {
 				buf := new(bytes.Buffer)
 				// Write only 2 bytes of magic (should be 4)
 				_, _ = buf.Write([]byte{0x44, 0x55})
+
 				return buf
 			},
 		},
@@ -770,6 +806,7 @@ func TestTruncatedFile(t *testing.T) {
 				_ = binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
 				// Write only 4 bytes of version (should be 8)
 				_, _ = buf.Write([]byte{0x40, 0x00, 0x00, 0x00})
+
 				return buf
 			},
 		},
@@ -781,9 +818,9 @@ func TestTruncatedFile(t *testing.T) {
 				// Start writing a property but truncate it
 				_ = writer.WriteProperty(100, uint32(42))
 				// Manually write incomplete flush
-				_ = binary.Write(buf, ByteOrder, uint32(1)) // count
+				_ = binary.Write(buf, ByteOrder, uint32(1))   // count
 				_ = binary.Write(buf, ByteOrder, uint32(100)) // id
-				_ = binary.Write(buf, ByteOrder, uint64(4)) // length
+				_ = binary.Write(buf, ByteOrder, uint64(4))   // length
 				// Don't write the actual data (truncated)
 				return buf
 			},
@@ -800,6 +837,7 @@ func TestTruncatedFile(t *testing.T) {
 				assert.Error(t, err)
 				assert.NotErrorIs(t, err, ErrInvalidMagicNumber)
 				assert.NotErrorIs(t, err, ErrUnsupportedVersion)
+
 				return
 			}
 
@@ -824,6 +862,7 @@ func TestCorruptedPropertyData(t *testing.T) {
 				buf := new(bytes.Buffer)
 				// Write huge property count that will cause read failure
 				_ = binary.Write(buf, ByteOrder, uint32(999999))
+
 				return buf
 			},
 		},
@@ -831,10 +870,11 @@ func TestCorruptedPropertyData(t *testing.T) {
 			"Property length exceeds buffer",
 			func() *bytes.Buffer {
 				buf := new(bytes.Buffer)
-				_ = binary.Write(buf, ByteOrder, uint32(1)) // count
-				_ = binary.Write(buf, ByteOrder, uint32(100)) // id
+				_ = binary.Write(buf, ByteOrder, uint32(1))      // count
+				_ = binary.Write(buf, ByteOrder, uint32(100))    // id
 				_ = binary.Write(buf, ByteOrder, uint64(999999)) // huge length
-				_, _ = buf.Write([]byte{0x01, 0x02, 0x03}) // only 3 bytes
+				_, _ = buf.Write([]byte{0x01, 0x02, 0x03})       // only 3 bytes
+
 				return buf
 			},
 		},
@@ -1094,6 +1134,7 @@ func TestComplexNestedScenarios(t *testing.T) {
 				entry, _ := dukdb.NewStructEntry(mapType, "data")
 				structType, _ := dukdb.NewStructInfo(entry)
 				arrayType, _ := dukdb.NewArrayInfo(structType, 10)
+
 				return arrayType
 			},
 		},
@@ -1108,6 +1149,7 @@ func TestComplexNestedScenarios(t *testing.T) {
 				listType, _ := dukdb.NewListInfo(structType)
 				keyType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 				mapType, _ := dukdb.NewMapInfo(keyType, listType)
+
 				return mapType
 			},
 		},

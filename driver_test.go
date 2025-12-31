@@ -17,6 +17,7 @@ func TestDriverRegistration(t *testing.T) {
 	for _, name := range drivers {
 		if name == "dukdb" {
 			found = true
+
 			break
 		}
 	}

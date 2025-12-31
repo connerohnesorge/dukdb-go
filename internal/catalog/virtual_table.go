@@ -21,6 +21,7 @@ func NewVirtualTableDef(vt dukdb.VirtualTable) *VirtualTableDef {
 			Nullable: col.Nullable,
 		}
 	}
+
 	return &VirtualTableDef{
 		vt:      vt,
 		columns: columns,
@@ -54,6 +55,7 @@ func (v *VirtualTableDef) GetColumn(name string) (*ColumnDef, bool) {
 			return col, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -64,6 +66,7 @@ func (v *VirtualTableDef) GetColumnIndex(name string) (int, bool) {
 			return i, true
 		}
 	}
+
 	return -1, false
 }
 
@@ -78,6 +81,7 @@ func (v *VirtualTableDef) ColumnNames() []string {
 	for i, col := range v.columns {
 		names[i] = col.Name
 	}
+
 	return names
 }
 
@@ -87,5 +91,6 @@ func (v *VirtualTableDef) ColumnTypes() []dukdb.Type {
 	for i, col := range v.columns {
 		types[i] = col.Type
 	}
+
 	return types
 }

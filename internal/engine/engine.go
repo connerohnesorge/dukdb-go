@@ -58,6 +58,7 @@ func (e *Engine) Open(
 			engine: isolatedEngine,
 			txn:    isolatedEngine.txnMgr.Begin(),
 		}
+
 		return conn, nil
 	}
 
@@ -131,6 +132,7 @@ func (e *Engine) Close() error {
 func (e *Engine) Catalog() *catalog.Catalog {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
 	return e.catalog
 }
 
@@ -138,6 +140,7 @@ func (e *Engine) Catalog() *catalog.Catalog {
 func (e *Engine) Storage() *storage.Storage {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
 	return e.storage
 }
 
@@ -297,6 +300,7 @@ func (e *Engine) saveToFile(path string) error {
 	if err != nil {
 		fm.Close()
 		os.Remove(tmpPath)
+
 		return fmt.Errorf("failed to marshal catalog: %w", err)
 	}
 
@@ -307,11 +311,13 @@ func (e *Engine) saveToFile(path string) error {
 			if err != nil {
 				fm.Close()
 				os.Remove(tmpPath)
+
 				return fmt.Errorf("failed to export row group %d for table %s: %w", i, tableName, err)
 			}
 			if err := fm.WriteBlock(tableName, i, data); err != nil {
 				fm.Close()
 				os.Remove(tmpPath)
+
 				return fmt.Errorf("failed to write block for table %s: %w", tableName, err)
 			}
 		}
@@ -321,6 +327,7 @@ func (e *Engine) saveToFile(path string) error {
 	if err := fm.WriteCatalog(catalogData); err != nil {
 		fm.Close()
 		os.Remove(tmpPath)
+
 		return fmt.Errorf("failed to write catalog: %w", err)
 	}
 
@@ -328,6 +335,7 @@ func (e *Engine) saveToFile(path string) error {
 	if err := fm.Finalize(); err != nil {
 		fm.Close()
 		os.Remove(tmpPath)
+
 		return fmt.Errorf("failed to finalize file: %w", err)
 	}
 	fm.Close()
@@ -335,12 +343,14 @@ func (e *Engine) saveToFile(path string) error {
 	// Verify checksum before rename
 	if err := persistence.VerifyFile(tmpPath); err != nil {
 		os.Remove(tmpPath)
+
 		return fmt.Errorf("save verification failed: %w", err)
 	}
 
 	// Atomic rename (preserves original on failure)
 	if err := os.Rename(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
+
 		return err
 	}
 

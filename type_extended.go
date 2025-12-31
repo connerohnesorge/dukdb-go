@@ -68,6 +68,7 @@ func (u Uhugeint) ToBigInt() *big.Int {
 	result := new(big.Int).SetUint64(u.upper)
 	result.Lsh(result, 64)
 	result.Add(result, new(big.Int).SetUint64(u.lower))
+
 	return result
 }
 
@@ -85,6 +86,7 @@ func (u Uhugeint) String() string {
 func (u *Uhugeint) Scan(v any) error {
 	if v == nil {
 		*u = Uhugeint{}
+
 		return nil
 	}
 
@@ -126,6 +128,7 @@ func (u *Uhugeint) Scan(v any) error {
 	default:
 		return fmt.Errorf("cannot scan %T into Uhugeint", v)
 	}
+
 	return nil
 }
 
@@ -147,6 +150,7 @@ func (u Uhugeint) Lower() uint64 {
 // Add adds two Uhugeint values. Returns error on overflow.
 func (u Uhugeint) Add(other Uhugeint) (Uhugeint, error) {
 	result := u.ToBigInt().Add(u.ToBigInt(), other.ToBigInt())
+
 	return NewUhugeint(result)
 }
 
@@ -156,12 +160,14 @@ func (u Uhugeint) Sub(other Uhugeint) (Uhugeint, error) {
 	if result.Sign() < 0 {
 		return Uhugeint{}, fmt.Errorf("Uhugeint subtraction would result in negative value")
 	}
+
 	return NewUhugeint(result)
 }
 
 // Mul multiplies two Uhugeint values. Returns error on overflow.
 func (u Uhugeint) Mul(other Uhugeint) (Uhugeint, error) {
 	result := new(big.Int).Mul(u.ToBigInt(), other.ToBigInt())
+
 	return NewUhugeint(result)
 }
 
@@ -171,6 +177,7 @@ func (u Uhugeint) Div(other Uhugeint) (Uhugeint, error) {
 		return Uhugeint{}, fmt.Errorf("division by zero")
 	}
 	result := new(big.Int).Div(u.ToBigInt(), other.ToBigInt())
+
 	return NewUhugeint(result)
 }
 
@@ -256,6 +263,7 @@ func (b Bit) Get(pos int) (bool, error) {
 	}
 	byteIdx := pos / 8
 	bitIdx := 7 - (pos % 8)
+
 	return (b.data[byteIdx] & (1 << bitIdx)) != 0, nil
 }
 
@@ -271,6 +279,7 @@ func (b *Bit) Set(pos int, val bool) error {
 	} else {
 		b.data[byteIdx] &^= (1 << bitIdx)
 	}
+
 	return nil
 }
 
@@ -286,6 +295,7 @@ func (b Bit) Bytes() []byte {
 	}
 	result := make([]byte, len(b.data))
 	copy(result, b.data)
+
 	return result
 }
 
@@ -298,7 +308,7 @@ func (b Bit) String() string {
 	var sb strings.Builder
 	sb.Grow(b.length)
 
-	for i := 0; i < b.length; i++ {
+	for i := range b.length {
 		val, _ := b.Get(i)
 		if val {
 			sb.WriteByte('1')
@@ -314,6 +324,7 @@ func (b Bit) String() string {
 func (b *Bit) Scan(v any) error {
 	if v == nil {
 		*b = Bit{}
+
 		return nil
 	}
 
@@ -334,12 +345,14 @@ func (b *Bit) Scan(v any) error {
 		if err != nil {
 			// If it fails, try interpreting as raw bytes.
 			*b = NewBitFromBytes(val, len(val)*8)
+
 			return nil
 		}
 		*b = result
 	default:
 		return fmt.Errorf("cannot scan %T into Bit", v)
 	}
+
 	return nil
 }
 
@@ -362,6 +375,7 @@ func (b Bit) And(other Bit) (Bit, error) {
 	for i := range b.data {
 		result[i] = b.data[i] & other.data[i]
 	}
+
 	return Bit{data: result, length: b.length}, nil
 }
 
@@ -379,6 +393,7 @@ func (b Bit) Or(other Bit) (Bit, error) {
 	for i := range b.data {
 		result[i] = b.data[i] | other.data[i]
 	}
+
 	return Bit{data: result, length: b.length}, nil
 }
 
@@ -396,6 +411,7 @@ func (b Bit) Xor(other Bit) (Bit, error) {
 	for i := range b.data {
 		result[i] = b.data[i] ^ other.data[i]
 	}
+
 	return Bit{data: result, length: b.length}, nil
 }
 
@@ -438,6 +454,7 @@ func NewTimeNS(hour, min, sec int, nsec int64) TimeNS {
 		int64(min)*nanosPerMinute +
 		int64(sec)*nanosPerSecond +
 		nsec
+
 	return TimeNS(total)
 }
 
@@ -450,6 +467,7 @@ func (t TimeNS) Components() (hour, min, sec int, nsec int64) {
 	remaining %= nanosPerMinute
 	sec = int(remaining / nanosPerSecond)
 	nsec = remaining % nanosPerSecond
+
 	return
 }
 
@@ -457,6 +475,7 @@ func (t TimeNS) Components() (hour, min, sec int, nsec int64) {
 // The date portion is set to Unix epoch (1970-01-01).
 func (t TimeNS) ToTime() time.Time {
 	h, m, s, ns := t.Components()
+
 	return time.Date(1970, 1, 1, h, m, s, int(ns), time.UTC)
 }
 
@@ -471,6 +490,7 @@ func (t TimeNS) String() string {
 	if ns == 0 {
 		return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
 	}
+
 	return fmt.Sprintf("%02d:%02d:%02d.%09d", h, m, s, ns)
 }
 
@@ -478,6 +498,7 @@ func (t TimeNS) String() string {
 func (t *TimeNS) Scan(v any) error {
 	if v == nil {
 		*t = 0
+
 		return nil
 	}
 
@@ -516,6 +537,7 @@ func (t *TimeNS) Scan(v any) error {
 	default:
 		return fmt.Errorf("cannot scan %T into TimeNS", v)
 	}
+
 	return nil
 }
 
@@ -532,6 +554,7 @@ func NowNS(clock quartz.Clock) TimeNS {
 		clock = quartz.NewReal()
 	}
 	now := clock.Now()
+
 	return TimeNSFromTime(now)
 }
 
@@ -542,6 +565,7 @@ func CurrentTimeNS(clock quartz.Clock) TimeNS {
 		clock = quartz.NewReal()
 	}
 	now := clock.Now()
+
 	return TimeNSFromTime(now)
 }
 
@@ -551,6 +575,7 @@ func CurrentTimestampNS(clock quartz.Clock) int64 {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
+
 	return clock.Now().UnixNano()
 }
 

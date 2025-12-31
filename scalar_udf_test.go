@@ -53,6 +53,7 @@ func createTestVector(typeInfo TypeInfo, capacity int) (*vector, error) {
 	if err := vec.init(typeInfo, 0); err != nil {
 		return nil, err
 	}
+
 	return vec, nil
 }
 
@@ -331,6 +332,7 @@ func TestScalarFuncExecution(t *testing.T) {
 					if !ok {
 						return nil, fmt.Errorf("expected int32, got %T", values[0])
 					}
+
 					return v * 2, nil
 				},
 			},
@@ -428,6 +430,7 @@ func TestScalarFuncExecution(t *testing.T) {
 					if values[0] == nil {
 						return int32(0), nil
 					}
+
 					return values[0], nil
 				},
 			},
@@ -620,6 +623,7 @@ func TestDeterministicTimeout(t *testing.T) {
 					rowCount++
 					// Simulate time passing
 					mockClock.Advance(50 * time.Millisecond)
+
 					return values[0], nil
 				},
 			},
@@ -629,7 +633,7 @@ func TestDeterministicTimeout(t *testing.T) {
 		chunk, err := NewDataChunk([]TypeInfo{intType})
 		require.NoError(t, err)
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			err = chunk.SetValue(0, i, int32(i))
 			require.NoError(t, err)
 		}
@@ -676,6 +680,7 @@ func TestRowContextExecutor(t *testing.T) {
 			executor: ScalarFuncExecutor{
 				RowContextExecutor: func(ctx context.Context, values []driver.Value) (any, error) {
 					receivedCtx = ctx
+
 					return values[0], nil
 				},
 			},
@@ -779,6 +784,7 @@ func TestScalarFuncMultipleInputs(t *testing.T) {
 				RowExecutor: func(values []driver.Value) (any, error) {
 					a, _ := values[0].(int32)
 					b, _ := values[1].(int32)
+
 					return a + b, nil
 				},
 			},
@@ -828,6 +834,7 @@ func TestScalarFuncMultipleInputs(t *testing.T) {
 				RowExecutor: func(values []driver.Value) (any, error) {
 					a, _ := values[0].(string)
 					b, _ := values[1].(string)
+
 					return a + b, nil
 				},
 			},
@@ -1114,6 +1121,7 @@ func TestScalarFuncConstantFolding(t *testing.T) {
 				ScalarBinder: func(ctx context.Context, args []ScalarUDFArg) (context.Context, error) {
 					binderCalled = true
 					receivedArgs = args
+
 					return context.WithValue(ctx, testContextKey("test"), "bound"), nil
 				},
 			},
@@ -1281,6 +1289,7 @@ func TestScalarFuncVolatileCaching(t *testing.T) {
 				},
 				ScalarBinder: func(ctx context.Context, args []ScalarUDFArg) (context.Context, error) {
 					binderCalled = true // This should NOT be called for volatile functions
+
 					return ctx, nil
 				},
 			},
@@ -1345,7 +1354,7 @@ func BenchmarkScalarFuncRegistration(b *testing.B) {
 	)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		registry := newScalarFuncRegistry()
 		_ = registry.register("test_func", fn)
 	}
@@ -1360,7 +1369,7 @@ func BenchmarkScalarFuncLookup(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fn := createSimpleScalarFunc(
 			[]TypeInfo{intType},
 			intType,
@@ -1374,7 +1383,7 @@ func BenchmarkScalarFuncLookup(b *testing.B) {
 	argTypes := []Type{TYPE_INTEGER}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = registry.lookup("func_5", argTypes)
 	}
 }
@@ -1394,6 +1403,7 @@ func BenchmarkScalarFuncExecution(b *testing.B) {
 		func(values []driver.Value) (any, error) {
 			a := values[0].(int32)
 			c := values[1].(int32)
+
 			return a + c, nil
 		},
 	)
@@ -1404,7 +1414,7 @@ func BenchmarkScalarFuncExecution(b *testing.B) {
 	values := []driver.Value{int32(10), int32(20)}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, _ = executor(values)
 	}
 }
@@ -1428,7 +1438,7 @@ func BenchmarkScalarFuncTypeMatching(b *testing.B) {
 		func(v []driver.Value) (any, error) { return v[0], nil }))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Match the last overload to test worst-case matching
 		registry.lookup("overloaded", []Type{TYPE_INTEGER, TYPE_INTEGER})
 	}
@@ -1463,7 +1473,7 @@ func BenchmarkScalarFuncBinderCall(b *testing.B) {
 	args := []ScalarUDFArg{{Foldable: true, Value: int32(42)}}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, _ = registry.BindScalarUDF(udfInfo, args)
 	}
 }

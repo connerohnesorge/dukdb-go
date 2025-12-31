@@ -14,10 +14,10 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	tests := []struct {
-		name     string
-		sql      string
-		errMsg   string
-		skipOK   bool // Some parsers are lenient
+		name   string
+		sql    string
+		errMsg string
+		skipOK bool // Some parsers are lenient
 	}{
 		{
 			name:   "missing FROM keyword",
@@ -55,6 +55,7 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 
 			if err == nil && tt.skipOK {
 				t.Skip("Parser accepts this syntax (lenient parsing)")
+
 				return
 			}
 
@@ -221,6 +222,7 @@ func TestPhaseD_Error_MismatchType(t *testing.T) {
 					for _, validType := range validTypes {
 						if dukErr.Type == validType {
 							found = true
+
 							break
 						}
 					}
@@ -287,12 +289,13 @@ func TestPhaseD_Error_DivideByZero(t *testing.T) {
 				if errors.As(err, &dukErr) {
 					// Should be ErrorTypeDivideByZero, but some implementations
 					// might use ErrorTypeExecutor
-					if dukErr.Type == dukdb.ErrorTypeDivideByZero {
+					switch dukErr.Type {
+					case dukdb.ErrorTypeDivideByZero:
 						t.Log("Got ErrorTypeDivideByZero")
-					} else if dukErr.Type == dukdb.ErrorTypeExecutor {
+					case dukdb.ErrorTypeExecutor:
 						t.Logf("Got ErrorTypeExecutor for division by zero (acceptable)")
 						assert.Contains(t, dukErr.Msg, "division", "error should mention division")
-					} else {
+					default:
 						t.Logf("Got unexpected error type %v for division by zero", dukErr.Type)
 					}
 				} else {
@@ -314,6 +317,7 @@ func TestPhaseD_Error_Constraint(t *testing.T) {
 	_, err := executeQuery(t, exec, cat, "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR)")
 	if err != nil {
 		t.Skip("PRIMARY KEY constraints not yet implemented")
+
 		return
 	}
 
@@ -343,10 +347,10 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	tests := []struct {
-		name           string
-		sql            string
-		expectedInMsg  []string // Strings that should appear in error message
-		skipOK         bool     // Allow skipping if no error
+		name          string
+		sql           string
+		expectedInMsg []string // Strings that should appear in error message
+		skipOK        bool     // Allow skipping if no error
 	}{
 		{
 			name:          "missing table name in error",
@@ -372,6 +376,7 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 
 			if err == nil && tt.skipOK {
 				t.Skip("Query succeeded (lenient parser)")
+
 				return
 			}
 
@@ -427,6 +432,7 @@ func TestPhaseD_Error_TypeClassification(t *testing.T) {
 
 			if err == nil && tt.skipOK {
 				t.Skip("Query succeeded (lenient parser)")
+
 				return
 			}
 
@@ -439,6 +445,7 @@ func TestPhaseD_Error_TypeClassification(t *testing.T) {
 				for _, expectedType := range tt.expectedTypes {
 					if dukErr.Type == expectedType {
 						found = true
+
 						break
 					}
 				}

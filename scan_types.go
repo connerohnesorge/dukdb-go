@@ -19,6 +19,7 @@ type ListScanner[T any] struct {
 func (s *ListScanner[T]) Scan(src any) error {
 	if src == nil {
 		*s.Result = nil
+
 		return nil
 	}
 
@@ -32,6 +33,7 @@ func (s *ListScanner[T]) Scan(src any) error {
 			}
 			(*s.Result)[i] = converted
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into ListScanner[%T]", src, *new(T))
@@ -54,6 +56,7 @@ type ArrayScanner[T any] struct {
 func (s *ArrayScanner[T]) Scan(src any) error {
 	if src == nil {
 		*s.Result = nil
+
 		return nil
 	}
 
@@ -70,6 +73,7 @@ func (s *ArrayScanner[T]) Scan(src any) error {
 			}
 			(*s.Result)[i] = converted
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into ArrayScanner[%T]", src, *new(T))
@@ -114,6 +118,7 @@ func (s *StructScanner[T]) Scan(src any) error {
 				}
 			}
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into StructScanner", src)
@@ -135,6 +140,7 @@ type MapScanner[K comparable, V any] struct {
 func (s *MapScanner[K, V]) Scan(src any) error {
 	if src == nil {
 		*s.Result = nil
+
 		return nil
 	}
 
@@ -157,6 +163,7 @@ func (s *MapScanner[K, V]) Scan(src any) error {
 			}
 			(*s.Result)[k] = vConverted
 		}
+
 		return nil
 	case Map:
 		*s.Result = make(map[K]V, len(v))
@@ -176,6 +183,7 @@ func (s *MapScanner[K, V]) Scan(src any) error {
 			}
 			(*s.Result)[k] = vConverted
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into MapScanner", src)
@@ -208,12 +216,14 @@ type UnionScanner struct {
 func (s *UnionScanner) Scan(src any) error {
 	if src == nil {
 		*s.Result = UnionValue{Tag: "", Index: -1, Value: nil}
+
 		return nil
 	}
 
 	switch v := src.(type) {
 	case UnionValue:
 		*s.Result = v
+
 		return nil
 	case Union:
 		*s.Result = UnionValue{
@@ -221,6 +231,7 @@ func (s *UnionScanner) Scan(src any) error {
 			Index: -1, // Union type doesn't carry index
 			Value: v.Value,
 		}
+
 		return nil
 	case map[string]any:
 		// Extract tag and value from struct representation
@@ -234,8 +245,10 @@ func (s *UnionScanner) Scan(src any) error {
 				Index: idx,
 				Value: v["value"],
 			}
+
 			return nil
 		}
+
 		return fmt.Errorf("invalid union structure: missing tag field")
 	default:
 		return fmt.Errorf("cannot scan %T into UnionScanner", src)
@@ -258,15 +271,18 @@ func (s *EnumScanner[T]) Scan(src any) error {
 	if src == nil {
 		var zero T
 		*s.Result = zero
+
 		return nil
 	}
 
 	switch v := src.(type) {
 	case string:
 		*s.Result = T(v)
+
 		return nil
 	case []byte:
 		*s.Result = T(string(v))
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into EnumScanner", src)
@@ -314,18 +330,21 @@ type UUIDScanner struct {
 func (s *UUIDScanner) Scan(src any) error {
 	if src == nil {
 		*s.Result = [16]byte{}
+
 		return nil
 	}
 
 	switch v := src.(type) {
 	case [16]byte:
 		*s.Result = v
+
 		return nil
 	case []byte:
 		if len(v) != 16 {
 			return fmt.Errorf("UUID must be 16 bytes, got %d", len(v))
 		}
 		copy((*s.Result)[:], v)
+
 		return nil
 	case string:
 		parsed, err := parseUUID(v)
@@ -333,9 +352,11 @@ func (s *UUIDScanner) Scan(src any) error {
 			return fmt.Errorf("invalid UUID string: %w", err)
 		}
 		*s.Result = parsed
+
 		return nil
 	case UUID:
 		*s.Result = [16]byte(v)
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into UUIDScanner", src)
@@ -357,6 +378,7 @@ type TimeNSScanner struct {
 func (s *TimeNSScanner) Scan(src any) error {
 	if src == nil {
 		*s.Result = TimeNS(0)
+
 		return nil
 	}
 
@@ -364,13 +386,16 @@ func (s *TimeNSScanner) Scan(src any) error {
 	case time.Time:
 		midnight := time.Date(v.Year(), v.Month(), v.Day(), 0, 0, 0, 0, v.Location())
 		*s.Result = TimeNS(v.Sub(midnight).Nanoseconds())
+
 		return nil
 	case int64:
 		// Already in nanoseconds since midnight
 		*s.Result = TimeNS(v)
+
 		return nil
 	case TimeNS:
 		*s.Result = v
+
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into TimeNSScanner", src)

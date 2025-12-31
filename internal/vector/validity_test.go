@@ -15,7 +15,7 @@ func TestNewValidityMask(t *testing.T) {
 
 	t.Run("initializes all entries as valid", func(t *testing.T) {
 		mask := NewValidityMask(100)
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.True(t, mask.IsValid(i), "entry %d should be valid", i)
 		}
 	})
@@ -36,7 +36,7 @@ func TestNewValidityMask(t *testing.T) {
 func TestNewValidityMaskEmpty(t *testing.T) {
 	t.Run("creates mask with all entries NULL", func(t *testing.T) {
 		mask := NewValidityMaskEmpty(100)
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.False(t, mask.IsValid(i), "entry %d should be NULL", i)
 		}
 	})
@@ -103,7 +103,7 @@ func TestValidityMask_SetAllValid(t *testing.T) {
 	t.Run("sets all entries to valid", func(t *testing.T) {
 		mask := NewValidityMaskEmpty(100)
 		mask.SetAllValid(100)
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.True(t, mask.IsValid(i), "entry %d should be valid", i)
 		}
 	})
@@ -111,7 +111,7 @@ func TestValidityMask_SetAllValid(t *testing.T) {
 	t.Run("handles partial count", func(t *testing.T) {
 		mask := NewValidityMaskEmpty(100)
 		mask.SetAllValid(50)
-		for i := uint64(0); i < 50; i++ {
+		for i := range uint64(50) {
 			assert.True(t, mask.IsValid(i), "entry %d should be valid", i)
 		}
 		for i := uint64(50); i < 100; i++ {
@@ -122,7 +122,7 @@ func TestValidityMask_SetAllValid(t *testing.T) {
 	t.Run("handles zero count", func(t *testing.T) {
 		mask := NewValidityMaskEmpty(100)
 		mask.SetAllValid(0)
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.False(t, mask.IsValid(i))
 		}
 	})
@@ -132,7 +132,7 @@ func TestValidityMask_SetAllNull(t *testing.T) {
 	t.Run("marks all entries as NULL", func(t *testing.T) {
 		mask := NewValidityMask(100)
 		mask.SetAllNull()
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.False(t, mask.IsValid(i))
 		}
 	})
@@ -197,7 +197,7 @@ func TestValidityMask_Reset(t *testing.T) {
 	t.Run("clears all entries to NULL", func(t *testing.T) {
 		mask := NewValidityMask(100)
 		mask.Reset()
-		for i := uint64(0); i < 100; i++ {
+		for i := range uint64(100) {
 			assert.False(t, mask.IsValid(i))
 		}
 	})
@@ -252,7 +252,7 @@ func TestValidityMask_SetBits(t *testing.T) {
 func BenchmarkValidityMask_IsValid(b *testing.B) {
 	mask := NewValidityMask(2048)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		_ = mask.IsValid(uint64(i % 2048))
 	}
 }
@@ -260,7 +260,7 @@ func BenchmarkValidityMask_IsValid(b *testing.B) {
 func BenchmarkValidityMask_SetValid(b *testing.B) {
 	mask := NewValidityMask(2048)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		mask.SetValid(uint64(i%2048), true)
 	}
 }
@@ -272,7 +272,7 @@ func BenchmarkValidityMask_CountValid(b *testing.B) {
 		mask.SetNull(i)
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = mask.CountValid()
 	}
 }
@@ -280,7 +280,7 @@ func BenchmarkValidityMask_CountValid(b *testing.B) {
 func BenchmarkValidityMask_SetAllValid(b *testing.B) {
 	mask := NewValidityMaskEmpty(2048)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		mask.SetAllValid(2048)
 	}
 }

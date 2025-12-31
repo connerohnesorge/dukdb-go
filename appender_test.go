@@ -32,6 +32,7 @@ func newAppenderMock() (*mockBackendConn, *appenderMockState) {
 			defer state.mu.Unlock()
 			state.lastQuery = query
 			state.execCount++
+
 			return 1, state.execError
 		},
 		queryFunc: func(ctx context.Context, query string, args []driver.NamedValue) ([]map[string]any, []string, error) {
@@ -41,9 +42,11 @@ func newAppenderMock() (*mockBackendConn, *appenderMockState) {
 			if state.queryError != nil {
 				return nil, nil, state.queryError
 			}
+
 			return state.queryResponse, state.queryColumns, nil
 		},
 	}
+
 	return mock, state
 }
 
@@ -75,6 +78,7 @@ func createAppenderTestConn(
 	mock *mockBackendConn,
 ) *Conn {
 	connector := &Connector{}
+
 	return &Conn{
 		connector:   connector,
 		backendConn: mock,
@@ -463,7 +467,7 @@ func TestFlush(t *testing.T) {
 	}
 
 	// Append some rows
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err = appender.AppendRow(i, "test")
 		if err != nil {
 			t.Fatalf(
@@ -597,7 +601,7 @@ func TestAutoFlushThreshold(t *testing.T) {
 	}
 
 	// Add rows up to threshold (should not trigger auto-flush yet)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err = appender.AppendRow(i)
 		if err != nil {
 			t.Fatalf(
@@ -827,7 +831,7 @@ func TestFlushErrorPreservation(t *testing.T) {
 	}
 
 	// Add some rows
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err = appender.AppendRow(i)
 		if err != nil {
 			t.Fatalf(
@@ -1002,13 +1006,14 @@ func TestConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, numGoroutines)
 
-	for g := 0; g < numGoroutines; g++ {
+	for g := range numGoroutines {
 		wg.Add(1)
 		go func(gid int) {
 			defer wg.Done()
-			for i := 0; i < rowsPerGoroutine; i++ {
+			for i := range rowsPerGoroutine {
 				if err := appender.AppendRow(gid*rowsPerGoroutine + i); err != nil {
 					errs <- err
+
 					return
 				}
 			}
@@ -1577,7 +1582,7 @@ func TestQueryAppender_AutoFlush(t *testing.T) {
 	}
 
 	// Append 3 rows - at threshold but not exceeded
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err = appender.AppendRow(i)
 		if err != nil {
 			t.Fatalf("AppendRow %d failed: %v", i, err)
@@ -1860,7 +1865,7 @@ func BenchmarkAppender_1MRows(b *testing.B) {
 	conn := createAppenderTestConn(mock)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Create appender with high threshold to avoid auto-flush overhead
 		appender, err := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
 		if err != nil {
@@ -1868,7 +1873,7 @@ func BenchmarkAppender_1MRows(b *testing.B) {
 		}
 
 		// Append 1 million rows
-		for j := 0; j < 1_000_000; j++ {
+		for j := range 1_000_000 {
 			err = appender.AppendRow(j)
 			if err != nil {
 				b.Fatalf("AppendRow failed at row %d: %v", j, err)
@@ -1907,11 +1912,11 @@ func BenchmarkAppender_MemoryProfile(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 10000)
 
 		// Append 10000 rows
-		for j := 0; j < 10000; j++ {
+		for j := range 10000 {
 			_ = appender.AppendRow(j, "test string data", float64(j)*1.5)
 		}
 		_ = appender.Flush()
@@ -1937,10 +1942,10 @@ func BenchmarkAppender_10MRows_Memory(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
 
-		for j := 0; j < 10_000_000; j++ {
+		for j := range 10_000_000 {
 			_ = appender.AppendRow(j)
 		}
 		_ = appender.Flush()

@@ -593,6 +593,7 @@ type customScanner struct {
 func (c *customScanner) Scan(src any) error {
 	c.called = true
 	c.value = src
+
 	return nil
 }
 

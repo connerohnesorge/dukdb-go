@@ -138,6 +138,7 @@ func TestParseSelect(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr && stmt == nil {
@@ -191,6 +192,7 @@ func TestParseInsert(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr {
@@ -238,6 +240,7 @@ func TestParseUpdate(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr {
@@ -285,6 +288,7 @@ func TestParseDelete(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr {
@@ -347,6 +351,7 @@ func TestParseCreateTable(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr {
@@ -389,6 +394,7 @@ func TestParseDropTable(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr {
@@ -466,6 +472,7 @@ func TestParseExpressions(t *testing.T) {
 					err,
 					tt.wantErr,
 				)
+
 				return
 			}
 			if !tt.wantErr && stmt == nil {

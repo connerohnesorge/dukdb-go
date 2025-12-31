@@ -361,7 +361,7 @@ func TestRowsZeroColumnResult(t *testing.T) {
 func TestRowsLargeResultSet(t *testing.T) {
 	const numRows = 10000
 	data := make([][]any, numRows)
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		data[i] = []any{int32(i), "row"}
 	}
 

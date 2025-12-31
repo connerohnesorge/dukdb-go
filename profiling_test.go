@@ -231,6 +231,7 @@ func TestGetProfilingInfo_WithProfiling(t *testing.T) {
 		c.profiling.Enable()
 		c.profiling.Start()
 		c.profiling.Complete(50)
+
 		return nil
 	})
 	require.NoError(t, err)

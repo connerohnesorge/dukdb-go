@@ -50,6 +50,7 @@ func (t *Table) ColumnTypes() []dukdb.Type {
 func (t *Table) RowCount() int64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return t.totalRows
 }
 
@@ -57,6 +58,7 @@ func (t *Table) RowCount() int64 {
 func (t *Table) RowGroupCount() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return len(t.rowGroups)
 }
 
@@ -67,6 +69,7 @@ func (t *Table) GetRowGroup(idx int) *RowGroup {
 	if idx < 0 || idx >= len(t.rowGroups) {
 		return nil
 	}
+
 	return t.rowGroups[idx]
 }
 
@@ -178,6 +181,7 @@ func NewRowGroup(
 	for i, t := range columnTypes {
 		columns[i] = NewVector(t, capacity)
 	}
+
 	return &RowGroup{
 		columns:  columns,
 		count:    0,
@@ -205,6 +209,7 @@ func (rg *RowGroup) GetColumn(idx int) *Vector {
 	if idx < 0 || idx >= len(rg.columns) {
 		return nil
 	}
+
 	return rg.columns[idx]
 }
 
@@ -235,6 +240,7 @@ func (rg *RowGroup) GetValue(row, col int) any {
 	if col < 0 || col >= len(rg.columns) {
 		return nil
 	}
+
 	return rg.columns[col].GetValue(row)
 }
 
@@ -259,7 +265,7 @@ func (rg *RowGroup) GetChunk(
 		types,
 		count,
 	)
-	for row := 0; row < count; row++ {
+	for row := range count {
 		values := make([]any, len(rg.columns))
 		for col, v := range rg.columns {
 			values[col] = v.GetValue(
@@ -297,6 +303,7 @@ func (s *TableScanner) Next() *DataChunk {
 		// Move to next row group
 		s.currentRG++
 		s.currentRow = 0
+
 		return s.Next()
 	}
 

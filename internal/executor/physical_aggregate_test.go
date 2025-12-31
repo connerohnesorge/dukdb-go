@@ -358,9 +358,10 @@ func TestPhysicalAggregate_GroupBySingleColumn(t *testing.T) {
 	groupB := -1
 	for i := 0; i < resultChunk.Count(); i++ {
 		category := resultChunk.GetValue(i, 0)
-		if category == "A" {
+		switch category {
+		case "A":
 			groupA = i
-		} else if category == "B" {
+		case "B":
 			groupB = i
 		}
 	}
@@ -440,9 +441,10 @@ func TestPhysicalAggregate_GroupByWithSum(t *testing.T) {
 	groupB := -1
 	for i := 0; i < resultChunk.Count(); i++ {
 		category := resultChunk.GetValue(i, 0)
-		if category == "A" {
+		switch category {
+		case "A":
 			groupA = i
-		} else if category == "B" {
+		case "B":
 			groupB = i
 		}
 	}

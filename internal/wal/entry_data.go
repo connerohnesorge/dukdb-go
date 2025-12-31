@@ -53,6 +53,7 @@ func (e *InsertEntry) Serialize(w io.Writer) error {
 	if err := enc.Encode(e.Values); err != nil {
 		return err
 	}
+
 	return writeBytes(w, buf.Bytes())
 }
 
@@ -74,6 +75,7 @@ func (e *InsertEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	dec := gob.NewDecoder(bytes.NewReader(data))
+
 	return dec.Decode(&e.Values)
 }
 
@@ -124,6 +126,7 @@ func (e *DeleteEntry) Serialize(w io.Writer) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -149,6 +152,7 @@ func (e *DeleteEntry) Deserialize(r io.Reader) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -222,6 +226,7 @@ func (e *UpdateEntry) Serialize(w io.Writer) error {
 	if err := enc.Encode(e.NewValues); err != nil {
 		return err
 	}
+
 	return writeBytes(w, buf.Bytes())
 }
 
@@ -270,6 +275,7 @@ func (e *UpdateEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	dec := gob.NewDecoder(bytes.NewReader(data))
+
 	return dec.Decode(&e.NewValues)
 }
 
@@ -290,6 +296,7 @@ func (e *UseTableEntry) Serialize(w io.Writer) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
+
 	return writeString(w, e.Table)
 }
 
@@ -300,5 +307,6 @@ func (e *UseTableEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 	e.Table, err = readString(r)
+
 	return err
 }

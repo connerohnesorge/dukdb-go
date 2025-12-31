@@ -66,6 +66,7 @@ func (op *PhysicalSortOperator) Next() (*storage.DataChunk, error) {
 
 	chunk := op.sorted[op.chunkIdx]
 	op.chunkIdx++
+
 	return chunk, nil
 }
 
@@ -108,6 +109,7 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 	// If no rows, return empty
 	if len(allRows) == 0 {
 		op.sorted = []*storage.DataChunk{}
+
 		return nil
 	}
 
@@ -118,6 +120,7 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 			// In case of error, maintain original order
 			return false
 		}
+
 		return cmp < 0
 	})
 
@@ -165,9 +168,11 @@ func (op *PhysicalSortOperator) compareRowData(a, b []any) (int, error) {
 			if order.Desc {
 				return -cmp, nil
 			}
+
 			return cmp, nil
 		}
 	}
+
 	return 0, nil
 }
 
@@ -194,7 +199,7 @@ func (op *PhysicalSortOperator) buildRowMap(data []any) map[string]any {
 		}
 	} else {
 		// Fallback: use column indices as string keys
-		for colIdx := 0; colIdx < len(data); colIdx++ {
+		for colIdx := range len(data) {
 			value := data[colIdx]
 			rowMap[string(rune('0'+colIdx))] = value
 		}

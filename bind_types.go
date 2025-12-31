@@ -57,6 +57,7 @@ func (v StructValue[T]) Value() (driver.Value, error) {
 		// Store with lowercase key for case-insensitive matching
 		result[strings.ToLower(name)] = rv.Field(i).Interface()
 	}
+
 	return result, nil
 }
 
@@ -79,6 +80,7 @@ func (v MapValue[K, V]) Value() (driver.Value, error) {
 	for k, val := range v {
 		result[k] = val
 	}
+
 	return result, nil
 }
 

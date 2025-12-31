@@ -42,6 +42,7 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		_ = file.Close()
+
 		return nil, fmt.Errorf("failed to stat WAL file: %w", err)
 	}
 
@@ -54,6 +55,7 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 		}
 		if err := header.Serialize(w.buffer); err != nil {
 			_ = file.Close()
+
 			return nil, fmt.Errorf("failed to write WAL header: %w", err)
 		}
 		w.bytesWritten = HeaderSize
@@ -61,11 +63,13 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 		// Read existing header to get iteration
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			_ = file.Close()
+
 			return nil, fmt.Errorf("failed to seek to WAL header: %w", err)
 		}
 		header := &FileHeader{}
 		if err := header.Deserialize(file); err != nil {
 			_ = file.Close()
+
 			return nil, fmt.Errorf("failed to read WAL header: %w", err)
 		}
 		w.iteration = header.Iteration
@@ -74,6 +78,7 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 		// Seek back to end for appending
 		if _, err := file.Seek(0, io.SeekEnd); err != nil {
 			_ = file.Close()
+
 			return nil, fmt.Errorf("failed to seek to WAL end: %w", err)
 		}
 	}
@@ -118,6 +123,7 @@ func (w *Writer) WriteEntry(entry Entry) error {
 	}
 
 	w.bytesWritten += EntryHeaderSize + size
+
 	return nil
 }
 
@@ -132,6 +138,7 @@ func (w *Writer) Sync() error {
 	if err := w.file.Sync(); err != nil {
 		return fmt.Errorf("failed to sync WAL file: %w", err)
 	}
+
 	return nil
 }
 
@@ -143,6 +150,7 @@ func (w *Writer) Close() error {
 	if err := w.buffer.Flush(); err != nil {
 		return fmt.Errorf("failed to flush WAL buffer: %w", err)
 	}
+
 	return w.file.Close()
 }
 
@@ -150,6 +158,7 @@ func (w *Writer) Close() error {
 func (w *Writer) BytesWritten() uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	return w.bytesWritten
 }
 
@@ -157,6 +166,7 @@ func (w *Writer) BytesWritten() uint64 {
 func (w *Writer) Iteration() uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	return w.iteration
 }
 

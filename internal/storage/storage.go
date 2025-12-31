@@ -27,6 +27,7 @@ func (s *Storage) GetTable(
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.tables[name]
+
 	return t, ok
 }
 
@@ -44,6 +45,7 @@ func (s *Storage) CreateTable(
 
 	t := NewTable(name, columnTypes)
 	s.tables[name] = t
+
 	return t, nil
 }
 
@@ -57,6 +59,7 @@ func (s *Storage) DropTable(name string) error {
 	}
 
 	delete(s.tables, name)
+
 	return nil
 }
 
@@ -67,6 +70,7 @@ func (s *Storage) Close() error {
 
 	// Clear all tables
 	s.tables = make(map[string]*Table)
+
 	return nil
 }
 
@@ -79,6 +83,7 @@ func (s *Storage) Tables() map[string]*Table {
 	for name, table := range s.tables {
 		tables[name] = table
 	}
+
 	return tables
 }
 
@@ -88,5 +93,6 @@ func (s *Storage) ImportTable(name string, table *Table) error {
 	defer s.mu.Unlock()
 
 	s.tables[name] = table
+
 	return nil
 }

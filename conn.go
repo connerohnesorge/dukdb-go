@@ -79,6 +79,7 @@ func (c *Conn) Close() error {
 		return errClosedCon
 	}
 	c.closed = true
+
 	return nil
 }
 
@@ -220,6 +221,7 @@ func (c *Conn) CheckNamedValue(
 		reflect.Array:
 		return nil
 	}
+
 	return driver.ErrSkip
 }
 
@@ -229,6 +231,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 	if c.closed {
 		return errClosedCon
 	}
+
 	return c.backendConn.Ping(ctx)
 }
 
@@ -273,6 +276,7 @@ func (c *Conn) getVirtualTableRegistry() VirtualTableRegistry {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -309,6 +313,7 @@ func (t *tx) Commit() error {
 		"COMMIT",
 		nil,
 	)
+
 	return err
 }
 
@@ -337,6 +342,7 @@ func (t *tx) Rollback() error {
 		"ROLLBACK",
 		nil,
 	)
+
 	return err
 }
 
@@ -384,6 +390,7 @@ func (r *rows) Next(dest []driver.Value) error {
 		dest[i] = row[col]
 	}
 	r.pos++
+
 	return nil
 }
 
@@ -401,6 +408,7 @@ func (s *Stmt) Close() error {
 		return errClosedStmt
 	}
 	s.closed = true
+
 	return s.backendStmt.Close()
 }
 
@@ -499,6 +507,7 @@ func (s *Stmt) ParamName(n int) (string, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ParamName(n), nil
 	}
+
 	return "", nil
 }
 
@@ -510,6 +519,7 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ParamType(n), nil
 	}
+
 	return TYPE_ANY, nil
 }
 
@@ -521,6 +531,7 @@ func (s *Stmt) ColumnCount() (int, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ColumnCount(), nil
 	}
+
 	return 0, nil
 }
 
@@ -532,6 +543,7 @@ func (s *Stmt) ColumnName(n int) (string, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ColumnName(n), nil
 	}
+
 	return "", nil
 }
 
@@ -543,6 +555,7 @@ func (s *Stmt) ColumnType(n int) (Type, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ColumnType(n), nil
 	}
+
 	return TYPE_INVALID, nil
 }
 
@@ -554,6 +567,7 @@ func (s *Stmt) ColumnTypeInfo(n int) (TypeInfo, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.ColumnTypeInfo(n), nil
 	}
+
 	return nil, nil
 }
 
@@ -565,6 +579,7 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		return intro.StatementType(), nil
 	}
+
 	return STATEMENT_TYPE_INVALID, nil
 }
 
@@ -580,6 +595,7 @@ func (s *Stmt) Properties() (StmtProperties, error) {
 	// Fallback: compute from StatementType if introspector available
 	if intro, ok := s.backendStmt.(BackendStmtIntrospector); ok {
 		stmtType := intro.StatementType()
+
 		return StmtProperties{
 			Type:        stmtType,
 			ReturnType:  stmtType.ReturnType(),
@@ -589,6 +605,7 @@ func (s *Stmt) Properties() (StmtProperties, error) {
 			ParamCount:  intro.NumInput(),
 		}, nil
 	}
+
 	return StmtProperties{}, &Error{
 		Type: ErrorTypeNotImplemented,
 		Msg:  "statement properties not supported",
@@ -601,6 +618,7 @@ func (s *Stmt) IsReadOnly() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return props.IsReadOnly, nil
 }
 
@@ -610,6 +628,7 @@ func (s *Stmt) IsQuery() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return props.ReturnType == RETURN_QUERY_RESULT, nil
 }
 
@@ -636,6 +655,7 @@ func (s *Stmt) Bind(index int, value any) error {
 		s.boundParams = make(map[int]any)
 	}
 	s.boundParams[index] = value
+
 	return nil
 }
 
@@ -658,6 +678,7 @@ func (s *Stmt) ExecBoundContext(ctx context.Context) (driver.Result, error) {
 	}
 
 	args := s.boundParamsToNamedValues()
+
 	return s.ExecContext(ctx, args)
 }
 
@@ -675,6 +696,7 @@ func (s *Stmt) QueryBoundContext(ctx context.Context) (driver.Rows, error) {
 	}
 
 	args := s.boundParamsToNamedValues()
+
 	return s.QueryContext(ctx, args)
 }
 
@@ -694,6 +716,7 @@ func (s *Stmt) ExecBoundContextClock(ctx context.Context, clock quartz.Clock) (d
 	}
 
 	args := s.boundParamsToNamedValues()
+
 	return s.ExecContext(ctx, args)
 }
 
@@ -713,6 +736,7 @@ func (s *Stmt) QueryBoundContextClock(ctx context.Context, clock quartz.Clock) (
 	}
 
 	args := s.boundParamsToNamedValues()
+
 	return s.QueryContext(ctx, args)
 }
 
@@ -737,6 +761,7 @@ func (s *Stmt) boundParamsToNamedValues() []driver.NamedValue {
 			Value:   val,
 		}
 	}
+
 	return args
 }
 
@@ -754,6 +779,7 @@ func valuesToNamedValues(
 			Value:   arg,
 		}
 	}
+
 	return namedArgs
 }
 

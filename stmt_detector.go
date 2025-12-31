@@ -32,6 +32,7 @@ func extractFirstKeyword(sql string) string {
 		// Skip whitespace
 		if isWhitespaceChar(sql[i]) {
 			i++
+
 			continue
 		}
 
@@ -41,6 +42,7 @@ func extractFirstKeyword(sql string) string {
 			for i < n && sql[i] != '\n' {
 				i++
 			}
+
 			continue
 		}
 
@@ -50,6 +52,7 @@ func extractFirstKeyword(sql string) string {
 			for i < n && sql[i] != '\n' {
 				i++
 			}
+
 			continue
 		}
 
@@ -59,10 +62,12 @@ func extractFirstKeyword(sql string) string {
 			for i+1 < n {
 				if sql[i] == '*' && sql[i+1] == '/' {
 					i += 2
+
 					break
 				}
 				i++
 			}
+
 			continue
 		}
 

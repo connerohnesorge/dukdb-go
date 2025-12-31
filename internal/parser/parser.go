@@ -12,6 +12,7 @@ import (
 // Parse parses a SQL string and returns a Statement.
 func Parse(sql string) (Statement, error) {
 	p := newParser(sql)
+
 	return p.parse()
 }
 
@@ -19,6 +20,7 @@ func Parse(sql string) (Statement, error) {
 func CountParameters(stmt Statement) int {
 	counter := &paramCounter{}
 	counter.countStmt(stmt)
+
 	return counter.count
 }
 
@@ -42,6 +44,7 @@ func CollectParameters(stmt Statement) []ParameterInfo {
 			result = append(result, p)
 		}
 	}
+
 	return result
 }
 
@@ -283,6 +286,7 @@ type parser struct {
 func newParser(input string) *parser {
 	p := &parser{input: input}
 	p.tokenize()
+
 	return p
 }
 
@@ -370,6 +374,7 @@ func (p *parser) skipWhitespace() {
 			for p.pos+1 < len(p.input) {
 				if p.input[p.pos] == '*' && p.input[p.pos+1] == '/' {
 					p.pos += 2
+
 					break
 				}
 				p.pos++
@@ -409,6 +414,7 @@ func (p *parser) scanString(quote byte) {
 				p.pos += 2
 			} else {
 				p.pos++
+
 				break
 			}
 		} else {
@@ -479,6 +485,7 @@ func (p *parser) scanOperator() {
 				p.tokens,
 				token{tokenOperator, two, start},
 			)
+
 			return
 		}
 	}
@@ -516,6 +523,7 @@ func (p *parser) current() token {
 	if p.tokPos >= len(p.tokens) {
 		return token{tokenEOF, "", len(p.input)}
 	}
+
 	return p.tokens[p.tokPos]
 }
 
@@ -523,12 +531,14 @@ func (p *parser) peek() token {
 	if p.tokPos+1 >= len(p.tokens) {
 		return token{tokenEOF, "", len(p.input)}
 	}
+
 	return p.tokens[p.tokPos+1]
 }
 
 func (p *parser) advance() token {
 	tok := p.current()
 	p.tokPos++
+
 	return tok
 }
 
@@ -544,6 +554,7 @@ func (p *parser) expect(
 		)
 	}
 	p.tokPos++
+
 	return tok, nil
 }
 
@@ -560,11 +571,13 @@ func (p *parser) expectKeyword(
 		)
 	}
 	p.tokPos++
+
 	return nil
 }
 
 func (p *parser) isKeyword(keyword string) bool {
 	tok := p.current()
+
 	return tok.typ == tokenIdent &&
 		strings.EqualFold(tok.value, keyword)
 }
@@ -1400,6 +1413,7 @@ func (p *parser) parseBegin() (*BeginStmt, error) {
 	if p.isKeyword("TRANSACTION") {
 		p.advance() // consume TRANSACTION (optional)
 	}
+
 	return &BeginStmt{}, nil
 }
 
@@ -1477,6 +1491,7 @@ func (p *parser) parseNotExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &UnaryExpr{
 			Op:   OpNot,
 			Expr: expr,
@@ -1509,6 +1524,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 				Expr: left,
 			}, nil
 		}
+
 		return &UnaryExpr{
 			Op:   OpIsNull,
 			Expr: left,
@@ -1529,6 +1545,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &BetweenExpr{
 			Expr: left,
 			Low:  low,
@@ -1556,6 +1573,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &BetweenExpr{
 			Expr: left,
 			Low:  low,
@@ -1578,6 +1596,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			if _, err := p.expect(tokenRParen); err != nil {
 				return nil, err
 			}
+
 			return &InSubqueryExpr{
 				Expr:     left,
 				Subquery: subquery,
@@ -1590,6 +1609,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if _, err := p.expect(tokenRParen); err != nil {
 			return nil, err
 		}
+
 		return &InListExpr{
 			Expr:   left,
 			Values: values,
@@ -1613,6 +1633,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			if _, err := p.expect(tokenRParen); err != nil {
 				return nil, err
 			}
+
 			return &InSubqueryExpr{
 				Expr:     left,
 				Subquery: subquery,
@@ -1626,6 +1647,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if _, err := p.expect(tokenRParen); err != nil {
 			return nil, err
 		}
+
 		return &InListExpr{
 			Expr:   left,
 			Values: values,
@@ -1640,6 +1662,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &BinaryExpr{
 			Left:  left,
 			Op:    OpLike,
@@ -1660,6 +1683,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &BinaryExpr{
 			Left:  left,
 			Op:    OpNotLike,
@@ -1691,6 +1715,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &BinaryExpr{
 			Left:  left,
 			Op:    op,
@@ -1788,6 +1813,7 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 							numStr,
 						)
 					}
+
 					return &Literal{
 						Value: -f,
 						Type:  dukdb.TYPE_DOUBLE,
@@ -1800,6 +1826,7 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 						numStr,
 					)
 				}
+
 				return &Literal{
 					Value: -i,
 					Type:  dukdb.TYPE_BIGINT,
@@ -1810,6 +1837,7 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			return &UnaryExpr{
 				Op:   OpNeg,
 				Expr: expr,
@@ -1819,12 +1847,14 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 			// Similar handling for unary plus with literals
 			if p.current().typ == tokenNumber {
 				tok := p.advance()
+
 				return p.parseNumber(tok.value)
 			}
 			expr, err := p.parseUnaryExpr()
 			if err != nil {
 				return nil, err
 			}
+
 			return &UnaryExpr{
 				Op:   OpPos,
 				Expr: expr,
@@ -1841,6 +1871,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 	switch tok.typ {
 	case tokenNumber:
 		p.advance()
+
 		return p.parseNumber(tok.value)
 
 	case tokenString:
@@ -1849,6 +1880,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 		s := tok.value[1 : len(tok.value)-1]
 		s = strings.ReplaceAll(s, "''", "'")
 		s = strings.ReplaceAll(s, "\"\"", "\"")
+
 		return &Literal{
 			Value: s,
 			Type:  dukdb.TYPE_VARCHAR,
@@ -1856,6 +1888,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 
 	case tokenParameter:
 		p.advance()
+
 		return p.parseParameter(tok.value)
 
 	case tokenLParen:
@@ -1869,6 +1902,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 			if _, err := p.expect(tokenRParen); err != nil {
 				return nil, err
 			}
+
 			return subquery, nil
 		}
 		expr, err := p.parseExpr()
@@ -1878,6 +1912,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 		if _, err := p.expect(tokenRParen); err != nil {
 			return nil, err
 		}
+
 		return expr, nil
 
 	case tokenIdent:
@@ -1885,6 +1920,7 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 
 	case tokenStar:
 		p.advance()
+
 		return &StarExpr{}, nil
 
 	default:
@@ -1907,6 +1943,7 @@ func (p *parser) parseNumber(
 				s,
 			)
 		}
+
 		return &Literal{
 			Value: f,
 			Type:  dukdb.TYPE_DOUBLE,
@@ -1919,6 +1956,7 @@ func (p *parser) parseNumber(
 			s,
 		)
 	}
+
 	return &Literal{
 		Value: i,
 		Type:  dukdb.TYPE_BIGINT,
@@ -1940,6 +1978,7 @@ func (p *parser) parseParameter(
 			s,
 		)
 	}
+
 	return &Parameter{Position: pos}, nil
 }
 
@@ -1981,6 +2020,7 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		p.advance()
 		if p.current().typ == tokenStar {
 			p.advance()
+
 			return &StarExpr{Table: name}, nil
 		}
 		if p.current().typ != tokenIdent {
@@ -1989,6 +2029,7 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 			)
 		}
 		col := p.advance().value
+
 		return &ColumnRef{
 			Table:  name,
 			Column: col,
@@ -2016,6 +2057,7 @@ func (p *parser) parseFunctionCall(
 		if _, err := p.expect(tokenRParen); err != nil {
 			return nil, err
 		}
+
 		return fn, nil
 	}
 

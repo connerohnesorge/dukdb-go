@@ -132,7 +132,7 @@ func TestPhaseB_E2E_ResultSetAcrossChunkBoundaries(t *testing.T) {
 
 	// Insert enough rows to create multiple chunks (StandardVectorSize + extra)
 	numRows := storage.StandardVectorSize + 100
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		require.NoError(t, table.AppendRow([]any{int32(i)}))
 	}
 
@@ -304,12 +304,12 @@ func TestPhaseB_E2E_ResultSetNullHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert rows with various NULL patterns
-	require.NoError(t, table.AppendRow([]any{int32(1), "Alice", 50000.0}))     // No NULLs
-	require.NoError(t, table.AppendRow([]any{int32(2), nil, 60000.0}))         // NULL name
-	require.NoError(t, table.AppendRow([]any{int32(3), "Charlie", nil}))       // NULL salary
-	require.NoError(t, table.AppendRow([]any{nil, "David", 70000.0}))          // NULL id
-	require.NoError(t, table.AppendRow([]any{nil, nil, nil}))                  // All NULLs
-	require.NoError(t, table.AppendRow([]any{int32(6), "Frank", 80000.0}))     // No NULLs
+	require.NoError(t, table.AppendRow([]any{int32(1), "Alice", 50000.0})) // No NULLs
+	require.NoError(t, table.AppendRow([]any{int32(2), nil, 60000.0}))     // NULL name
+	require.NoError(t, table.AppendRow([]any{int32(3), "Charlie", nil}))   // NULL salary
+	require.NoError(t, table.AppendRow([]any{nil, "David", 70000.0}))      // NULL id
+	require.NoError(t, table.AppendRow([]any{nil, nil, nil}))              // All NULLs
+	require.NoError(t, table.AppendRow([]any{int32(6), "Frank", 80000.0})) // No NULLs
 
 	// Create table definition
 	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
@@ -745,7 +745,7 @@ func TestPhaseB_E2E_ResultSetWithFilteredData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert 100 rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		require.NoError(t, table.AppendRow([]any{int32(i)}))
 	}
 

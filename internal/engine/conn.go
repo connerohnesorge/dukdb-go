@@ -248,9 +248,9 @@ func (c *EngineConn) AppendDataChunk(
 
 	// Copy data from dukdb.DataChunk to storage.DataChunk
 	colCount := chunk.GetColumnCount()
-	for row := 0; row < rowCount; row++ {
+	for row := range rowCount {
 		values := make([]any, colCount)
-		for col := 0; col < colCount; col++ {
+		for col := range colCount {
 			val, err := chunk.GetValue(col, row)
 			if err != nil {
 				return 0, err
@@ -359,6 +359,7 @@ func (s *EngineStmt) Close() error {
 	defer s.mu.Unlock()
 
 	s.closed = true
+
 	return nil
 }
 
@@ -372,6 +373,7 @@ func (s *EngineStmt) StatementType() dukdb.StmtType {
 	if s.closed || s.stmt == nil {
 		return dukdb.STATEMENT_TYPE_INVALID
 	}
+
 	return s.stmt.Type()
 }
 
@@ -381,6 +383,7 @@ func (s *EngineStmt) ParamName(index int) string {
 	if index < 1 || index > len(s.params) {
 		return ""
 	}
+
 	return s.params[index-1].Name
 }
 
@@ -393,6 +396,7 @@ func (s *EngineStmt) ParamType(index int) dukdb.Type {
 	if typ, ok := s.paramTypes[index]; ok {
 		return typ
 	}
+
 	return dukdb.TYPE_ANY
 }
 
@@ -407,6 +411,7 @@ func (s *EngineStmt) ColumnName(index int) string {
 	if index < 0 || index >= len(s.columns) {
 		return ""
 	}
+
 	return s.columns[index].name
 }
 
@@ -415,6 +420,7 @@ func (s *EngineStmt) ColumnType(index int) dukdb.Type {
 	if index < 0 || index >= len(s.columns) {
 		return dukdb.TYPE_INVALID
 	}
+
 	return s.columns[index].colType
 }
 
@@ -432,6 +438,7 @@ func (s *EngineStmt) ColumnTypeInfo(index int) dukdb.TypeInfo {
 		// This is a limitation - full complex type info requires binder enhancement
 		return &basicTypeInfo{typ: colType}
 	}
+
 	return info
 }
 

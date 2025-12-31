@@ -202,7 +202,7 @@ func (e *Executor) collectResults(
 		// Convert chunk to rows
 		for i := 0; i < chunk.Count(); i++ {
 			row := make(map[string]any)
-			for j := 0; j < len(outputCols); j++ {
+			for j := range len(outputCols) {
 				row[result.Columns[j]] = chunk.GetValue(
 					i,
 					j,
@@ -869,7 +869,6 @@ func (e *Executor) executeInsert(
 	}, nil
 }
 
-
 func (e *Executor) executeCreateTable(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalCreateTable,
@@ -885,6 +884,7 @@ func (e *Executor) executeCreateTable(
 				RowsAffected: 0,
 			}, nil
 		}
+
 		return nil, dukdb.ErrTableAlreadyExists
 	}
 
@@ -915,6 +915,7 @@ func (e *Executor) executeCreateTable(
 			plan.Schema,
 			plan.Table,
 		)
+
 		return nil, err
 	}
 
@@ -936,6 +937,7 @@ func (e *Executor) executeDropTable(
 				RowsAffected: 0,
 			}, nil
 		}
+
 		return nil, dukdb.ErrTableNotFound
 	}
 
@@ -1004,6 +1006,7 @@ func formatGroupKey(values []any) string {
 		}
 		result += formatValue(v)
 	}
+
 	return result
 }
 
@@ -1018,6 +1021,7 @@ func formatRowKey(
 		}
 		result += formatValue(row[col])
 	}
+
 	return result
 }
 
@@ -1043,6 +1047,7 @@ func formatRowMap(row map[string]any) string {
 		}
 		result += k + ":" + formatValue(row[k])
 	}
+
 	return result
 }
 
@@ -1050,5 +1055,6 @@ func formatValue(v any) string {
 	if v == nil {
 		return "<null>"
 	}
+
 	return fmt.Sprintf("%v", v)
 }

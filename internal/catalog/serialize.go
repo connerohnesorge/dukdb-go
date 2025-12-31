@@ -206,17 +206,20 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 	if data == nil {
 		// For primitive types, create basic type info
 		info, _ := dukdb.NewTypeInfo(typ)
+
 		return info
 	}
 
 	switch typ {
 	case dukdb.TYPE_DECIMAL:
 		info, _ := dukdb.NewDecimalInfo(uint8(data.Precision), uint8(data.Scale))
+
 		return info
 
 	case dukdb.TYPE_ENUM:
 		if len(data.EnumValues) > 0 {
 			info, _ := dukdb.NewEnumInfo(data.EnumValues[0], data.EnumValues[1:]...)
+
 			return info
 		}
 
@@ -228,6 +231,7 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 			}
 			if childInfo != nil {
 				info, _ := dukdb.NewListInfo(childInfo)
+
 				return info
 			}
 		}
@@ -240,6 +244,7 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 			}
 			if childInfo != nil {
 				info, _ := dukdb.NewArrayInfo(childInfo, uint64(data.ArraySize))
+
 				return info
 			}
 		}
@@ -256,6 +261,7 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 			}
 			if keyInfo != nil && valInfo != nil {
 				info, _ := dukdb.NewMapInfo(keyInfo, valInfo)
+
 				return info
 			}
 		}
@@ -275,6 +281,7 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 			}
 			if len(entries) > 0 && entries[0] != nil {
 				info, _ := dukdb.NewStructInfo(entries[0], entries[1:]...)
+
 				return info
 			}
 		}
@@ -282,5 +289,6 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 
 	// Default: create basic type info for primitive types
 	info, _ := dukdb.NewTypeInfo(typ)
+
 	return info
 }

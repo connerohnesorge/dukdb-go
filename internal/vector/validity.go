@@ -22,6 +22,7 @@ func NewValidityMask(capacity uint64) *ValidityMask {
 	for i := range mask {
 		mask[i] = ^uint64(0)
 	}
+
 	return &ValidityMask{
 		bits:     mask,
 		capacity: capacity,
@@ -31,6 +32,7 @@ func NewValidityMask(capacity uint64) *ValidityMask {
 // NewValidityMaskEmpty creates a new ValidityMask with all entries marked as NULL.
 func NewValidityMaskEmpty(capacity uint64) *ValidityMask {
 	numWords := (capacity + BitsPerWord - 1) / BitsPerWord
+
 	return &ValidityMask{
 		bits:     make([]uint64, numWords),
 		capacity: capacity,
@@ -43,6 +45,7 @@ func NewValidityMaskEmpty(capacity uint64) *ValidityMask {
 func (v *ValidityMask) IsValid(row uint64) bool {
 	wordIdx := row / BitsPerWord
 	bitIdx := row % BitsPerWord
+
 	return (v.bits[wordIdx] & (1 << bitIdx)) != 0
 }
 
@@ -77,7 +80,7 @@ func (v *ValidityMask) SetAllValid(count uint64) {
 
 	// Number of full words to set
 	fullWords := count / BitsPerWord
-	for i := uint64(0); i < fullWords; i++ {
+	for i := range fullWords {
 		v.bits[i] = ^uint64(0)
 	}
 
@@ -108,7 +111,7 @@ func (v *ValidityMask) CountValid() uint64 {
 	fullWords := v.capacity / BitsPerWord
 
 	// Count bits in full words
-	for i := uint64(0); i < fullWords; i++ {
+	for i := range fullWords {
 		count += uint64(bits.OnesCount64(v.bits[i]))
 	}
 
@@ -143,7 +146,7 @@ func (v *ValidityMask) HasNull() bool {
 	fullWords := v.capacity / BitsPerWord
 
 	// Check full words
-	for i := uint64(0); i < fullWords; i++ {
+	for i := range fullWords {
 		if v.bits[i] != ^uint64(0) {
 			return true
 		}
@@ -177,6 +180,7 @@ func (v *ValidityMask) Reset() {
 func (v *ValidityMask) Clone() *ValidityMask {
 	newBits := make([]uint64, len(v.bits))
 	copy(newBits, v.bits)
+
 	return &ValidityMask{
 		bits:     newBits,
 		capacity: v.capacity,
@@ -208,5 +212,6 @@ func min(a, b uint64) uint64 {
 	if a < b {
 		return a
 	}
+
 	return b
 }

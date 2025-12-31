@@ -82,6 +82,7 @@ func (c *Connector) Connect(
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
+
 		return nil, errClosedCon
 	}
 	c.mu.RUnlock()
@@ -91,6 +92,7 @@ func (c *Connector) Connect(
 		c.backend = GetBackend()
 		if c.backend == nil {
 			c.initErr = errNoBackend
+
 			return
 		}
 
@@ -105,6 +107,7 @@ func (c *Connector) Connect(
 				errConnect,
 				err,
 			)
+
 			return
 		}
 	})
@@ -147,6 +150,7 @@ func (c *Connector) Close() error {
 	if c.backendConn != nil {
 		return c.backendConn.Close()
 	}
+
 	return nil
 }
 

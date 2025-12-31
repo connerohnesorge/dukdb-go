@@ -256,7 +256,7 @@ func TestTypeInfoConcurrency(t *testing.T) {
 	const goroutines = 100
 	done := make(chan TypeInfo, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			info, err := NewTypeInfo(TYPE_INTEGER)
 			if err != nil {
@@ -268,7 +268,7 @@ func TestTypeInfoConcurrency(t *testing.T) {
 
 	// Collect all results
 	var results []TypeInfo
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		results = append(results, <-done)
 	}
 

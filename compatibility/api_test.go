@@ -85,6 +85,7 @@ func testConnRaw(t *testing.T, db *sql.DB) {
 	err = conn.Raw(func(driverConn any) error {
 		// Both implementations should expose a non-nil connection
 		assert.NotNil(t, driverConn)
+
 		return nil
 	})
 	require.NoError(t, err)

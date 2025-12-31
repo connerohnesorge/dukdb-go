@@ -15,7 +15,7 @@ import (
 // Binary Format:
 //   - Schema count: uint64 (number of schemas)
 //   - For each schema:
-//     - Schema serialization (via DeserializeSchema)
+//   - Schema serialization (via DeserializeSchema)
 //
 // The catalog is deserialized by reading all schemas and their tables
 // using property-based deserialization.
@@ -33,7 +33,7 @@ func DeserializeCatalog(r io.Reader) (*catalog.Catalog, error) {
 	cat := catalog.NewCatalog()
 
 	// Deserialize each schema
-	for i := uint64(0); i < schemaCount; i++ {
+	for i := range schemaCount {
 		schema, err := DeserializeSchema(r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to deserialize schema %d: %w", i, err)
@@ -66,7 +66,7 @@ func DeserializeCatalog(r io.Reader) (*catalog.Catalog, error) {
 //   - Property 101: string (schema name)
 //   - Property 200: uint64 (table count)
 //   - For each table:
-//     - Table serialization (via DeserializeTableEntry)
+//   - Table serialization (via DeserializeTableEntry)
 //
 // A schema contains metadata about a namespace and its tables.
 func DeserializeSchema(r io.Reader) (*catalog.Schema, error) {
@@ -100,7 +100,7 @@ func DeserializeSchema(r io.Reader) (*catalog.Schema, error) {
 	schema := catalog.NewSchema(schemaName)
 
 	// Deserialize each table
-	for i := uint64(0); i < tableCount; i++ {
+	for i := range tableCount {
 		table, err := DeserializeTableEntry(r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to deserialize table %d: %w", i, err)
@@ -122,7 +122,7 @@ func DeserializeSchema(r io.Reader) (*catalog.Schema, error) {
 //   - Property 102: string (schema name)
 //   - Property 200: uint64 (column count)
 //   - For each column:
-//     - Column serialization (via DeserializeColumn)
+//   - Column serialization (via DeserializeColumn)
 //   - Property 201: []int (primary key column indices, optional)
 //
 // A table entry contains the table definition including all columns and constraints.
@@ -161,7 +161,7 @@ func DeserializeTableEntry(r io.Reader) (*catalog.TableDef, error) {
 
 	// Deserialize each column
 	columns := make([]*catalog.ColumnDef, columnCount)
-	for i := uint64(0); i < columnCount; i++ {
+	for i := range columnCount {
 		col, err := DeserializeColumn(r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to deserialize column %d: %w", i, err)
@@ -243,9 +243,9 @@ func DeserializeColumn(r io.Reader) (*catalog.ColumnDef, error) {
 //
 // This function reads a complete DuckDB file including header validation and
 // catalog deserialization. It performs the following steps:
-//   1. Opens the file for reading
-//   2. Validates the DuckDB magic number and format version
-//   3. Deserializes the catalog structure
+//  1. Opens the file for reading
+//  2. Validates the DuckDB magic number and format version
+//  3. Deserializes the catalog structure
 //
 // The file must be in DuckDB v64 binary format with the proper header.
 //
@@ -279,9 +279,9 @@ func LoadCatalogFromDuckDBFormat(path string) (*catalog.Catalog, error) {
 //
 // This function writes a complete DuckDB file including header and catalog
 // serialization. It performs the following steps:
-//   1. Creates or truncates the output file
-//   2. Writes the DuckDB magic number and format version
-//   3. Serializes the catalog structure
+//  1. Creates or truncates the output file
+//  2. Writes the DuckDB magic number and format version
+//  3. Serializes the catalog structure
 //
 // The resulting file will be in DuckDB v64 binary format and can be read by
 // compatible DuckDB implementations.

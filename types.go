@@ -46,6 +46,7 @@ func (u *UUID) Scan(v any) error {
 	default:
 		return fmt.Errorf("invalid UUID value type: %T", val)
 	}
+
 	return nil
 }
 
@@ -90,6 +91,7 @@ func (m *Map) Scan(v any) error {
 	}
 
 	*m = data
+
 	return nil
 }
 
@@ -124,6 +126,7 @@ func (d Decimal) Float64() float64 {
 	value := new(big.Float).SetInt(d.Value)
 	value.Quo(value, factor)
 	f, _ := value.Float64()
+
 	return f
 }
 
@@ -172,6 +175,7 @@ func (d Decimal) String() string {
 			zeroTrimmed,
 		)
 	}
+
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
 }
 
@@ -213,6 +217,7 @@ func hugeIntToBigInt(h hugeInt) *big.Int {
 	i := big.NewInt(h.upper)
 	i.Lsh(i, 64)
 	i.Add(i, new(big.Int).SetUint64(h.lower))
+
 	return i
 }
 
@@ -272,6 +277,7 @@ func inferTimestamp(val any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return ti.UnixMicro(), nil
 }
 
@@ -281,6 +287,7 @@ func inferTimestampS(val any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return ti.Unix(), nil
 }
 
@@ -290,6 +297,7 @@ func inferTimestampMS(val any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return ti.UnixMilli(), nil
 }
 
@@ -299,6 +307,7 @@ func inferTimestampNS(val any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return ti.UnixNano(), nil
 }
 
@@ -308,6 +317,7 @@ func inferDate(val any) (int32, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return int32(ti.Unix() / secondsPerDay), nil
 }
 
@@ -329,6 +339,7 @@ func inferTime(val any) (int64, error) {
 		ti.Nanosecond(),
 		time.UTC,
 	)
+
 	return base.UnixMicro(), nil
 }
 

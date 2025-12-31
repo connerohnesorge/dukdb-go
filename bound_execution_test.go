@@ -33,6 +33,7 @@ func (m *boundTestMockBackendStmt) Query(
 
 func (m *boundTestMockBackendStmt) Close() error {
 	m.closed = true
+
 	return nil
 }
 

@@ -25,6 +25,7 @@ func (m *mockPhysicalOperator) Next() (*storage.DataChunk, error) {
 	}
 	chunk := m.chunks[m.index]
 	m.index++
+
 	return chunk, nil
 }
 

@@ -83,6 +83,7 @@ func NewBinder(cat *catalog.Catalog) *Binder {
 // WithUDFResolver sets the scalar UDF resolver and returns the binder.
 func (b *Binder) WithUDFResolver(resolver ScalarUDFResolver) *Binder {
 	b.udfResolver = resolver
+
 	return b
 }
 
@@ -768,6 +769,7 @@ func (b *Binder) bindExpr(
 		}
 		// Store in scope for later retrieval
 		b.scope.params[pos] = inferredType
+
 		return &BoundParameter{Position: pos, ParamType: inferredType}, nil
 	case *parser.BinaryExpr:
 		return b.bindBinaryExpr(e)
@@ -781,6 +783,7 @@ func (b *Binder) bindExpr(
 		if err != nil {
 			return nil, err
 		}
+
 		return &BoundCastExpr{Expr: inner, TargetType: e.TargetType}, nil
 	case *parser.CaseExpr:
 		return b.bindCaseExpr(e, expectedType)
@@ -827,6 +830,7 @@ func (b *Binder) bindColumnRef(
 				}, nil
 			}
 		}
+
 		return nil, b.errorf(
 			"column not found: %s.%s",
 			ref.Table,
@@ -1524,6 +1528,7 @@ func promoteType(t1, t2 dukdb.Type) dukdb.Type {
 		if typeSize(t1) > typeSize(t2) {
 			return t1
 		}
+
 		return t2
 	}
 
@@ -1532,6 +1537,7 @@ func promoteType(t1, t2 dukdb.Type) dukdb.Type {
 		if t1 == dukdb.TYPE_DOUBLE {
 			return t1
 		}
+
 		return t2
 	}
 
@@ -1553,6 +1559,7 @@ func isIntegerType(t dukdb.Type) bool {
 		dukdb.TYPE_UHUGEINT:
 		return true
 	}
+
 	return false
 }
 
@@ -1602,6 +1609,7 @@ func inferFunctionResultType(
 				return dukdb.TYPE_DECIMAL
 			}
 		}
+
 		return dukdb.TYPE_BIGINT
 	case "AVG":
 		return dukdb.TYPE_DOUBLE
@@ -1609,16 +1617,19 @@ func inferFunctionResultType(
 		if len(args) > 0 {
 			return args[0].ResultType()
 		}
+
 		return dukdb.TYPE_ANY
 	case "COALESCE":
 		if len(args) > 0 {
 			return args[0].ResultType()
 		}
+
 		return dukdb.TYPE_ANY
 	case "ABS":
 		if len(args) > 0 {
 			return args[0].ResultType()
 		}
+
 		return dukdb.TYPE_DOUBLE
 	case "UPPER",
 		"LOWER",
@@ -1672,6 +1683,7 @@ func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
 		if argCount >= 3 {
 			types[2] = dukdb.TYPE_INTEGER
 		}
+
 		return types
 	case "REPLACE":
 		// REPLACE(string, from, to)
@@ -1684,6 +1696,7 @@ func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
 		for i := range types {
 			types[i] = dukdb.TYPE_VARCHAR
 		}
+
 		return types
 	case "COALESCE":
 		// COALESCE accepts homogeneous types - first arg determines type
@@ -1695,6 +1708,7 @@ func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
 			return []dukdb.Type{dukdb.TYPE_ANY}
 		}
 	}
+
 	return nil
 }
 
@@ -1703,5 +1717,6 @@ func (b *Binder) GetParamTypes() map[int]dukdb.Type {
 	if b.scope == nil {
 		return nil
 	}
+
 	return b.scope.params
 }

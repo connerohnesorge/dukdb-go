@@ -48,12 +48,14 @@ func ParseDSN(dsn string) (*Config, error) {
 	// Handle empty DSN (in-memory database)
 	if dsn == "" {
 		config.Path = ":memory:"
+
 		return config, nil
 	}
 
 	// Handle :memory: database
 	if dsn == ":memory:" {
 		config.Path = ":memory:"
+
 		return config, nil
 	}
 
@@ -64,6 +66,7 @@ func ParseDSN(dsn string) (*Config, error) {
 		if err := parseOptions(queryStr, config); err != nil {
 			return nil, err
 		}
+
 		return config, nil
 	}
 
@@ -73,6 +76,7 @@ func ParseDSN(dsn string) (*Config, error) {
 		if err := parseOptions(dsn[1:], config); err != nil {
 			return nil, err
 		}
+
 		return config, nil
 	}
 
@@ -81,6 +85,7 @@ func ParseDSN(dsn string) (*Config, error) {
 	if idx == -1 {
 		// No query parameters, just a path
 		config.Path = dsn
+
 		return config, nil
 	}
 
@@ -185,6 +190,7 @@ func validateAccessMode(mode string) error {
 			),
 		}
 	}
+
 	return nil
 }
 
@@ -249,6 +255,7 @@ func validateMaxMemory(value string) error {
 				),
 			}
 		}
+
 		return nil
 	}
 
@@ -283,6 +290,7 @@ func validateMaxMemory(value string) error {
 				}
 			}
 			foundSuffix = true
+
 			break
 		}
 	}
@@ -370,6 +378,7 @@ func ResolveMaxMemory(
 					value,
 				)
 			}
+
 			return int64(
 				num * float64(unit.multiplier),
 			), nil
@@ -384,6 +393,7 @@ func ResolveMaxMemory(
 			value,
 		)
 	}
+
 	return bytes, nil
 }
 

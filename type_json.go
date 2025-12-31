@@ -32,6 +32,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_TINYINT:
@@ -42,6 +43,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_SMALLINT:
@@ -52,6 +54,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_INTEGER:
@@ -62,6 +65,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_BIGINT:
@@ -72,6 +76,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_UTINYINT:
@@ -82,6 +87,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_USMALLINT:
@@ -92,6 +98,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_UINTEGER:
@@ -102,6 +109,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_UBIGINT:
@@ -112,6 +120,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_FLOAT:
@@ -132,6 +141,7 @@ func ParseValue(
 					err,
 				)
 			}
+
 			return big.NewInt(v), nil
 		}
 		i := new(big.Int)
@@ -141,6 +151,7 @@ func ParseValue(
 				s,
 			)
 		}
+
 		return i, nil
 
 	case TYPE_UHUGEINT:
@@ -157,6 +168,7 @@ func ParseValue(
 			}
 			i := new(big.Int)
 			i.SetUint64(v)
+
 			return i, nil
 		}
 		i := new(big.Int)
@@ -166,6 +178,7 @@ func ParseValue(
 				s,
 			)
 		}
+
 		return i, nil
 
 	case TYPE_VARCHAR:
@@ -176,6 +189,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 
 	case TYPE_BLOB:
@@ -193,6 +207,7 @@ func ParseValue(
 					err,
 				)
 			}
+
 			return f, nil
 		}
 		// Return as string, caller can convert to Decimal if needed
@@ -218,6 +233,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return t, nil
 
 	case TYPE_DATE:
@@ -235,6 +251,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return t, nil
 
 	case TYPE_TIME, TYPE_TIME_TZ:
@@ -252,6 +269,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return t, nil
 
 	case TYPE_INTERVAL:
@@ -262,6 +280,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return interval, nil
 
 	case TYPE_UUID:
@@ -279,6 +298,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return u, nil
 
 	case TYPE_LIST, TYPE_ARRAY:
@@ -301,6 +321,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return s, nil
 
 	case TYPE_BIT:
@@ -311,6 +332,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return s, nil
 
 	case TYPE_SQLNULL, TYPE_ANY, TYPE_INVALID:
@@ -326,6 +348,7 @@ func ParseValue(
 				err,
 			)
 		}
+
 		return v, nil
 	}
 }
@@ -359,6 +382,7 @@ func parseFloat(data []byte) (float64, error) {
 			err,
 		)
 	}
+
 	return v, nil
 }
 
@@ -384,6 +408,7 @@ func parseBLOB(data []byte) ([]byte, error) {
 				err,
 			)
 		}
+
 		return decoded, nil
 	}
 
@@ -413,6 +438,7 @@ func parseList(data []byte) ([]any, error) {
 		}
 		result[i] = v
 	}
+
 	return result, nil
 }
 
@@ -440,6 +466,7 @@ func parseStruct(
 		}
 		result[k] = val
 	}
+
 	return result, nil
 }
 
@@ -473,6 +500,7 @@ func parseMap(data []byte) (Map, error) {
 			}
 			result[k] = val
 		}
+
 		return result, nil
 	}
 
@@ -495,6 +523,7 @@ func parseMap(data []byte) (Map, error) {
 		}
 		result[key] = value
 	}
+
 	return result, nil
 }
 

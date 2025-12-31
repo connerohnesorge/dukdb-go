@@ -667,7 +667,7 @@ func TestPreparedStmtConcurrentExecution(
 			var wg sync.WaitGroup
 			results := make([]int, 100)
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
@@ -702,7 +702,7 @@ func TestPreparedStmtConcurrentExecution(
 			var wg sync.WaitGroup
 			errors := make([]error, 100)
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
@@ -740,7 +740,7 @@ func TestPreparedStmtConcurrentExecution(
 			var wg sync.WaitGroup
 			errors := make([]error, 100)
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()

@@ -166,6 +166,7 @@ func (h *FileHeader) Serialize(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, h.Version); err != nil {
 		return err
 	}
+
 	return binary.Write(w, binary.LittleEndian, h.Iteration)
 }
 
@@ -183,6 +184,7 @@ func (h *FileHeader) Deserialize(r io.Reader) error {
 	if h.Version > CurrentVersion {
 		return fmt.Errorf("unsupported WAL version: %d", h.Version)
 	}
+
 	return binary.Read(r, binary.LittleEndian, &h.Iteration)
 }
 
@@ -193,6 +195,7 @@ func writeString(w io.Writer, s string) error {
 		return err
 	}
 	_, err := w.Write(data)
+
 	return err
 }
 
@@ -206,6 +209,7 @@ func readString(r io.Reader) (string, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return "", err
 	}
+
 	return string(data), nil
 }
 
@@ -215,6 +219,7 @@ func writeBytes(w io.Writer, data []byte) error {
 		return err
 	}
 	_, err := w.Write(data)
+
 	return err
 }
 
@@ -228,5 +233,6 @@ func readBytes(r io.Reader) ([]byte, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, err
 	}
+
 	return data, nil
 }

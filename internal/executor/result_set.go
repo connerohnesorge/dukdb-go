@@ -106,7 +106,7 @@ func (rs *ResultSet) Next(dest []driver.Value) error {
 			return errors.New("destination slice too small")
 		}
 
-		for col := 0; col < numCols; col++ {
+		for col := range numCols {
 			value := chunk.GetValue(rs.currentRow, col)
 			dest[col] = toDriverValue(value)
 		}

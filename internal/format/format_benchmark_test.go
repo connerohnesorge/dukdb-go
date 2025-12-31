@@ -70,7 +70,7 @@ func BenchmarkSerializeTypeInfo(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				buf := new(bytes.Buffer)
 				w := NewBinaryWriter(buf)
 				if err := SerializeTypeInfo(w, tc.typeInfo); err != nil {
@@ -155,7 +155,7 @@ func BenchmarkDeserializeTypeInfo(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				r := NewBinaryReader(bytes.NewReader(serialized))
 				if err := r.Load(); err != nil {
 					b.Fatalf("Load failed: %v", err)
@@ -178,7 +178,7 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 		b.Fatalf("CreateSchema failed: %v", err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		tableName := "table_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10))
 		tableDef := &catalog.TableDef{
 			Name:    tableName,
@@ -187,7 +187,7 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 		}
 
 		// Create 10 columns with various types
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			var typeInfo dukdb.TypeInfo
 			switch j {
 			case 0:
@@ -227,7 +227,7 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		buf := new(bytes.Buffer)
 		if err := SerializeCatalog(buf, cat); err != nil {
 			b.Fatalf("SerializeCatalog failed: %v", err)
@@ -245,7 +245,7 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 		b.Fatalf("CreateSchema failed: %v", err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		tableName := "table_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10))
 		tableDef := &catalog.TableDef{
 			Name:    tableName,
@@ -253,7 +253,7 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 			Columns: make([]*catalog.ColumnDef, 10),
 		}
 
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			var typeInfo dukdb.TypeInfo
 			switch j {
 			case 0:
@@ -300,7 +300,7 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		// Note: DeserializeCatalog is not yet implemented (task 4.2)
 		// This benchmark will be enabled once that task is complete
 		_ = serialized
@@ -333,7 +333,7 @@ func BenchmarkChecksum(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(tc.size))
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = CalculateChecksum(data)
 			}
 		})
@@ -464,6 +464,7 @@ func mustNewTypeInfo(ti dukdb.TypeInfo, err error) dukdb.TypeInfo {
 	if err != nil {
 		panic(err)
 	}
+
 	return ti
 }
 
@@ -472,6 +473,7 @@ func mustNewStructEntry(ti dukdb.TypeInfo, name string) dukdb.StructEntry {
 	if err != nil {
 		panic(err)
 	}
+
 	return entry
 }
 
@@ -484,5 +486,6 @@ func mustSerializeTypeInfo(ti dukdb.TypeInfo) []byte {
 	if err := w.Flush(); err != nil {
 		panic(err)
 	}
+
 	return buf.Bytes()
 }

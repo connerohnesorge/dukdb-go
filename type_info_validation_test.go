@@ -30,7 +30,6 @@ func TestTypeInfoValidation(t *testing.T) {
 	t.Run("NewTypeInfo rejects unsupported types", func(t *testing.T) {
 		unsupportedTypes := []Type{
 			TYPE_INVALID,
-			TYPE_BIT,
 			TYPE_BIGNUM,
 			TYPE_SQLNULL,
 		}

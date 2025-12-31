@@ -48,6 +48,7 @@ func (t *TableDef) GetColumn(
 	if !ok {
 		return nil, false
 	}
+
 	return t.Columns[idx], true
 }
 
@@ -56,6 +57,7 @@ func (t *TableDef) GetColumnIndex(
 	name string,
 ) (int, bool) {
 	idx, ok := t.columnIndex[name]
+
 	return idx, ok
 }
 
@@ -70,6 +72,7 @@ func (t *TableDef) ColumnNames() []string {
 	for i, col := range t.Columns {
 		names[i] = col.Name
 	}
+
 	return names
 }
 
@@ -79,6 +82,7 @@ func (t *TableDef) ColumnTypes() []dukdb.Type {
 	for i, col := range t.Columns {
 		types[i] = col.Type
 	}
+
 	return types
 }
 
@@ -88,6 +92,7 @@ func (t *TableDef) ColumnTypeInfos() []dukdb.TypeInfo {
 	for i, col := range t.Columns {
 		infos[i] = col.GetTypeInfo()
 	}
+
 	return infos
 }
 
@@ -104,6 +109,7 @@ func (t *TableDef) SetPrimaryKey(
 		indices[i] = idx
 	}
 	t.PrimaryKey = indices
+
 	return nil
 }
 

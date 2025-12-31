@@ -59,7 +59,7 @@ func (r *BinaryReader) Load() error {
 
 	r.properties = make(map[uint32][]byte, count)
 
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		// Read property ID
 		var id uint32
 		if err := binary.Read(r.r, ByteOrder, &id); err != nil {
@@ -101,6 +101,7 @@ func (r *BinaryReader) ReadProperty(id uint32, dest interface{}) error {
 	if !ok {
 		return fmt.Errorf("%w: property %d", ErrRequiredProperty, id)
 	}
+
 	return r.deserializeValue(data, dest)
 }
 
@@ -123,8 +124,10 @@ func (r *BinaryReader) ReadPropertyWithDefault(id uint32, dest, defaultValue int
 			return fmt.Errorf("dest must be a pointer, got %T", dest)
 		}
 		destValue.Elem().Set(reflect.ValueOf(defaultValue))
+
 		return nil
 	}
+
 	return r.deserializeValue(data, dest)
 }
 
@@ -157,7 +160,7 @@ func (r *BinaryReader) ReadList(id uint32) ([]string, error) {
 
 	items := make([]string, count)
 
-	for i := uint64(0); i < count; i++ {
+	for i := range count {
 		// Read string length
 		var strLen uint64
 		if err := binary.Read(buf, ByteOrder, &strLen); err != nil {

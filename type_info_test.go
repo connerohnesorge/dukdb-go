@@ -468,24 +468,29 @@ func TestTypeInfoInternalType(t *testing.T) {
 		{"Enum", func() (TypeInfo, error) { return NewEnumInfo("a", "b") }, TYPE_ENUM},
 		{"List", func() (TypeInfo, error) {
 			intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+
 			return NewListInfo(intInfo)
 		}, TYPE_LIST},
 		{"Array", func() (TypeInfo, error) {
 			intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+
 			return NewArrayInfo(intInfo, 5)
 		}, TYPE_ARRAY},
 		{"Map", func() (TypeInfo, error) {
 			keyInfo, _ := NewTypeInfo(TYPE_VARCHAR)
 			valueInfo, _ := NewTypeInfo(TYPE_INTEGER)
+
 			return NewMapInfo(keyInfo, valueInfo)
 		}, TYPE_MAP},
 		{"Struct", func() (TypeInfo, error) {
 			intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 			entry, _ := NewStructEntry(intInfo, "field")
+
 			return NewStructInfo(entry)
 		}, TYPE_STRUCT},
 		{"Union", func() (TypeInfo, error) {
 			intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+
 			return NewUnionInfo([]TypeInfo{intInfo}, []string{"int_val"})
 		}, TYPE_UNION},
 	}

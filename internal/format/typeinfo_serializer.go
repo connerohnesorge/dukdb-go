@@ -43,6 +43,7 @@ func SerializeTypeInfo(w *BinaryWriter, ti dukdb.TypeInfo) error {
 		if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_GENERIC)); err != nil {
 			return fmt.Errorf("failed to write primitive type discriminator: %w", err)
 		}
+
 		return nil
 	}
 
@@ -202,11 +203,11 @@ func SerializeArray(w *BinaryWriter, a *dukdb.ArrayDetails) error {
 // Binary Format:
 //   - Property 100: uint32 (ExtraTypeInfoType_STRUCT = 5)
 //   - Property 200: child_list_t<LogicalType> (field definitions)
-//     - Count: uint64 (number of fields)
-//     - For each field:
-//       - Name length: uint64
-//       - Name: []byte
-//       - LogicalType: (recursive TypeInfo serialization)
+//   - Count: uint64 (number of fields)
+//   - For each field:
+//   - Name length: uint64
+//   - Name: []byte
+//   - LogicalType: (recursive TypeInfo serialization)
 //
 // Example: STRUCT(x INTEGER, y VARCHAR) -> 2 fields with names and types
 func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
@@ -263,12 +264,13 @@ func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
 // Binary Format:
 //   - Property 100: uint32 (ExtraTypeInfoType_LIST = 4) <- Uses LIST discriminator!
 //   - Property 200: LogicalType (STRUCT with "key" and "value" fields)
-//     - The STRUCT has ExtraTypeInfoType_STRUCT = 5
-//     - Field 0: name="key", type=Key TypeInfo
-//     - Field 1: name="value", type=Value TypeInfo
+//   - The STRUCT has ExtraTypeInfoType_STRUCT = 5
+//   - Field 0: name="key", type=Key TypeInfo
+//   - Field 1: name="value", type=Value TypeInfo
 //
 // Example: MAP<VARCHAR, INTEGER>
-//   -> LIST<STRUCT<key VARCHAR, value INTEGER>>
+//
+//	-> LIST<STRUCT<key VARCHAR, value INTEGER>>
 func SerializeMap(w *BinaryWriter, m *dukdb.MapDetails) error {
 	// MAP uses LIST_TYPE_INFO (4) as discriminator, not a separate MAP type
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_LIST)); err != nil {

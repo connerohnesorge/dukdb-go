@@ -103,6 +103,7 @@ func CreateFile(path string) (*FileManager, error) {
 	if err := fm.writeHeader(); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
+
 		return nil, err
 	}
 
@@ -125,6 +126,7 @@ func OpenFile(path string) (*FileManager, error) {
 	header, err := fm.readHeader()
 	if err != nil {
 		_ = file.Close()
+
 		return nil, err
 	}
 	fm.header = header
@@ -133,6 +135,7 @@ func OpenFile(path string) (*FileManager, error) {
 	blocks, err := fm.readBlockIndex()
 	if err != nil {
 		_ = file.Close()
+
 		return nil, err
 	}
 	fm.blocks = blocks
@@ -151,6 +154,7 @@ func (fm *FileManager) Close() error {
 	if fm.file != nil {
 		return fm.file.Close()
 	}
+
 	return nil
 }
 
@@ -170,6 +174,7 @@ func newHeader() *Header {
 		Version: Version,
 	}
 	copy(h.Magic[:], MagicNumber)
+
 	return h
 }
 
@@ -297,6 +302,7 @@ func (fm *FileManager) WriteCatalog(data []byte) error {
 
 	if _, err := gzWriter.Write(data); err != nil {
 		_ = gzWriter.Close()
+
 		return fmt.Errorf("failed to write catalog data: %w", err)
 	}
 
@@ -483,7 +489,7 @@ func (fm *FileManager) readBlockIndex() ([]BlockInfo, error) {
 
 	blocks := make([]BlockInfo, count)
 
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		// Read table name
 		tableName, err := readString(fm.file)
 		if err != nil {
@@ -573,6 +579,7 @@ func (fm *FileManager) calculateChecksum() ([32]byte, error) {
 
 	var checksum [32]byte
 	copy(checksum[:], h.Sum(nil))
+
 	return checksum, nil
 }
 
@@ -642,6 +649,7 @@ func writeString(w io.Writer, s string) error {
 		return err
 	}
 	_, err := w.Write(data)
+
 	return err
 }
 
@@ -665,6 +673,7 @@ func writeVarint(w io.Writer, v uint64) error {
 	buf := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(buf, v)
 	_, err := w.Write(buf[:n])
+
 	return err
 }
 
@@ -686,6 +695,7 @@ func readVarint(r io.Reader) (uint64, error) {
 			return 0, errors.New("varint overflow")
 		}
 	}
+
 	return result, nil
 }
 
@@ -742,5 +752,6 @@ func UnmarshalCatalog(data []byte) (*CatalogJSON, error) {
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		return nil, err
 	}
+
 	return &catalog, nil
 }

@@ -27,12 +27,12 @@ type PhysicalHashJoinOperator struct {
 	hashTableBuilt bool
 
 	// Probe state
-	leftChunk        *storage.DataChunk
-	leftRowIdx       int
-	currentLeftRow   map[string]any
-	currentMatches   []map[string]any
-	currentMatchIdx  int
-	finished         bool
+	leftChunk       *storage.DataChunk
+	leftRowIdx      int
+	currentLeftRow  map[string]any
+	currentMatches  []map[string]any
+	currentMatchIdx int
+	finished        bool
 }
 
 // NewPhysicalHashJoinOperator creates a new PhysicalHashJoinOperator.
@@ -157,6 +157,7 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 			if outputChunk.Count() >= outputChunk.Capacity() {
 				return outputChunk, nil
 			}
+
 			continue
 		}
 
@@ -173,6 +174,7 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 				if outputChunk.Count() > 0 {
 					return outputChunk, nil
 				}
+
 				return nil, nil
 			}
 			op.leftChunk = chunk
@@ -229,6 +231,7 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 				if outputChunk.Count() >= outputChunk.Capacity() {
 					return outputChunk, nil
 				}
+
 				continue
 			}
 		}

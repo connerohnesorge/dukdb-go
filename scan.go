@@ -42,6 +42,7 @@ func scanValue(src any, dest any) error {
 	// 3. Handle NULL (src is nil)
 	if src == nil {
 		dv.Set(reflect.Zero(dv.Type()))
+
 		return nil
 	}
 
@@ -64,12 +65,14 @@ func convertValue(
 		if dv.IsNil() {
 			dv.Set(reflect.New(dv.Type().Elem()))
 		}
+
 		return convertValue(src, dv.Elem())
 	}
 
 	// Handle interface{} / any destination
 	if dv.Kind() == reflect.Interface {
 		dv.Set(reflect.ValueOf(src))
+
 		return nil
 	}
 
@@ -77,6 +80,7 @@ func convertValue(
 	sv := reflect.ValueOf(src)
 	if sv.Type().AssignableTo(dv.Type()) {
 		dv.Set(sv)
+
 		return nil
 	}
 
@@ -123,12 +127,15 @@ func scanBool(src any, dv reflect.Value) error {
 	switch v := src.(type) {
 	case bool:
 		dv.SetBool(v)
+
 		return nil
 	case int64:
 		dv.SetBool(v != 0)
+
 		return nil
 	case float64:
 		dv.SetBool(v != 0)
+
 		return nil
 	case string:
 		b, err := strconv.ParseBool(v)
@@ -136,6 +143,7 @@ func scanBool(src any, dv reflect.Value) error {
 			return &Error{Type: ErrorTypeConversion, Msg: fmt.Sprintf("cannot convert %q to bool", v)}
 		}
 		dv.SetBool(b)
+
 		return nil
 	default:
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into bool", src)}
@@ -208,6 +216,7 @@ func scanInt(src any, dv reflect.Value) error {
 	}
 
 	dv.SetInt(i64)
+
 	return nil
 }
 
@@ -295,6 +304,7 @@ func scanUint(src any, dv reflect.Value) error {
 	}
 
 	dv.SetUint(u64)
+
 	return nil
 }
 
@@ -346,6 +356,7 @@ func scanFloat(src any, dv reflect.Value) error {
 	}
 
 	dv.SetFloat(f64)
+
 	return nil
 }
 
@@ -390,6 +401,7 @@ func scanBigIntPtr(
 	}
 
 	dv.Set(reflect.ValueOf(bi))
+
 	return nil
 }
 
@@ -452,6 +464,7 @@ func scanString(src any, dv reflect.Value) error {
 	}
 
 	dv.SetString(s)
+
 	return nil
 }
 
@@ -472,6 +485,7 @@ func scanSlice(src any, dv reflect.Value) error {
 			}
 		}
 		dv.Set(slice)
+
 		return nil
 	default:
 		// Try to handle other slice types
@@ -484,8 +498,10 @@ func scanSlice(src any, dv reflect.Value) error {
 				}
 			}
 			dv.Set(slice)
+
 			return nil
 		}
+
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into slice", src)}
 	}
 }
@@ -512,6 +528,7 @@ func scanBytes(src any, dv reflect.Value) error {
 	}
 
 	dv.SetBytes(bytes)
+
 	return nil
 }
 
@@ -530,10 +547,12 @@ func scanMap(src any, dv reflect.Value) error {
 			}
 			dv.SetMapIndex(kv, vv)
 		}
+
 		return nil
 	case Map:
 		if dv.Type() == reflectTypeMap {
 			dv.Set(reflect.ValueOf(v))
+
 			return nil
 		}
 		// Convert Map to destination map type
@@ -552,6 +571,7 @@ func scanMap(src any, dv reflect.Value) error {
 			}
 			dv.SetMapIndex(kv, vv)
 		}
+
 		return nil
 	case map[any]any:
 		if dv.IsNil() {
@@ -569,6 +589,7 @@ func scanMap(src any, dv reflect.Value) error {
 			}
 			dv.SetMapIndex(kv, vv)
 		}
+
 		return nil
 	default:
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into map", src)}
@@ -649,6 +670,7 @@ func scanTime(src any, dv reflect.Value) error {
 	}
 
 	dv.Set(reflect.ValueOf(t))
+
 	return nil
 }
 
@@ -665,6 +687,7 @@ func scanUUID(src any, dv reflect.Value) error {
 		}
 	}
 	dv.Set(reflect.ValueOf(u))
+
 	return nil
 }
 
@@ -676,6 +699,7 @@ func scanInterval(
 	switch v := src.(type) {
 	case Interval:
 		dv.Set(reflect.ValueOf(v))
+
 		return nil
 	case map[string]any:
 		var interval Interval
@@ -695,6 +719,7 @@ func scanInterval(
 			}
 		}
 		dv.Set(reflect.ValueOf(interval))
+
 		return nil
 	default:
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into Interval", src)}
@@ -709,6 +734,7 @@ func scanDecimal(
 	switch v := src.(type) {
 	case Decimal:
 		dv.Set(reflect.ValueOf(v))
+
 		return nil
 	case string:
 		dec, err := parseDecimal(v)
@@ -716,6 +742,7 @@ func scanDecimal(
 			return err
 		}
 		dv.Set(reflect.ValueOf(dec))
+
 		return nil
 	case map[string]any:
 		// Handle JSON representation of decimal
@@ -742,6 +769,7 @@ func scanDecimal(
 			}
 		}
 		dv.Set(reflect.ValueOf(dec))
+
 		return nil
 	case float64:
 		// Convert float to decimal
@@ -751,6 +779,7 @@ func scanDecimal(
 			Value: big.NewInt(int64(v * 1e6)),
 		}
 		dv.Set(reflect.ValueOf(dec))
+
 		return nil
 	default:
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into Decimal", src)}
@@ -762,6 +791,7 @@ func scanUnion(src any, dv reflect.Value) error {
 	switch v := src.(type) {
 	case Union:
 		dv.Set(reflect.ValueOf(v))
+
 		return nil
 	case map[string]any:
 		var u Union
@@ -774,6 +804,7 @@ func scanUnion(src any, dv reflect.Value) error {
 			u.Value = value
 		}
 		dv.Set(reflect.ValueOf(u))
+
 		return nil
 	default:
 		return &Error{Type: ErrorTypeInvalid, Msg: fmt.Sprintf("cannot scan %T into Union", src)}
@@ -808,6 +839,7 @@ func scanStructFromMap(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -851,6 +883,7 @@ func checkIntOverflow(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -890,6 +923,7 @@ func checkUintOverflow(
 			}
 		}
 	}
+
 	return nil
 }
 

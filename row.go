@@ -36,6 +36,7 @@ func (r Row) IsProjected(colIdx int) bool {
 	}
 
 	actualCol := r.chunk.projection[colIdx]
+
 	return actualCol >= 0 && actualCol < len(r.chunk.columns)
 }
 
@@ -45,6 +46,7 @@ func (r Row) SetRowValue(colIdx int, val any) error {
 	if r.chunk == nil {
 		return errors.New("row has no associated chunk")
 	}
+
 	return r.chunk.SetValue(colIdx, r.rowIdx, val)
 }
 
@@ -53,6 +55,7 @@ func (r Row) GetRowValue(colIdx int) (any, error) {
 	if r.chunk == nil {
 		return nil, errors.New("row has no associated chunk")
 	}
+
 	return r.chunk.GetValue(colIdx, r.rowIdx)
 }
 
@@ -72,5 +75,6 @@ func SetRowValue[T any](row Row, colIdx int, val T) error {
 	if row.chunk == nil {
 		return errors.New("row has no associated chunk")
 	}
+
 	return SetChunkValue(*row.chunk, colIdx, row.rowIdx, val)
 }

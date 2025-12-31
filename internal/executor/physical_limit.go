@@ -67,6 +67,7 @@ func (op *PhysicalLimitOperator) Next() (*storage.DataChunk, error) {
 			if rowsToSkip >= chunkSize {
 				// Skip entire chunk
 				op.skipped += chunkSize
+
 				continue
 			}
 
@@ -103,7 +104,7 @@ func (op *PhysicalLimitOperator) Next() (*storage.DataChunk, error) {
 			rowsToEmit,
 		)
 
-		for i := 0; i < rowsToEmit; i++ {
+		for i := range rowsToEmit {
 			rowIdx := startIdx + i
 			values := make([]any, inputChunk.ColumnCount())
 			for colIdx := 0; colIdx < inputChunk.ColumnCount(); colIdx++ {

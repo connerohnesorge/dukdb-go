@@ -84,6 +84,7 @@ func NewScalarFuncContext(ctx context.Context, clock quartz.Clock) *ScalarFuncCo
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
+
 	return &ScalarFuncContext{
 		ctx:   ctx,
 		clock: clock,
@@ -115,6 +116,7 @@ func (c *ScalarFuncContext) checkTimeout() error {
 			return context.DeadlineExceeded
 		}
 	}
+
 	return nil
 }
 
@@ -182,6 +184,7 @@ func (r *scalarFuncRegistry) register(name string, f ScalarFunc) error {
 	}
 
 	r.functions[name] = append(r.functions[name], registered)
+
 	return nil
 }
 
@@ -200,6 +203,7 @@ func (r *scalarFuncRegistry) lookup(name string, argTypes []Type) *registeredSca
 			return &funcs[i]
 		}
 	}
+
 	return nil
 }
 
@@ -210,6 +214,7 @@ func (r *scalarFuncRegistry) LookupScalarUDF(name string, argTypes []Type) (udfI
 	if udf == nil {
 		return nil, TYPE_INVALID, false
 	}
+
 	return udf, udf.config.ResultTypeInfo.InternalType(), true
 }
 
@@ -252,6 +257,7 @@ func (r *scalarFuncRegistry) IsVolatile(udfInfo any) bool {
 	if !ok {
 		return false
 	}
+
 	return udf.config.Volatile
 }
 
@@ -290,6 +296,7 @@ func typesCompatible(expected, actual Type) bool {
 	if expected == TYPE_ANY {
 		return true
 	}
+
 	return expected == actual
 }
 
@@ -322,7 +329,7 @@ func executeScalarUDF(
 
 	nullInNullOut := !udf.config.SpecialNullHandling
 
-	for rowIdx := 0; rowIdx < size; rowIdx++ {
+	for rowIdx := range size {
 		// Check timeout periodically.
 		if ctx != nil {
 			if err := ctx.checkTimeout(); err != nil {
@@ -332,7 +339,7 @@ func executeScalarUDF(
 
 		// Gather input values.
 		nullRow := false
-		for colIdx := 0; colIdx < numCols; colIdx++ {
+		for colIdx := range numCols {
 			val, err := input.GetValue(colIdx, rowIdx)
 			if err != nil {
 				return fmt.Errorf("scalar UDF '%s' failed to get input at row %d, col %d: %w", udf.name, rowIdx, colIdx, err)
@@ -345,6 +352,7 @@ func executeScalarUDF(
 					return fmt.Errorf("scalar UDF '%s' failed to set NULL output at row %d: %w", udf.name, rowIdx, err)
 				}
 				nullRow = true
+
 				break
 			}
 		}
@@ -375,6 +383,7 @@ func safeExecute(fn func([]driver.Value) (any, error), values []driver.Value) (r
 			err = fmt.Errorf("panic in scalar UDF: %v", r)
 		}
 	}()
+
 	return fn(values)
 }
 

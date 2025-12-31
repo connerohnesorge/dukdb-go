@@ -16,6 +16,7 @@ func setupTestExecutor() (*Executor, *catalog.Catalog, *storage.Storage) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	exec := NewExecutor(cat, stor)
+
 	return exec, cat, stor
 }
 
@@ -598,6 +599,7 @@ func TestArithmeticExpressions(t *testing.T) {
 					"Expected 1 row, got %d",
 					len(result.Rows),
 				)
+
 				return
 			}
 		})
@@ -824,6 +826,7 @@ func TestStringFunctions(t *testing.T) {
 					"Expected 1 row, got %d",
 					len(result.Rows),
 				)
+
 				return
 			}
 		})

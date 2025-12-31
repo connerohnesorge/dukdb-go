@@ -514,7 +514,7 @@ func TestPhaseA_E2E_MultipleChunks(t *testing.T) {
 
 	// Insert enough rows to span multiple chunks
 	numRows := storage.StandardVectorSize + 500
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		require.NoError(t, table.AppendRow([]any{int32(i)}))
 	}
 

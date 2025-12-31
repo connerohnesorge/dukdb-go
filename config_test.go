@@ -253,6 +253,7 @@ func TestParseDSNConfig(t *testing.T) {
 						"ParseDSN(%q) expected error, got nil",
 						tt.dsn,
 					)
+
 					return
 				}
 				if dErr, ok := err.(*Error); ok {
@@ -265,6 +266,7 @@ func TestParseDSNConfig(t *testing.T) {
 						)
 					}
 				}
+
 				return
 			}
 
@@ -274,6 +276,7 @@ func TestParseDSNConfig(t *testing.T) {
 					tt.dsn,
 					err,
 				)
+
 				return
 			}
 
@@ -431,6 +434,7 @@ func TestResolveMaxMemory(t *testing.T) {
 						tt.value,
 					)
 				}
+
 				return
 			}
 
@@ -440,6 +444,7 @@ func TestResolveMaxMemory(t *testing.T) {
 					tt.value,
 					err,
 				)
+
 				return
 			}
 
@@ -553,6 +558,7 @@ func TestParseThreads(t *testing.T) {
 						tt.value,
 					)
 				}
+
 				return
 			}
 
@@ -562,6 +568,7 @@ func TestParseThreads(t *testing.T) {
 					tt.value,
 					err,
 				)
+
 				return
 			}
 

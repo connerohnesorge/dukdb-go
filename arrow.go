@@ -32,6 +32,7 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	if !ok {
 		return nil, errors.New("driverConn must be a *dukdb.Conn")
 	}
+
 	return &Arrow{
 		conn:  conn,
 		clock: quartz.NewReal(),
@@ -97,6 +98,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	schema, err := a.buildSchema(driverRows)
 	if err != nil {
 		_ = driverRows.Close()
+
 		return nil, fmt.Errorf("failed to build Arrow schema: %w", err)
 	}
 
@@ -181,6 +183,7 @@ func (r *arrowRecordReader) Next() bool {
 	record, err := r.buildNextBatch()
 	if err != nil {
 		r.err = err
+
 		return false
 	}
 
@@ -189,6 +192,7 @@ func (r *arrowRecordReader) Next() bool {
 	}
 
 	r.current = record
+
 	return true
 }
 
@@ -197,6 +201,7 @@ func (r *arrowRecordReader) Next() bool {
 func (r *arrowRecordReader) RecordBatch() arrow.RecordBatch {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return r.current
 }
 
@@ -209,6 +214,7 @@ func (r *arrowRecordReader) Record() arrow.RecordBatch {
 func (r *arrowRecordReader) Err() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return r.err
 }
 
@@ -282,6 +288,7 @@ func (r *arrowRecordReader) buildNextBatch() (arrow.RecordBatch, error) {
 			if rowCount == 0 {
 				return nil, nil // No more data
 			}
+
 			break
 		}
 
@@ -363,6 +370,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 		if !ok {
 			return nil, errors.New("expected DecimalDetails for DECIMAL type")
 		}
+
 		return &arrow.Decimal128Type{Precision: int32(details.Width), Scale: int32(details.Scale)}, nil
 	case TYPE_LIST:
 		details, ok := typeInfo.Details().(*ListDetails)
@@ -373,6 +381,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 		if err != nil {
 			return nil, fmt.Errorf("list child: %w", err)
 		}
+
 		return arrow.ListOf(childType), nil
 	case TYPE_ARRAY:
 		details, ok := typeInfo.Details().(*ArrayDetails)
@@ -383,6 +392,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 		if err != nil {
 			return nil, fmt.Errorf("array child: %w", err)
 		}
+
 		return arrow.FixedSizeListOf(int32(details.Size), childType), nil
 	case TYPE_STRUCT:
 		details, ok := typeInfo.Details().(*StructDetails)
@@ -397,6 +407,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 			}
 			fields[i] = arrow.Field{Name: entry.Name(), Type: childType, Nullable: true}
 		}
+
 		return arrow.StructOf(fields...), nil
 	case TYPE_MAP:
 		details, ok := typeInfo.Details().(*MapDetails)
@@ -411,6 +422,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 		if err != nil {
 			return nil, fmt.Errorf("map value: %w", err)
 		}
+
 		return arrow.MapOf(keyType, valueType), nil
 	case TYPE_ENUM:
 		// ENUM represented as dictionary-encoded string
@@ -435,6 +447,7 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 			fields[i] = arrow.Field{Name: member.Name, Type: memberType, Nullable: true}
 			typeCodes[i] = arrow.UnionTypeCode(i)
 		}
+
 		return arrow.DenseUnionOf(fields, typeCodes), nil
 	case TYPE_SQLNULL:
 		return arrow.Null, nil
@@ -489,6 +502,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		case arrow.Nanosecond:
 			return NewTypeInfo(TYPE_TIMESTAMP_NS)
 		}
+
 		return NewTypeInfo(TYPE_TIMESTAMP)
 	case arrow.INTERVAL_MONTHS, arrow.INTERVAL_DAY_TIME, arrow.INTERVAL_MONTH_DAY_NANO:
 		return NewTypeInfo(TYPE_INTERVAL)
@@ -497,9 +511,11 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		if fsb.ByteWidth == 16 {
 			return NewTypeInfo(TYPE_UUID)
 		}
+
 		return NewTypeInfo(TYPE_BLOB)
 	case arrow.DECIMAL128:
 		dec := dt.(*arrow.Decimal128Type)
+
 		return NewDecimalInfo(uint8(dec.Precision), uint8(dec.Scale))
 	case arrow.LIST, arrow.LARGE_LIST:
 		var elemType arrow.DataType
@@ -513,6 +529,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("list element: %w", err)
 		}
+
 		return NewListInfo(childInfo)
 	case arrow.FIXED_SIZE_LIST:
 		fsl := dt.(*arrow.FixedSizeListType)
@@ -520,6 +537,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("array element: %w", err)
 		}
+
 		return NewArrayInfo(childInfo, uint64(fsl.Len()))
 	case arrow.STRUCT:
 		st := dt.(*arrow.StructType)
@@ -538,6 +556,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 			}
 			entries[i] = entry
 		}
+
 		return NewStructInfo(entries[0], entries[1:]...)
 	case arrow.MAP:
 		mt := dt.(*arrow.MapType)
@@ -549,6 +568,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("map value: %w", err)
 		}
+
 		return NewMapInfo(keyInfo, valueInfo)
 	case arrow.DICTIONARY:
 		// Dictionary-encoded types are typically ENUMs in DuckDB
@@ -566,6 +586,7 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock quartz.Clock) error {
 	if val == nil {
 		builder.AppendNull()
+
 		return nil
 	}
 
@@ -734,6 +755,7 @@ func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock qu
 			if member.Name == u.Tag {
 				typeCode = int8(i)
 				memberType = member.Type
+
 				break
 			}
 		}
@@ -844,6 +866,7 @@ func (it *arrowRowIterator) Next() bool {
 			if err := it.reader.Err(); err != nil {
 				it.err = err
 			}
+
 			return false
 		}
 
@@ -857,6 +880,7 @@ func (it *arrowRowIterator) Next() bool {
 
 	// Extract values for current row
 	it.values = it.extractRowValues()
+
 	return true
 }
 
@@ -869,10 +893,11 @@ func (it *arrowRowIterator) extractRowValues() []any {
 	numCols := int(it.batch.NumCols())
 	values := make([]any, numCols)
 
-	for col := 0; col < numCols; col++ {
+	for col := range numCols {
 		arr := it.batch.Column(col)
 		if arr.IsNull(int(it.rowIdx)) {
 			values[col] = nil
+
 			continue
 		}
 
@@ -921,17 +946,21 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 		return a.Value(idx)
 	case *array.Date32:
 		days := int64(a.Value(idx))
+
 		return time.Unix(days*secondsPerDay, 0).UTC()
 	case *array.Date64:
 		millis := int64(a.Value(idx))
+
 		return time.UnixMilli(millis).UTC()
 	case *array.Time32:
 		// Time32 is in seconds or milliseconds
 		val := int64(a.Value(idx))
+
 		return time.UnixMicro(val * 1000).UTC()
 	case *array.Time64:
 		// Time64 is in microseconds or nanoseconds
 		val := int64(a.Value(idx))
+
 		return time.UnixMicro(val).UTC()
 	case *array.Timestamp:
 		ts := a.Value(idx)
@@ -946,17 +975,21 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 		case arrow.Nanosecond:
 			return time.Unix(0, int64(ts)).UTC()
 		}
+
 		return time.UnixMicro(int64(ts)).UTC()
 	case *array.Decimal128:
 		val := a.Value(idx)
+
 		return val.BigInt()
 	case *array.FixedSizeBinary:
 		data := a.Value(idx)
 		if len(data) == 16 {
 			var u UUID
 			copy(u[:], data)
+
 			return u
 		}
+
 		return data
 	case *array.List:
 		start, end := a.ValueOffsets(idx)
@@ -966,6 +999,7 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 		for i := start; i < end; i++ {
 			result[i-start] = extractArrowValue(child, int(i), childTypeInfo, clock)
 		}
+
 		return result
 	case *array.LargeList:
 		start, end := a.ValueOffsets(idx)
@@ -975,6 +1009,7 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 		for i := start; i < end; i++ {
 			result[i-start] = extractArrowValue(child, int(i), childTypeInfo, clock)
 		}
+
 		return result
 	case *array.FixedSizeList:
 		listSize := a.DataType().(*arrow.FixedSizeListType).Len()
@@ -982,9 +1017,10 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 		child := a.ListValues()
 		result := make([]any, listSize)
 		childTypeInfo := typeInfo.Details().(*ArrayDetails).Child
-		for i := int32(0); i < listSize; i++ {
+		for i := range listSize {
 			result[i] = extractArrowValue(child, int(start)+int(i), childTypeInfo, clock)
 		}
+
 		return result
 	case *array.Struct:
 		result := make(map[string]any)
@@ -993,6 +1029,7 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 			field := a.Field(i)
 			result[entry.Name()] = extractArrowValue(field, idx, entry.Info(), clock)
 		}
+
 		return result
 	case *array.Map:
 		keys := a.Keys()
@@ -1005,6 +1042,7 @@ func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz
 			value := extractArrowValue(items, int(i), mapDetails.Value, clock)
 			result[key] = value
 		}
+
 		return result
 	default:
 		// Fallback: try to get string representation

@@ -85,6 +85,7 @@ func newVector(capacity int) *vector {
 	for i := range mask {
 		mask[i] = ^uint64(0)
 	}
+
 	return &vector{
 		capacity: capacity,
 		maskBits: mask,
@@ -95,6 +96,7 @@ func newVector(capacity int) *vector {
 func (vec *vector) isNull(rowIdx int) bool {
 	wordIdx := rowIdx / bitsPerWord
 	bitIdx := rowIdx % bitsPerWord
+
 	return (vec.maskBits[wordIdx] & (1 << bitIdx)) == 0
 }
 
@@ -208,6 +210,7 @@ func (vec *vector) init(typeInfo TypeInfo, colIdx int) error {
 	default:
 		return fmt.Errorf("column index %d: unknown type %s", colIdx, t.String())
 	}
+
 	return nil
 }
 
@@ -221,6 +224,7 @@ type numericType interface {
 // getPrimitive gets a primitive value from the vector at the given index.
 func getPrimitive[T any](vec *vector, rowIdx int) T {
 	slice := vec.dataSlice.([]T)
+
 	return slice[rowIdx]
 }
 
@@ -237,13 +241,16 @@ func initBoolVec(vec *vector) {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[bool](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setBool(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_BOOLEAN
@@ -255,6 +262,7 @@ func setBool(vec *vector, rowIdx int, val any) error {
 	case bool:
 		vec.setValid(rowIdx)
 		setPrimitive(vec, rowIdx, v)
+
 		return nil
 	default:
 		return fmt.Errorf("cannot convert %T to bool", val)
@@ -268,13 +276,16 @@ func initNumericVec[T numericType](vec *vector, t Type) {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[T](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setNumeric[T](vec, rowIdx, val)
 	}
 	vec.Type = t
@@ -319,6 +330,7 @@ func setNumeric[T numericType](vec *vector, rowIdx int, val any) error {
 	}
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, result)
+
 	return nil
 }
 
@@ -329,13 +341,16 @@ func (vec *vector) initTimestamp(t Type) {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getTimestamp(t, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setTimestamp(vec, t, rowIdx, val)
 	}
 	vec.Type = t
@@ -375,6 +390,7 @@ func setTimestamp(vec *vector, t Type, rowIdx int, val any) error {
 
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, micros)
+
 	return nil
 }
 
@@ -385,13 +401,16 @@ func (vec *vector) initDate() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getDate(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setDate(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_DATE
@@ -399,6 +418,7 @@ func (vec *vector) initDate() {
 
 func (vec *vector) getDate(rowIdx int) time.Time {
 	days := getPrimitive[int32](vec, rowIdx)
+
 	return time.Unix(int64(days)*secondsPerDay, 0).UTC()
 }
 
@@ -410,6 +430,7 @@ func setDate(vec *vector, rowIdx int, val any) error {
 	days := int32(ti.Unix() / secondsPerDay)
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, days)
+
 	return nil
 }
 
@@ -420,13 +441,16 @@ func (vec *vector) initTime(t Type) {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getTime(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setTime(vec, rowIdx, val)
 	}
 	vec.Type = t
@@ -448,6 +472,7 @@ func setTime(vec *vector, rowIdx int, val any) error {
 	micros := base.UnixMicro()
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, micros)
+
 	return nil
 }
 
@@ -458,13 +483,16 @@ func (vec *vector) initInterval() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[Interval](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setInterval(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_INTERVAL
@@ -477,6 +505,7 @@ func setInterval(vec *vector, rowIdx int, val any) error {
 	}
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, interval)
+
 	return nil
 }
 
@@ -488,13 +517,16 @@ func (vec *vector) initHugeint() {
 			return nil
 		}
 		h := getPrimitive[hugeInt](vec, rowIdx)
+
 		return hugeIntToBigInt(h)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setHugeint(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_HUGEINT
@@ -519,6 +551,7 @@ func setHugeint(vec *vector, rowIdx int, val any) error {
 	}
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, h)
+
 	return nil
 }
 
@@ -529,13 +562,16 @@ func (vec *vector) initUhugeint() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[Uhugeint](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setUhugeint(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UHUGEINT
@@ -573,6 +609,7 @@ func setUhugeint(vec *vector, rowIdx int, val any) error {
 
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, u)
+
 	return nil
 }
 
@@ -583,13 +620,16 @@ func (vec *vector) initBit() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[Bit](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setBit(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_BIT
@@ -622,6 +662,7 @@ func setBit(vec *vector, rowIdx int, val any) error {
 
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, b)
+
 	return nil
 }
 
@@ -632,13 +673,16 @@ func (vec *vector) initVarchar() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[string](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setVarchar(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_VARCHAR
@@ -649,10 +693,12 @@ func setVarchar(vec *vector, rowIdx int, val any) error {
 	case string:
 		vec.setValid(rowIdx)
 		setPrimitive(vec, rowIdx, v)
+
 		return nil
 	case []byte:
 		vec.setValid(rowIdx)
 		setPrimitive(vec, rowIdx, string(v))
+
 		return nil
 	default:
 		return fmt.Errorf("cannot convert %T to string", val)
@@ -666,13 +712,16 @@ func (vec *vector) initBlob() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return getPrimitive[[]byte](vec, rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setBlob(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_BLOB
@@ -683,10 +732,12 @@ func setBlob(vec *vector, rowIdx int, val any) error {
 	case []byte:
 		vec.setValid(rowIdx)
 		setPrimitive(vec, rowIdx, v)
+
 		return nil
 	case string:
 		vec.setValid(rowIdx)
 		setPrimitive(vec, rowIdx, []byte(v))
+
 		return nil
 	default:
 		return fmt.Errorf("cannot convert %T to []byte", val)
@@ -706,13 +757,16 @@ func (vec *vector) initJSON() {
 		if err := json.Unmarshal([]byte(s), &result); err != nil {
 			return s // Return raw string on parse failure.
 		}
+
 		return result
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setJSON(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_VARCHAR
@@ -741,6 +795,7 @@ func setJSON(vec *vector, rowIdx int, val any) error {
 	}
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, s)
+
 	return nil
 }
 
@@ -774,16 +829,20 @@ func (vec *vector) initDecimal(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getDecimal(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setDecimal(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_DECIMAL
+
 	return nil
 }
 
@@ -803,6 +862,7 @@ func (vec *vector) getDecimal(rowIdx int) Decimal {
 		h := getPrimitive[hugeInt](vec, rowIdx)
 		value = hugeIntToBigInt(h)
 	}
+
 	return Decimal{
 		Width: vec.decimalWidth,
 		Scale: vec.decimalScale,
@@ -835,6 +895,7 @@ func setDecimal(vec *vector, rowIdx int, val any) error {
 		slice := vec.dataSlice.([]hugeInt)
 		slice[rowIdx] = h
 	}
+
 	return nil
 }
 
@@ -878,16 +939,20 @@ func (vec *vector) initEnum(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getEnum(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setEnum(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_ENUM
+
 	return nil
 }
 
@@ -903,6 +968,7 @@ func (vec *vector) getEnum(rowIdx int) string {
 	case TYPE_UBIGINT:
 		idx = uint32(getPrimitive[uint64](vec, rowIdx))
 	}
+
 	return vec.tagDict[idx]
 }
 
@@ -932,6 +998,7 @@ func setEnum(vec *vector, rowIdx int, val any) error {
 		slice := vec.dataSlice.([]uint64)
 		slice[rowIdx] = uint64(idx)
 	}
+
 	return nil
 }
 
@@ -957,16 +1024,20 @@ func (vec *vector) initList(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getList(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setList(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_LIST
+
 	return nil
 }
 
@@ -979,6 +1050,7 @@ func (vec *vector) getList(rowIdx int) []any {
 	for i := start; i < end; i++ {
 		result[i-start] = child.getFn(child, int(i))
 	}
+
 	return result
 }
 
@@ -999,6 +1071,7 @@ func setList(vec *vector, rowIdx int, val any) error {
 
 	vec.setValid(rowIdx)
 	vec.listOffsets[rowIdx+1] = start + uint64(len(slice))
+
 	return nil
 }
 
@@ -1024,16 +1097,20 @@ func (vec *vector) initStruct(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getStruct(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setStruct(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_STRUCT
+
 	return nil
 }
 
@@ -1043,6 +1120,7 @@ func (vec *vector) getStruct(rowIdx int) map[string]any {
 		child := &vec.childVectors[i]
 		result[entry.Name()] = child.getFn(child, rowIdx)
 	}
+
 	return result
 }
 
@@ -1061,6 +1139,7 @@ func setStruct(vec *vector, rowIdx int, val any) error {
 	}
 
 	vec.setValid(rowIdx)
+
 	return nil
 }
 
@@ -1097,13 +1176,16 @@ func (vec *vector) initMap(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getMap(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setMap(vec, rowIdx, val)
 	}
 
@@ -1119,6 +1201,7 @@ func (vec *vector) getMap(rowIdx int) Map {
 			result[m["key"]] = m["value"]
 		}
 	}
+
 	return result
 }
 
@@ -1157,16 +1240,20 @@ func (vec *vector) initArray(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getArray(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setArray(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_ARRAY
+
 	return nil
 }
 
@@ -1174,9 +1261,10 @@ func (vec *vector) getArray(rowIdx int) []any {
 	result := make([]any, vec.arrayLength)
 	child := &vec.childVectors[0]
 	start := rowIdx * vec.arrayLength
-	for i := 0; i < vec.arrayLength; i++ {
+	for i := range vec.arrayLength {
 		result[i] = child.getFn(child, start+i)
 	}
+
 	return result
 }
 
@@ -1199,6 +1287,7 @@ func setArray(vec *vector, rowIdx int, val any) error {
 	}
 
 	vec.setValid(rowIdx)
+
 	return nil
 }
 
@@ -1237,16 +1326,20 @@ func (vec *vector) initUnion(typeInfo TypeInfo, colIdx int) error {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
+
 		return vec.getUnion(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setUnion(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UNION
+
 	return nil
 }
 
@@ -1285,6 +1378,7 @@ func setUnion(vec *vector, rowIdx int, val any) error {
 	}
 
 	vec.setValid(rowIdx)
+
 	return nil
 }
 
@@ -1296,13 +1390,16 @@ func (vec *vector) initUUID() {
 			return nil
 		}
 		h := getPrimitive[hugeInt](vec, rowIdx)
+
 		return hugeIntToUUID(&h)
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
+
 			return nil
 		}
+
 		return setUUID(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UUID
@@ -1312,26 +1409,27 @@ func hugeIntToUUID(h *hugeInt) UUID {
 	var u UUID
 	// Upper 64 bits (XOR with sign bit for UUID format).
 	upper := uint64(h.upper) ^ (1 << 63)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		u[i] = byte(upper >> (56 - i*8))
 	}
 	// Lower 64 bits.
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		u[8+i] = byte(h.lower >> (56 - i*8))
 	}
+
 	return u
 }
 
 func uuidToHugeInt(u *UUID) hugeInt {
 	var upper uint64
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		upper |= uint64(u[i]) << (56 - i*8)
 	}
 	// XOR with sign bit.
 	upper ^= (1 << 63)
 
 	var lower uint64
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		lower |= uint64(u[8+i]) << (56 - i*8)
 	}
 
@@ -1368,6 +1466,7 @@ func setUUID(vec *vector, rowIdx int, val any) error {
 	vec.setValid(rowIdx)
 	h := uuidToHugeInt(u)
 	setPrimitive(vec, rowIdx, h)
+
 	return nil
 }
 

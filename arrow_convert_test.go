@@ -358,8 +358,8 @@ func TestRoundTrip_DataChunk_RecordBatch(t *testing.T) {
 	// Verify values match
 	assert.Equal(t, original.GetSize(), roundtrip.GetSize())
 
-	for row := 0; row < 3; row++ {
-		for col := 0; col < 3; col++ {
+	for row := range 3 {
+		for col := range 3 {
 			origVal, err := original.GetValue(col, row)
 			require.NoError(t, err)
 			rtVal, err := roundtrip.GetValue(col, row)

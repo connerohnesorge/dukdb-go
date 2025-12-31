@@ -42,6 +42,7 @@ func TestDeserializeColumn(t *testing.T) {
 			name: "decimal column",
 			column: func() *catalog.ColumnDef {
 				info, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return &catalog.ColumnDef{
 					Name:     "price",
 					Type:     dukdb.TYPE_DECIMAL,
@@ -57,6 +58,7 @@ func TestDeserializeColumn(t *testing.T) {
 			column: func() *catalog.ColumnDef {
 				childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listInfo, _ := dukdb.NewListInfo(childInfo)
+
 				return &catalog.ColumnDef{
 					Name:     "numbers",
 					Type:     dukdb.TYPE_LIST,
@@ -120,6 +122,7 @@ func TestDeserializeTableEntry(t *testing.T) {
 					{Name: "price", Type: dukdb.TYPE_DOUBLE, Nullable: true},
 				})
 				t.Schema = "sales"
+
 				return t
 			}(),
 			wantName:   "products",
@@ -132,6 +135,7 @@ func TestDeserializeTableEntry(t *testing.T) {
 				{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
 				func() *catalog.ColumnDef {
 					info, _ := dukdb.NewDecimalInfo(18, 4)
+
 					return &catalog.ColumnDef{
 						Name:     "amount",
 						Type:     dukdb.TYPE_DECIMAL,
@@ -142,6 +146,7 @@ func TestDeserializeTableEntry(t *testing.T) {
 				func() *catalog.ColumnDef {
 					childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 					listInfo, _ := dukdb.NewListInfo(childInfo)
+
 					return &catalog.ColumnDef{
 						Name:     "tags",
 						Type:     dukdb.TYPE_LIST,
@@ -206,6 +211,7 @@ func TestDeserializeSchema(t *testing.T) {
 					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
 				})
 				_ = s.CreateTable(table)
+
 				return s
 			}(),
 			wantName:   "test",
@@ -224,6 +230,7 @@ func TestDeserializeSchema(t *testing.T) {
 				})
 				_ = s.CreateTable(table1)
 				_ = s.CreateTable(table2)
+
 				return s
 			}(),
 			wantName:   "multi",
@@ -279,6 +286,7 @@ func TestDeserializeCatalog(t *testing.T) {
 					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
 				})
 				_ = cat.CreateTable(table)
+
 				return cat
 			},
 			wantSchemas: 1,
@@ -338,6 +346,7 @@ func TestDeserializeCatalog(t *testing.T) {
 					},
 				})
 				_ = cat.CreateTable(table)
+
 				return cat
 			},
 			wantSchemas: 1,
@@ -421,6 +430,7 @@ func TestDeserializeColumn_ErrorHandling(t *testing.T) {
 				// Only write property 100, missing property 101 (TypeInfo)
 				_ = bw.WriteProperty(100, "test_col")
 				_ = bw.Flush()
+
 				return buf.Bytes()
 			}(),
 			wantErr: true,
@@ -462,6 +472,7 @@ func TestDeserializeTableEntry_ErrorHandling(t *testing.T) {
 				_ = bw.WriteProperty(102, "main")
 				_ = bw.WriteProperty(200, uint64(0))
 				_ = bw.Flush()
+
 				return buf.Bytes()
 			}(),
 			wantErr: true,
@@ -502,6 +513,7 @@ func TestDeserializeSchema_ErrorHandling(t *testing.T) {
 				_ = bw.WriteProperty(101, "test_schema")
 				_ = bw.WriteProperty(200, uint64(0))
 				_ = bw.Flush()
+
 				return buf.Bytes()
 			}(),
 			wantErr: true,
@@ -537,12 +549,18 @@ func TestCatalogRoundTrip_ComplexTypes(t *testing.T) {
 
 	// Struct column
 	structField1, err := dukdb.NewStructEntry(
-		func() dukdb.TypeInfo { info, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER); return info }(),
+		func() dukdb.TypeInfo {
+			info, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+			return info
+		}(),
 		"x",
 	)
 	require.NoError(t, err)
 	structField2, err := dukdb.NewStructEntry(
-		func() dukdb.TypeInfo { info, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR); return info }(),
+		func() dukdb.TypeInfo {
+			info, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+			return info
+		}(),
 		"y",
 	)
 	require.NoError(t, err)
@@ -656,6 +674,7 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
 				})
 				_ = cat.CreateTable(table)
+
 				return cat
 			},
 			verify: func(t *testing.T, cat *catalog.Catalog) {
@@ -721,6 +740,7 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 					},
 				})
 				_ = cat.CreateTable(table)
+
 				return cat
 			},
 			verify: func(t *testing.T, cat *catalog.Catalog) {
@@ -789,6 +809,7 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 				}()
 				// Write invalid magic number
 				_, err = f.Write([]byte{0x00, 0x00, 0x00, 0x00})
+
 				return err
 			},
 			wantErr: true,
@@ -808,6 +829,7 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 				// Overwrite version with incorrect value by seeking back
 				_, _ = f.Seek(4, 0)
 				_, err = f.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+
 				return err
 			},
 			wantErr: true,

@@ -37,6 +37,7 @@ func convertToType[T any](src any) (T, error) {
 		} else {
 			return zero, fmt.Errorf("cannot convert %T to *%s", src, elemType)
 		}
+
 		return newPtr.Interface().(T), nil
 	}
 
@@ -54,6 +55,7 @@ func convertToType[T any](src any) (T, error) {
 		if err != nil {
 			return zero, err
 		}
+
 		return reflect.ValueOf(converted).Convert(targetType).Interface().(T), nil
 	}
 
@@ -64,24 +66,28 @@ func convertToType[T any](src any) (T, error) {
 		if err != nil {
 			return zero, err
 		}
+
 		return any(t).(T), nil
 	case reflect.TypeOf(&big.Int{}):
 		bi, err := convertToBigInt(src)
 		if err != nil {
 			return zero, err
 		}
+
 		return any(bi).(T), nil
 	case reflect.TypeOf(Decimal{}):
 		d, err := convertToDecimal(src)
 		if err != nil {
 			return zero, err
 		}
+
 		return any(d).(T), nil
 	case reflect.TypeOf(Interval{}):
 		i, err := convertToInterval(src)
 		if err != nil {
 			return zero, err
 		}
+
 		return any(i).(T), nil
 	}
 
@@ -118,6 +124,7 @@ func stringToNumeric(s string, kind reflect.Kind) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse %q as numeric: %w", s, err)
 	}
+
 	return result, nil
 }
 
@@ -128,10 +135,12 @@ func setFieldValue(field reflect.Value, val any) error {
 		// For pointer fields, set to nil
 		if field.Kind() == reflect.Ptr {
 			field.Set(reflect.Zero(field.Type()))
+
 			return nil
 		}
 		// For non-pointer fields, set to zero value
 		field.Set(reflect.Zero(field.Type()))
+
 		return nil
 	}
 
@@ -142,6 +151,7 @@ func setFieldValue(field reflect.Value, val any) error {
 		if valValue.Kind() == reflect.Ptr {
 			if valValue.Type().AssignableTo(field.Type()) {
 				field.Set(valValue)
+
 				return nil
 			}
 		}
@@ -150,6 +160,7 @@ func setFieldValue(field reflect.Value, val any) error {
 			return err
 		}
 		field.Set(newPtr)
+
 		return nil
 	}
 
@@ -168,6 +179,7 @@ func setFieldValue(field reflect.Value, val any) error {
 					}
 				}
 			}
+
 			return nil
 		}
 	}
@@ -182,6 +194,7 @@ func setFieldValue(field reflect.Value, val any) error {
 				}
 			}
 			field.Set(slice)
+
 			return nil
 		}
 	}
@@ -202,6 +215,7 @@ func setFieldValue(field reflect.Value, val any) error {
 				newMap.SetMapIndex(keyVal, valVal)
 			}
 			field.Set(newMap)
+
 			return nil
 		}
 	}
@@ -209,12 +223,14 @@ func setFieldValue(field reflect.Value, val any) error {
 	// Direct assignment
 	if valValue.Type().AssignableTo(field.Type()) {
 		field.Set(valValue)
+
 		return nil
 	}
 
 	// Convertible types
 	if valValue.Type().ConvertibleTo(field.Type()) {
 		field.Set(valValue.Convert(field.Type()))
+
 		return nil
 	}
 
@@ -227,6 +243,7 @@ func toAnySlice[T any](src []T) []any {
 	for i, v := range src {
 		result[i] = v
 	}
+
 	return result
 }
 
@@ -243,6 +260,7 @@ func parseUUID(s string) ([16]byte, error) {
 	if err != nil {
 		return uuid, fmt.Errorf("invalid UUID hex: %w", err)
 	}
+
 	return uuid, nil
 }
 
@@ -266,6 +284,7 @@ func convertToTime(src any) (time.Time, error) {
 		if t, err := time.Parse("2006-01-02", v); err == nil {
 			return t, nil
 		}
+
 		return time.Time{}, fmt.Errorf("cannot parse %q as time", v)
 	default:
 		return time.Time{}, fmt.Errorf("cannot convert %T to time.Time", src)
@@ -288,6 +307,7 @@ func convertToBigInt(src any) (*big.Int, error) {
 		if _, ok := bi.SetString(v, 10); !ok {
 			return nil, fmt.Errorf("invalid big.Int string: %s", v)
 		}
+
 		return bi, nil
 	default:
 		return nil, fmt.Errorf("cannot convert %T to *big.Int", src)
@@ -330,6 +350,7 @@ func NewDecimalFromFloat(f float64) Decimal {
 		// Fallback to zero decimal
 		return Decimal{Width: 18, Scale: 0, Value: big.NewInt(0)}
 	}
+
 	return d
 }
 

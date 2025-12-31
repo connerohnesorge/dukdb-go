@@ -22,6 +22,7 @@ func NewCatalog() *Catalog {
 	}
 	// Create default schema
 	c.schemas["main"] = NewSchema("main")
+
 	return c
 }
 
@@ -32,6 +33,7 @@ func (c *Catalog) GetSchema(
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	s, ok := c.schemas[name]
+
 	return s, ok
 }
 
@@ -44,6 +46,7 @@ func (c *Catalog) ListSchemas() []*Schema {
 	for _, s := range c.schemas {
 		schemas = append(schemas, s)
 	}
+
 	return schemas
 }
 
@@ -63,6 +66,7 @@ func (c *Catalog) CreateSchema(
 
 	s := NewSchema(name)
 	c.schemas[name] = s
+
 	return s, nil
 }
 
@@ -86,6 +90,7 @@ func (c *Catalog) DropSchema(name string) error {
 	}
 
 	delete(c.schemas, name)
+
 	return nil
 }
 
@@ -107,6 +112,7 @@ func (c *Catalog) GetTableInSchema(
 	if !ok {
 		return nil, false
 	}
+
 	return schema.GetTable(tableName)
 }
 
@@ -175,6 +181,7 @@ func (c *Catalog) ListTablesInSchema(
 	if !ok {
 		return nil
 	}
+
 	return schema.ListTables()
 }
 
@@ -212,6 +219,7 @@ func (c *Catalog) RegisterVirtualTable(vt dukdb.VirtualTable) error {
 	}
 
 	c.virtualTables[name] = NewVirtualTableDef(vt)
+
 	return nil
 }
 
@@ -228,6 +236,7 @@ func (c *Catalog) UnregisterVirtualTable(name string) error {
 	}
 
 	delete(c.virtualTables, name)
+
 	return nil
 }
 
@@ -238,6 +247,7 @@ func (c *Catalog) GetVirtualTableDef(name string) (*VirtualTableDef, bool) {
 	defer c.mu.RUnlock()
 
 	vt, ok := c.virtualTables[name]
+
 	return vt, ok
 }
 
@@ -251,6 +261,7 @@ func (c *Catalog) GetVirtualTable(name string) (dukdb.VirtualTable, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return vt.VirtualTable(), true
 }
 
@@ -260,6 +271,7 @@ func (c *Catalog) IsVirtualTable(name string) bool {
 	defer c.mu.RUnlock()
 
 	_, ok := c.virtualTables[name]
+
 	return ok
 }
 
@@ -290,6 +302,7 @@ func (s *Schema) GetTable(
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.tables[name]
+
 	return t, ok
 }
 
@@ -306,6 +319,7 @@ func (s *Schema) CreateTable(
 
 	table.Schema = s.name
 	s.tables[table.Name] = table
+
 	return nil
 }
 
@@ -319,6 +333,7 @@ func (s *Schema) DropTable(name string) error {
 	}
 
 	delete(s.tables, name)
+
 	return nil
 }
 
@@ -331,6 +346,7 @@ func (s *Schema) ListTables() []*TableDef {
 	for _, t := range s.tables {
 		tables = append(tables, t)
 	}
+
 	return tables
 }
 

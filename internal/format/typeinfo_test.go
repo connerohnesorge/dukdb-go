@@ -69,9 +69,10 @@ func TestEnumRoundTrip(t *testing.T) {
 		{"ENUM with Unicode", []string{"😀", "😁", "😂"}},
 		{"ENUM 100 values", func() []string {
 			vals := make([]string, 100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				vals[i] = fmt.Sprintf("VAL_%d", i)
 			}
+
 			return vals
 		}()},
 	}
@@ -116,6 +117,7 @@ func TestListRoundTrip(t *testing.T) {
 			"LIST<INTEGER>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 		},
@@ -123,6 +125,7 @@ func TestListRoundTrip(t *testing.T) {
 			"LIST<VARCHAR>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 		},
@@ -130,6 +133,7 @@ func TestListRoundTrip(t *testing.T) {
 			"LIST<DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 		},
@@ -138,6 +142,7 @@ func TestListRoundTrip(t *testing.T) {
 			func() dukdb.TypeInfo {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
+
 				return listType
 			},
 		},
@@ -147,6 +152,7 @@ func TestListRoundTrip(t *testing.T) {
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 				list1, _ := dukdb.NewListInfo(varcharType)
 				list2, _ := dukdb.NewListInfo(list1)
+
 				return list2
 			},
 		},
@@ -192,6 +198,7 @@ func TestArrayRoundTrip(t *testing.T) {
 			"INTEGER[10]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			10,
@@ -200,6 +207,7 @@ func TestArrayRoundTrip(t *testing.T) {
 			"VARCHAR[100]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			100,
@@ -208,6 +216,7 @@ func TestArrayRoundTrip(t *testing.T) {
 			"DECIMAL(18,4)[5]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 			5,
@@ -216,6 +225,7 @@ func TestArrayRoundTrip(t *testing.T) {
 			"INTEGER[1]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			1,
@@ -224,6 +234,7 @@ func TestArrayRoundTrip(t *testing.T) {
 			"INTEGER[1000]",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			1000,
@@ -273,6 +284,7 @@ func TestStructRoundTrip(t *testing.T) {
 			func() []dukdb.StructEntry {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				entry, _ := dukdb.NewStructEntry(intType, "x")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -283,6 +295,7 @@ func TestStructRoundTrip(t *testing.T) {
 				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
 				entry1, _ := dukdb.NewStructEntry(intType, "x")
 				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
+
 				return []dukdb.StructEntry{entry1, entry2}
 			},
 		},
@@ -290,11 +303,12 @@ func TestStructRoundTrip(t *testing.T) {
 			"STRUCT with 10 fields",
 			func() []dukdb.StructEntry {
 				entries := make([]dukdb.StructEntry, 10)
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 					entry, _ := dukdb.NewStructEntry(intType, string(rune('a'+i)))
 					entries[i] = entry
 				}
+
 				return entries
 			},
 		},
@@ -307,6 +321,7 @@ func TestStructRoundTrip(t *testing.T) {
 				innerEntry2, _ := dukdb.NewStructEntry(varcharType, "b")
 				innerStruct, _ := dukdb.NewStructInfo(innerEntry1, innerEntry2)
 				entry, _ := dukdb.NewStructEntry(innerStruct, "x")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -316,6 +331,7 @@ func TestStructRoundTrip(t *testing.T) {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
 				entry, _ := dukdb.NewStructEntry(listType, "items")
+
 				return []dukdb.StructEntry{entry}
 			},
 		},
@@ -367,10 +383,12 @@ func TestMapRoundTrip(t *testing.T) {
 			"MAP<VARCHAR, INTEGER>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 		},
@@ -378,10 +396,12 @@ func TestMapRoundTrip(t *testing.T) {
 			"MAP<INTEGER, VARCHAR>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 		},
@@ -389,10 +409,12 @@ func TestMapRoundTrip(t *testing.T) {
 			"MAP<VARCHAR, DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewDecimalInfo(18, 4)
+
 				return ti
 			},
 		},
@@ -400,11 +422,13 @@ func TestMapRoundTrip(t *testing.T) {
 			"MAP<VARCHAR, LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
 				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
 				listType, _ := dukdb.NewListInfo(intType)
+
 				return listType
 			},
 		},
@@ -412,6 +436,7 @@ func TestMapRoundTrip(t *testing.T) {
 			"MAP<VARCHAR, STRUCT(x INTEGER, y VARCHAR)>",
 			func() dukdb.TypeInfo {
 				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+
 				return ti
 			},
 			func() dukdb.TypeInfo {
@@ -420,6 +445,7 @@ func TestMapRoundTrip(t *testing.T) {
 				entry1, _ := dukdb.NewStructEntry(intType, "x")
 				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+
 				return structType
 			},
 		},
@@ -475,6 +501,7 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 				list1, _ := dukdb.NewListInfo(intType)
 				list2, _ := dukdb.NewListInfo(list1)
 				list3, _ := dukdb.NewListInfo(list2)
+
 				return list3
 			},
 		},
@@ -488,6 +515,7 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 				struct2, _ := dukdb.NewStructInfo(entry2)
 				entry3, _ := dukdb.NewStructEntry(struct2, "x")
 				struct3, _ := dukdb.NewStructInfo(entry3)
+
 				return struct3
 			},
 		},
@@ -501,6 +529,7 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 				entry2, _ := dukdb.NewStructEntry(listType, "y")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
 				listStruct, _ := dukdb.NewListInfo(structType)
+
 				return listStruct
 			},
 		},
@@ -515,6 +544,7 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 				entry1, _ := dukdb.NewStructEntry(mapType, "a")
 				entry2, _ := dukdb.NewStructEntry(listType, "b")
 				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+
 				return structType
 			},
 		},

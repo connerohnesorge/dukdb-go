@@ -37,12 +37,14 @@ func (e *Executor) evaluateExpr(
 		if val, ok := row[key]; ok {
 			return val, nil
 		}
+
 		return nil, nil
 
 	case *binder.BoundParameter:
 		if ctx.Args == nil || ex.Position <= 0 || ex.Position > len(ctx.Args) {
 			return nil, nil
 		}
+
 		return ctx.Args[ex.Position-1].Value, nil
 
 	case *binder.BoundBinaryExpr:
@@ -59,6 +61,7 @@ func (e *Executor) evaluateExpr(
 		if err != nil {
 			return nil, err
 		}
+
 		return castValue(val, ex.TargetType)
 
 	case *binder.BoundCaseExpr:
@@ -88,6 +91,7 @@ func (e *Executor) evaluateExprAsBool(
 	if err != nil {
 		return false, err
 	}
+
 	return toBool(val), nil
 }
 
@@ -129,6 +133,7 @@ func (e *Executor) evaluateBinaryExpr(
 					return false, nil
 				}
 			}
+
 			return nil, nil
 		case parser.OpOr:
 			// NULL OR TRUE = TRUE, NULL OR FALSE = NULL
@@ -142,12 +147,13 @@ func (e *Executor) evaluateBinaryExpr(
 					return true, nil
 				}
 			}
+
 			return nil, nil
 		case parser.OpIs:
 			return left == nil &&
 				right == nil, nil
 		case parser.OpIsNot:
-			return !(left == nil && right == nil), nil
+			return left != nil || right != nil, nil
 		default:
 			return nil, nil
 		}
@@ -260,11 +266,13 @@ func (e *Executor) evaluateUnaryExpr(
 		if val == nil {
 			return nil, nil
 		}
+
 		return !toBool(val), nil
 	case parser.OpNeg:
 		if val == nil {
 			return nil, nil
 		}
+
 		return negateValue(val)
 	case parser.OpPos:
 		return val, nil
@@ -307,6 +315,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "ABS requires 1 argument",
 			}
 		}
+
 		return absValue(args[0])
 
 	case "UPPER":
@@ -316,6 +325,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "UPPER requires 1 argument",
 			}
 		}
+
 		return strings.ToUpper(
 			toString(args[0]),
 		), nil
@@ -327,6 +337,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "LOWER requires 1 argument",
 			}
 		}
+
 		return strings.ToLower(
 			toString(args[0]),
 		), nil
@@ -340,6 +351,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "LENGTH requires 1 argument",
 			}
 		}
+
 		return int64(len(toString(args[0]))), nil
 
 	case "TRIM":
@@ -349,6 +361,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "TRIM requires 1 argument",
 			}
 		}
+
 		return strings.TrimSpace(
 			toString(args[0]),
 		), nil
@@ -360,6 +373,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "LTRIM requires 1 argument",
 			}
 		}
+
 		return strings.TrimLeft(
 			toString(args[0]),
 			" ",
@@ -372,6 +386,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "RTRIM requires 1 argument",
 			}
 		}
+
 		return strings.TrimRight(
 			toString(args[0]),
 			" ",
@@ -382,6 +397,7 @@ func (e *Executor) evaluateFunctionCall(
 		for _, arg := range args {
 			result.WriteString(toString(arg))
 		}
+
 		return result.String(), nil
 
 	case "COALESCE":
@@ -390,6 +406,7 @@ func (e *Executor) evaluateFunctionCall(
 				return arg, nil
 			}
 		}
+
 		return nil, nil
 
 	case "NULLIF":
@@ -402,6 +419,7 @@ func (e *Executor) evaluateFunctionCall(
 		if compareValues(args[0], args[1]) == 0 {
 			return nil, nil
 		}
+
 		return args[0], nil
 
 	case "SUBSTR", "SUBSTRING":
@@ -426,8 +444,10 @@ func (e *Executor) evaluateFunctionCall(
 			if start+length > len(s) {
 				length = len(s) - start
 			}
+
 			return s[start : start+length], nil
 		}
+
 		return s[start:], nil
 
 	case "REPLACE":
@@ -437,6 +457,7 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "REPLACE requires 3 arguments",
 			}
 		}
+
 		return strings.ReplaceAll(
 			toString(args[0]),
 			toString(args[1]),
@@ -449,6 +470,7 @@ func (e *Executor) evaluateFunctionCall(
 		case "COUNT", "SUM", "AVG", "MIN", "MAX":
 			return nil, nil
 		}
+
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg: fmt.Sprintf(
@@ -553,6 +575,7 @@ func (e *Executor) evaluateBetweenExpr(
 	if expr.Not {
 		return !inRange, nil
 	}
+
 	return inRange, nil
 }
 
@@ -588,6 +611,7 @@ func (e *Executor) evaluateInListExpr(
 			if expr.Not {
 				return false, nil
 			}
+
 			return true, nil
 		}
 	}
@@ -595,6 +619,7 @@ func (e *Executor) evaluateInListExpr(
 	if expr.Not {
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -642,6 +667,7 @@ func (e *Executor) computeAggregate(
 				}
 			}
 		}
+
 		return count, nil
 
 	case "SUM":
@@ -667,6 +693,7 @@ func (e *Executor) computeAggregate(
 		if !hasValue {
 			return nil, nil
 		}
+
 		return sum, nil
 
 	case "AVG":
@@ -692,6 +719,7 @@ func (e *Executor) computeAggregate(
 		if count == 0 {
 			return nil, nil
 		}
+
 		return sum / float64(count), nil
 
 	case "MIN":
@@ -718,6 +746,7 @@ func (e *Executor) computeAggregate(
 				}
 			}
 		}
+
 		return minVal, nil
 
 	case "MAX":
@@ -744,6 +773,7 @@ func (e *Executor) computeAggregate(
 				}
 			}
 		}
+
 		return maxVal, nil
 
 	default:
@@ -786,9 +816,11 @@ func (e *Executor) compareRows(
 			if order.Desc {
 				return -cmp, nil
 			}
+
 			return cmp, nil
 		}
 	}
+
 	return 0, nil
 }
 
@@ -816,6 +848,7 @@ func toString(v any) string {
 	if v == nil {
 		return ""
 	}
+
 	return fmt.Sprintf("%v", v)
 }
 
@@ -881,6 +914,7 @@ func compareValues(a, b any) int {
 			if aNum > bNum {
 				return 1
 			}
+
 			return 0
 		}
 	}
@@ -894,6 +928,7 @@ func compareValues(a, b any) int {
 	if aStr > bStr {
 		return 1
 	}
+
 	return 0
 }
 
@@ -942,6 +977,7 @@ func subValues(a, b any) (any, error) {
 			return aNum - bNum, nil
 		}
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot subtract non-numeric values",
@@ -954,6 +990,7 @@ func mulValues(a, b any) (any, error) {
 			return aNum * bNum, nil
 		}
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot multiply non-numeric values",
@@ -966,9 +1003,11 @@ func divValues(a, b any) (any, error) {
 			if bNum == 0 {
 				return nil, dukdb.ErrDivisionByZero
 			}
+
 			return aNum / bNum, nil
 		}
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot divide non-numeric values",
@@ -981,9 +1020,11 @@ func modValues(a, b any) (any, error) {
 			if bNum == 0 {
 				return nil, dukdb.ErrDivisionByZero
 			}
+
 			return math.Mod(aNum, bNum), nil
 		}
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot modulo non-numeric values",
@@ -994,6 +1035,7 @@ func negateValue(v any) (any, error) {
 	if num, ok := toNumber(v); ok {
 		return -num, nil
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot negate non-numeric value",
@@ -1004,6 +1046,7 @@ func absValue(v any) (any, error) {
 	if num, ok := toNumber(v); ok {
 		return math.Abs(num), nil
 	}
+
 	return nil, &dukdb.Error{
 		Type: dukdb.ErrorTypeExecutor,
 		Msg:  "cannot compute ABS of non-numeric value",
@@ -1051,7 +1094,7 @@ func matchLike(
 
 	for si < len(s) {
 		if pi < len(pattern) &&
-			(pattern[pi] == '_' || (caseSensitive && pattern[pi] == s[si]) || (!caseSensitive && strings.ToLower(string(pattern[pi])) == strings.ToLower(string(s[si])))) {
+			(pattern[pi] == '_' || (caseSensitive && pattern[pi] == s[si]) || (!caseSensitive && strings.EqualFold(string(pattern[pi]), string(s[si])))) {
 			pi++
 			si++
 		} else if pi < len(pattern) && pattern[pi] == '%' {

@@ -284,7 +284,7 @@ func TestFlushMultiplePropertiesSorted(t *testing.T) {
 	expectedIDs := []uint32{100, 200, 300}
 	expectedValues := []uint8{1, 2, 3}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		var id uint32
 		err = binary.Read(reader, ByteOrder, &id)
 		require.NoError(t, err)

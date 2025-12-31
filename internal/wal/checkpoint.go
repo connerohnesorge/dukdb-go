@@ -74,6 +74,7 @@ func (cm *CheckpointManager) SetThreshold(bytes uint64) {
 func (cm *CheckpointManager) Threshold() uint64 {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+
 	return cm.threshold
 }
 
@@ -112,6 +113,7 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 	if err := cm.writeCatalogCheckpoint(ckptWriter); err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
+
 		return fmt.Errorf("failed to write catalog checkpoint: %w", err)
 	}
 
@@ -119,6 +121,7 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 	if err := cm.writeDataCheckpoint(ckptWriter); err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
+
 		return fmt.Errorf("failed to write data checkpoint: %w", err)
 	}
 
@@ -127,6 +130,7 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 	if err := ckptWriter.WriteEntry(completeEntry); err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
+
 		return fmt.Errorf("failed to write checkpoint complete entry: %w", err)
 	}
 
@@ -134,12 +138,14 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 	if err := ckptWriter.Sync(); err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
+
 		return fmt.Errorf("failed to sync checkpoint WAL: %w", err)
 	}
 
 	// Close checkpoint writer
 	if err := ckptWriter.Close(); err != nil {
 		_ = os.Remove(ckptPath)
+
 		return fmt.Errorf("failed to close checkpoint WAL: %w", err)
 	}
 
@@ -191,6 +197,7 @@ func (cm *CheckpointManager) MaybeAutoCheckpoint() error {
 	if bytesWritten >= threshold {
 		return cm.Checkpoint()
 	}
+
 	return nil
 }
 
@@ -294,6 +301,7 @@ func syncDir(path string) error {
 		return err
 	}
 	defer func() { _ = dir.Close() }()
+
 	return dir.Sync()
 }
 
@@ -301,6 +309,7 @@ func syncDir(path string) error {
 func (cm *CheckpointManager) WAL() *Writer {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+
 	return cm.wal
 }
 

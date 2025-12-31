@@ -13,10 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ============================================================================
-// Section 6.1: Unit tests for Scan methods
-// ============================================================================
-
 func TestUUID_Scan_Bytes(t *testing.T) {
 	// Test scanning 16-byte slice
 	input := []byte{

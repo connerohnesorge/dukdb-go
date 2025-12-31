@@ -12,9 +12,9 @@ import (
 // DeserializeTypeInfo deserializes a TypeInfo from binary format using property-based deserialization.
 //
 // This is the main entry point for TypeInfo deserialization. It reads:
-//   1. Property 99: LogicalTypeId (the base type like INTEGER, DECIMAL, LIST, etc.)
-//   2. Property 100: ExtraTypeInfoType discriminator
-//   3. Type-specific properties (200+) based on the discriminator
+//  1. Property 99: LogicalTypeId (the base type like INTEGER, DECIMAL, LIST, etc.)
+//  2. Property 100: ExtraTypeInfoType discriminator
+//  3. Type-specific properties (200+) based on the discriminator
 //
 // Binary Format:
 //   - Property count: uint32
@@ -58,6 +58,7 @@ func DeserializeTypeInfo(r *BinaryReader) (dukdb.TypeInfo, error) {
 		if dukdb.Type(typeId) == dukdb.TYPE_MAP {
 			return DeserializeMap(r)
 		}
+
 		return DeserializeList(r)
 	case ExtraTypeInfoType_STRUCT:
 		return DeserializeStruct(r)
@@ -203,11 +204,11 @@ func DeserializeArray(r *BinaryReader) (dukdb.TypeInfo, error) {
 // Binary Format:
 //   - Property 100: uint32 (ExtraTypeInfoType_STRUCT = 5)
 //   - Property 200: child_list_t<LogicalType> (field definitions)
-//     - Count: uint64 (number of fields)
-//     - For each field:
-//       - Name length: uint64
-//       - Name: []byte
-//       - LogicalType: (recursive TypeInfo deserialization)
+//   - Count: uint64 (number of fields)
+//   - For each field:
+//   - Name length: uint64
+//   - Name: []byte
+//   - LogicalType: (recursive TypeInfo deserialization)
 //
 // Example: STRUCT(x INTEGER, y VARCHAR) -> 2 fields with names and types
 func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
@@ -232,7 +233,7 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 	entries := make([]dukdb.StructEntry, count)
 
 	// Read each field
-	for i := uint64(0); i < count; i++ {
+	for i := range count {
 		// Read field name length
 		var nameLen uint64
 		if err := binary.Read(fieldBuf, ByteOrder, &nameLen); err != nil {
@@ -279,12 +280,13 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 // Binary Format:
 //   - Property 100: uint32 (ExtraTypeInfoType_LIST = 4) <- Uses LIST discriminator!
 //   - Property 200: LogicalType (STRUCT with "key" and "value" fields)
-//     - The STRUCT has ExtraTypeInfoType_STRUCT = 5
-//     - Field 0: name="key", type=Key TypeInfo
-//     - Field 1: name="value", type=Value TypeInfo
+//   - The STRUCT has ExtraTypeInfoType_STRUCT = 5
+//   - Field 0: name="key", type=Key TypeInfo
+//   - Field 1: name="value", type=Value TypeInfo
 //
 // Example: MAP<VARCHAR, INTEGER>
-//   -> LIST<STRUCT<key VARCHAR, value INTEGER>>
+//
+//	-> LIST<STRUCT<key VARCHAR, value INTEGER>>
 //
 // This function is called by DeserializeTypeInfo when it detects a LIST with a
 // STRUCT<key, value> child pattern.

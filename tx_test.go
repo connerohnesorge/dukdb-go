@@ -24,6 +24,7 @@ func (m *mockBackendConn) Execute(
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, query, args)
 	}
+
 	return 0, nil
 }
 
@@ -35,6 +36,7 @@ func (m *mockBackendConn) Query(
 	if m.queryFunc != nil {
 		return m.queryFunc(ctx, query, args)
 	}
+
 	return nil, nil, nil
 }
 
@@ -45,6 +47,7 @@ func (m *mockBackendConn) Prepare(
 	if m.prepareFunc != nil {
 		return m.prepareFunc(ctx, query)
 	}
+
 	return nil, nil
 }
 
@@ -52,6 +55,7 @@ func (m *mockBackendConn) Close() error {
 	if m.closeFunc != nil {
 		return m.closeFunc()
 	}
+
 	return nil
 }
 
@@ -61,6 +65,7 @@ func (m *mockBackendConn) Ping(
 	if m.pingFunc != nil {
 		return m.pingFunc(ctx)
 	}
+
 	return nil
 }
 
@@ -93,6 +98,7 @@ func (m *mockBackendStmt) Execute(
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, args)
 	}
+
 	return 0, nil
 }
 
@@ -103,6 +109,7 @@ func (m *mockBackendStmt) Query(
 	if m.queryFunc != nil {
 		return m.queryFunc(ctx, args)
 	}
+
 	return nil, nil, nil
 }
 
@@ -110,6 +117,7 @@ func (m *mockBackendStmt) Close() error {
 	if m.closeFunc != nil {
 		return m.closeFunc()
 	}
+
 	return nil
 }
 
@@ -127,6 +135,7 @@ func TestTransactionBegin(t *testing.T) {
 				executedQueries,
 				query,
 			)
+
 			return 0, nil
 		},
 	}
@@ -176,6 +185,7 @@ func TestTransactionCommit(t *testing.T) {
 				executedQueries,
 				query,
 			)
+
 			return 0, nil
 		},
 	}
@@ -229,6 +239,7 @@ func TestTransactionRollback(t *testing.T) {
 				executedQueries,
 				query,
 			)
+
 			return 0, nil
 		},
 	}
@@ -484,6 +495,7 @@ func TestContextCancellationExecContext(
 			t.Error(
 				"Execute should not be called with cancelled context",
 			)
+
 			return 0, nil
 		},
 	}
@@ -527,6 +539,7 @@ func TestContextCancellationQueryContext(
 			t.Error(
 				"Query should not be called with cancelled context",
 			)
+
 			return nil, nil, nil
 		},
 	}
@@ -569,6 +582,7 @@ func TestContextDeadlineExceededExecContext(
 			t.Error(
 				"Execute should not be called with expired context",
 			)
+
 			return 0, nil
 		},
 	}
@@ -612,6 +626,7 @@ func TestStmtContextCancellationExecContext(
 			t.Error(
 				"Execute should not be called with cancelled context",
 			)
+
 			return 0, nil
 		},
 	}
@@ -651,6 +666,7 @@ func TestStmtContextCancellationQueryContext(
 			t.Error(
 				"Query should not be called with cancelled context",
 			)
+
 			return nil, nil, nil
 		},
 	}

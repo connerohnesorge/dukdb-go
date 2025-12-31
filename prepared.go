@@ -53,6 +53,7 @@ func countPlaceholders(query string) int {
 		for _, p := range named {
 			uniqueNamed[p.name] = true
 		}
+
 		return maxIndex + len(uniqueNamed)
 	}
 
@@ -65,6 +66,7 @@ func countPlaceholders(query string) int {
 				maxIndex = idx
 			}
 		}
+
 		return maxIndex
 	}
 
@@ -74,6 +76,7 @@ func countPlaceholders(query string) int {
 		for _, p := range named {
 			uniqueNames[p.name] = true
 		}
+
 		return len(uniqueNames)
 	}
 
@@ -109,6 +112,7 @@ func extractOrderedParams(query string) []placeholder {
 				isPositional: true,
 			}
 		}
+
 		return result
 	}
 
@@ -122,6 +126,7 @@ func extractOrderedParams(query string) []placeholder {
 				result = append(result, p)
 			}
 		}
+
 		return result
 	}
 
@@ -171,6 +176,7 @@ func (s *PreparedStmt) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true // Idempotent - no error on multiple closes
+
 	return nil
 }
 
@@ -218,6 +224,7 @@ func (s *PreparedStmt) ParamName(idx int) (string, error) {
 			),
 		}
 	}
+
 	return s.extractedParams[idx].name, nil
 }
 
@@ -282,7 +289,7 @@ func (s *PreparedStmt) ClearBindings() {
 
 // allParamsBound checks if all parameters have been bound.
 func (s *PreparedStmt) allParamsBound() bool {
-	for i := 0; i < s.numParams; i++ {
+	for i := range s.numParams {
 		// Check if this slot has been set (Value is non-nil or Ordinal > 0 or Name non-empty)
 		if s.boundParams[i].Ordinal == 0 &&
 			s.boundParams[i].Name == "" &&
@@ -290,6 +297,7 @@ func (s *PreparedStmt) allParamsBound() bool {
 			return false
 		}
 	}
+
 	return true
 }
 

@@ -145,5 +145,6 @@ func GetTotalTestCount() int {
 	for _, c := range counts {
 		total += c
 	}
+
 	return total
 }

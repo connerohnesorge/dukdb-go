@@ -56,6 +56,7 @@ func (w *BinaryWriter) WriteProperty(id uint32, value interface{}) error {
 		return fmt.Errorf("failed to serialize property %d: %w", id, err)
 	}
 	w.properties[id] = serialized
+
 	return nil
 }
 
@@ -73,6 +74,7 @@ func (w *BinaryWriter) WritePropertyWithDefault(id uint32, value, defaultValue i
 	if reflect.DeepEqual(value, defaultValue) {
 		return nil // Skip writing property
 	}
+
 	return w.WriteProperty(id, value)
 }
 
@@ -101,12 +103,13 @@ func (w *BinaryWriter) WriteList(id uint32, items []string) error {
 			return fmt.Errorf("failed to write list item %d length: %w", i, err)
 		}
 		// Write string data
-		if _, err := buf.Write([]byte(item)); err != nil {
+		if _, err := buf.WriteString(item); err != nil {
 			return fmt.Errorf("failed to write list item %d data: %w", i, err)
 		}
 	}
 
 	w.properties[id] = buf.Bytes()
+
 	return nil
 }
 
@@ -194,7 +197,7 @@ func (w *BinaryWriter) serializeValue(value interface{}) ([]byte, error) {
 			return nil, err
 		}
 		// Write string data
-		if _, err := buf.Write([]byte(v)); err != nil {
+		if _, err := buf.WriteString(v); err != nil {
 			return nil, err
 		}
 
@@ -214,7 +217,7 @@ func (w *BinaryWriter) serializeValue(value interface{}) ([]byte, error) {
 			if err := binary.Write(buf, ByteOrder, uint64(len(item))); err != nil {
 				return nil, err
 			}
-			if _, err := buf.Write([]byte(item)); err != nil {
+			if _, err := buf.WriteString(item); err != nil {
 				return nil, err
 			}
 		}

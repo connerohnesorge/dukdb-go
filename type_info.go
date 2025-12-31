@@ -160,6 +160,7 @@ func (info *typeInfo) Details() TypeDetails {
 	case TYPE_ENUM:
 		values := make([]string, len(info.names))
 		copy(values, info.names)
+
 		return &EnumDetails{
 			Values: values,
 		}
@@ -180,6 +181,7 @@ func (info *typeInfo) Details() TypeDetails {
 	case TYPE_STRUCT:
 		entries := make([]StructEntry, len(info.structEntries))
 		copy(entries, info.structEntries)
+
 		return &StructDetails{
 			Entries: entries,
 		}
@@ -191,6 +193,7 @@ func (info *typeInfo) Details() TypeDetails {
 				Type: info.types[i],
 			}
 		}
+
 		return &UnionDetails{
 			Members: members,
 		}
@@ -275,6 +278,7 @@ func (info *typeInfo) SQLType() string {
 			sb.WriteString("'")
 		}
 		sb.WriteString(")")
+
 		return sb.String()
 
 	// Nested types
@@ -282,18 +286,21 @@ func (info *typeInfo) SQLType() string {
 		if len(info.types) > 0 && info.types[0] != nil {
 			return info.types[0].SQLType() + "[]"
 		}
+
 		return "VARCHAR[]" // fallback
 
 	case TYPE_ARRAY:
 		if len(info.types) > 0 && info.types[0] != nil {
 			return fmt.Sprintf("%s[%d]", info.types[0].SQLType(), info.arrayLength)
 		}
+
 		return fmt.Sprintf("VARCHAR[%d]", info.arrayLength) // fallback
 
 	case TYPE_MAP:
 		if len(info.types) >= 2 && info.types[0] != nil && info.types[1] != nil {
 			return fmt.Sprintf("MAP(%s, %s)", info.types[0].SQLType(), info.types[1].SQLType())
 		}
+
 		return "MAP(VARCHAR, VARCHAR)" // fallback
 
 	case TYPE_STRUCT:
@@ -312,6 +319,7 @@ func (info *typeInfo) SQLType() string {
 			}
 		}
 		sb.WriteString(")")
+
 		return sb.String()
 
 	case TYPE_UNION:
@@ -330,6 +338,7 @@ func (info *typeInfo) SQLType() string {
 			}
 		}
 		sb.WriteString(")")
+
 		return sb.String()
 
 	// Special types
@@ -348,7 +357,7 @@ func (info *typeInfo) SQLType() string {
 // Else, it returns nil, and an error.
 // Valid types are:
 // TYPE_[BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, UTINYINT, USMALLINT, UINTEGER,
-// UBIGINT, FLOAT, DOUBLE, TIMESTAMP, DATE, TIME, INTERVAL, HUGEINT, UHUGEINT, VARCHAR, BLOB,
+// UBIGINT, FLOAT, DOUBLE, TIMESTAMP, DATE, TIME, INTERVAL, HUGEINT, UHUGEINT, VARCHAR, BLOB, BIT,
 // TIMESTAMP_S, TIMESTAMP_MS, TIMESTAMP_NS, UUID, TIMESTAMP_TZ, TIME_TZ].
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
@@ -421,6 +430,7 @@ func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
 	}
 	info.names = append(info.names, first)
 	info.names = append(info.names, others...)
+
 	return info, nil
 }
 
@@ -473,6 +483,7 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 	}
 	info.structEntries = append(info.structEntries, firstEntry)
 	info.structEntries = append(info.structEntries, others...)
+
 	return info, nil
 }
 

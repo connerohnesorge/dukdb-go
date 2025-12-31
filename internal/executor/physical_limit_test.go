@@ -22,6 +22,7 @@ func (m *mockOperator) Next() (*storage.DataChunk, error) {
 	}
 	chunk := m.chunks[m.idx]
 	m.idx++
+
 	return chunk, nil
 }
 
@@ -31,15 +32,17 @@ func (m *mockOperator) GetTypes() []dukdb.TypeInfo {
 		for i := range types {
 			types[i] = &basicTypeInfo{typ: dukdb.TYPE_BIGINT}
 		}
+
 		return types
 	}
+
 	return nil
 }
 
 func TestPhysicalLimitOperator_LimitOnly(t *testing.T) {
 	// Create mock data: 20 rows total
 	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
@@ -56,8 +59,8 @@ func TestPhysicalLimitOperator_LimitOnly(t *testing.T) {
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
 		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
-		5,  // limit
-		0,  // offset
+		5, // limit
+		0, // offset
 	)
 	require.NoError(t, err)
 
@@ -82,7 +85,7 @@ func TestPhysicalLimitOperator_LimitOnly(t *testing.T) {
 func TestPhysicalLimitOperator_OffsetOnly(t *testing.T) {
 	// Create mock data: 20 rows total
 	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
@@ -125,7 +128,7 @@ func TestPhysicalLimitOperator_OffsetOnly(t *testing.T) {
 func TestPhysicalLimitOperator_LimitAndOffset(t *testing.T) {
 	// Create mock data: 20 rows total
 	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
@@ -168,7 +171,7 @@ func TestPhysicalLimitOperator_LimitAndOffset(t *testing.T) {
 func TestPhysicalLimitOperator_LimitLargerThanData(t *testing.T) {
 	// Create mock data: 5 rows total
 	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
 
@@ -206,7 +209,7 @@ func TestPhysicalLimitOperator_LimitLargerThanData(t *testing.T) {
 func TestPhysicalLimitOperator_OffsetLargerThanData(t *testing.T) {
 	// Create mock data: 5 rows total
 	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
 
@@ -244,7 +247,7 @@ func TestPhysicalLimitOperator_OffsetLargerThanData(t *testing.T) {
 func TestPhysicalLimitOperator_PartialChunk(t *testing.T) {
 	// Create mock data: chunk boundaries don't align with limit
 	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
@@ -287,7 +290,7 @@ func TestPhysicalLimitOperator_PartialChunk(t *testing.T) {
 func TestPhysicalLimitOperator_ZeroLimit(t *testing.T) {
 	// Create mock data
 	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
 
@@ -325,7 +328,7 @@ func TestPhysicalLimitOperator_ZeroLimit(t *testing.T) {
 func TestPhysicalLimitOperator_MultipleColumns(t *testing.T) {
 	// Create mock data with multiple columns
 	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_VARCHAR})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chunk.AppendRow([]any{int64(i), "value" + string(rune('0'+i))})
 	}
 

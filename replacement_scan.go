@@ -32,6 +32,7 @@ func NewReplacementScanContext(ctx context.Context, clock quartz.Clock) *Replace
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
 	return &ReplacementScanContext{
 		ctx:   ctx,
 		clock: clock,
@@ -67,6 +68,7 @@ func (c *ReplacementScanContext) executeCallback(
 			return "", nil, context.DeadlineExceeded
 		}
 	}
+
 	return callback(tableName)
 }
 
@@ -92,6 +94,7 @@ func (r *replacementScanRegistry) register(callback ReplacementScanCallback) {
 func (r *replacementScanRegistry) get() ReplacementScanCallback {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.callback
 }
 
@@ -122,6 +125,7 @@ func validateReplacementParams(params []any) error {
 			return fmt.Errorf("%w: parameter %d has type %T", errReplacementScanUnsupportedType, i, param)
 		}
 	}
+
 	return nil
 }
 
@@ -206,6 +210,7 @@ func ConvertParamsToFunctionArgs(params []any) []FunctionArg {
 			Value:    param,
 		}
 	}
+
 	return args
 }
 

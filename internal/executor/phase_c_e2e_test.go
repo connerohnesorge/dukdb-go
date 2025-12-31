@@ -240,7 +240,7 @@ func TestPhaseC_Limit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert 10 rows
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = table.AppendRow([]any{int32(i)})
 		require.NoError(t, err)
 	}
@@ -265,7 +265,7 @@ func TestPhaseC_Limit(t *testing.T) {
 
 	// Verify only 5 rows returned
 	require.Equal(t, 5, len(result.Rows))
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		assert.Equal(t, int32(i), result.Rows[i]["x"])
 	}
 }
@@ -288,7 +288,7 @@ func TestPhaseC_Offset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert 10 rows
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = table.AppendRow([]any{int32(i)})
 		require.NoError(t, err)
 	}
@@ -336,7 +336,7 @@ func TestPhaseC_LimitOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert 20 rows
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		err = table.AppendRow([]any{int32(i)})
 		require.NoError(t, err)
 	}
@@ -361,7 +361,7 @@ func TestPhaseC_LimitOffset(t *testing.T) {
 
 	// Verify 10 rows returned (rows 5-14)
 	require.Equal(t, 10, len(result.Rows))
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, int32(i+5), result.Rows[i]["x"])
 	}
 }
@@ -711,9 +711,10 @@ func TestPhaseC_SingleColumnGroupBy(t *testing.T) {
 	// Find groups (order may vary)
 	var electronicsRow, booksRow map[string]any
 	for _, row := range result.Rows {
-		if row["category"] == "Electronics" {
+		switch row["category"] {
+		case "Electronics":
 			electronicsRow = row
-		} else if row["category"] == "Books" {
+		case "Books":
 			booksRow = row
 		}
 	}
@@ -825,10 +826,10 @@ func TestPhaseC_MultiColumnGroupBy(t *testing.T) {
 		groups[region][product] = sum
 	}
 
-	assert.Equal(t, float64(22), groups["North"]["Widget"])  // 10 + 12
-	assert.Equal(t, float64(5), groups["North"]["Gadget"])   // 5
-	assert.Equal(t, float64(14), groups["South"]["Widget"])  // 8 + 6
-	assert.Equal(t, float64(3), groups["South"]["Gadget"])   // 3
+	assert.Equal(t, float64(22), groups["North"]["Widget"]) // 10 + 12
+	assert.Equal(t, float64(5), groups["North"]["Gadget"])  // 5
+	assert.Equal(t, float64(14), groups["South"]["Widget"]) // 8 + 6
+	assert.Equal(t, float64(3), groups["South"]["Gadget"])  // 3
 }
 
 // ============================================================================
@@ -937,9 +938,10 @@ func TestPhaseC_InnerJoin(t *testing.T) {
 			name = v
 		}
 
-		if name == "Alice" {
+		switch name {
+		case "Alice":
 			aliceCount++
-		} else if name == "Bob" {
+		case "Bob":
 			bobCount++
 		}
 	}
@@ -1093,6 +1095,7 @@ func TestPhaseC_JoinWithWhereOrderByLimit(t *testing.T) {
 		if v, ok := row["quantity"]; ok {
 			return v.(int32)
 		}
+
 		return 0
 	}
 

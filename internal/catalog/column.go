@@ -43,6 +43,7 @@ func (c *ColumnDef) WithNullable(
 	nullable bool,
 ) *ColumnDef {
 	c.Nullable = nullable
+
 	return c
 }
 
@@ -52,6 +53,7 @@ func (c *ColumnDef) WithDefault(
 ) *ColumnDef {
 	c.DefaultValue = value
 	c.HasDefault = true
+
 	return c
 }
 
@@ -79,6 +81,7 @@ func (c *ColumnDef) GetTypeInfo() dukdb.TypeInfo {
 		// Return a basic wrapper for unsupported types
 		return &basicTypeInfo{typ: c.Type}
 	}
+
 	return info
 }
 

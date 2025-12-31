@@ -24,6 +24,7 @@ func (m *testMockBackend) Open(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.openCalled++
+
 	return &testMockBackendConn{}, nil
 }
 
@@ -31,6 +32,7 @@ func (m *testMockBackend) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.closeCalled++
+
 	return nil
 }
 
@@ -52,6 +54,7 @@ func (m *testMockBackendConn) Execute(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.executeCalled++
+
 	return 0, nil
 }
 
@@ -72,6 +75,7 @@ func (m *testMockBackendConn) Query(
 				"1",
 			}, nil
 	}
+
 	return nil, nil, nil
 }
 
@@ -81,6 +85,7 @@ func (m *testMockBackendConn) Prepare(
 ) (BackendStmt, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return &testMockBackendStmt{query: query}, nil
 }
 
@@ -88,6 +93,7 @@ func (m *testMockBackendConn) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.closed = true
+
 	return nil
 }
 
@@ -97,6 +103,7 @@ func (m *testMockBackendConn) Ping(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.pingCalled++
+
 	return nil
 }
 
@@ -137,6 +144,7 @@ func (m *testMockBackendStmt) Query(
 
 func (m *testMockBackendStmt) Close() error {
 	m.closed = true
+
 	return nil
 }
 
@@ -148,6 +156,7 @@ func (m *testMockBackendStmt) NumInput() int {
 func setupTestMockBackend() *testMockBackend {
 	backend := &testMockBackend{}
 	RegisterBackend(backend)
+
 	return backend
 }
 
@@ -573,6 +582,7 @@ func TestConnInitCallback(t *testing.T) {
 	initCalled := false
 	initFn := func(conn driver.ExecerContext) error {
 		initCalled = true
+
 		return nil
 	}
 
@@ -611,13 +621,14 @@ func TestDriverThreadSafety(t *testing.T) {
 	errors := make(chan error, 100)
 
 	// Open multiple connections concurrently
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			conn, err := d.Open(":memory:")
 			if err != nil {
 				errors <- err
+
 				return
 			}
 			conn.Close()
@@ -651,7 +662,7 @@ func TestConnectorThreadSafety(t *testing.T) {
 	errors := make(chan error, 100)
 
 	// Connect multiple times concurrently
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -660,6 +671,7 @@ func TestConnectorThreadSafety(t *testing.T) {
 			)
 			if err != nil {
 				errors <- err
+
 				return
 			}
 			conn.Close()
@@ -699,7 +711,7 @@ func TestConnectionPooling(t *testing.T) {
 
 	// Use connections
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -65,6 +65,7 @@ func (dc *DataChunk) GetVector(idx int) *Vector {
 	if idx < 0 || idx >= len(dc.vectors) {
 		return nil
 	}
+
 	return dc.vectors[idx]
 }
 
@@ -203,5 +204,6 @@ func (dc *DataChunk) Types() []dukdb.Type {
 	for i, v := range dc.vectors {
 		types[i] = v.Type()
 	}
+
 	return types
 }

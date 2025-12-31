@@ -70,6 +70,7 @@ func (s *LogicalScan) OutputColumns() []ColumnBinding {
 			}
 		}
 	}
+
 	return s.columns
 }
 
@@ -121,6 +122,7 @@ func (p *LogicalProject) OutputColumns() []ColumnBinding {
 			ColumnIdx: i,
 		}
 	}
+
 	return p.columns
 }
 
@@ -298,6 +300,7 @@ func (i *LogicalInsert) Children() []LogicalPlan {
 	if i.Source != nil {
 		return []LogicalPlan{i.Source}
 	}
+
 	return nil
 }
 
@@ -317,6 +320,7 @@ func (u *LogicalUpdate) Children() []LogicalPlan {
 	if u.Source != nil {
 		return []LogicalPlan{u.Source}
 	}
+
 	return nil
 }
 
@@ -335,6 +339,7 @@ func (d *LogicalDelete) Children() []LogicalPlan {
 	if d.Source != nil {
 		return []LogicalPlan{d.Source}
 	}
+
 	return nil
 }
 

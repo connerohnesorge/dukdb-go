@@ -153,7 +153,7 @@ func TestPhysicalScanOperator_MultipleChunks(t *testing.T) {
 
 	// Insert more rows than StandardVectorSize to ensure multiple chunks
 	numRows := storage.StandardVectorSize + 100
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		require.NoError(t, table.AppendRow([]any{int32(i)}))
 	}
 
