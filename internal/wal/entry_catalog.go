@@ -28,7 +28,9 @@ func (e *CreateTableEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *CreateTableEntry) Serialize(w io.Writer) error {
+func (e *CreateTableEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -61,7 +63,9 @@ func (e *CreateTableEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *CreateTableEntry) Deserialize(r io.Reader) error {
+func (e *CreateTableEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err
@@ -106,7 +110,9 @@ func (e *DropTableEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *DropTableEntry) Serialize(w io.Writer) error {
+func (e *DropTableEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -115,7 +121,9 @@ func (e *DropTableEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *DropTableEntry) Deserialize(r io.Reader) error {
+func (e *DropTableEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err
@@ -136,12 +144,16 @@ func (e *CreateSchemaEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *CreateSchemaEntry) Serialize(w io.Writer) error {
+func (e *CreateSchemaEntry) Serialize(
+	w io.Writer,
+) error {
 	return writeString(w, e.Name)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *CreateSchemaEntry) Deserialize(r io.Reader) error {
+func (e *CreateSchemaEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	e.Name, err = readString(r)
 
@@ -159,12 +171,16 @@ func (e *DropSchemaEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *DropSchemaEntry) Serialize(w io.Writer) error {
+func (e *DropSchemaEntry) Serialize(
+	w io.Writer,
+) error {
 	return writeString(w, e.Name)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *DropSchemaEntry) Deserialize(r io.Reader) error {
+func (e *DropSchemaEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	e.Name, err = readString(r)
 
@@ -184,7 +200,9 @@ func (e *CreateViewEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *CreateViewEntry) Serialize(w io.Writer) error {
+func (e *CreateViewEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -196,7 +214,9 @@ func (e *CreateViewEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *CreateViewEntry) Deserialize(r io.Reader) error {
+func (e *CreateViewEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err
@@ -221,7 +241,9 @@ func (e *DropViewEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *DropViewEntry) Serialize(w io.Writer) error {
+func (e *DropViewEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -230,7 +252,9 @@ func (e *DropViewEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *DropViewEntry) Deserialize(r io.Reader) error {
+func (e *DropViewEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err
@@ -256,7 +280,9 @@ func (e *CreateIndexEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *CreateIndexEntry) Serialize(w io.Writer) error {
+func (e *CreateIndexEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -282,11 +308,17 @@ func (e *CreateIndexEntry) Serialize(w io.Writer) error {
 		flags |= 0x02
 	}
 
-	return binary.Write(w, binary.LittleEndian, flags)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		flags,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *CreateIndexEntry) Deserialize(r io.Reader) error {
+func (e *CreateIndexEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err
@@ -330,7 +362,9 @@ func (e *DropIndexEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *DropIndexEntry) Serialize(w io.Writer) error {
+func (e *DropIndexEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -342,7 +376,9 @@ func (e *DropIndexEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *DropIndexEntry) Deserialize(r io.Reader) error {
+func (e *DropIndexEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err

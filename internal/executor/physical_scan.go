@@ -31,9 +31,15 @@ func NewPhysicalScanOperator(
 
 	// Get TypeInfo for output columns
 	outputCols := plan.OutputColumns()
-	types := make([]dukdb.TypeInfo, len(outputCols))
+	types := make(
+		[]dukdb.TypeInfo,
+		len(outputCols),
+	)
 	for i, col := range outputCols {
-		if col.ColumnIdx >= 0 && col.ColumnIdx < len(plan.TableDef.Columns) {
+		if col.ColumnIdx >= 0 &&
+			col.ColumnIdx < len(
+				plan.TableDef.Columns,
+			) {
 			colDef := plan.TableDef.Columns[col.ColumnIdx]
 			types[i] = colDef.GetTypeInfo()
 		} else {
@@ -68,7 +74,10 @@ func (op *PhysicalScanOperator) Next() (*storage.DataChunk, error) {
 	// If there are projections, we need to select only specific columns
 	if op.plan.Projections != nil {
 		// Create a new chunk with only the projected columns
-		projectedTypes := make([]dukdb.Type, len(op.plan.Projections))
+		projectedTypes := make(
+			[]dukdb.Type,
+			len(op.plan.Projections),
+		)
 		for i, colIdx := range op.plan.Projections {
 			projectedTypes[i] = chunk.Types()[colIdx]
 		}
@@ -80,9 +89,15 @@ func (op *PhysicalScanOperator) Next() (*storage.DataChunk, error) {
 
 		// Copy projected columns
 		for rowIdx := 0; rowIdx < chunk.Count(); rowIdx++ {
-			values := make([]any, len(op.plan.Projections))
+			values := make(
+				[]any,
+				len(op.plan.Projections),
+			)
 			for i, colIdx := range op.plan.Projections {
-				values[i] = chunk.GetValue(rowIdx, colIdx)
+				values[i] = chunk.GetValue(
+					rowIdx,
+					colIdx,
+				)
 			}
 			projectedChunk.AppendRow(values)
 		}

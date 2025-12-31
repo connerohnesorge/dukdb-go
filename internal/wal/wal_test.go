@@ -32,9 +32,21 @@ func TestFileHeader(t *testing.T) {
 	err = readHeader.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, header.Magic, readHeader.Magic)
-	assert.Equal(t, header.Version, readHeader.Version)
-	assert.Equal(t, header.Iteration, readHeader.Iteration)
+	assert.Equal(
+		t,
+		header.Magic,
+		readHeader.Magic,
+	)
+	assert.Equal(
+		t,
+		header.Version,
+		readHeader.Version,
+	)
+	assert.Equal(
+		t,
+		header.Iteration,
+		readHeader.Iteration,
+	)
 }
 
 func TestCreateTableEntry(t *testing.T) {
@@ -42,8 +54,16 @@ func TestCreateTableEntry(t *testing.T) {
 		Schema: "main",
 		Name:   "test_table",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-			{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: true,
+			},
 		},
 	}
 
@@ -56,13 +76,33 @@ func TestCreateTableEntry(t *testing.T) {
 	err = readEntry.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, entry.Schema, readEntry.Schema)
+	assert.Equal(
+		t,
+		entry.Schema,
+		readEntry.Schema,
+	)
 	assert.Equal(t, entry.Name, readEntry.Name)
-	assert.Equal(t, len(entry.Columns), len(readEntry.Columns))
+	assert.Equal(
+		t,
+		len(entry.Columns),
+		len(readEntry.Columns),
+	)
 	for i, col := range entry.Columns {
-		assert.Equal(t, col.Name, readEntry.Columns[i].Name)
-		assert.Equal(t, col.Type, readEntry.Columns[i].Type)
-		assert.Equal(t, col.Nullable, readEntry.Columns[i].Nullable)
+		assert.Equal(
+			t,
+			col.Name,
+			readEntry.Columns[i].Name,
+		)
+		assert.Equal(
+			t,
+			col.Type,
+			readEntry.Columns[i].Type,
+		)
+		assert.Equal(
+			t,
+			col.Nullable,
+			readEntry.Columns[i].Nullable,
+		)
 	}
 }
 
@@ -80,15 +120,24 @@ func TestDropTableEntry(t *testing.T) {
 	err = readEntry.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, entry.Schema, readEntry.Schema)
+	assert.Equal(
+		t,
+		entry.Schema,
+		readEntry.Schema,
+	)
 	assert.Equal(t, entry.Name, readEntry.Name)
 }
 
 func TestInsertEntry(t *testing.T) {
-	entry := NewInsertEntry(1, "main", "test_table", [][]any{
-		{int32(1), "Alice"},
-		{int32(2), "Bob"},
-	})
+	entry := NewInsertEntry(
+		1,
+		"main",
+		"test_table",
+		[][]any{
+			{int32(1), "Alice"},
+			{int32(2), "Bob"},
+		},
+	)
 
 	var buf bytes.Buffer
 	err := entry.Serialize(&buf)
@@ -98,14 +147,31 @@ func TestInsertEntry(t *testing.T) {
 	err = readEntry.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, entry.TxnID(), readEntry.TxnID())
-	assert.Equal(t, entry.Schema, readEntry.Schema)
+	assert.Equal(
+		t,
+		entry.TxnID(),
+		readEntry.TxnID(),
+	)
+	assert.Equal(
+		t,
+		entry.Schema,
+		readEntry.Schema,
+	)
 	assert.Equal(t, entry.Table, readEntry.Table)
-	assert.Equal(t, len(entry.Values), len(readEntry.Values))
+	assert.Equal(
+		t,
+		len(entry.Values),
+		len(readEntry.Values),
+	)
 }
 
 func TestDeleteEntry(t *testing.T) {
-	entry := NewDeleteEntry(1, "main", "test_table", []uint64{1, 2, 3})
+	entry := NewDeleteEntry(
+		1,
+		"main",
+		"test_table",
+		[]uint64{1, 2, 3},
+	)
 
 	var buf bytes.Buffer
 	err := entry.Serialize(&buf)
@@ -115,10 +181,22 @@ func TestDeleteEntry(t *testing.T) {
 	err = readEntry.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, entry.TxnID(), readEntry.TxnID())
-	assert.Equal(t, entry.Schema, readEntry.Schema)
+	assert.Equal(
+		t,
+		entry.TxnID(),
+		readEntry.TxnID(),
+	)
+	assert.Equal(
+		t,
+		entry.Schema,
+		readEntry.Schema,
+	)
 	assert.Equal(t, entry.Table, readEntry.Table)
-	assert.Equal(t, entry.RowIDs, readEntry.RowIDs)
+	assert.Equal(
+		t,
+		entry.RowIDs,
+		readEntry.RowIDs,
+	)
 }
 
 func TestTxnEntries(t *testing.T) {
@@ -132,7 +210,11 @@ func TestTxnEntries(t *testing.T) {
 	readBegin := &TxnBeginEntry{}
 	err = readBegin.Deserialize(&buf)
 	require.NoError(t, err)
-	assert.Equal(t, beginEntry.TxnID(), readBegin.TxnID())
+	assert.Equal(
+		t,
+		beginEntry.TxnID(),
+		readBegin.TxnID(),
+	)
 
 	commitEntry := NewTxnCommitEntry(1, now)
 	buf.Reset()
@@ -142,7 +224,11 @@ func TestTxnEntries(t *testing.T) {
 	readCommit := &TxnCommitEntry{}
 	err = readCommit.Deserialize(&buf)
 	require.NoError(t, err)
-	assert.Equal(t, commitEntry.TxnID(), readCommit.TxnID())
+	assert.Equal(
+		t,
+		commitEntry.TxnID(),
+		readCommit.TxnID(),
+	)
 }
 
 func TestCheckpointEntry(t *testing.T) {
@@ -157,7 +243,11 @@ func TestCheckpointEntry(t *testing.T) {
 	err = readEntry.Deserialize(&buf)
 	require.NoError(t, err)
 
-	assert.Equal(t, entry.Iteration, readEntry.Iteration)
+	assert.Equal(
+		t,
+		entry.Iteration,
+		readEntry.Iteration,
+	)
 }
 
 func TestWriterReader(t *testing.T) {
@@ -174,16 +264,29 @@ func TestWriterReader(t *testing.T) {
 		Schema: "main",
 		Name:   "users",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-			{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: true,
+			},
 		},
 	}
 	err = writer.WriteEntry(createEntry)
 	require.NoError(t, err)
 
-	insertEntry := NewInsertEntry(1, "main", "users", [][]any{
-		{int32(1), "Alice"},
-	})
+	insertEntry := NewInsertEntry(
+		1,
+		"main",
+		"users",
+		[][]any{
+			{int32(1), "Alice"},
+		},
+	)
 	err = writer.WriteEntry(insertEntry)
 	require.NoError(t, err)
 
@@ -205,12 +308,20 @@ func TestWriterReader(t *testing.T) {
 	// Verify first entry
 	readCreate, ok := entries[0].(*CreateTableEntry)
 	require.True(t, ok)
-	assert.Equal(t, createEntry.Name, readCreate.Name)
+	assert.Equal(
+		t,
+		createEntry.Name,
+		readCreate.Name,
+	)
 
 	// Verify second entry
 	readInsert, ok := entries[1].(*InsertEntry)
 	require.True(t, ok)
-	assert.Equal(t, insertEntry.Table, readInsert.Table)
+	assert.Equal(
+		t,
+		insertEntry.Table,
+		readInsert.Table,
+	)
 }
 
 func TestRecovery(t *testing.T) {
@@ -227,8 +338,16 @@ func TestRecovery(t *testing.T) {
 		Schema: "main",
 		Name:   "users",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-			{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: true,
+			},
 		},
 	}
 	err = writer.WriteEntry(createEntry)
@@ -240,26 +359,42 @@ func TestRecovery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert data
-	insertEntry := NewInsertEntry(1, "main", "users", [][]any{
-		{int32(1), "Alice"},
-		{int32(2), "Bob"},
-	})
+	insertEntry := NewInsertEntry(
+		1,
+		"main",
+		"users",
+		[][]any{
+			{int32(1), "Alice"},
+			{int32(2), "Bob"},
+		},
+	)
 	err = writer.WriteEntry(insertEntry)
 	require.NoError(t, err)
 
 	// Commit transaction
-	commitEntry := NewTxnCommitEntry(1, clock.Now())
+	commitEntry := NewTxnCommitEntry(
+		1,
+		clock.Now(),
+	)
 	err = writer.WriteEntry(commitEntry)
 	require.NoError(t, err)
 
 	// Write uncommitted transaction (should not be recovered)
-	beginEntry2 := NewTxnBeginEntry(2, clock.Now())
+	beginEntry2 := NewTxnBeginEntry(
+		2,
+		clock.Now(),
+	)
 	err = writer.WriteEntry(beginEntry2)
 	require.NoError(t, err)
 
-	insertEntry2 := NewInsertEntry(2, "main", "users", [][]any{
-		{int32(3), "Charlie"},
-	})
+	insertEntry2 := NewInsertEntry(
+		2,
+		"main",
+		"users",
+		[][]any{
+			{int32(3), "Charlie"},
+		},
+	)
 	err = writer.WriteEntry(insertEntry2)
 	require.NoError(t, err)
 	// No commit for transaction 2
@@ -289,7 +424,11 @@ func TestRecovery(t *testing.T) {
 	// Verify only committed data was recovered
 	table, ok := store.GetTable("users")
 	require.True(t, ok)
-	assert.Equal(t, int64(2), table.RowCount()) // Only Alice and Bob, not Charlie
+	assert.Equal(
+		t,
+		int64(2),
+		table.RowCount(),
+	) // Only Alice and Bob, not Charlie
 }
 
 func TestTornWriteRecovery(t *testing.T) {
@@ -305,7 +444,11 @@ func TestTornWriteRecovery(t *testing.T) {
 		Schema: "main",
 		Name:   "users",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
 		},
 	}
 	err = writer.WriteEntry(entry)
@@ -318,13 +461,30 @@ func TestTornWriteRecovery(t *testing.T) {
 
 	// Append partial entry header to simulate torn write
 	// Write a complete size field (8 bytes) but partial checksum (4 bytes)
-	f, err := os.OpenFile(walPath, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(
+		walPath,
+		os.O_APPEND|os.O_WRONLY,
+		0644,
+	)
 	require.NoError(t, err)
 	// Write a valid size
-	_, err = f.Write([]byte{0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) // size = 16
+	_, err = f.Write(
+		[]byte{
+			0x10,
+			0x00,
+			0x00,
+			0x00,
+			0x00,
+			0x00,
+			0x00,
+			0x00,
+		},
+	) // size = 16
 	require.NoError(t, err)
 	// Write partial checksum (torn)
-	_, err = f.Write([]byte{0x00, 0x01, 0x02, 0x03})
+	_, err = f.Write(
+		[]byte{0x00, 0x01, 0x02, 0x03},
+	)
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -335,7 +495,11 @@ func TestTornWriteRecovery(t *testing.T) {
 
 	entries, err := reader.ReadAll()
 	require.NoError(t, err)
-	assert.Len(t, entries, 1) // Only the valid entry
+	assert.Len(
+		t,
+		entries,
+		1,
+	) // Only the valid entry
 }
 
 func TestChecksumValidation(t *testing.T) {
@@ -351,7 +515,11 @@ func TestChecksumValidation(t *testing.T) {
 		Schema: "main",
 		Name:   "users",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
 		},
 	}
 	err = writer.WriteEntry(entry)
@@ -395,7 +563,11 @@ func TestWriterReset(t *testing.T) {
 		Schema: "main",
 		Name:   "users",
 		Columns: []ColumnDef{
-			{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
 		},
 	}
 	err = writer.WriteEntry(entry)
@@ -408,10 +580,18 @@ func TestWriterReset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Iteration should be incremented
-	assert.Equal(t, oldIteration+1, writer.Iteration())
+	assert.Equal(
+		t,
+		oldIteration+1,
+		writer.Iteration(),
+	)
 
 	// Bytes written should be reset to header size
-	assert.Equal(t, uint64(HeaderSize), writer.BytesWritten())
+	assert.Equal(
+		t,
+		uint64(HeaderSize),
+		writer.BytesWritten(),
+	)
 
 	err = writer.Close()
 	require.NoError(t, err)
@@ -436,28 +616,48 @@ func TestCheckpointManager(t *testing.T) {
 
 	// Create table in catalog
 	columns := []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER).WithNullable(false),
-		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR).WithNullable(true),
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER).
+			WithNullable(false),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR).
+			WithNullable(true),
 	}
-	tableDef := catalog.NewTableDef("users", columns)
+	tableDef := catalog.NewTableDef(
+		"users",
+		columns,
+	)
 	err := cat.CreateTable(tableDef)
 	require.NoError(t, err)
 
 	// Create table in storage
-	storeTable, err := store.CreateTable("users", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	storeTable, err := store.CreateTable(
+		"users",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert some data
-	err = storeTable.AppendRow([]any{int32(1), "Alice"})
+	err = storeTable.AppendRow(
+		[]any{int32(1), "Alice"},
+	)
 	require.NoError(t, err)
-	err = storeTable.AppendRow([]any{int32(2), "Bob"})
+	err = storeTable.AppendRow(
+		[]any{int32(2), "Bob"},
+	)
 	require.NoError(t, err)
 
 	// Create WAL writer and checkpoint manager
 	writer, err := NewWriter(walPath, clock)
 	require.NoError(t, err)
 
-	cm := NewCheckpointManager(writer, cat, store, clock)
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+	)
 
 	// Perform checkpoint
 	err = cm.Checkpoint()
@@ -490,7 +690,12 @@ func TestAutoCheckpoint(t *testing.T) {
 	writer, err := NewWriter(walPath, clock)
 	require.NoError(t, err)
 
-	cm := NewCheckpointManager(writer, cat, store, clock)
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+	)
 
 	// Set a low threshold - but high enough to contain checkpoint data
 	cm.SetThreshold(500)
@@ -499,24 +704,39 @@ func TestAutoCheckpoint(t *testing.T) {
 	for i := range 20 {
 		entry := &CreateTableEntry{
 			Schema: "main",
-			Name:   "table_" + string(rune('a'+i)),
+			Name: "table_" + string(
+				rune('a'+i),
+			),
 			Columns: []ColumnDef{
-				{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
+				{
+					Name:     "id",
+					Type:     dukdb.TYPE_INTEGER,
+					Nullable: false,
+				},
 			},
 		}
 		err = cm.WAL().WriteEntry(entry)
 		require.NoError(t, err)
 	}
 
-	bytesBeforeCheckpoint := cm.WAL().BytesWritten()
-	require.GreaterOrEqual(t, bytesBeforeCheckpoint, uint64(500))
+	bytesBeforeCheckpoint := cm.WAL().
+		BytesWritten()
+	require.GreaterOrEqual(
+		t,
+		bytesBeforeCheckpoint,
+		uint64(500),
+	)
 
 	// Auto-checkpoint should trigger
 	err = cm.MaybeAutoCheckpoint()
 	require.NoError(t, err)
 
 	// Bytes written should be less than before checkpoint (reset to just header + checkpoint marker)
-	assert.Less(t, cm.WAL().BytesWritten(), bytesBeforeCheckpoint)
+	assert.Less(
+		t,
+		cm.WAL().BytesWritten(),
+		bytesBeforeCheckpoint,
+	)
 
 	err = cm.WAL().Close()
 	require.NoError(t, err)
@@ -527,25 +747,101 @@ func TestEntryTypes(t *testing.T) {
 		name  string
 		entry Entry
 	}{
-		{"CreateTable", &CreateTableEntry{Schema: "main", Name: "test", Columns: []ColumnDef{{Name: "id", Type: dukdb.TYPE_INTEGER}}}},
-		{"DropTable", &DropTableEntry{Schema: "main", Name: "test"}},
-		{"CreateSchema", &CreateSchemaEntry{Name: "test_schema"}},
-		{"DropSchema", &DropSchemaEntry{Name: "test_schema"}},
-		{"CreateView", &CreateViewEntry{Schema: "main", Name: "test_view", Query: "SELECT * FROM test"}},
-		{"DropView", &DropViewEntry{Schema: "main", Name: "test_view"}},
-		{"CreateIndex", &CreateIndexEntry{Schema: "main", Table: "test", Name: "idx", Columns: []string{"id"}, IsUnique: true}},
-		{"DropIndex", &DropIndexEntry{Schema: "main", Table: "test", Name: "idx"}},
-		{"UseTable", &UseTableEntry{Schema: "main", Table: "test"}},
-		{"TxnBegin", NewTxnBeginEntry(1, time.Now())},
-		{"TxnCommit", NewTxnCommitEntry(1, time.Now())},
-		{"Checkpoint", NewCheckpointEntry(1, time.Now())},
+		{
+			"CreateTable",
+			&CreateTableEntry{
+				Schema: "main",
+				Name:   "test",
+				Columns: []ColumnDef{
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+				},
+			},
+		},
+		{
+			"DropTable",
+			&DropTableEntry{
+				Schema: "main",
+				Name:   "test",
+			},
+		},
+		{
+			"CreateSchema",
+			&CreateSchemaEntry{
+				Name: "test_schema",
+			},
+		},
+		{
+			"DropSchema",
+			&DropSchemaEntry{Name: "test_schema"},
+		},
+		{
+			"CreateView",
+			&CreateViewEntry{
+				Schema: "main",
+				Name:   "test_view",
+				Query:  "SELECT * FROM test",
+			},
+		},
+		{
+			"DropView",
+			&DropViewEntry{
+				Schema: "main",
+				Name:   "test_view",
+			},
+		},
+		{
+			"CreateIndex",
+			&CreateIndexEntry{
+				Schema:   "main",
+				Table:    "test",
+				Name:     "idx",
+				Columns:  []string{"id"},
+				IsUnique: true,
+			},
+		},
+		{
+			"DropIndex",
+			&DropIndexEntry{
+				Schema: "main",
+				Table:  "test",
+				Name:   "idx",
+			},
+		},
+		{
+			"UseTable",
+			&UseTableEntry{
+				Schema: "main",
+				Table:  "test",
+			},
+		},
+		{
+			"TxnBegin",
+			NewTxnBeginEntry(1, time.Now()),
+		},
+		{
+			"TxnCommit",
+			NewTxnCommitEntry(1, time.Now()),
+		},
+		{
+			"Checkpoint",
+			NewCheckpointEntry(1, time.Now()),
+		},
 		{"Flush", NewFlushEntry(time.Now())},
-		{"Version", NewVersionEntry(2, 1, time.Now())},
+		{
+			"Version",
+			NewVersionEntry(2, 1, time.Now()),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.NotEmpty(t, tt.entry.Type().String())
+			assert.NotEmpty(
+				t,
+				tt.entry.Type().String(),
+			)
 		})
 	}
 }

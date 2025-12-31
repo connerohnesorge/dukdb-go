@@ -8,7 +8,9 @@ import (
 )
 
 // TestTypeInfoSQLTypeIntegration tests SQLType() output for all supported types.
-func TestTypeInfoSQLTypeIntegration(t *testing.T) {
+func TestTypeInfoSQLTypeIntegration(
+	t *testing.T,
+) {
 	t.Run("primitive types", func(t *testing.T) {
 		testCases := []struct {
 			typ     Type
@@ -43,8 +45,19 @@ func TestTypeInfoSQLTypeIntegration(t *testing.T) {
 
 		for _, tc := range testCases {
 			info, err := NewTypeInfo(tc.typ)
-			require.NoError(t, err, "NewTypeInfo(%v) should succeed", tc.typ)
-			assert.Equal(t, tc.sqlType, info.SQLType(), "SQLType for %v", tc.typ)
+			require.NoError(
+				t,
+				err,
+				"NewTypeInfo(%v) should succeed",
+				tc.typ,
+			)
+			assert.Equal(
+				t,
+				tc.sqlType,
+				info.SQLType(),
+				"SQLType for %v",
+				tc.typ,
+			)
 		}
 	})
 
@@ -61,47 +74,89 @@ func TestTypeInfoSQLTypeIntegration(t *testing.T) {
 		}
 
 		for _, tc := range testCases {
-			info, err := NewDecimalInfo(tc.width, tc.scale)
+			info, err := NewDecimalInfo(
+				tc.width,
+				tc.scale,
+			)
 			require.NoError(t, err)
-			assert.Equal(t, tc.sqlType, info.SQLType())
+			assert.Equal(
+				t,
+				tc.sqlType,
+				info.SQLType(),
+			)
 		}
 	})
 
 	t.Run("ENUM types", func(t *testing.T) {
-		info, err := NewEnumInfo("red", "green", "blue")
+		info, err := NewEnumInfo(
+			"red",
+			"green",
+			"blue",
+		)
 		require.NoError(t, err)
-		assert.Equal(t, "ENUM('red', 'green', 'blue')", info.SQLType())
+		assert.Equal(
+			t,
+			"ENUM('red', 'green', 'blue')",
+			info.SQLType(),
+		)
 
 		// Test escaping
-		info, err = NewEnumInfo("it's", "a", "test")
+		info, err = NewEnumInfo(
+			"it's",
+			"a",
+			"test",
+		)
 		require.NoError(t, err)
-		assert.Equal(t, "ENUM('it''s', 'a', 'test')", info.SQLType())
+		assert.Equal(
+			t,
+			"ENUM('it''s', 'a', 'test')",
+			info.SQLType(),
+		)
 	})
 
 	t.Run("LIST types", func(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		listInfo, err := NewListInfo(intInfo)
 		require.NoError(t, err)
-		assert.Equal(t, "INTEGER[]", listInfo.SQLType())
+		assert.Equal(
+			t,
+			"INTEGER[]",
+			listInfo.SQLType(),
+		)
 
 		// Nested list
 		nestedList, _ := NewListInfo(listInfo)
-		assert.Equal(t, "INTEGER[][]", nestedList.SQLType())
+		assert.Equal(
+			t,
+			"INTEGER[][]",
+			nestedList.SQLType(),
+		)
 	})
 
 	t.Run("ARRAY types", func(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		arrayInfo, err := NewArrayInfo(intInfo, 5)
 		require.NoError(t, err)
-		assert.Equal(t, "INTEGER[5]", arrayInfo.SQLType())
+		assert.Equal(
+			t,
+			"INTEGER[5]",
+			arrayInfo.SQLType(),
+		)
 	})
 
 	t.Run("MAP types", func(t *testing.T) {
 		strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-		mapInfo, err := NewMapInfo(strInfo, intInfo)
+		mapInfo, err := NewMapInfo(
+			strInfo,
+			intInfo,
+		)
 		require.NoError(t, err)
-		assert.Equal(t, "MAP(VARCHAR, INTEGER)", mapInfo.SQLType())
+		assert.Equal(
+			t,
+			"MAP(VARCHAR, INTEGER)",
+			mapInfo.SQLType(),
+		)
 	})
 
 	t.Run("STRUCT types", func(t *testing.T) {
@@ -109,11 +164,21 @@ func TestTypeInfoSQLTypeIntegration(t *testing.T) {
 		strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
 
 		entry1, _ := NewStructEntry(intInfo, "id")
-		entry2, _ := NewStructEntry(strInfo, "name")
+		entry2, _ := NewStructEntry(
+			strInfo,
+			"name",
+		)
 
-		structInfo, err := NewStructInfo(entry1, entry2)
+		structInfo, err := NewStructInfo(
+			entry1,
+			entry2,
+		)
 		require.NoError(t, err)
-		assert.Equal(t, `STRUCT("id" INTEGER, "name" VARCHAR)`, structInfo.SQLType())
+		assert.Equal(
+			t,
+			`STRUCT("id" INTEGER, "name" VARCHAR)`,
+			structInfo.SQLType(),
+		)
 	})
 
 	t.Run("UNION types", func(t *testing.T) {
@@ -125,76 +190,151 @@ func TestTypeInfoSQLTypeIntegration(t *testing.T) {
 			[]string{"num", "str"},
 		)
 		require.NoError(t, err)
-		assert.Equal(t, `UNION("num" INTEGER, "str" VARCHAR)`, unionInfo.SQLType())
+		assert.Equal(
+			t,
+			`UNION("num" INTEGER, "str" VARCHAR)`,
+			unionInfo.SQLType(),
+		)
 	})
 
-	t.Run("complex nested types", func(t *testing.T) {
-		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-		strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	t.Run(
+		"complex nested types",
+		func(t *testing.T) {
+			intInfo, _ := NewTypeInfo(
+				TYPE_INTEGER,
+			)
+			strInfo, _ := NewTypeInfo(
+				TYPE_VARCHAR,
+			)
 
-		// MAP(VARCHAR, LIST[INTEGER])
-		listInfo, _ := NewListInfo(intInfo)
-		mapInfo, _ := NewMapInfo(strInfo, listInfo)
-		assert.Equal(t, "MAP(VARCHAR, INTEGER[])", mapInfo.SQLType())
+			// MAP(VARCHAR, LIST[INTEGER])
+			listInfo, _ := NewListInfo(intInfo)
+			mapInfo, _ := NewMapInfo(
+				strInfo,
+				listInfo,
+			)
+			assert.Equal(
+				t,
+				"MAP(VARCHAR, INTEGER[])",
+				mapInfo.SQLType(),
+			)
 
-		// STRUCT(data MAP(VARCHAR, INTEGER[]))
-		entry, _ := NewStructEntry(mapInfo, "data")
-		structInfo, _ := NewStructInfo(entry)
-		assert.Equal(t, `STRUCT("data" MAP(VARCHAR, INTEGER[]))`, structInfo.SQLType())
-	})
+			// STRUCT(data MAP(VARCHAR, INTEGER[]))
+			entry, _ := NewStructEntry(
+				mapInfo,
+				"data",
+			)
+			structInfo, _ := NewStructInfo(entry)
+			assert.Equal(
+				t,
+				`STRUCT("data" MAP(VARCHAR, INTEGER[]))`,
+				structInfo.SQLType(),
+			)
+		},
+	)
 }
 
 // TestTypeInfoRoundTrip tests that TypeInfo can be created and queried correctly.
 func TestTypeInfoRoundTrip(t *testing.T) {
-	t.Run("primitive type round trip", func(t *testing.T) {
-		for _, typ := range []Type{
-			TYPE_BOOLEAN, TYPE_INTEGER, TYPE_BIGINT, TYPE_DOUBLE,
-			TYPE_VARCHAR, TYPE_DATE, TYPE_TIMESTAMP,
-		} {
-			info, err := NewTypeInfo(typ)
+	t.Run(
+		"primitive type round trip",
+		func(t *testing.T) {
+			for _, typ := range []Type{
+				TYPE_BOOLEAN, TYPE_INTEGER, TYPE_BIGINT, TYPE_DOUBLE,
+				TYPE_VARCHAR, TYPE_DATE, TYPE_TIMESTAMP,
+			} {
+				info, err := NewTypeInfo(typ)
+				require.NoError(t, err)
+				assert.Equal(
+					t,
+					typ,
+					info.InternalType(),
+				)
+				assert.Nil(t, info.Details())
+			}
+		},
+	)
+
+	t.Run(
+		"DECIMAL round trip",
+		func(t *testing.T) {
+			info, err := NewDecimalInfo(18, 6)
 			require.NoError(t, err)
-			assert.Equal(t, typ, info.InternalType())
-			assert.Nil(t, info.Details())
-		}
-	})
+			assert.Equal(
+				t,
+				TYPE_DECIMAL,
+				info.InternalType(),
+			)
 
-	t.Run("DECIMAL round trip", func(t *testing.T) {
-		info, err := NewDecimalInfo(18, 6)
-		require.NoError(t, err)
-		assert.Equal(t, TYPE_DECIMAL, info.InternalType())
-
-		details := info.Details().(*DecimalDetails)
-		assert.Equal(t, uint8(18), details.Width)
-		assert.Equal(t, uint8(6), details.Scale)
-	})
+			details := info.Details().(*DecimalDetails)
+			assert.Equal(
+				t,
+				uint8(18),
+				details.Width,
+			)
+			assert.Equal(
+				t,
+				uint8(6),
+				details.Scale,
+			)
+		},
+	)
 
 	t.Run("ENUM round trip", func(t *testing.T) {
-		info, err := NewEnumInfo("small", "medium", "large")
+		info, err := NewEnumInfo(
+			"small",
+			"medium",
+			"large",
+		)
 		require.NoError(t, err)
-		assert.Equal(t, TYPE_ENUM, info.InternalType())
+		assert.Equal(
+			t,
+			TYPE_ENUM,
+			info.InternalType(),
+		)
 
 		details := info.Details().(*EnumDetails)
-		assert.Equal(t, []string{"small", "medium", "large"}, details.Values)
+		assert.Equal(
+			t,
+			[]string{"small", "medium", "large"},
+			details.Values,
+		)
 	})
 
 	t.Run("LIST round trip", func(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		info, err := NewListInfo(intInfo)
 		require.NoError(t, err)
-		assert.Equal(t, TYPE_LIST, info.InternalType())
+		assert.Equal(
+			t,
+			TYPE_LIST,
+			info.InternalType(),
+		)
 
 		details := info.Details().(*ListDetails)
-		assert.Equal(t, TYPE_INTEGER, details.Child.InternalType())
+		assert.Equal(
+			t,
+			TYPE_INTEGER,
+			details.Child.InternalType(),
+		)
 	})
 
 	t.Run("ARRAY round trip", func(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		info, err := NewArrayInfo(intInfo, 10)
 		require.NoError(t, err)
-		assert.Equal(t, TYPE_ARRAY, info.InternalType())
+		assert.Equal(
+			t,
+			TYPE_ARRAY,
+			info.InternalType(),
+		)
 
 		details := info.Details().(*ArrayDetails)
-		assert.Equal(t, TYPE_INTEGER, details.Child.InternalType())
+		assert.Equal(
+			t,
+			TYPE_INTEGER,
+			details.Child.InternalType(),
+		)
 		assert.Equal(t, uint64(10), details.Size)
 	})
 
@@ -203,31 +343,81 @@ func TestTypeInfoRoundTrip(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		info, err := NewMapInfo(strInfo, intInfo)
 		require.NoError(t, err)
-		assert.Equal(t, TYPE_MAP, info.InternalType())
+		assert.Equal(
+			t,
+			TYPE_MAP,
+			info.InternalType(),
+		)
 
 		details := info.Details().(*MapDetails)
-		assert.Equal(t, TYPE_VARCHAR, details.Key.InternalType())
-		assert.Equal(t, TYPE_INTEGER, details.Value.InternalType())
+		assert.Equal(
+			t,
+			TYPE_VARCHAR,
+			details.Key.InternalType(),
+		)
+		assert.Equal(
+			t,
+			TYPE_INTEGER,
+			details.Value.InternalType(),
+		)
 	})
 
-	t.Run("STRUCT round trip", func(t *testing.T) {
-		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-		strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+	t.Run(
+		"STRUCT round trip",
+		func(t *testing.T) {
+			intInfo, _ := NewTypeInfo(
+				TYPE_INTEGER,
+			)
+			strInfo, _ := NewTypeInfo(
+				TYPE_VARCHAR,
+			)
 
-		entry1, _ := NewStructEntry(intInfo, "id")
-		entry2, _ := NewStructEntry(strInfo, "name")
+			entry1, _ := NewStructEntry(
+				intInfo,
+				"id",
+			)
+			entry2, _ := NewStructEntry(
+				strInfo,
+				"name",
+			)
 
-		info, err := NewStructInfo(entry1, entry2)
-		require.NoError(t, err)
-		assert.Equal(t, TYPE_STRUCT, info.InternalType())
+			info, err := NewStructInfo(
+				entry1,
+				entry2,
+			)
+			require.NoError(t, err)
+			assert.Equal(
+				t,
+				TYPE_STRUCT,
+				info.InternalType(),
+			)
 
-		details := info.Details().(*StructDetails)
-		require.Len(t, details.Entries, 2)
-		assert.Equal(t, "id", details.Entries[0].Name())
-		assert.Equal(t, TYPE_INTEGER, details.Entries[0].Info().InternalType())
-		assert.Equal(t, "name", details.Entries[1].Name())
-		assert.Equal(t, TYPE_VARCHAR, details.Entries[1].Info().InternalType())
-	})
+			details := info.Details().(*StructDetails)
+			require.Len(t, details.Entries, 2)
+			assert.Equal(
+				t,
+				"id",
+				details.Entries[0].Name(),
+			)
+			assert.Equal(
+				t,
+				TYPE_INTEGER,
+				details.Entries[0].Info().
+					InternalType(),
+			)
+			assert.Equal(
+				t,
+				"name",
+				details.Entries[1].Name(),
+			)
+			assert.Equal(
+				t,
+				TYPE_VARCHAR,
+				details.Entries[1].Info().
+					InternalType(),
+			)
+		},
+	)
 
 	t.Run("UNION round trip", func(t *testing.T) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
@@ -238,14 +428,34 @@ func TestTypeInfoRoundTrip(t *testing.T) {
 			[]string{"num", "str"},
 		)
 		require.NoError(t, err)
-		assert.Equal(t, TYPE_UNION, info.InternalType())
+		assert.Equal(
+			t,
+			TYPE_UNION,
+			info.InternalType(),
+		)
 
 		details := info.Details().(*UnionDetails)
 		require.Len(t, details.Members, 2)
-		assert.Equal(t, "num", details.Members[0].Name)
-		assert.Equal(t, TYPE_INTEGER, details.Members[0].Type.InternalType())
-		assert.Equal(t, "str", details.Members[1].Name)
-		assert.Equal(t, TYPE_VARCHAR, details.Members[1].Type.InternalType())
+		assert.Equal(
+			t,
+			"num",
+			details.Members[0].Name,
+		)
+		assert.Equal(
+			t,
+			TYPE_INTEGER,
+			details.Members[0].Type.InternalType(),
+		)
+		assert.Equal(
+			t,
+			"str",
+			details.Members[1].Name,
+		)
+		assert.Equal(
+			t,
+			TYPE_VARCHAR,
+			details.Members[1].Type.InternalType(),
+		)
 	})
 }
 
@@ -260,7 +470,10 @@ func TestTypeInfoConcurrency(t *testing.T) {
 		go func() {
 			info, err := NewTypeInfo(TYPE_INTEGER)
 			if err != nil {
-				t.Errorf("unexpected error: %v", err)
+				t.Errorf(
+					"unexpected error: %v",
+					err,
+				)
 			}
 			done <- info
 		}()
@@ -275,7 +488,13 @@ func TestTypeInfoConcurrency(t *testing.T) {
 	// All should be the same cached instance
 	first := results[0]
 	for i, info := range results {
-		assert.Same(t, first, info, "goroutine %d returned different instance", i)
+		assert.Same(
+			t,
+			first,
+			info,
+			"goroutine %d returned different instance",
+			i,
+		)
 	}
 
 	// Only one entry should be in the cache
@@ -284,23 +503,29 @@ func TestTypeInfoConcurrency(t *testing.T) {
 
 // TestTypeInfoEquality tests TypeInfo equality behavior.
 func TestTypeInfoEquality(t *testing.T) {
-	t.Run("cached primitives are same instance", func(t *testing.T) {
-		ClearTypeInfoCache()
+	t.Run(
+		"cached primitives are same instance",
+		func(t *testing.T) {
+			ClearTypeInfoCache()
 
-		info1, _ := NewTypeInfo(TYPE_INTEGER)
-		info2, _ := NewTypeInfo(TYPE_INTEGER)
-		assert.Same(t, info1, info2)
-	})
+			info1, _ := NewTypeInfo(TYPE_INTEGER)
+			info2, _ := NewTypeInfo(TYPE_INTEGER)
+			assert.Same(t, info1, info2)
+		},
+	)
 
-	t.Run("complex types are different instances", func(t *testing.T) {
-		info1, _ := NewDecimalInfo(10, 2)
-		info2, _ := NewDecimalInfo(10, 2)
-		assert.NotSame(t, info1, info2)
+	t.Run(
+		"complex types are different instances",
+		func(t *testing.T) {
+			info1, _ := NewDecimalInfo(10, 2)
+			info2, _ := NewDecimalInfo(10, 2)
+			assert.NotSame(t, info1, info2)
 
-		// But they have the same values
-		d1 := info1.Details().(*DecimalDetails)
-		d2 := info2.Details().(*DecimalDetails)
-		assert.Equal(t, d1.Width, d2.Width)
-		assert.Equal(t, d1.Scale, d2.Scale)
-	})
+			// But they have the same values
+			d1 := info1.Details().(*DecimalDetails)
+			d2 := info2.Details().(*DecimalDetails)
+			assert.Equal(t, d1.Width, d2.Width)
+			assert.Equal(t, d1.Scale, d2.Scale)
+		},
+	)
 }

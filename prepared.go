@@ -86,8 +86,12 @@ func countPlaceholders(query string) int {
 // extractOrderedParams extracts unique parameters from a query and returns them
 // in canonical order. For positional parameters, they are sorted by index ($1, $2, $3).
 // For named parameters, they are returned in first-occurrence order.
-func extractOrderedParams(query string) []placeholder {
-	positional := extractPositionalPlaceholders(query)
+func extractOrderedParams(
+	query string,
+) []placeholder {
+	positional := extractPositionalPlaceholders(
+		query,
+	)
 	named := extractNamedPlaceholders(query)
 
 	// Mixed mode - not supported for introspection, return empty
@@ -156,7 +160,10 @@ func (c *Conn) PreparePreparedStmt(
 	// Initialize boundParams with the same capacity as numParams
 	var boundParams []driver.NamedValue
 	if numParams > 0 {
-		boundParams = make([]driver.NamedValue, numParams)
+		boundParams = make(
+			[]driver.NamedValue,
+			numParams,
+		)
 	}
 
 	return &PreparedStmt{
@@ -214,13 +221,16 @@ func (s *PreparedStmt) ParamCount() int {
 // For positional parameters ($1, $2), returns "1", "2", etc.
 // For named parameters (@name), returns the parameter name without the @ prefix.
 // Returns an error if the index is out of bounds.
-func (s *PreparedStmt) ParamName(idx int) (string, error) {
+func (s *PreparedStmt) ParamName(
+	idx int,
+) (string, error) {
 	if idx < 0 || idx >= len(s.extractedParams) {
 		return "", &Error{
 			Type: ErrorTypeInvalid,
 			Msg: fmt.Sprintf(
 				"parameter index %d out of range [0, %d)",
-				idx, len(s.extractedParams),
+				idx,
+				len(s.extractedParams),
 			),
 		}
 	}
@@ -235,7 +245,10 @@ func (s *PreparedStmt) ParamName(idx int) (string, error) {
 //
 // Bind is not thread-safe - do not call concurrently with other Bind calls
 // or with ExecBound/QueryBound.
-func (s *PreparedStmt) Bind(idx int, value any) error {
+func (s *PreparedStmt) Bind(
+	idx int,
+	value any,
+) error {
 	if s.closed {
 		return &Error{
 			Type: ErrorTypeClosed,
@@ -247,7 +260,8 @@ func (s *PreparedStmt) Bind(idx int, value any) error {
 			Type: ErrorTypeInvalid,
 			Msg: fmt.Sprintf(
 				"parameter index %d out of range [0, %d)",
-				idx, s.numParams,
+				idx,
+				s.numParams,
 			),
 		}
 	}
@@ -304,7 +318,9 @@ func (s *PreparedStmt) allParamsBound() bool {
 // ExecBound executes the prepared statement using previously bound parameters.
 // All parameters must be bound using Bind() before calling this method.
 // Returns an error if any parameter has not been bound.
-func (s *PreparedStmt) ExecBound(ctx context.Context) (driver.Result, error) {
+func (s *PreparedStmt) ExecBound(
+	ctx context.Context,
+) (driver.Result, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -335,7 +351,10 @@ func (s *PreparedStmt) ExecBound(ctx context.Context) (driver.Result, error) {
 	}
 
 	// Make a copy of boundParams to avoid data races
-	args := make([]driver.NamedValue, len(s.boundParams))
+	args := make(
+		[]driver.NamedValue,
+		len(s.boundParams),
+	)
 	copy(args, s.boundParams)
 
 	return s.conn.ExecContext(ctx, s.query, args)
@@ -345,7 +364,9 @@ func (s *PreparedStmt) ExecBound(ctx context.Context) (driver.Result, error) {
 // and returns the query results as driver.Rows.
 // All parameters must be bound using Bind() before calling this method.
 // Returns an error if any parameter has not been bound.
-func (s *PreparedStmt) QueryBound(ctx context.Context) (driver.Rows, error) {
+func (s *PreparedStmt) QueryBound(
+	ctx context.Context,
+) (driver.Rows, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -376,7 +397,10 @@ func (s *PreparedStmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 	}
 
 	// Make a copy of boundParams to avoid data races
-	args := make([]driver.NamedValue, len(s.boundParams))
+	args := make(
+		[]driver.NamedValue,
+		len(s.boundParams),
+	)
 	copy(args, s.boundParams)
 
 	return s.conn.QueryContext(ctx, s.query, args)

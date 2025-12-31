@@ -14,12 +14,16 @@ import (
 //
 // dukdb-go targets: within 2x of C++ performance for these operations.
 
-func BenchmarkComparison_ValidityMaskOps(b *testing.B) {
+func BenchmarkComparison_ValidityMaskOps(
+	b *testing.B,
+) {
 	// DuckDB C++ validity operations: ~1ns per operation
 	// Target: <2ns per operation
 	b.Run("IsValid", func(b *testing.B) {
 		intType, _ := NewTypeInfo(TYPE_INTEGER)
-		chunk, _ := NewDataChunk([]TypeInfo{intType})
+		chunk, _ := NewDataChunk(
+			[]TypeInfo{intType},
+		)
 		_ = chunk.SetSize(GetDataChunkCapacity())
 
 		for i := 0; i < GetDataChunkCapacity(); i++ {
@@ -33,13 +37,21 @@ func BenchmarkComparison_ValidityMaskOps(b *testing.B) {
 			}
 		}
 
-		opsPerIter := float64(GetDataChunkCapacity())
-		nsPerOp := float64(b.Elapsed().Nanoseconds()) / float64(b.N) / opsPerIter
+		opsPerIter := float64(
+			GetDataChunkCapacity(),
+		)
+		nsPerOp := float64(
+			b.Elapsed().Nanoseconds(),
+		) / float64(
+			b.N,
+		) / opsPerIter
 		b.ReportMetric(nsPerOp, "ns/value")
 	})
 }
 
-func BenchmarkComparison_IntegerOps(b *testing.B) {
+func BenchmarkComparison_IntegerOps(
+	b *testing.B,
+) {
 	// DuckDB C++ integer operations: ~5-10ns per value
 	// Target: <20ns per value
 	intType, _ := NewTypeInfo(TYPE_INTEGER)
@@ -50,12 +62,22 @@ func BenchmarkComparison_IntegerOps(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			for row := 0; row < GetDataChunkCapacity(); row++ {
-				_ = chunk.SetValue(0, row, int32(row))
+				_ = chunk.SetValue(
+					0,
+					row,
+					int32(row),
+				)
 			}
 		}
 
-		opsPerIter := float64(GetDataChunkCapacity())
-		nsPerOp := float64(b.Elapsed().Nanoseconds()) / float64(b.N) / opsPerIter
+		opsPerIter := float64(
+			GetDataChunkCapacity(),
+		)
+		nsPerOp := float64(
+			b.Elapsed().Nanoseconds(),
+		) / float64(
+			b.N,
+		) / opsPerIter
 		b.ReportMetric(nsPerOp, "ns/value")
 	})
 
@@ -72,24 +94,41 @@ func BenchmarkComparison_IntegerOps(b *testing.B) {
 			}
 		}
 
-		opsPerIter := float64(GetDataChunkCapacity())
-		nsPerOp := float64(b.Elapsed().Nanoseconds()) / float64(b.N) / opsPerIter
+		opsPerIter := float64(
+			GetDataChunkCapacity(),
+		)
+		nsPerOp := float64(
+			b.Elapsed().Nanoseconds(),
+		) / float64(
+			b.N,
+		) / opsPerIter
 		b.ReportMetric(nsPerOp, "ns/value")
 	})
 }
 
-func BenchmarkComparison_BulkAppend(b *testing.B) {
+func BenchmarkComparison_BulkAppend(
+	b *testing.B,
+) {
 	// DuckDB C++ bulk append: ~10M rows/second for simple types
 	// Target: >5M rows/second (within 2x)
 	mock, state := newAppenderMock()
-	state.setTableColumns([]string{"id"}, []string{"INTEGER"})
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
 	conn := createAppenderTestConn(mock)
 
 	const rowCount = 100000
 
 	b.ResetTimer()
 	for range b.N {
-		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", rowCount)
+		appender, _ := NewAppenderWithThreshold(
+			conn,
+			"",
+			"main",
+			"test",
+			rowCount,
+		)
 		for j := range rowCount {
 			_ = appender.AppendRow(j)
 		}
@@ -101,6 +140,8 @@ func BenchmarkComparison_BulkAppend(b *testing.B) {
 		b.StartTimer()
 	}
 
-	rowsPerSec := float64(rowCount) / (float64(b.Elapsed().Nanoseconds()) / float64(b.N) / 1e9)
+	rowsPerSec := float64(
+		rowCount,
+	) / (float64(b.Elapsed().Nanoseconds()) / float64(b.N) / 1e9)
 	b.ReportMetric(rowsPerSec, "rows/sec")
 }

@@ -154,7 +154,11 @@ func (c *EngineConn) Prepare(
 
 		// For SELECT statements, also extract column metadata
 		if boundSelect, ok := boundStmt.(*binder.BoundSelectStmt); ok {
-			engineStmt.columns = make([]columnInfo, 0, len(boundSelect.Columns))
+			engineStmt.columns = make(
+				[]columnInfo,
+				0,
+				len(boundSelect.Columns),
+			)
 			for _, col := range boundSelect.Columns {
 				name := col.Alias
 				if name == "" && col.Expr != nil {
@@ -167,10 +171,13 @@ func (c *EngineConn) Prepare(
 				if col.Expr != nil {
 					colType = col.Expr.ResultType()
 				}
-				engineStmt.columns = append(engineStmt.columns, columnInfo{
-					name:    name,
-					colType: colType,
-				})
+				engineStmt.columns = append(
+					engineStmt.columns,
+					columnInfo{
+						name:    name,
+						colType: colType,
+					},
+				)
 			}
 		}
 	}
@@ -227,7 +234,9 @@ func (c *EngineConn) AppendDataChunk(
 
 	// Get the table from storage
 	tableKey := schema + "." + table
-	storageTable, ok := c.engine.storage.GetTable(tableKey)
+	storageTable, ok := c.engine.storage.GetTable(
+		tableKey,
+	)
 	if !ok {
 		return 0, &dukdb.Error{
 			Type: dukdb.ErrorTypeCatalog,
@@ -244,7 +253,10 @@ func (c *EngineConn) AppendDataChunk(
 
 	// Create a storage DataChunk with the same column types
 	colTypes := storageTable.ColumnTypes()
-	storageChunk := storage.NewDataChunkWithCapacity(colTypes, rowCount)
+	storageChunk := storage.NewDataChunkWithCapacity(
+		colTypes,
+		rowCount,
+	)
 
 	// Copy data from dukdb.DataChunk to storage.DataChunk
 	colCount := chunk.GetColumnCount()
@@ -281,7 +293,10 @@ func (c *EngineConn) GetTableTypeInfos(
 	}
 
 	// Get the table definition from catalog
-	tableDef, ok := c.engine.catalog.GetTableInSchema(schema, table)
+	tableDef, ok := c.engine.catalog.GetTableInSchema(
+		schema,
+		table,
+	)
 	if !ok {
 		return nil, nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeCatalog,
@@ -389,7 +404,9 @@ func (s *EngineStmt) ParamName(index int) string {
 
 // ParamType returns the inferred type of the parameter at the given index (1-based).
 // Returns TYPE_ANY if the type could not be inferred from context.
-func (s *EngineStmt) ParamType(index int) dukdb.Type {
+func (s *EngineStmt) ParamType(
+	index int,
+) dukdb.Type {
 	if index < 1 || index > s.numParams {
 		return dukdb.TYPE_INVALID
 	}
@@ -407,7 +424,9 @@ func (s *EngineStmt) ColumnCount() int {
 }
 
 // ColumnName returns the name of the result column at the given index (0-based).
-func (s *EngineStmt) ColumnName(index int) string {
+func (s *EngineStmt) ColumnName(
+	index int,
+) string {
 	if index < 0 || index >= len(s.columns) {
 		return ""
 	}
@@ -416,7 +435,9 @@ func (s *EngineStmt) ColumnName(index int) string {
 }
 
 // ColumnType returns the type of the result column at the given index (0-based).
-func (s *EngineStmt) ColumnType(index int) dukdb.Type {
+func (s *EngineStmt) ColumnType(
+	index int,
+) dukdb.Type {
 	if index < 0 || index >= len(s.columns) {
 		return dukdb.TYPE_INVALID
 	}
@@ -425,7 +446,9 @@ func (s *EngineStmt) ColumnType(index int) dukdb.Type {
 }
 
 // ColumnTypeInfo returns extended type info for the result column at the given index (0-based).
-func (s *EngineStmt) ColumnTypeInfo(index int) dukdb.TypeInfo {
+func (s *EngineStmt) ColumnTypeInfo(
+	index int,
+) dukdb.TypeInfo {
 	if index < 0 || index >= len(s.columns) {
 		return nil
 	}
@@ -477,9 +500,12 @@ func (s *EngineStmt) Properties() dukdb.StmtProperties {
 // isReadOnly returns true if the statement doesn't modify any data.
 func (s *EngineStmt) isReadOnly() bool {
 	switch s.StatementType() {
-	case dukdb.STATEMENT_TYPE_SELECT, dukdb.STATEMENT_TYPE_EXPLAIN,
-		dukdb.STATEMENT_TYPE_PRAGMA, dukdb.STATEMENT_TYPE_PREPARE,
-		dukdb.STATEMENT_TYPE_RELATION, dukdb.STATEMENT_TYPE_LOGICAL_PLAN:
+	case dukdb.STATEMENT_TYPE_SELECT,
+		dukdb.STATEMENT_TYPE_EXPLAIN,
+		dukdb.STATEMENT_TYPE_PRAGMA,
+		dukdb.STATEMENT_TYPE_PREPARE,
+		dukdb.STATEMENT_TYPE_RELATION,
+		dukdb.STATEMENT_TYPE_LOGICAL_PLAN:
 		return true
 	default:
 		return false
@@ -494,9 +520,19 @@ func (c *EngineConn) GetCatalog() any {
 
 // Verify interface implementations
 var (
-	_ dukdb.BackendConn             = (*EngineConn)(nil)
-	_ dukdb.BackendConnCatalog      = (*EngineConn)(nil)
-	_ dukdb.BackendStmt             = (*EngineStmt)(nil)
-	_ dukdb.BackendStmtIntrospector = (*EngineStmt)(nil)
-	_ dukdb.BackendStmtProperties   = (*EngineStmt)(nil)
+	_ dukdb.BackendConn = (*EngineConn)(
+		nil,
+	)
+	_ dukdb.BackendConnCatalog = (*EngineConn)(
+		nil,
+	)
+	_ dukdb.BackendStmt = (*EngineStmt)(
+		nil,
+	)
+	_ dukdb.BackendStmtIntrospector = (*EngineStmt)(
+		nil,
+	)
+	_ dukdb.BackendStmtProperties = (*EngineStmt)(
+		nil,
+	)
 )

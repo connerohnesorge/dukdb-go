@@ -27,10 +27,16 @@ func (m *mockOperator) Next() (*storage.DataChunk, error) {
 }
 
 func (m *mockOperator) GetTypes() []dukdb.TypeInfo {
-	if len(m.chunks) > 0 && m.chunks[0].ColumnCount() > 0 {
-		types := make([]dukdb.TypeInfo, m.chunks[0].ColumnCount())
+	if len(m.chunks) > 0 &&
+		m.chunks[0].ColumnCount() > 0 {
+		types := make(
+			[]dukdb.TypeInfo,
+			m.chunks[0].ColumnCount(),
+		)
 		for i := range types {
-			types[i] = &basicTypeInfo{typ: dukdb.TYPE_BIGINT}
+			types[i] = &basicTypeInfo{
+				typ: dukdb.TYPE_BIGINT,
+			}
 		}
 
 		return types
@@ -39,26 +45,40 @@ func (m *mockOperator) GetTypes() []dukdb.TypeInfo {
 	return nil
 }
 
-func TestPhysicalLimitOperator_LimitOnly(t *testing.T) {
+func TestPhysicalLimitOperator_LimitOnly(
+	t *testing.T,
+) {
 	// Create mock data: 20 rows total
-	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk1 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
-	chunk2 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk2 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := 10; i < 20; i++ {
 		chunk2.AppendRow([]any{int64(i)})
 	}
 
 	mockChild := &mockOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
 	}
 
 	// Create limit operator with LIMIT 5
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		5, // limit
 		0, // offset
 	)
@@ -79,29 +99,47 @@ func TestPhysicalLimitOperator_LimitOnly(t *testing.T) {
 	}
 
 	// Should only get first 5 rows
-	assert.Equal(t, []int64{0, 1, 2, 3, 4}, results)
+	assert.Equal(
+		t,
+		[]int64{0, 1, 2, 3, 4},
+		results,
+	)
 }
 
-func TestPhysicalLimitOperator_OffsetOnly(t *testing.T) {
+func TestPhysicalLimitOperator_OffsetOnly(
+	t *testing.T,
+) {
 	// Create mock data: 20 rows total
-	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk1 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
-	chunk2 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk2 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := 10; i < 20; i++ {
 		chunk2.AppendRow([]any{int64(i)})
 	}
 
 	mockChild := &mockOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
 	}
 
 	// Create limit operator with OFFSET 15 (no limit)
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		-1, // no limit
 		15, // offset
 	)
@@ -122,29 +160,47 @@ func TestPhysicalLimitOperator_OffsetOnly(t *testing.T) {
 	}
 
 	// Should skip first 15 rows, get rows 15-19
-	assert.Equal(t, []int64{15, 16, 17, 18, 19}, results)
+	assert.Equal(
+		t,
+		[]int64{15, 16, 17, 18, 19},
+		results,
+	)
 }
 
-func TestPhysicalLimitOperator_LimitAndOffset(t *testing.T) {
+func TestPhysicalLimitOperator_LimitAndOffset(
+	t *testing.T,
+) {
 	// Create mock data: 20 rows total
-	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk1 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 10 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
-	chunk2 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk2 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := 10; i < 20; i++ {
 		chunk2.AppendRow([]any{int64(i)})
 	}
 
 	mockChild := &mockOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
 	}
 
 	// Create limit operator with LIMIT 5 OFFSET 10
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		5,  // limit
 		10, // offset
 	)
@@ -165,12 +221,20 @@ func TestPhysicalLimitOperator_LimitAndOffset(t *testing.T) {
 	}
 
 	// Should skip first 10 rows, then get next 5 (rows 10-14)
-	assert.Equal(t, []int64{10, 11, 12, 13, 14}, results)
+	assert.Equal(
+		t,
+		[]int64{10, 11, 12, 13, 14},
+		results,
+	)
 }
 
-func TestPhysicalLimitOperator_LimitLargerThanData(t *testing.T) {
+func TestPhysicalLimitOperator_LimitLargerThanData(
+	t *testing.T,
+) {
 	// Create mock data: 5 rows total
-	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
@@ -182,7 +246,12 @@ func TestPhysicalLimitOperator_LimitLargerThanData(t *testing.T) {
 	// Create limit operator with LIMIT 100 (more than available)
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		100, // limit
 		0,   // offset
 	)
@@ -203,12 +272,20 @@ func TestPhysicalLimitOperator_LimitLargerThanData(t *testing.T) {
 	}
 
 	// Should get all 5 rows
-	assert.Equal(t, []int64{0, 1, 2, 3, 4}, results)
+	assert.Equal(
+		t,
+		[]int64{0, 1, 2, 3, 4},
+		results,
+	)
 }
 
-func TestPhysicalLimitOperator_OffsetLargerThanData(t *testing.T) {
+func TestPhysicalLimitOperator_OffsetLargerThanData(
+	t *testing.T,
+) {
 	// Create mock data: 5 rows total
-	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
@@ -220,7 +297,12 @@ func TestPhysicalLimitOperator_OffsetLargerThanData(t *testing.T) {
 	// Create limit operator with OFFSET 100 (more than available)
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		-1,  // no limit
 		100, // offset
 	)
@@ -244,26 +326,40 @@ func TestPhysicalLimitOperator_OffsetLargerThanData(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestPhysicalLimitOperator_PartialChunk(t *testing.T) {
+func TestPhysicalLimitOperator_PartialChunk(
+	t *testing.T,
+) {
 	// Create mock data: chunk boundaries don't align with limit
-	chunk1 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk1 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 7 {
 		chunk1.AppendRow([]any{int64(i)})
 	}
 
-	chunk2 := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk2 := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := 7; i < 15; i++ {
 		chunk2.AppendRow([]any{int64(i)})
 	}
 
 	mockChild := &mockOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
 	}
 
 	// Create limit operator with LIMIT 10 OFFSET 3
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		10, // limit
 		3,  // offset
 	)
@@ -284,12 +380,20 @@ func TestPhysicalLimitOperator_PartialChunk(t *testing.T) {
 	}
 
 	// Should skip first 3 rows (0,1,2), then get next 10 (3-12)
-	assert.Equal(t, []int64{3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, results)
+	assert.Equal(
+		t,
+		[]int64{3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		results,
+	)
 }
 
-func TestPhysicalLimitOperator_ZeroLimit(t *testing.T) {
+func TestPhysicalLimitOperator_ZeroLimit(
+	t *testing.T,
+) {
 	// Create mock data
-	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT})
+	chunk := storage.NewDataChunk(
+		[]dukdb.Type{dukdb.TYPE_BIGINT},
+	)
 	for i := range 5 {
 		chunk.AppendRow([]any{int64(i)})
 	}
@@ -301,7 +405,12 @@ func TestPhysicalLimitOperator_ZeroLimit(t *testing.T) {
 	// Create limit operator with LIMIT 0
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
-		[]planner.ColumnBinding{{Column: "id", Type: dukdb.TYPE_BIGINT}},
+		[]planner.ColumnBinding{
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+		},
 		0, // limit 0
 		0, // offset
 	)
@@ -325,11 +434,23 @@ func TestPhysicalLimitOperator_ZeroLimit(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestPhysicalLimitOperator_MultipleColumns(t *testing.T) {
+func TestPhysicalLimitOperator_MultipleColumns(
+	t *testing.T,
+) {
 	// Create mock data with multiple columns
-	chunk := storage.NewDataChunk([]dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_VARCHAR})
+	chunk := storage.NewDataChunk(
+		[]dukdb.Type{
+			dukdb.TYPE_BIGINT,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	for i := range 10 {
-		chunk.AppendRow([]any{int64(i), "value" + string(rune('0'+i))})
+		chunk.AppendRow(
+			[]any{
+				int64(i),
+				"value" + string(rune('0'+i)),
+			},
+		)
 	}
 
 	mockChild := &mockOperator{
@@ -340,8 +461,14 @@ func TestPhysicalLimitOperator_MultipleColumns(t *testing.T) {
 	limitOp, err := NewPhysicalLimitOperator(
 		mockChild,
 		[]planner.ColumnBinding{
-			{Column: "id", Type: dukdb.TYPE_BIGINT},
-			{Column: "name", Type: dukdb.TYPE_VARCHAR},
+			{
+				Column: "id",
+				Type:   dukdb.TYPE_BIGINT,
+			},
+			{
+				Column: "name",
+				Type:   dukdb.TYPE_VARCHAR,
+			},
 		},
 		3, // limit
 		2, // offset

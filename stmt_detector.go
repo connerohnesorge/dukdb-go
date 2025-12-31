@@ -37,7 +37,8 @@ func extractFirstKeyword(sql string) string {
 		}
 
 		// Skip single-line comments (-- ...)
-		if i+1 < n && sql[i] == '-' && sql[i+1] == '-' {
+		if i+1 < n && sql[i] == '-' &&
+			sql[i+1] == '-' {
 			i += 2
 			for i < n && sql[i] != '\n' {
 				i++
@@ -47,7 +48,8 @@ func extractFirstKeyword(sql string) string {
 		}
 
 		// Skip C-style single-line comments (// ...)
-		if i+1 < n && sql[i] == '/' && sql[i+1] == '/' {
+		if i+1 < n && sql[i] == '/' &&
+			sql[i+1] == '/' {
 			i += 2
 			for i < n && sql[i] != '\n' {
 				i++
@@ -57,10 +59,12 @@ func extractFirstKeyword(sql string) string {
 		}
 
 		// Skip multi-line comments (/* ... */)
-		if i+1 < n && sql[i] == '/' && sql[i+1] == '*' {
+		if i+1 < n && sql[i] == '/' &&
+			sql[i+1] == '*' {
 			i += 2
 			for i+1 < n {
-				if sql[i] == '*' && sql[i+1] == '/' {
+				if sql[i] == '*' &&
+					sql[i+1] == '/' {
 					i += 2
 
 					break
@@ -111,7 +115,11 @@ func keywordToStmtType(keyword string) StmtType {
 		return STATEMENT_TYPE_PREPARE
 	case "EXECUTE":
 		return STATEMENT_TYPE_EXECUTE
-	case "BEGIN", "START", "COMMIT", "ROLLBACK", "END":
+	case "BEGIN",
+		"START",
+		"COMMIT",
+		"ROLLBACK",
+		"END":
 		return STATEMENT_TYPE_TRANSACTION
 	case "COPY":
 		return STATEMENT_TYPE_COPY
@@ -142,7 +150,8 @@ func keywordToStmtType(keyword string) StmtType {
 
 // isWhitespaceChar returns true if c is a whitespace character.
 func isWhitespaceChar(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+	return c == ' ' || c == '\t' || c == '\n' ||
+		c == '\r'
 }
 
 // isAlphaNumericChar returns true if c is an alphanumeric character or underscore.

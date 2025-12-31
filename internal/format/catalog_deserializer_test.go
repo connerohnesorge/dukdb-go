@@ -41,7 +41,10 @@ func TestDeserializeColumn(t *testing.T) {
 		{
 			name: "decimal column",
 			column: func() *catalog.ColumnDef {
-				info, _ := dukdb.NewDecimalInfo(18, 4)
+				info, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return &catalog.ColumnDef{
 					Name:     "price",
@@ -56,8 +59,12 @@ func TestDeserializeColumn(t *testing.T) {
 		{
 			name: "list column",
 			column: func() *catalog.ColumnDef {
-				childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listInfo, _ := dukdb.NewListInfo(childInfo)
+				childInfo, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listInfo, _ := dukdb.NewListInfo(
+					childInfo,
+				)
 
 				return &catalog.ColumnDef{
 					Name:     "numbers",
@@ -75,7 +82,10 @@ func TestDeserializeColumn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Serialize the column
 			var buf bytes.Buffer
-			err := SerializeColumn(&buf, tt.column)
+			err := SerializeColumn(
+				&buf,
+				tt.column,
+			)
 			require.NoError(t, err)
 
 			// Deserialize the column
@@ -86,11 +96,19 @@ func TestDeserializeColumn(t *testing.T) {
 			// Verify column properties
 			assert.Equal(t, tt.wantName, col.Name)
 			assert.Equal(t, tt.wantType, col.Type)
-			assert.Equal(t, tt.column.Nullable, col.Nullable)
+			assert.Equal(
+				t,
+				tt.column.Nullable,
+				col.Nullable,
+			)
 
 			// Verify TypeInfo
 			assert.NotNil(t, col.TypeInfo)
-			assert.Equal(t, tt.wantType, col.TypeInfo.InternalType())
+			assert.Equal(
+				t,
+				tt.wantType,
+				col.TypeInfo.InternalType(),
+			)
 		})
 	}
 }
@@ -105,10 +123,21 @@ func TestDeserializeTableEntry(t *testing.T) {
 	}{
 		{
 			name: "simple table with two columns",
-			table: catalog.NewTableDef("users", []*catalog.ColumnDef{
-				{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-			}),
+			table: catalog.NewTableDef(
+				"users",
+				[]*catalog.ColumnDef{
+					{
+						Name:     "id",
+						Type:     dukdb.TYPE_INTEGER,
+						Nullable: false,
+					},
+					{
+						Name:     "name",
+						Type:     dukdb.TYPE_VARCHAR,
+						Nullable: true,
+					},
+				},
+			),
 			wantName:   "users",
 			wantSchema: "",
 			wantCols:   2,
@@ -116,11 +145,26 @@ func TestDeserializeTableEntry(t *testing.T) {
 		{
 			name: "table with schema",
 			table: func() *catalog.TableDef {
-				t := catalog.NewTableDef("products", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_BIGINT, Nullable: false},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-					{Name: "price", Type: dukdb.TYPE_DOUBLE, Nullable: true},
-				})
+				t := catalog.NewTableDef(
+					"products",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_BIGINT,
+							Nullable: false,
+						},
+						{
+							Name:     "name",
+							Type:     dukdb.TYPE_VARCHAR,
+							Nullable: true,
+						},
+						{
+							Name:     "price",
+							Type:     dukdb.TYPE_DOUBLE,
+							Nullable: true,
+						},
+					},
+				)
 				t.Schema = "sales"
 
 				return t
@@ -131,30 +175,44 @@ func TestDeserializeTableEntry(t *testing.T) {
 		},
 		{
 			name: "table with complex types",
-			table: catalog.NewTableDef("complex_table", []*catalog.ColumnDef{
-				{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				func() *catalog.ColumnDef {
-					info, _ := dukdb.NewDecimalInfo(18, 4)
+			table: catalog.NewTableDef(
+				"complex_table",
+				[]*catalog.ColumnDef{
+					{
+						Name:     "id",
+						Type:     dukdb.TYPE_INTEGER,
+						Nullable: false,
+					},
+					func() *catalog.ColumnDef {
+						info, _ := dukdb.NewDecimalInfo(
+							18,
+							4,
+						)
 
-					return &catalog.ColumnDef{
-						Name:     "amount",
-						Type:     dukdb.TYPE_DECIMAL,
-						TypeInfo: info,
-						Nullable: true,
-					}
-				}(),
-				func() *catalog.ColumnDef {
-					childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-					listInfo, _ := dukdb.NewListInfo(childInfo)
+						return &catalog.ColumnDef{
+							Name:     "amount",
+							Type:     dukdb.TYPE_DECIMAL,
+							TypeInfo: info,
+							Nullable: true,
+						}
+					}(),
+					func() *catalog.ColumnDef {
+						childInfo, _ := dukdb.NewTypeInfo(
+							dukdb.TYPE_VARCHAR,
+						)
+						listInfo, _ := dukdb.NewListInfo(
+							childInfo,
+						)
 
-					return &catalog.ColumnDef{
-						Name:     "tags",
-						Type:     dukdb.TYPE_LIST,
-						TypeInfo: listInfo,
-						Nullable: true,
-					}
-				}(),
-			}),
+						return &catalog.ColumnDef{
+							Name:     "tags",
+							Type:     dukdb.TYPE_LIST,
+							TypeInfo: listInfo,
+							Nullable: true,
+						}
+					}(),
+				},
+			),
 			wantName:   "complex_table",
 			wantSchema: "",
 			wantCols:   3,
@@ -165,25 +223,54 @@ func TestDeserializeTableEntry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Serialize the table
 			var buf bytes.Buffer
-			err := SerializeTableEntry(&buf, tt.table)
+			err := SerializeTableEntry(
+				&buf,
+				tt.table,
+			)
 			require.NoError(t, err)
 
 			// Deserialize the table
-			table, err := DeserializeTableEntry(&buf)
+			table, err := DeserializeTableEntry(
+				&buf,
+			)
 			require.NoError(t, err)
 			assert.NotNil(t, table)
 
 			// Verify table properties
-			assert.Equal(t, tt.wantName, table.Name)
-			assert.Equal(t, tt.wantSchema, table.Schema)
-			assert.Equal(t, tt.wantCols, len(table.Columns))
+			assert.Equal(
+				t,
+				tt.wantName,
+				table.Name,
+			)
+			assert.Equal(
+				t,
+				tt.wantSchema,
+				table.Schema,
+			)
+			assert.Equal(
+				t,
+				tt.wantCols,
+				len(table.Columns),
+			)
 
 			// Verify each column matches
 			for i, expectedCol := range tt.table.Columns {
 				actualCol := table.Columns[i]
-				assert.Equal(t, expectedCol.Name, actualCol.Name)
-				assert.Equal(t, expectedCol.Type, actualCol.Type)
-				assert.Equal(t, expectedCol.Nullable, actualCol.Nullable)
+				assert.Equal(
+					t,
+					expectedCol.Name,
+					actualCol.Name,
+				)
+				assert.Equal(
+					t,
+					expectedCol.Type,
+					actualCol.Type,
+				)
+				assert.Equal(
+					t,
+					expectedCol.Nullable,
+					actualCol.Nullable,
+				)
 			}
 		})
 	}
@@ -197,8 +284,10 @@ func TestDeserializeSchema(t *testing.T) {
 		wantTables int
 	}{
 		{
-			name:       "empty schema",
-			schema:     catalog.NewSchema("empty"),
+			name: "empty schema",
+			schema: catalog.NewSchema(
+				"empty",
+			),
 			wantName:   "empty",
 			wantTables: 0,
 		},
@@ -206,10 +295,21 @@ func TestDeserializeSchema(t *testing.T) {
 			name: "schema with single table",
 			schema: func() *catalog.Schema {
 				s := catalog.NewSchema("test")
-				table := catalog.NewTableDef("users", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-				})
+				table := catalog.NewTableDef(
+					"users",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+						{
+							Name:     "name",
+							Type:     dukdb.TYPE_VARCHAR,
+							Nullable: true,
+						},
+					},
+				)
 				_ = s.CreateTable(table)
 
 				return s
@@ -221,13 +321,31 @@ func TestDeserializeSchema(t *testing.T) {
 			name: "schema with multiple tables",
 			schema: func() *catalog.Schema {
 				s := catalog.NewSchema("multi")
-				table1 := catalog.NewTableDef("users", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				})
-				table2 := catalog.NewTableDef("products", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_BIGINT, Nullable: false},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-				})
+				table1 := catalog.NewTableDef(
+					"users",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+					},
+				)
+				table2 := catalog.NewTableDef(
+					"products",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_BIGINT,
+							Nullable: false,
+						},
+						{
+							Name:     "name",
+							Type:     dukdb.TYPE_VARCHAR,
+							Nullable: true,
+						},
+					},
+				)
 				_ = s.CreateTable(table1)
 				_ = s.CreateTable(table2)
 
@@ -242,7 +360,10 @@ func TestDeserializeSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Serialize the schema
 			var buf bytes.Buffer
-			err := SerializeSchema(&buf, tt.schema)
+			err := SerializeSchema(
+				&buf,
+				tt.schema,
+			)
 			require.NoError(t, err)
 
 			// Deserialize the schema
@@ -251,19 +372,34 @@ func TestDeserializeSchema(t *testing.T) {
 			assert.NotNil(t, schema)
 
 			// Verify schema properties
-			assert.Equal(t, tt.wantName, schema.Name())
-			assert.Equal(t, tt.wantTables, len(schema.ListTables()))
+			assert.Equal(
+				t,
+				tt.wantName,
+				schema.Name(),
+			)
+			assert.Equal(
+				t,
+				tt.wantTables,
+				len(schema.ListTables()),
+			)
 
 			// Verify table names match
 			originalTables := tt.schema.ListTables()
 			deserializedTables := schema.ListTables()
 			if len(originalTables) > 0 {
-				originalNames := make(map[string]bool)
+				originalNames := make(
+					map[string]bool,
+				)
 				for _, table := range originalTables {
 					originalNames[table.Name] = true
 				}
 				for _, table := range deserializedTables {
-					assert.True(t, originalNames[table.Name], "table %s not found in original schema", table.Name)
+					assert.True(
+						t,
+						originalNames[table.Name],
+						"table %s not found in original schema",
+						table.Name,
+					)
 				}
 			}
 		})
@@ -281,10 +417,21 @@ func TestDeserializeCatalog(t *testing.T) {
 			name: "catalog with main schema only",
 			setupCatalog: func() *catalog.Catalog {
 				cat := catalog.NewCatalog()
-				table := catalog.NewTableDef("users", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-				})
+				table := catalog.NewTableDef(
+					"users",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+						{
+							Name:     "name",
+							Type:     dukdb.TYPE_VARCHAR,
+							Nullable: true,
+						},
+					},
+				)
 				_ = cat.CreateTable(table)
 
 				return cat
@@ -300,18 +447,39 @@ func TestDeserializeCatalog(t *testing.T) {
 				cat := catalog.NewCatalog()
 
 				// Main schema
-				mainTable := catalog.NewTableDef("users", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				})
+				mainTable := catalog.NewTableDef(
+					"users",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+					},
+				)
 				_ = cat.CreateTable(mainTable)
 
 				// Custom schema
 				_, _ = cat.CreateSchema("sales")
-				salesTable := catalog.NewTableDef("orders", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_BIGINT, Nullable: false},
-					{Name: "total", Type: dukdb.TYPE_DOUBLE, Nullable: true},
-				})
-				_ = cat.CreateTableInSchema("sales", salesTable)
+				salesTable := catalog.NewTableDef(
+					"orders",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_BIGINT,
+							Nullable: false,
+						},
+						{
+							Name:     "total",
+							Type:     dukdb.TYPE_DOUBLE,
+							Nullable: true,
+						},
+					},
+				)
+				_ = cat.CreateTableInSchema(
+					"sales",
+					salesTable,
+				)
 
 				return cat
 			},
@@ -326,25 +494,39 @@ func TestDeserializeCatalog(t *testing.T) {
 			setupCatalog: func() *catalog.Catalog {
 				cat := catalog.NewCatalog()
 
-				decimalInfo, _ := dukdb.NewDecimalInfo(18, 4)
-				childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listInfo, _ := dukdb.NewListInfo(childInfo)
+				decimalInfo, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
+				childInfo, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listInfo, _ := dukdb.NewListInfo(
+					childInfo,
+				)
 
-				table := catalog.NewTableDef("complex_table", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-					{
-						Name:     "amount",
-						Type:     dukdb.TYPE_DECIMAL,
-						TypeInfo: decimalInfo,
-						Nullable: true,
+				table := catalog.NewTableDef(
+					"complex_table",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+						{
+							Name:     "amount",
+							Type:     dukdb.TYPE_DECIMAL,
+							TypeInfo: decimalInfo,
+							Nullable: true,
+						},
+						{
+							Name:     "numbers",
+							Type:     dukdb.TYPE_LIST,
+							TypeInfo: listInfo,
+							Nullable: true,
+						},
 					},
-					{
-						Name:     "numbers",
-						Type:     dukdb.TYPE_LIST,
-						TypeInfo: listInfo,
-						Nullable: true,
-					},
-				})
+				)
 				_ = cat.CreateTable(table)
 
 				return cat
@@ -362,7 +544,10 @@ func TestDeserializeCatalog(t *testing.T) {
 
 			// Serialize the catalog
 			var buf bytes.Buffer
-			err := SerializeCatalog(&buf, originalCat)
+			err := SerializeCatalog(
+				&buf,
+				originalCat,
+			)
 			require.NoError(t, err)
 
 			// Deserialize the catalog
@@ -372,37 +557,89 @@ func TestDeserializeCatalog(t *testing.T) {
 
 			// Verify schemas
 			for schemaName, expectedTableCount := range tt.wantTables {
-				schema, ok := cat.GetSchema(schemaName)
-				assert.True(t, ok, "schema %s not found", schemaName)
+				schema, ok := cat.GetSchema(
+					schemaName,
+				)
+				assert.True(
+					t,
+					ok,
+					"schema %s not found",
+					schemaName,
+				)
 				if ok {
 					tables := schema.ListTables()
-					assert.Equal(t, expectedTableCount, len(tables),
+					assert.Equal(
+						t,
+						expectedTableCount,
+						len(tables),
 						"schema %s should have %d tables, got %d",
-						schemaName, expectedTableCount, len(tables))
+						schemaName,
+						expectedTableCount,
+						len(tables),
+					)
 				}
 			}
 
 			// Verify tables have correct columns
 			for schemaName := range tt.wantTables {
-				originalSchema, _ := originalCat.GetSchema(schemaName)
-				deserializedSchema, _ := cat.GetSchema(schemaName)
+				originalSchema, _ := originalCat.GetSchema(
+					schemaName,
+				)
+				deserializedSchema, _ := cat.GetSchema(
+					schemaName,
+				)
 
 				originalTables := originalSchema.ListTables()
 				for _, originalTable := range originalTables {
-					deserializedTable, ok := deserializedSchema.GetTable(originalTable.Name)
-					assert.True(t, ok, "table %s not found in schema %s", originalTable.Name, schemaName)
+					deserializedTable, ok := deserializedSchema.GetTable(
+						originalTable.Name,
+					)
+					assert.True(
+						t,
+						ok,
+						"table %s not found in schema %s",
+						originalTable.Name,
+						schemaName,
+					)
 					if ok {
-						assert.Equal(t, len(originalTable.Columns), len(deserializedTable.Columns),
-							"table %s column count mismatch", originalTable.Name)
+						assert.Equal(
+							t,
+							len(
+								originalTable.Columns,
+							),
+							len(
+								deserializedTable.Columns,
+							),
+							"table %s column count mismatch",
+							originalTable.Name,
+						)
 
 						for i, originalCol := range originalTable.Columns {
 							deserializedCol := deserializedTable.Columns[i]
-							assert.Equal(t, originalCol.Name, deserializedCol.Name,
-								"column %d name mismatch in table %s", i, originalTable.Name)
-							assert.Equal(t, originalCol.Type, deserializedCol.Type,
-								"column %s type mismatch in table %s", originalCol.Name, originalTable.Name)
-							assert.Equal(t, originalCol.Nullable, deserializedCol.Nullable,
-								"column %s nullable mismatch in table %s", originalCol.Name, originalTable.Name)
+							assert.Equal(
+								t,
+								originalCol.Name,
+								deserializedCol.Name,
+								"column %d name mismatch in table %s",
+								i,
+								originalTable.Name,
+							)
+							assert.Equal(
+								t,
+								originalCol.Type,
+								deserializedCol.Type,
+								"column %s type mismatch in table %s",
+								originalCol.Name,
+								originalTable.Name,
+							)
+							assert.Equal(
+								t,
+								originalCol.Nullable,
+								deserializedCol.Nullable,
+								"column %s nullable mismatch in table %s",
+								originalCol.Name,
+								originalTable.Name,
+							)
 						}
 					}
 				}
@@ -411,7 +648,9 @@ func TestDeserializeCatalog(t *testing.T) {
 	}
 }
 
-func TestDeserializeColumn_ErrorHandling(t *testing.T) {
+func TestDeserializeColumn_ErrorHandling(
+	t *testing.T,
+) {
 	tests := []struct {
 		name    string
 		input   []byte
@@ -428,7 +667,10 @@ func TestDeserializeColumn_ErrorHandling(t *testing.T) {
 				var buf bytes.Buffer
 				bw := NewBinaryWriter(&buf)
 				// Only write property 100, missing property 101 (TypeInfo)
-				_ = bw.WriteProperty(100, "test_col")
+				_ = bw.WriteProperty(
+					100,
+					"test_col",
+				)
 				_ = bw.Flush()
 
 				return buf.Bytes()
@@ -450,7 +692,9 @@ func TestDeserializeColumn_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestDeserializeTableEntry_ErrorHandling(t *testing.T) {
+func TestDeserializeTableEntry_ErrorHandling(
+	t *testing.T,
+) {
 	tests := []struct {
 		name    string
 		input   []byte
@@ -467,10 +711,21 @@ func TestDeserializeTableEntry_ErrorHandling(t *testing.T) {
 				var buf bytes.Buffer
 				bw := NewBinaryWriter(&buf)
 				// Write SCHEMA type instead of TABLE
-				_ = bw.WriteProperty(100, uint32(CatalogEntryType_SCHEMA))
-				_ = bw.WriteProperty(101, "test_table")
+				_ = bw.WriteProperty(
+					100,
+					uint32(
+						CatalogEntryType_SCHEMA,
+					),
+				)
+				_ = bw.WriteProperty(
+					101,
+					"test_table",
+				)
 				_ = bw.WriteProperty(102, "main")
-				_ = bw.WriteProperty(200, uint64(0))
+				_ = bw.WriteProperty(
+					200,
+					uint64(0),
+				)
 				_ = bw.Flush()
 
 				return buf.Bytes()
@@ -492,7 +747,9 @@ func TestDeserializeTableEntry_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestDeserializeSchema_ErrorHandling(t *testing.T) {
+func TestDeserializeSchema_ErrorHandling(
+	t *testing.T,
+) {
 	tests := []struct {
 		name    string
 		input   []byte
@@ -509,9 +766,20 @@ func TestDeserializeSchema_ErrorHandling(t *testing.T) {
 				var buf bytes.Buffer
 				bw := NewBinaryWriter(&buf)
 				// Write TABLE type instead of SCHEMA
-				_ = bw.WriteProperty(100, uint32(CatalogEntryType_TABLE))
-				_ = bw.WriteProperty(101, "test_schema")
-				_ = bw.WriteProperty(200, uint64(0))
+				_ = bw.WriteProperty(
+					100,
+					uint32(
+						CatalogEntryType_TABLE,
+					),
+				)
+				_ = bw.WriteProperty(
+					101,
+					"test_schema",
+				)
+				_ = bw.WriteProperty(
+					200,
+					uint64(0),
+				)
 				_ = bw.Flush()
 
 				return buf.Bytes()
@@ -533,24 +801,35 @@ func TestDeserializeSchema_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestCatalogRoundTrip_ComplexTypes(t *testing.T) {
+func TestCatalogRoundTrip_ComplexTypes(
+	t *testing.T,
+) {
 	// Create a catalog with various complex types
 	cat := catalog.NewCatalog()
 
 	// Decimal column
-	decimalInfo, err := dukdb.NewDecimalInfo(18, 4)
+	decimalInfo, err := dukdb.NewDecimalInfo(
+		18,
+		4,
+	)
 	require.NoError(t, err)
 
 	// List column
-	listChildInfo, err := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	listChildInfo, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 	require.NoError(t, err)
-	listInfo, err := dukdb.NewListInfo(listChildInfo)
+	listInfo, err := dukdb.NewListInfo(
+		listChildInfo,
+	)
 	require.NoError(t, err)
 
 	// Struct column
 	structField1, err := dukdb.NewStructEntry(
 		func() dukdb.TypeInfo {
-			info, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+			info, _ := dukdb.NewTypeInfo(
+				dukdb.TYPE_INTEGER,
+			)
 			return info
 		}(),
 		"x",
@@ -558,27 +837,63 @@ func TestCatalogRoundTrip_ComplexTypes(t *testing.T) {
 	require.NoError(t, err)
 	structField2, err := dukdb.NewStructEntry(
 		func() dukdb.TypeInfo {
-			info, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+			info, _ := dukdb.NewTypeInfo(
+				dukdb.TYPE_VARCHAR,
+			)
 			return info
 		}(),
 		"y",
 	)
 	require.NoError(t, err)
-	structInfo, err := dukdb.NewStructInfo(structField1, structField2)
+	structInfo, err := dukdb.NewStructInfo(
+		structField1,
+		structField2,
+	)
 	require.NoError(t, err)
 
 	// Enum column
-	enumInfo, err := dukdb.NewEnumInfo("RED", "GREEN", "BLUE")
+	enumInfo, err := dukdb.NewEnumInfo(
+		"RED",
+		"GREEN",
+		"BLUE",
+	)
 	require.NoError(t, err)
 
 	// Create table with all these types
-	table := catalog.NewTableDef("complex_types", []*catalog.ColumnDef{
-		{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "price", Type: dukdb.TYPE_DECIMAL, TypeInfo: decimalInfo, Nullable: true},
-		{Name: "tags", Type: dukdb.TYPE_LIST, TypeInfo: listInfo, Nullable: true},
-		{Name: "point", Type: dukdb.TYPE_STRUCT, TypeInfo: structInfo, Nullable: true},
-		{Name: "color", Type: dukdb.TYPE_ENUM, TypeInfo: enumInfo, Nullable: true},
-	})
+	table := catalog.NewTableDef(
+		"complex_types",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "price",
+				Type:     dukdb.TYPE_DECIMAL,
+				TypeInfo: decimalInfo,
+				Nullable: true,
+			},
+			{
+				Name:     "tags",
+				Type:     dukdb.TYPE_LIST,
+				TypeInfo: listInfo,
+				Nullable: true,
+			},
+			{
+				Name:     "point",
+				Type:     dukdb.TYPE_STRUCT,
+				TypeInfo: structInfo,
+				Nullable: true,
+			},
+			{
+				Name:     "color",
+				Type:     dukdb.TYPE_ENUM,
+				TypeInfo: enumInfo,
+				Nullable: true,
+			},
+		},
+	)
 
 	err = cat.CreateTable(table)
 	require.NoError(t, err)
@@ -589,51 +904,114 @@ func TestCatalogRoundTrip_ComplexTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	// Deserialize
-	deserializedCat, err := DeserializeCatalog(&buf)
+	deserializedCat, err := DeserializeCatalog(
+		&buf,
+	)
 	require.NoError(t, err)
 
 	// Verify
-	deserializedTable, ok := deserializedCat.GetTable("complex_types")
+	deserializedTable, ok := deserializedCat.GetTable(
+		"complex_types",
+	)
 	assert.True(t, ok)
-	assert.Equal(t, 5, len(deserializedTable.Columns))
+	assert.Equal(
+		t,
+		5,
+		len(deserializedTable.Columns),
+	)
 
 	// Verify each column type
-	assert.Equal(t, dukdb.TYPE_INTEGER, deserializedTable.Columns[0].Type)
-	assert.Equal(t, dukdb.TYPE_DECIMAL, deserializedTable.Columns[1].Type)
-	assert.Equal(t, dukdb.TYPE_LIST, deserializedTable.Columns[2].Type)
-	assert.Equal(t, dukdb.TYPE_STRUCT, deserializedTable.Columns[3].Type)
-	assert.Equal(t, dukdb.TYPE_ENUM, deserializedTable.Columns[4].Type)
+	assert.Equal(
+		t,
+		dukdb.TYPE_INTEGER,
+		deserializedTable.Columns[0].Type,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_DECIMAL,
+		deserializedTable.Columns[1].Type,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_LIST,
+		deserializedTable.Columns[2].Type,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_STRUCT,
+		deserializedTable.Columns[3].Type,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_ENUM,
+		deserializedTable.Columns[4].Type,
+	)
 
 	// Verify decimal details
 	decimalDetails := deserializedTable.Columns[1].TypeInfo.Details().(*dukdb.DecimalDetails)
-	assert.Equal(t, uint8(18), decimalDetails.Width)
-	assert.Equal(t, uint8(4), decimalDetails.Scale)
+	assert.Equal(
+		t,
+		uint8(18),
+		decimalDetails.Width,
+	)
+	assert.Equal(
+		t,
+		uint8(4),
+		decimalDetails.Scale,
+	)
 
 	// Verify list details
 	listDetails := deserializedTable.Columns[2].TypeInfo.Details().(*dukdb.ListDetails)
-	assert.Equal(t, dukdb.TYPE_VARCHAR, listDetails.Child.InternalType())
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		listDetails.Child.InternalType(),
+	)
 
 	// Verify struct details
 	structDetails := deserializedTable.Columns[3].TypeInfo.Details().(*dukdb.StructDetails)
 	assert.Equal(t, 2, len(structDetails.Entries))
-	assert.Equal(t, "x", structDetails.Entries[0].Name())
-	assert.Equal(t, "y", structDetails.Entries[1].Name())
+	assert.Equal(
+		t,
+		"x",
+		structDetails.Entries[0].Name(),
+	)
+	assert.Equal(
+		t,
+		"y",
+		structDetails.Entries[1].Name(),
+	)
 
 	// Verify enum details
 	enumDetails := deserializedTable.Columns[4].TypeInfo.Details().(*dukdb.EnumDetails)
 	assert.Equal(t, 3, len(enumDetails.Values))
 	assert.Contains(t, enumDetails.Values, "RED")
-	assert.Contains(t, enumDetails.Values, "GREEN")
+	assert.Contains(
+		t,
+		enumDetails.Values,
+		"GREEN",
+	)
 	assert.Contains(t, enumDetails.Values, "BLUE")
 }
 
 func TestSaveCatalogToDuckDBFormat(t *testing.T) {
 	// Create a test catalog
 	cat := catalog.NewCatalog()
-	table := catalog.NewTableDef("users", []*catalog.ColumnDef{
-		{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: true},
-	})
+	table := catalog.NewTableDef(
+		"users",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: true,
+			},
+		},
+	)
 	err := cat.CreateTable(table)
 	require.NoError(t, err)
 
@@ -649,7 +1027,9 @@ func TestSaveCatalogToDuckDBFormat(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Load catalog back
-	loadedCat, err := LoadCatalogFromDuckDBFormat(tmpFile)
+	loadedCat, err := LoadCatalogFromDuckDBFormat(
+		tmpFile,
+	)
 	require.NoError(t, err)
 	assert.NotNil(t, loadedCat)
 
@@ -660,7 +1040,9 @@ func TestSaveCatalogToDuckDBFormat(t *testing.T) {
 	assert.Equal(t, 2, len(loadedTable.Columns))
 }
 
-func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
+func TestLoadCatalogFromDuckDBFormat(
+	t *testing.T,
+) {
 	tests := []struct {
 		name         string
 		setupCatalog func() *catalog.Catalog
@@ -670,17 +1052,30 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 			name: "simple catalog",
 			setupCatalog: func() *catalog.Catalog {
 				cat := catalog.NewCatalog()
-				table := catalog.NewTableDef("test_table", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				})
+				table := catalog.NewTableDef(
+					"test_table",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+					},
+				)
 				_ = cat.CreateTable(table)
 
 				return cat
 			},
 			verify: func(t *testing.T, cat *catalog.Catalog) {
-				table, ok := cat.GetTable("test_table")
+				table, ok := cat.GetTable(
+					"test_table",
+				)
 				assert.True(t, ok)
-				assert.Equal(t, 1, len(table.Columns))
+				assert.Equal(
+					t,
+					1,
+					len(table.Columns),
+				)
 			},
 		},
 		{
@@ -689,30 +1084,60 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 				cat := catalog.NewCatalog()
 
 				// Main schema
-				table1 := catalog.NewTableDef("users", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-				})
+				table1 := catalog.NewTableDef(
+					"users",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+					},
+				)
 				_ = cat.CreateTable(table1)
 
 				// Sales schema
 				_, _ = cat.CreateSchema("sales")
-				table2 := catalog.NewTableDef("orders", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_BIGINT, Nullable: false},
-				})
-				_ = cat.CreateTableInSchema("sales", table2)
+				table2 := catalog.NewTableDef(
+					"orders",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_BIGINT,
+							Nullable: false,
+						},
+					},
+				)
+				_ = cat.CreateTableInSchema(
+					"sales",
+					table2,
+				)
 
 				return cat
 			},
 			verify: func(t *testing.T, cat *catalog.Catalog) {
 				// Verify main schema
-				mainTable, ok := cat.GetTable("users")
+				mainTable, ok := cat.GetTable(
+					"users",
+				)
 				assert.True(t, ok)
-				assert.Equal(t, "users", mainTable.Name)
+				assert.Equal(
+					t,
+					"users",
+					mainTable.Name,
+				)
 
 				// Verify sales schema
-				salesTable, ok := cat.GetTableInSchema("sales", "orders")
+				salesTable, ok := cat.GetTableInSchema(
+					"sales",
+					"orders",
+				)
 				assert.True(t, ok)
-				assert.Equal(t, "orders", salesTable.Name)
+				assert.Equal(
+					t,
+					"orders",
+					salesTable.Name,
+				)
 			},
 		},
 		{
@@ -720,44 +1145,84 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 			setupCatalog: func() *catalog.Catalog {
 				cat := catalog.NewCatalog()
 
-				decimalInfo, _ := dukdb.NewDecimalInfo(18, 4)
-				childInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				listInfo, _ := dukdb.NewListInfo(childInfo)
+				decimalInfo, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
+				childInfo, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				listInfo, _ := dukdb.NewListInfo(
+					childInfo,
+				)
 
-				table := catalog.NewTableDef("complex", []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-					{
-						Name:     "amount",
-						Type:     dukdb.TYPE_DECIMAL,
-						TypeInfo: decimalInfo,
-						Nullable: true,
+				table := catalog.NewTableDef(
+					"complex",
+					[]*catalog.ColumnDef{
+						{
+							Name:     "id",
+							Type:     dukdb.TYPE_INTEGER,
+							Nullable: false,
+						},
+						{
+							Name:     "amount",
+							Type:     dukdb.TYPE_DECIMAL,
+							TypeInfo: decimalInfo,
+							Nullable: true,
+						},
+						{
+							Name:     "tags",
+							Type:     dukdb.TYPE_LIST,
+							TypeInfo: listInfo,
+							Nullable: true,
+						},
 					},
-					{
-						Name:     "tags",
-						Type:     dukdb.TYPE_LIST,
-						TypeInfo: listInfo,
-						Nullable: true,
-					},
-				})
+				)
 				_ = cat.CreateTable(table)
 
 				return cat
 			},
 			verify: func(t *testing.T, cat *catalog.Catalog) {
-				table, ok := cat.GetTable("complex")
+				table, ok := cat.GetTable(
+					"complex",
+				)
 				assert.True(t, ok)
-				assert.Equal(t, 3, len(table.Columns))
+				assert.Equal(
+					t,
+					3,
+					len(table.Columns),
+				)
 
 				// Verify decimal column
-				assert.Equal(t, dukdb.TYPE_DECIMAL, table.Columns[1].Type)
+				assert.Equal(
+					t,
+					dukdb.TYPE_DECIMAL,
+					table.Columns[1].Type,
+				)
 				decimalDetails := table.Columns[1].TypeInfo.Details().(*dukdb.DecimalDetails)
-				assert.Equal(t, uint8(18), decimalDetails.Width)
-				assert.Equal(t, uint8(4), decimalDetails.Scale)
+				assert.Equal(
+					t,
+					uint8(18),
+					decimalDetails.Width,
+				)
+				assert.Equal(
+					t,
+					uint8(4),
+					decimalDetails.Scale,
+				)
 
 				// Verify list column
-				assert.Equal(t, dukdb.TYPE_LIST, table.Columns[2].Type)
+				assert.Equal(
+					t,
+					dukdb.TYPE_LIST,
+					table.Columns[2].Type,
+				)
 				listDetails := table.Columns[2].TypeInfo.Details().(*dukdb.ListDetails)
-				assert.Equal(t, dukdb.TYPE_VARCHAR, listDetails.Child.InternalType())
+				assert.Equal(
+					t,
+					dukdb.TYPE_VARCHAR,
+					listDetails.Child.InternalType(),
+				)
 			},
 		},
 	}
@@ -769,11 +1234,16 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 
 			// Save catalog
 			originalCat := tt.setupCatalog()
-			err := SaveCatalogToDuckDBFormat(originalCat, tmpFile)
+			err := SaveCatalogToDuckDBFormat(
+				originalCat,
+				tmpFile,
+			)
 			require.NoError(t, err)
 
 			// Load catalog
-			loadedCat, err := LoadCatalogFromDuckDBFormat(tmpFile)
+			loadedCat, err := LoadCatalogFromDuckDBFormat(
+				tmpFile,
+			)
 			require.NoError(t, err)
 			assert.NotNil(t, loadedCat)
 
@@ -783,7 +1253,9 @@ func TestLoadCatalogFromDuckDBFormat(t *testing.T) {
 	}
 }
 
-func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
+func TestLoadCatalogFromDuckDBFormat_InvalidFiles(
+	t *testing.T,
+) {
 	tests := []struct {
 		name      string
 		setupFile func(string) error
@@ -808,7 +1280,14 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 					_ = f.Close()
 				}()
 				// Write invalid magic number
-				_, err = f.Write([]byte{0x00, 0x00, 0x00, 0x00})
+				_, err = f.Write(
+					[]byte{
+						0x00,
+						0x00,
+						0x00,
+						0x00,
+					},
+				)
 
 				return err
 			},
@@ -828,7 +1307,18 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 				_ = WriteHeader(f)
 				// Overwrite version with incorrect value by seeking back
 				_, _ = f.Seek(4, 0)
-				_, err = f.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+				_, err = f.Write(
+					[]byte{
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+					},
+				)
 
 				return err
 			},
@@ -845,7 +1335,9 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			_, err := LoadCatalogFromDuckDBFormat(tmpFile)
+			_, err := LoadCatalogFromDuckDBFormat(
+				tmpFile,
+			)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -855,7 +1347,9 @@ func TestLoadCatalogFromDuckDBFormat_InvalidFiles(t *testing.T) {
 	}
 }
 
-func TestSaveAndLoadCatalog_EmptySchema(t *testing.T) {
+func TestSaveAndLoadCatalog_EmptySchema(
+	t *testing.T,
+) {
 	// Create catalog with empty main schema
 	cat := catalog.NewCatalog()
 
@@ -867,7 +1361,9 @@ func TestSaveAndLoadCatalog_EmptySchema(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load catalog
-	loadedCat, err := LoadCatalogFromDuckDBFormat(tmpFile)
+	loadedCat, err := LoadCatalogFromDuckDBFormat(
+		tmpFile,
+	)
 	require.NoError(t, err)
 
 	// Verify main schema exists but has no tables

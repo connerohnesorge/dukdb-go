@@ -1293,7 +1293,9 @@ func TestAppenderColumnTypes(t *testing.T) {
 // === Query Appender Tests ===
 
 // TestNewQueryAppender_EmptyQuery tests error for empty query
-func TestNewQueryAppender_EmptyQuery(t *testing.T) {
+func TestNewQueryAppender_EmptyQuery(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1321,7 +1323,9 @@ func TestNewQueryAppender_EmptyQuery(t *testing.T) {
 }
 
 // TestNewQueryAppender_EmptyColTypes tests error for empty column types
-func TestNewQueryAppender_EmptyColTypes(t *testing.T) {
+func TestNewQueryAppender_EmptyColTypes(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1334,7 +1338,9 @@ func TestNewQueryAppender_EmptyColTypes(t *testing.T) {
 	)
 
 	if err == nil {
-		t.Fatal("expected error for empty column types")
+		t.Fatal(
+			"expected error for empty column types",
+		)
 	}
 	var dukErr *Error
 	if errors.As(err, &dukErr) {
@@ -1348,7 +1354,9 @@ func TestNewQueryAppender_EmptyColTypes(t *testing.T) {
 }
 
 // TestNewQueryAppender_ColNamesMismatch tests error for column name/type mismatch
-func TestNewQueryAppender_ColNamesMismatch(t *testing.T) {
+func TestNewQueryAppender_ColNamesMismatch(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1357,12 +1365,17 @@ func TestNewQueryAppender_ColNamesMismatch(t *testing.T) {
 		conn,
 		"INSERT INTO test SELECT * FROM appended_data",
 		"appended_data",
-		[]TypeInfo{intInfo},      // 1 type
-		[]string{"col1", "col2"}, // 2 names - mismatch
+		[]TypeInfo{intInfo}, // 1 type
+		[]string{
+			"col1",
+			"col2",
+		}, // 2 names - mismatch
 	)
 
 	if err == nil {
-		t.Fatal("expected error for column names/types mismatch")
+		t.Fatal(
+			"expected error for column names/types mismatch",
+		)
 	}
 	var dukErr *Error
 	if errors.As(err, &dukErr) {
@@ -1376,7 +1389,9 @@ func TestNewQueryAppender_ColNamesMismatch(t *testing.T) {
 }
 
 // TestNewQueryAppender_DefaultTableName tests default table name
-func TestNewQueryAppender_DefaultTableName(t *testing.T) {
+func TestNewQueryAppender_DefaultTableName(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1388,9 +1403,11 @@ func TestNewQueryAppender_DefaultTableName(t *testing.T) {
 		[]TypeInfo{intInfo},
 		[]string{"id"},
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	if appender.tempTableName != "appended_data" {
@@ -1403,7 +1420,9 @@ func TestNewQueryAppender_DefaultTableName(t *testing.T) {
 }
 
 // TestNewQueryAppender_DefaultColumnNames tests default column names
-func TestNewQueryAppender_DefaultColumnNames(t *testing.T) {
+func TestNewQueryAppender_DefaultColumnNames(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1416,19 +1435,32 @@ func TestNewQueryAppender_DefaultColumnNames(t *testing.T) {
 		[]TypeInfo{intInfo, varcharInfo},
 		[]string{}, // empty column names - should default to col1, col2
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	if len(appender.queryColNames) != 2 {
-		t.Fatalf("expected 2 column names, got %d", len(appender.queryColNames))
+		t.Fatalf(
+			"expected 2 column names, got %d",
+			len(appender.queryColNames),
+		)
 	}
 	if appender.queryColNames[0] != "col1" {
-		t.Errorf("column 0: got %q, want %q", appender.queryColNames[0], "col1")
+		t.Errorf(
+			"column 0: got %q, want %q",
+			appender.queryColNames[0],
+			"col1",
+		)
 	}
 	if appender.queryColNames[1] != "col2" {
-		t.Errorf("column 1: got %q, want %q", appender.queryColNames[1], "col2")
+		t.Errorf(
+			"column 1: got %q, want %q",
+			appender.queryColNames[1],
+			"col2",
+		)
 	}
 }
 
@@ -1446,30 +1478,48 @@ func TestNewQueryAppender_Valid(t *testing.T) {
 		[]TypeInfo{intInfo, varcharInfo},
 		[]string{"id", "name"},
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	if !appender.isQueryAppender {
-		t.Error("expected isQueryAppender to be true")
+		t.Error(
+			"expected isQueryAppender to be true",
+		)
 	}
 	if appender.query != "INSERT INTO target SELECT * FROM my_data" {
 		t.Errorf("query: got %q", appender.query)
 	}
 	if appender.tempTableName != "my_data" {
-		t.Errorf("tempTableName: got %q, want %q", appender.tempTableName, "my_data")
+		t.Errorf(
+			"tempTableName: got %q, want %q",
+			appender.tempTableName,
+			"my_data",
+		)
 	}
 	if len(appender.queryColTypes) != 2 {
-		t.Errorf("queryColTypes length: got %d, want %d", len(appender.queryColTypes), 2)
+		t.Errorf(
+			"queryColTypes length: got %d, want %d",
+			len(appender.queryColTypes),
+			2,
+		)
 	}
 	if len(appender.queryColNames) != 2 {
-		t.Errorf("queryColNames length: got %d, want %d", len(appender.queryColNames), 2)
+		t.Errorf(
+			"queryColNames length: got %d, want %d",
+			len(appender.queryColNames),
+			2,
+		)
 	}
 }
 
 // TestQueryAppender_FlushWithInsert tests flush with INSERT query
-func TestQueryAppender_FlushWithInsert(t *testing.T) {
+func TestQueryAppender_FlushWithInsert(
+	t *testing.T,
+) {
 	mock, state := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1482,9 +1532,11 @@ func TestQueryAppender_FlushWithInsert(t *testing.T) {
 		[]TypeInfo{intInfo, varcharInfo},
 		[]string{"id", "name"},
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	// Append rows
@@ -1509,12 +1561,18 @@ func TestQueryAppender_FlushWithInsert(t *testing.T) {
 	// 3. INSERT INTO temp table
 	// 4. Execute user query
 	if state.execCount != 4 {
-		t.Errorf("exec count: got %d, want 4 (CREATE, DELETE, INSERT, user query)", state.execCount)
+		t.Errorf(
+			"exec count: got %d, want 4 (CREATE, DELETE, INSERT, user query)",
+			state.execCount,
+		)
 	}
 
 	// Verify buffer is cleared
 	if appender.BufferSize() != 0 {
-		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+		t.Errorf(
+			"buffer size after flush: got %d, want 0",
+			appender.BufferSize(),
+		)
 	}
 }
 
@@ -1531,9 +1589,11 @@ func TestQueryAppender_Close(t *testing.T) {
 		[]TypeInfo{intInfo},
 		[]string{"id"},
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	// Append a row and flush to create the temp table
@@ -1555,10 +1615,18 @@ func TestQueryAppender_Close(t *testing.T) {
 
 	// Verify DROP TABLE was executed
 	if state.execCount <= initialExecCount {
-		t.Error("expected DROP TABLE to be executed on close")
+		t.Error(
+			"expected DROP TABLE to be executed on close",
+		)
 	}
-	if !strings.Contains(state.lastQuery, "DROP TABLE") {
-		t.Errorf("expected DROP TABLE in last query, got: %s", state.lastQuery)
+	if !strings.Contains(
+		state.lastQuery,
+		"DROP TABLE",
+	) {
+		t.Errorf(
+			"expected DROP TABLE in last query, got: %s",
+			state.lastQuery,
+		)
 	}
 }
 
@@ -1576,21 +1644,30 @@ func TestQueryAppender_AutoFlush(t *testing.T) {
 		[]string{"id"},
 		3, // threshold of 3
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppenderWithThreshold failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppenderWithThreshold failed: %v",
+			err,
+		)
 	}
 
 	// Append 3 rows - at threshold but not exceeded
 	for i := range 3 {
 		err = appender.AppendRow(i)
 		if err != nil {
-			t.Fatalf("AppendRow %d failed: %v", i, err)
+			t.Fatalf(
+				"AppendRow %d failed: %v",
+				i,
+				err,
+			)
 		}
 	}
 
 	if state.execCount != 0 {
-		t.Errorf("exec count before threshold exceeded: got %d, want 0", state.execCount)
+		t.Errorf(
+			"exec count before threshold exceeded: got %d, want 0",
+			state.execCount,
+		)
 	}
 
 	// Append one more - should trigger auto-flush
@@ -1600,12 +1677,16 @@ func TestQueryAppender_AutoFlush(t *testing.T) {
 	}
 
 	if state.execCount == 0 {
-		t.Error("expected auto-flush to execute queries")
+		t.Error(
+			"expected auto-flush to execute queries",
+		)
 	}
 }
 
 // TestQueryAppender_NestedTypesSchema tests temp table creation with nested types
-func TestQueryAppender_NestedTypesSchema(t *testing.T) {
+func TestQueryAppender_NestedTypesSchema(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1622,28 +1703,44 @@ func TestQueryAppender_NestedTypesSchema(t *testing.T) {
 		[]TypeInfo{intInfo, listInfo, mapInfo},
 		[]string{"id", "numbers", "metadata"},
 	)
-
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	// Verify the types are stored correctly
 	if len(appender.queryColTypes) != 3 {
-		t.Errorf("queryColTypes length: got %d, want 3", len(appender.queryColTypes))
+		t.Errorf(
+			"queryColTypes length: got %d, want 3",
+			len(appender.queryColTypes),
+		)
 	}
 
 	// Verify SQLType() produces correct strings for nested types
-	expected := []string{"INTEGER", "INTEGER[]", "MAP(VARCHAR, INTEGER)"}
+	expected := []string{
+		"INTEGER",
+		"INTEGER[]",
+		"MAP(VARCHAR, INTEGER)",
+	}
 	for i, typeInfo := range appender.queryColTypes {
 		sqlType := typeInfo.SQLType()
 		if sqlType != expected[i] {
-			t.Errorf("SQLType[%d]: got %q, want %q", i, sqlType, expected[i])
+			t.Errorf(
+				"SQLType[%d]: got %q, want %q",
+				i,
+				sqlType,
+				expected[i],
+			)
 		}
 	}
 }
 
 // TestQueryAppender_InvalidConnection tests error for non-*Conn
-func TestQueryAppender_InvalidConnection(t *testing.T) {
+func TestQueryAppender_InvalidConnection(
+	t *testing.T,
+) {
 	// Create a mock that doesn't implement driver.Conn properly
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	_, err := NewQueryAppender(
@@ -1655,7 +1752,9 @@ func TestQueryAppender_InvalidConnection(t *testing.T) {
 	)
 
 	if err == nil {
-		t.Fatal("expected error for nil connection")
+		t.Fatal(
+			"expected error for nil connection",
+		)
 	}
 	var dukErr *Error
 	if errors.As(err, &dukErr) {
@@ -1685,7 +1784,10 @@ func TestFlushWithContext_Timeout(t *testing.T) {
 		"test_table",
 	)
 	if err != nil {
-		t.Fatalf("NewAppenderFromConn failed: %v", err)
+		t.Fatalf(
+			"NewAppenderFromConn failed: %v",
+			err,
+		)
 	}
 
 	// Append a row
@@ -1699,7 +1801,10 @@ func TestFlushWithContext_Timeout(t *testing.T) {
 
 	// Create a deadline based on mock clock time
 	deadline := mClock.Now().Add(1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	// Advance the clock past the deadline
@@ -1710,12 +1815,18 @@ func TestFlushWithContext_Timeout(t *testing.T) {
 	err = appender.FlushWithContext(appCtx)
 
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
+		t.Errorf(
+			"expected context.DeadlineExceeded, got: %v",
+			err,
+		)
 	}
 
 	// Buffer should be preserved
 	if appender.BufferSize() != 1 {
-		t.Errorf("buffer size after timeout: got %d, want 1", appender.BufferSize())
+		t.Errorf(
+			"buffer size after timeout: got %d, want 1",
+			appender.BufferSize(),
+		)
 	}
 }
 
@@ -1734,7 +1845,10 @@ func TestFlushWithContext_Success(t *testing.T) {
 		"test_table",
 	)
 	if err != nil {
-		t.Fatalf("NewAppenderFromConn failed: %v", err)
+		t.Fatalf(
+			"NewAppenderFromConn failed: %v",
+			err,
+		)
 	}
 
 	// Append a row
@@ -1750,17 +1864,25 @@ func TestFlushWithContext_Success(t *testing.T) {
 
 	err = appender.FlushWithContext(appCtx)
 	if err != nil {
-		t.Fatalf("FlushWithContext failed: %v", err)
+		t.Fatalf(
+			"FlushWithContext failed: %v",
+			err,
+		)
 	}
 
 	// Buffer should be cleared
 	if appender.BufferSize() != 0 {
-		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+		t.Errorf(
+			"buffer size after flush: got %d, want 0",
+			appender.BufferSize(),
+		)
 	}
 }
 
 // TestFlushWithContext_BeforeDeadline tests that flush succeeds before deadline
-func TestFlushWithContext_BeforeDeadline(t *testing.T) {
+func TestFlushWithContext_BeforeDeadline(
+	t *testing.T,
+) {
 	mock, state := newAppenderMock()
 	state.setTableColumns(
 		[]string{"id"},
@@ -1774,7 +1896,10 @@ func TestFlushWithContext_BeforeDeadline(t *testing.T) {
 		"test_table",
 	)
 	if err != nil {
-		t.Fatalf("NewAppenderFromConn failed: %v", err)
+		t.Fatalf(
+			"NewAppenderFromConn failed: %v",
+			err,
+		)
 	}
 
 	// Append a row
@@ -1787,24 +1912,35 @@ func TestFlushWithContext_BeforeDeadline(t *testing.T) {
 	mClock := quartz.NewMock(t)
 
 	// Create a deadline in the future (1 hour from mock clock now)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Hour))
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		time.Now().Add(1*time.Hour),
+	)
 	defer cancel()
 
 	// Don't advance the clock - we're still before deadline
 	appCtx := NewAppenderContext(ctx, mClock)
 	err = appender.FlushWithContext(appCtx)
 	if err != nil {
-		t.Fatalf("FlushWithContext failed: %v", err)
+		t.Fatalf(
+			"FlushWithContext failed: %v",
+			err,
+		)
 	}
 
 	// Buffer should be cleared
 	if appender.BufferSize() != 0 {
-		t.Errorf("buffer size after flush: got %d, want 0", appender.BufferSize())
+		t.Errorf(
+			"buffer size after flush: got %d, want 0",
+			appender.BufferSize(),
+		)
 	}
 }
 
 // TestFlushWithContext_QueryAppenderTimeout tests timeout for query appender
-func TestFlushWithContext_QueryAppenderTimeout(t *testing.T) {
+func TestFlushWithContext_QueryAppenderTimeout(
+	t *testing.T,
+) {
 	mock, _ := newAppenderMock()
 	conn := createAppenderTestConn(mock)
 
@@ -1817,7 +1953,10 @@ func TestFlushWithContext_QueryAppenderTimeout(t *testing.T) {
 		[]string{"id"},
 	)
 	if err != nil {
-		t.Fatalf("NewQueryAppender failed: %v", err)
+		t.Fatalf(
+			"NewQueryAppender failed: %v",
+			err,
+		)
 	}
 
 	// Append a row
@@ -1831,7 +1970,10 @@ func TestFlushWithContext_QueryAppenderTimeout(t *testing.T) {
 
 	// Create a deadline and advance past it
 	deadline := mClock.Now().Add(1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	mClock.Advance(2 * time.Second)
@@ -1840,7 +1982,10 @@ func TestFlushWithContext_QueryAppenderTimeout(t *testing.T) {
 	err = appender.FlushWithContext(appCtx)
 
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
+		t.Errorf(
+			"expected context.DeadlineExceeded, got: %v",
+			err,
+		)
 	}
 }
 
@@ -1851,7 +1996,9 @@ func TestAppenderContext_NilClock(t *testing.T) {
 
 	// Verify that the clock is not nil (uses real clock)
 	if appCtx.clock == nil {
-		t.Error("expected non-nil clock when passing nil")
+		t.Error(
+			"expected non-nil clock when passing nil",
+		)
 	}
 }
 
@@ -1861,22 +2008,38 @@ func TestAppenderContext_NilClock(t *testing.T) {
 // Performance requirement: 1M rows in <1 second
 func BenchmarkAppender_1MRows(b *testing.B) {
 	mock, state := newAppenderMock()
-	state.setTableColumns([]string{"id"}, []string{"INTEGER"})
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
 	conn := createAppenderTestConn(mock)
 
 	b.ResetTimer()
 	for range b.N {
 		// Create appender with high threshold to avoid auto-flush overhead
-		appender, err := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
+		appender, err := NewAppenderWithThreshold(
+			conn,
+			"",
+			"main",
+			"test",
+			100000,
+		)
 		if err != nil {
-			b.Fatalf("NewAppenderWithThreshold failed: %v", err)
+			b.Fatalf(
+				"NewAppenderWithThreshold failed: %v",
+				err,
+			)
 		}
 
 		// Append 1 million rows
 		for j := range 1_000_000 {
 			err = appender.AppendRow(j)
 			if err != nil {
-				b.Fatalf("AppendRow failed at row %d: %v", j, err)
+				b.Fatalf(
+					"AppendRow failed at row %d: %v",
+					j,
+					err,
+				)
 			}
 		}
 
@@ -1904,20 +2067,35 @@ func BenchmarkAppender_1MRows(b *testing.B) {
 
 // BenchmarkAppender_MemoryProfile benchmarks memory usage during appender operations.
 // Useful for profiling memory allocations with pprof.
-func BenchmarkAppender_MemoryProfile(b *testing.B) {
+func BenchmarkAppender_MemoryProfile(
+	b *testing.B,
+) {
 	mock, state := newAppenderMock()
-	state.setTableColumns([]string{"id", "name", "value"}, []string{"INTEGER", "VARCHAR", "DOUBLE"})
+	state.setTableColumns(
+		[]string{"id", "name", "value"},
+		[]string{"INTEGER", "VARCHAR", "DOUBLE"},
+	)
 	conn := createAppenderTestConn(mock)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for range b.N {
-		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 10000)
+		appender, _ := NewAppenderWithThreshold(
+			conn,
+			"",
+			"main",
+			"test",
+			10000,
+		)
 
 		// Append 10000 rows
 		for j := range 10000 {
-			_ = appender.AppendRow(j, "test string data", float64(j)*1.5)
+			_ = appender.AppendRow(
+				j,
+				"test string data",
+				float64(j)*1.5,
+			)
 		}
 		_ = appender.Flush()
 		_ = appender.Close()
@@ -1930,20 +2108,33 @@ func BenchmarkAppender_MemoryProfile(b *testing.B) {
 }
 
 // BenchmarkAppender_10MRows_Memory benchmarks memory for 10M rows (for heap profiling).
-func BenchmarkAppender_10MRows_Memory(b *testing.B) {
+func BenchmarkAppender_10MRows_Memory(
+	b *testing.B,
+) {
 	if testing.Short() {
-		b.Skip("skipping 10M row test in short mode")
+		b.Skip(
+			"skipping 10M row test in short mode",
+		)
 	}
 
 	mock, state := newAppenderMock()
-	state.setTableColumns([]string{"id"}, []string{"INTEGER"})
+	state.setTableColumns(
+		[]string{"id"},
+		[]string{"INTEGER"},
+	)
 	conn := createAppenderTestConn(mock)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for range b.N {
-		appender, _ := NewAppenderWithThreshold(conn, "", "main", "test", 100000)
+		appender, _ := NewAppenderWithThreshold(
+			conn,
+			"",
+			"main",
+			"test",
+			100000,
+		)
 
 		for j := range 10_000_000 {
 			_ = appender.AppendRow(j)

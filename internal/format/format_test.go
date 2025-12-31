@@ -19,7 +19,9 @@ import (
 
 // TestDecimalRoundTripComprehensive tests DECIMAL round-trip with 10 cases
 // Covers: Tasks 5.2 (DECIMAL round-trip 10 cases: 1,0 through 38,38)
-func TestDecimalRoundTripComprehensive(t *testing.T) {
+func TestDecimalRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name  string
 		width uint8
@@ -40,13 +42,19 @@ func TestDecimalRoundTripComprehensive(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
-			original, err := dukdb.NewDecimalInfo(tt.width, tt.scale)
+			original, err := dukdb.NewDecimalInfo(
+				tt.width,
+				tt.scale,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -55,30 +63,68 @@ func TestDecimalRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_DECIMAL, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_DECIMAL,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.DecimalDetails)
 			require.True(t, ok)
-			assert.Equal(t, tt.width, details.Width, "Width mismatch")
-			assert.Equal(t, tt.scale, details.Scale, "Scale mismatch")
+			assert.Equal(
+				t,
+				tt.width,
+				details.Width,
+				"Width mismatch",
+			)
+			assert.Equal(
+				t,
+				tt.scale,
+				details.Scale,
+				"Scale mismatch",
+			)
 		})
 	}
 }
 
 // TestEnumRoundTripComprehensive tests ENUM round-trip
 // Covers: Task 5.3 (ENUM: single value, 100 values, Unicode)
-func TestEnumRoundTripComprehensive(t *testing.T) {
+func TestEnumRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name   string
 		values []string
 	}{
 		{"ENUM single value", []string{"RED"}},
-		{"ENUM three values", []string{"RED", "GREEN", "BLUE"}},
-		{"ENUM ten values", []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}},
-		{"ENUM with Unicode", []string{"😀", "😁", "😂", "🎉", "🚀"}},
+		{
+			"ENUM three values",
+			[]string{"RED", "GREEN", "BLUE"},
+		},
+		{
+			"ENUM ten values",
+			[]string{
+				"A",
+				"B",
+				"C",
+				"D",
+				"E",
+				"F",
+				"G",
+				"H",
+				"I",
+				"J",
+			},
+		},
+		{
+			"ENUM with Unicode",
+			[]string{"😀", "😁", "😂", "🎉", "🚀"},
+		},
 		{"ENUM 100 values", func() []string {
 			vals := make([]string, 100)
 			for i := range 100 {
@@ -87,19 +133,27 @@ func TestEnumRoundTripComprehensive(t *testing.T) {
 
 			return vals
 		}()},
-		{"ENUM with special chars", []string{"a b", "c\td", "e\nf"}},
+		{
+			"ENUM with special chars",
+			[]string{"a b", "c\td", "e\nf"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
-			original, err := dukdb.NewEnumInfo(tt.values[0], tt.values[1:]...)
+			original, err := dukdb.NewEnumInfo(
+				tt.values[0],
+				tt.values[1:]...)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -108,21 +162,34 @@ func TestEnumRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_ENUM, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_ENUM,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.EnumDetails)
 			require.True(t, ok)
-			assert.Equal(t, tt.values, details.Values, "Values mismatch")
+			assert.Equal(
+				t,
+				tt.values,
+				details.Values,
+				"Values mismatch",
+			)
 		})
 	}
 }
 
 // TestListRoundTripComprehensive tests LIST round-trip
 // Covers: Task 5.4 (LIST: primitives, nested 3 levels deep)
-func TestListRoundTripComprehensive(t *testing.T) {
+func TestListRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name  string
 		child func() dukdb.TypeInfo
@@ -130,7 +197,9 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<INTEGER>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -138,7 +207,9 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<VARCHAR>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -146,7 +217,10 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -154,8 +228,12 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
 
 				return listType
 			},
@@ -163,9 +241,15 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<LIST<LIST<VARCHAR>>>",
 			func() dukdb.TypeInfo {
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				list1, _ := dukdb.NewListInfo(varcharType)
-				list2, _ := dukdb.NewListInfo(list1)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				list1, _ := dukdb.NewListInfo(
+					varcharType,
+				)
+				list2, _ := dukdb.NewListInfo(
+					list1,
+				)
 
 				return list2
 			},
@@ -173,9 +257,15 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<LIST<LIST<INTEGER>>>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				list1, _ := dukdb.NewListInfo(intType)
-				list2, _ := dukdb.NewListInfo(list1)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				list1, _ := dukdb.NewListInfo(
+					intType,
+				)
+				list2, _ := dukdb.NewListInfo(
+					list1,
+				)
 
 				return list2
 			},
@@ -186,13 +276,18 @@ func TestListRoundTripComprehensive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			childInfo := tt.child()
-			original, err := dukdb.NewListInfo(childInfo)
+			original, err := dukdb.NewListInfo(
+				childInfo,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -201,19 +296,31 @@ func TestListRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_LIST, reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			require.Equal(
+				t,
+				dukdb.TYPE_LIST,
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
 
 // TestArrayRoundTripComprehensive tests ARRAY round-trip
 // Covers: Task 5.5 (ARRAY: size 1, size 1000, complex child types)
-func TestArrayRoundTripComprehensive(t *testing.T) {
+func TestArrayRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name  string
 		child func() dukdb.TypeInfo
@@ -222,7 +329,9 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"INTEGER[1]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -231,7 +340,9 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"INTEGER[10]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -240,7 +351,9 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"VARCHAR[100]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -249,7 +362,9 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"INTEGER[1000]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -258,7 +373,10 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"DECIMAL(18,4)[5]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -267,11 +385,24 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(x INTEGER, y VARCHAR)[20]",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"y",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
 
 				return structType
 			},
@@ -283,13 +414,19 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			childInfo := tt.child()
-			original, err := dukdb.NewArrayInfo(childInfo, tt.size)
+			original, err := dukdb.NewArrayInfo(
+				childInfo,
+				tt.size,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -298,22 +435,39 @@ func TestArrayRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_ARRAY, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_ARRAY,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.ArrayDetails)
 			require.True(t, ok)
-			assert.Equal(t, tt.size, details.Size, "Size mismatch")
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				tt.size,
+				details.Size,
+				"Size mismatch",
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
 
 // TestStructRoundTripComprehensive tests STRUCT round-trip
 // Covers: Task 5.6 (STRUCT: 1 field, 50 fields, nested)
-func TestStructRoundTripComprehensive(t *testing.T) {
+func TestStructRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name    string
 		entries func() []dukdb.StructEntry
@@ -321,8 +475,13 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(x INTEGER)",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				entry, _ := dukdb.NewStructEntry(intType, "x")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -330,21 +489,45 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(x INTEGER, y VARCHAR)",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"y",
+				)
 
-				return []dukdb.StructEntry{entry1, entry2}
+				return []dukdb.StructEntry{
+					entry1,
+					entry2,
+				}
 			},
 		},
 		{
 			"STRUCT with 20 fields",
 			func() []dukdb.StructEntry {
-				entries := make([]dukdb.StructEntry, 20)
+				entries := make(
+					[]dukdb.StructEntry,
+					20,
+				)
 				for i := range 20 {
-					intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-					entry, _ := dukdb.NewStructEntry(intType, fmt.Sprintf("field_%d", i))
+					intType, _ := dukdb.NewTypeInfo(
+						dukdb.TYPE_INTEGER,
+					)
+					entry, _ := dukdb.NewStructEntry(
+						intType,
+						fmt.Sprintf(
+							"field_%d",
+							i,
+						),
+					)
 					entries[i] = entry
 				}
 
@@ -354,10 +537,18 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT with 50 fields",
 			func() []dukdb.StructEntry {
-				entries := make([]dukdb.StructEntry, 50)
+				entries := make(
+					[]dukdb.StructEntry,
+					50,
+				)
 				for i := range 50 {
-					varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-					entry, _ := dukdb.NewStructEntry(varcharType, fmt.Sprintf("col_%d", i))
+					varcharType, _ := dukdb.NewTypeInfo(
+						dukdb.TYPE_VARCHAR,
+					)
+					entry, _ := dukdb.NewStructEntry(
+						varcharType,
+						fmt.Sprintf("col_%d", i),
+					)
 					entries[i] = entry
 				}
 
@@ -367,12 +558,28 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(x STRUCT(a INTEGER, b VARCHAR))",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				innerEntry1, _ := dukdb.NewStructEntry(intType, "a")
-				innerEntry2, _ := dukdb.NewStructEntry(varcharType, "b")
-				innerStruct, _ := dukdb.NewStructInfo(innerEntry1, innerEntry2)
-				entry, _ := dukdb.NewStructEntry(innerStruct, "x")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				innerEntry1, _ := dukdb.NewStructEntry(
+					intType,
+					"a",
+				)
+				innerEntry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"b",
+				)
+				innerStruct, _ := dukdb.NewStructInfo(
+					innerEntry1,
+					innerEntry2,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					innerStruct,
+					"x",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -380,9 +587,16 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT with LIST field",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
-				entry, _ := dukdb.NewStructEntry(listType, "items")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					listType,
+					"items",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -393,13 +607,18 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			entries := tt.entries()
-			original, err := dukdb.NewStructInfo(entries[0], entries[1:]...)
+			original, err := dukdb.NewStructInfo(
+				entries[0],
+				entries[1:]...)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -408,18 +627,39 @@ func TestStructRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_STRUCT, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_STRUCT,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.StructDetails)
 			require.True(t, ok)
-			assert.Equal(t, len(entries), len(details.Entries), "Field count mismatch")
+			assert.Equal(
+				t,
+				len(entries),
+				len(details.Entries),
+				"Field count mismatch",
+			)
 			for i := range entries {
-				assert.Equal(t, entries[i].Name(), details.Entries[i].Name(), "Field name mismatch at index %d", i)
+				assert.Equal(
+					t,
+					entries[i].Name(),
+					details.Entries[i].Name(),
+					"Field name mismatch at index %d",
+					i,
+				)
 			}
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -435,12 +675,16 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 		{
 			"MAP<VARCHAR, INTEGER>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -448,12 +692,16 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 		{
 			"MAP<INTEGER, VARCHAR>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -461,12 +709,17 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 		{
 			"MAP<VARCHAR, DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -474,13 +727,19 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 		{
 			"MAP<VARCHAR, LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
 
 				return listType
 			},
@@ -488,16 +747,31 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 		{
 			"MAP<VARCHAR, STRUCT(x INTEGER, y VARCHAR)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"y",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
 
 				return structType
 			},
@@ -509,13 +783,19 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			// Create TypeInfo
 			keyInfo := tt.key()
 			valueInfo := tt.value()
-			original, err := dukdb.NewMapInfo(keyInfo, valueInfo)
+			original, err := dukdb.NewMapInfo(
+				keyInfo,
+				valueInfo,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -524,27 +804,47 @@ func TestMapRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_MAP, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_MAP,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.MapDetails)
 			require.True(t, ok)
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 
 			// Verify key and value types match
 			origDetails, ok := original.Details().(*dukdb.MapDetails)
 			require.True(t, ok)
-			assert.Equal(t, origDetails.Key.SQLType(), details.Key.SQLType())
-			assert.Equal(t, origDetails.Value.SQLType(), details.Value.SQLType())
+			assert.Equal(
+				t,
+				origDetails.Key.SQLType(),
+				details.Key.SQLType(),
+			)
+			assert.Equal(
+				t,
+				origDetails.Value.SQLType(),
+				details.Value.SQLType(),
+			)
 		})
 	}
 }
 
 // TestUnionNotSerializableExtended tests UNION returns ErrUnsupportedTypeForSerialization with multiple members
 // Covers: Task 5.8 (UNION: verify ErrUnsupportedTypeForSerialization)
-func TestUnionNotSerializableExtended(t *testing.T) {
+func TestUnionNotSerializableExtended(
+	t *testing.T,
+) {
 	tests := []struct {
 		name    string
 		members func() ([]dukdb.TypeInfo, []string)
@@ -552,21 +852,48 @@ func TestUnionNotSerializableExtended(t *testing.T) {
 		{
 			"UNION(x INTEGER, y VARCHAR)",
 			func() ([]dukdb.TypeInfo, []string) {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
-				return []dukdb.TypeInfo{intType, varcharType}, []string{"x", "y"}
+				return []dukdb.TypeInfo{
+						intType,
+						varcharType,
+					}, []string{
+						"x",
+						"y",
+					}
 			},
 		},
 		{
 			"UNION(a DECIMAL, b LIST<INTEGER>, c VARCHAR)",
 			func() ([]dukdb.TypeInfo, []string) {
-				decimalType, _ := dukdb.NewDecimalInfo(18, 4)
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				decimalType, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
-				return []dukdb.TypeInfo{decimalType, listType, varcharType}, []string{"a", "b", "c"}
+				return []dukdb.TypeInfo{
+						decimalType,
+						listType,
+						varcharType,
+					}, []string{
+						"a",
+						"b",
+						"c",
+					}
 			},
 		},
 	}
@@ -574,22 +901,34 @@ func TestUnionNotSerializableExtended(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			members, tags := tt.members()
-			unionType, err := dukdb.NewUnionInfo(members, tags)
+			unionType, err := dukdb.NewUnionInfo(
+				members,
+				tags,
+			)
 			require.NoError(t, err)
 
 			// Attempt to serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, unionType)
+			err = SerializeTypeInfo(
+				writer,
+				unionType,
+			)
 
 			// Verify it returns ErrUnsupportedTypeForSerialization
-			assert.ErrorIs(t, err, ErrUnsupportedTypeForSerialization)
+			assert.ErrorIs(
+				t,
+				err,
+				ErrUnsupportedTypeForSerialization,
+			)
 		})
 	}
 }
 
 // TestNestedTypesRoundTripComprehensive tests deeply nested types (3+ levels)
-func TestNestedTypesRoundTripComprehensive(t *testing.T) {
+func TestNestedTypesRoundTripComprehensive(
+	t *testing.T,
+) {
 	tests := []struct {
 		name string
 		ti   func() dukdb.TypeInfo
@@ -597,10 +936,18 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<LIST<LIST<INTEGER>>>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				list1, _ := dukdb.NewListInfo(intType)
-				list2, _ := dukdb.NewListInfo(list1)
-				list3, _ := dukdb.NewListInfo(list2)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				list1, _ := dukdb.NewListInfo(
+					intType,
+				)
+				list2, _ := dukdb.NewListInfo(
+					list1,
+				)
+				list3, _ := dukdb.NewListInfo(
+					list2,
+				)
 
 				return list3
 			},
@@ -608,13 +955,30 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(x STRUCT(y STRUCT(z INTEGER)))",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				entry1, _ := dukdb.NewStructEntry(intType, "z")
-				struct1, _ := dukdb.NewStructInfo(entry1)
-				entry2, _ := dukdb.NewStructEntry(struct1, "y")
-				struct2, _ := dukdb.NewStructInfo(entry2)
-				entry3, _ := dukdb.NewStructEntry(struct2, "x")
-				struct3, _ := dukdb.NewStructInfo(entry3)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"z",
+				)
+				struct1, _ := dukdb.NewStructInfo(
+					entry1,
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					struct1,
+					"y",
+				)
+				struct2, _ := dukdb.NewStructInfo(
+					entry2,
+				)
+				entry3, _ := dukdb.NewStructEntry(
+					struct2,
+					"x",
+				)
+				struct3, _ := dukdb.NewStructInfo(
+					entry3,
+				)
 
 				return struct3
 			},
@@ -622,13 +986,30 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 		{
 			"LIST<STRUCT(x INTEGER, y LIST<VARCHAR>)>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				listType, _ := dukdb.NewListInfo(varcharType)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(listType, "y")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
-				listStruct, _ := dukdb.NewListInfo(structType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				listType, _ := dukdb.NewListInfo(
+					varcharType,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					listType,
+					"y",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
+				listStruct, _ := dukdb.NewListInfo(
+					structType,
+				)
 
 				return listStruct
 			},
@@ -636,14 +1017,35 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 		{
 			"STRUCT(a MAP<VARCHAR, INTEGER>, b LIST<DECIMAL(10,2)>)",
 			func() dukdb.TypeInfo {
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				mapType, _ := dukdb.NewMapInfo(varcharType, intType)
-				decimalType, _ := dukdb.NewDecimalInfo(10, 2)
-				listType, _ := dukdb.NewListInfo(decimalType)
-				entry1, _ := dukdb.NewStructEntry(mapType, "a")
-				entry2, _ := dukdb.NewStructEntry(listType, "b")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				mapType, _ := dukdb.NewMapInfo(
+					varcharType,
+					intType,
+				)
+				decimalType, _ := dukdb.NewDecimalInfo(
+					10,
+					2,
+				)
+				listType, _ := dukdb.NewListInfo(
+					decimalType,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					mapType,
+					"a",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					listType,
+					"b",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
 
 				return structType
 			},
@@ -658,7 +1060,10 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err := SerializeTypeInfo(writer, original)
+			err := SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -667,12 +1072,22 @@ func TestNestedTypesRoundTripComprehensive(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			assert.Equal(t, original.InternalType(), reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.InternalType(),
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -690,7 +1105,10 @@ func TestInvalidMagicNumber(t *testing.T) {
 	}{
 		{"Wrong magic 0x00000000", 0x00000000},
 		{"Wrong magic 0xDEADBEEF", 0xDEADBEEF},
-		{"Wrong magic 0x4455434D", 0x4455434D}, // "DUCM" instead of "DUCK"
+		{
+			"Wrong magic 0x4455434D",
+			0x4455434D,
+		}, // "DUCM" instead of "DUCK"
 	}
 
 	for _, tt := range tests {
@@ -698,16 +1116,28 @@ func TestInvalidMagicNumber(t *testing.T) {
 			buf := new(bytes.Buffer)
 
 			// Write invalid magic number
-			err := binary.Write(buf, ByteOrder, tt.magicNumber)
+			err := binary.Write(
+				buf,
+				ByteOrder,
+				tt.magicNumber,
+			)
 			require.NoError(t, err)
 
 			// Write valid version
-			err = binary.Write(buf, ByteOrder, uint64(DuckDBFormatVersion))
+			err = binary.Write(
+				buf,
+				ByteOrder,
+				uint64(DuckDBFormatVersion),
+			)
 			require.NoError(t, err)
 
 			// Attempt to validate header
 			err = ValidateHeader(buf)
-			assert.ErrorIs(t, err, ErrInvalidMagicNumber)
+			assert.ErrorIs(
+				t,
+				err,
+				ErrInvalidMagicNumber,
+			)
 		})
 	}
 }
@@ -731,16 +1161,28 @@ func TestUnsupportedVersion(t *testing.T) {
 			buf := new(bytes.Buffer)
 
 			// Write valid magic number
-			err := binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
+			err := binary.Write(
+				buf,
+				ByteOrder,
+				uint32(DuckDBMagicNumber),
+			)
 			require.NoError(t, err)
 
 			// Write invalid version
-			err = binary.Write(buf, ByteOrder, tt.version)
+			err = binary.Write(
+				buf,
+				ByteOrder,
+				tt.version,
+			)
 			require.NoError(t, err)
 
 			// Attempt to validate header
 			err = ValidateHeader(buf)
-			assert.ErrorIs(t, err, ErrUnsupportedVersion)
+			assert.ErrorIs(
+				t,
+				err,
+				ErrUnsupportedVersion,
+			)
 		})
 	}
 }
@@ -754,9 +1196,24 @@ func TestChecksumMismatch(t *testing.T) {
 		corruptChecksum bool
 		wrongChecksum   uint64
 	}{
-		{"Corrupt checksum", []byte("test data"), true, 0x1234567890ABCDEF},
-		{"Zero checksum", []byte("hello world"), true, 0x0000000000000000},
-		{"Max checksum", []byte("important data"), true, 0xFFFFFFFFFFFFFFFF},
+		{
+			"Corrupt checksum",
+			[]byte("test data"),
+			true,
+			0x1234567890ABCDEF,
+		},
+		{
+			"Zero checksum",
+			[]byte("hello world"),
+			true,
+			0x0000000000000000,
+		},
+		{
+			"Max checksum",
+			[]byte("important data"),
+			true,
+			0xFFFFFFFFFFFFFFFF,
+		},
 	}
 
 	for _, tt := range tests {
@@ -769,14 +1226,25 @@ func TestChecksumMismatch(t *testing.T) {
 
 			// Write incorrect checksum
 			if tt.corruptChecksum {
-				err = binary.Write(buf, ByteOrder, tt.wrongChecksum)
+				err = binary.Write(
+					buf,
+					ByteOrder,
+					tt.wrongChecksum,
+				)
 				require.NoError(t, err)
 			}
 
 			// Attempt to read and verify
 			reader := bytes.NewReader(buf.Bytes())
-			_, err = ReadAndVerifyChecksum(reader, len(tt.data))
-			assert.ErrorIs(t, err, ErrChecksumMismatch)
+			_, err = ReadAndVerifyChecksum(
+				reader,
+				len(tt.data),
+			)
+			assert.ErrorIs(
+				t,
+				err,
+				ErrChecksumMismatch,
+			)
 		})
 	}
 }
@@ -793,7 +1261,9 @@ func TestTruncatedFile(t *testing.T) {
 			func() *bytes.Buffer {
 				buf := new(bytes.Buffer)
 				// Write only 2 bytes of magic (should be 4)
-				_, _ = buf.Write([]byte{0x44, 0x55})
+				_, _ = buf.Write(
+					[]byte{0x44, 0x55},
+				)
 
 				return buf
 			},
@@ -803,9 +1273,20 @@ func TestTruncatedFile(t *testing.T) {
 			func() *bytes.Buffer {
 				buf := new(bytes.Buffer)
 				// Write full magic
-				_ = binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(DuckDBMagicNumber),
+				)
 				// Write only 4 bytes of version (should be 8)
-				_, _ = buf.Write([]byte{0x40, 0x00, 0x00, 0x00})
+				_, _ = buf.Write(
+					[]byte{
+						0x40,
+						0x00,
+						0x00,
+						0x00,
+					},
+				)
 
 				return buf
 			},
@@ -816,11 +1297,26 @@ func TestTruncatedFile(t *testing.T) {
 				buf := new(bytes.Buffer)
 				writer := NewBinaryWriter(buf)
 				// Start writing a property but truncate it
-				_ = writer.WriteProperty(100, uint32(42))
+				_ = writer.WriteProperty(
+					100,
+					uint32(42),
+				)
 				// Manually write incomplete flush
-				_ = binary.Write(buf, ByteOrder, uint32(1))   // count
-				_ = binary.Write(buf, ByteOrder, uint32(100)) // id
-				_ = binary.Write(buf, ByteOrder, uint64(4))   // length
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(1),
+				) // count
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(100),
+				) // id
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint64(4),
+				) // length
 				// Don't write the actual data (truncated)
 				return buf
 			},
@@ -832,11 +1328,20 @@ func TestTruncatedFile(t *testing.T) {
 			buf := tt.setupData()
 
 			// For header truncation tests
-			if tt.name == "Truncated at magic number" || tt.name == "Truncated at version" {
+			if tt.name == "Truncated at magic number" ||
+				tt.name == "Truncated at version" {
 				err := ValidateHeader(buf)
 				assert.Error(t, err)
-				assert.NotErrorIs(t, err, ErrInvalidMagicNumber)
-				assert.NotErrorIs(t, err, ErrUnsupportedVersion)
+				assert.NotErrorIs(
+					t,
+					err,
+					ErrInvalidMagicNumber,
+				)
+				assert.NotErrorIs(
+					t,
+					err,
+					ErrUnsupportedVersion,
+				)
 
 				return
 			}
@@ -861,7 +1366,11 @@ func TestCorruptedPropertyData(t *testing.T) {
 			func() *bytes.Buffer {
 				buf := new(bytes.Buffer)
 				// Write huge property count that will cause read failure
-				_ = binary.Write(buf, ByteOrder, uint32(999999))
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(999999),
+				)
 
 				return buf
 			},
@@ -870,10 +1379,24 @@ func TestCorruptedPropertyData(t *testing.T) {
 			"Property length exceeds buffer",
 			func() *bytes.Buffer {
 				buf := new(bytes.Buffer)
-				_ = binary.Write(buf, ByteOrder, uint32(1))      // count
-				_ = binary.Write(buf, ByteOrder, uint32(100))    // id
-				_ = binary.Write(buf, ByteOrder, uint64(999999)) // huge length
-				_, _ = buf.Write([]byte{0x01, 0x02, 0x03})       // only 3 bytes
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(1),
+				) // count
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint32(100),
+				) // id
+				_ = binary.Write(
+					buf,
+					ByteOrder,
+					uint64(999999),
+				) // huge length
+				_, _ = buf.Write(
+					[]byte{0x01, 0x02, 0x03},
+				) // only 3 bytes
 
 				return buf
 			},
@@ -897,9 +1420,18 @@ func TestMissingRequiredProperty(t *testing.T) {
 		name       string
 		propertyID uint32
 	}{
-		{"Missing property 99 (LogicalTypeId)", 99},
-		{"Missing property 100 (TypeDiscriminator)", 100},
-		{"Missing property 200 (type-specific)", 200},
+		{
+			"Missing property 99 (LogicalTypeId)",
+			99,
+		},
+		{
+			"Missing property 100 (TypeDiscriminator)",
+			100,
+		},
+		{
+			"Missing property 200 (type-specific)",
+			200,
+		},
 	}
 
 	for _, tt := range tests {
@@ -909,10 +1441,18 @@ func TestMissingRequiredProperty(t *testing.T) {
 
 			// Write some properties but not all required ones
 			if tt.propertyID != 100 {
-				_ = writer.WriteProperty(100, uint32(ExtraTypeInfoType_GENERIC))
+				_ = writer.WriteProperty(
+					100,
+					uint32(
+						ExtraTypeInfoType_GENERIC,
+					),
+				)
 			}
 			if tt.propertyID != 99 {
-				_ = writer.WriteProperty(99, uint8(dukdb.TYPE_INTEGER))
+				_ = writer.WriteProperty(
+					99,
+					uint8(dukdb.TYPE_INTEGER),
+				)
 			}
 
 			err := writer.Flush()
@@ -924,9 +1464,23 @@ func TestMissingRequiredProperty(t *testing.T) {
 			require.NoError(t, err)
 
 			var value uint32
-			err = reader.ReadProperty(tt.propertyID, &value)
-			assert.ErrorIs(t, err, ErrRequiredProperty)
-			assert.Contains(t, err.Error(), fmt.Sprintf("property %d", tt.propertyID))
+			err = reader.ReadProperty(
+				tt.propertyID,
+				&value,
+			)
+			assert.ErrorIs(
+				t,
+				err,
+				ErrRequiredProperty,
+			)
+			assert.Contains(
+				t,
+				err.Error(),
+				fmt.Sprintf(
+					"property %d",
+					tt.propertyID,
+				),
+			)
 		})
 	}
 }
@@ -1032,9 +1586,17 @@ func TestRoundTripAll(t *testing.T) {
 	scenarioCount += 4
 
 	// Total should be well over 100
-	require.GreaterOrEqual(t, scenarioCount, 100, "Should have at least 100 test scenarios")
+	require.GreaterOrEqual(
+		t,
+		scenarioCount,
+		100,
+		"Should have at least 100 test scenarios",
+	)
 
-	t.Logf("Total test scenarios: %d", scenarioCount)
+	t.Logf(
+		"Total test scenarios: %d",
+		scenarioCount,
+	)
 }
 
 // TestPrimitiveTypesRoundTrip tests primitive types for completeness
@@ -1055,13 +1617,18 @@ func TestPrimitiveTypesRoundTrip(t *testing.T) {
 	for _, typ := range primitiveTypes {
 		t.Run(typ.String(), func(t *testing.T) {
 			// Create TypeInfo
-			original, err := dukdb.NewTypeInfo(typ)
+			original, err := dukdb.NewTypeInfo(
+				typ,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -1070,18 +1637,30 @@ func TestPrimitiveTypesRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			assert.Equal(t, original.InternalType(), reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.InternalType(),
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
 
 // TestWriteHeaderAndValidateRoundTrip tests header write/validate cycle
-func TestWriteHeaderAndValidateRoundTrip(t *testing.T) {
+func TestWriteHeaderAndValidateRoundTrip(
+	t *testing.T,
+) {
 	buf := new(bytes.Buffer)
 
 	// Write header
@@ -1094,28 +1673,51 @@ func TestWriteHeaderAndValidateRoundTrip(t *testing.T) {
 }
 
 // TestChecksumWriteAndVerifyRoundTrip tests checksum write/verify cycle
-func TestChecksumWriteAndVerifyRoundTrip(t *testing.T) {
+func TestChecksumWriteAndVerifyRoundTrip(
+	t *testing.T,
+) {
 	testData := [][]byte{
 		[]byte("hello world"),
-		[]byte("test data with special chars: !@#$%^&*()"),
-		[]byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD},
+		[]byte(
+			"test data with special chars: !@#$%^&*()",
+		),
+		{
+			0x00,
+			0x01,
+			0x02,
+			0x03,
+			0xFF,
+			0xFE,
+			0xFD,
+		},
 		make([]byte, 1024), // 1KB of zeros
 	}
 
 	for i, data := range testData {
-		t.Run(fmt.Sprintf("Data_%d", i), func(t *testing.T) {
-			buf := new(bytes.Buffer)
+		t.Run(
+			fmt.Sprintf("Data_%d", i),
+			func(t *testing.T) {
+				buf := new(bytes.Buffer)
 
-			// Write with checksum
-			err := WriteWithChecksum(buf, data)
-			require.NoError(t, err)
+				// Write with checksum
+				err := WriteWithChecksum(
+					buf,
+					data,
+				)
+				require.NoError(t, err)
 
-			// Read and verify
-			reader := bytes.NewReader(buf.Bytes())
-			verified, err := ReadAndVerifyChecksum(reader, len(data))
-			require.NoError(t, err)
-			assert.Equal(t, data, verified)
-		})
+				// Read and verify
+				reader := bytes.NewReader(
+					buf.Bytes(),
+				)
+				verified, err := ReadAndVerifyChecksum(
+					reader,
+					len(data),
+				)
+				require.NoError(t, err)
+				assert.Equal(t, data, verified)
+			},
+		)
 	}
 }
 
@@ -1128,12 +1730,27 @@ func TestComplexNestedScenarios(t *testing.T) {
 		{
 			"ARRAY of STRUCT with MAP",
 			func() dukdb.TypeInfo {
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				mapType, _ := dukdb.NewMapInfo(varcharType, intType)
-				entry, _ := dukdb.NewStructEntry(mapType, "data")
-				structType, _ := dukdb.NewStructInfo(entry)
-				arrayType, _ := dukdb.NewArrayInfo(structType, 10)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				mapType, _ := dukdb.NewMapInfo(
+					varcharType,
+					intType,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					mapType,
+					"data",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry,
+				)
+				arrayType, _ := dukdb.NewArrayInfo(
+					structType,
+					10,
+				)
 
 				return arrayType
 			},
@@ -1141,14 +1758,34 @@ func TestComplexNestedScenarios(t *testing.T) {
 		{
 			"MAP with LIST of STRUCT",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "id")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "name")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
-				listType, _ := dukdb.NewListInfo(structType)
-				keyType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				mapType, _ := dukdb.NewMapInfo(keyType, listType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"id",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"name",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
+				listType, _ := dukdb.NewListInfo(
+					structType,
+				)
+				keyType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				mapType, _ := dukdb.NewMapInfo(
+					keyType,
+					listType,
+				)
 
 				return mapType
 			},
@@ -1162,7 +1799,10 @@ func TestComplexNestedScenarios(t *testing.T) {
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err := SerializeTypeInfo(writer, original)
+			err := SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -1171,12 +1811,22 @@ func TestComplexNestedScenarios(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			assert.Equal(t, original.InternalType(), reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.InternalType(),
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -1184,41 +1834,75 @@ func TestComplexNestedScenarios(t *testing.T) {
 // TestErrorMessageQuality verifies error messages are descriptive
 // Covers: Task 5.24 (Validation: All error paths tested with descriptive messages)
 func TestErrorMessageQuality(t *testing.T) {
-	t.Run("Missing property error includes ID", func(t *testing.T) {
-		buf := new(bytes.Buffer)
-		writer := NewBinaryWriter(buf)
-		_ = writer.WriteProperty(100, uint32(42))
-		_ = writer.Flush()
+	t.Run(
+		"Missing property error includes ID",
+		func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			writer := NewBinaryWriter(buf)
+			_ = writer.WriteProperty(
+				100,
+				uint32(42),
+			)
+			_ = writer.Flush()
 
-		reader := NewBinaryReader(buf)
-		_ = reader.Load()
+			reader := NewBinaryReader(buf)
+			_ = reader.Load()
 
-		var value uint32
-		err := reader.ReadProperty(200, &value)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "200")
-	})
+			var value uint32
+			err := reader.ReadProperty(
+				200,
+				&value,
+			)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "200")
+		},
+	)
 
-	t.Run("Checksum mismatch error includes values", func(t *testing.T) {
-		buf := new(bytes.Buffer)
-		_, _ = buf.WriteString("test")
-		_ = binary.Write(buf, ByteOrder, uint64(0x1234567890ABCDEF))
+	t.Run(
+		"Checksum mismatch error includes values",
+		func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			_, _ = buf.WriteString("test")
+			_ = binary.Write(
+				buf,
+				ByteOrder,
+				uint64(0x1234567890ABCDEF),
+			)
 
-		reader := bytes.NewReader(buf.Bytes())
-		_, err := ReadAndVerifyChecksum(reader, 4)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "0x")
-	})
+			reader := bytes.NewReader(buf.Bytes())
+			_, err := ReadAndVerifyChecksum(
+				reader,
+				4,
+			)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "0x")
+		},
+	)
 
-	t.Run("Invalid magic number error includes actual value", func(t *testing.T) {
-		buf := new(bytes.Buffer)
-		_ = binary.Write(buf, ByteOrder, uint32(0xDEADBEEF))
-		_ = binary.Write(buf, ByteOrder, uint64(64))
+	t.Run(
+		"Invalid magic number error includes actual value",
+		func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			_ = binary.Write(
+				buf,
+				ByteOrder,
+				uint32(0xDEADBEEF),
+			)
+			_ = binary.Write(
+				buf,
+				ByteOrder,
+				uint64(64),
+			)
 
-		err := ValidateHeader(buf)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "magic")
-	})
+			err := ValidateHeader(buf)
+			require.Error(t, err)
+			assert.Contains(
+				t,
+				err.Error(),
+				"magic",
+			)
+		},
+	)
 }
 
 // Note: WriteHeader and ValidateHeader are defined in catalog_serializer.go
@@ -1241,16 +1925,25 @@ func Example_typeInfoSerialization() {
 	_ = SerializeTypeInfo(writer, decimalType)
 	_ = writer.Flush()
 
-	fmt.Printf("Serialized DECIMAL(18,4) to %d bytes\n", buf.Len())
+	fmt.Printf(
+		"Serialized DECIMAL(18,4) to %d bytes\n",
+		buf.Len(),
+	)
 
 	// Deserialize from binary format
 	reader := NewBinaryReader(buf)
 	_ = reader.Load()
-	reconstructed, _ := DeserializeTypeInfo(reader)
+	reconstructed, _ := DeserializeTypeInfo(
+		reader,
+	)
 
 	// Verify the type was preserved
 	details := reconstructed.Details().(*dukdb.DecimalDetails)
-	fmt.Printf("Deserialized: DECIMAL(%d,%d)\n", details.Width, details.Scale)
+	fmt.Printf(
+		"Deserialized: DECIMAL(%d,%d)\n",
+		details.Width,
+		details.Scale,
+	)
 
 	// Output:
 	// Serialized DECIMAL(18,4) to 59 bytes
@@ -1263,9 +1956,16 @@ func Example_typeInfoSerialization() {
 // as LIST<STRUCT<key, value>> in the DuckDB binary format.
 func Example_complexTypeInfoSerialization() {
 	// Create a MAP<VARCHAR, INTEGER> TypeInfo
-	keyType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-	valueType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	mapType, _ := dukdb.NewMapInfo(keyType, valueType)
+	keyType, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
+	valueType, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	mapType, _ := dukdb.NewMapInfo(
+		keyType,
+		valueType,
+	)
 
 	// Serialize to binary format
 	buf := new(bytes.Buffer)
@@ -1273,15 +1973,23 @@ func Example_complexTypeInfoSerialization() {
 	_ = SerializeTypeInfo(writer, mapType)
 	_ = writer.Flush()
 
-	fmt.Printf("Serialized MAP<VARCHAR, INTEGER> to %d bytes\n", buf.Len())
+	fmt.Printf(
+		"Serialized MAP<VARCHAR, INTEGER> to %d bytes\n",
+		buf.Len(),
+	)
 
 	// Deserialize from binary format
 	reader := NewBinaryReader(buf)
 	_ = reader.Load()
-	reconstructed, _ := DeserializeTypeInfo(reader)
+	reconstructed, _ := DeserializeTypeInfo(
+		reader,
+	)
 
 	// Verify the type was preserved
-	fmt.Printf("Deserialized: %s\n", reconstructed.SQLType())
+	fmt.Printf(
+		"Deserialized: %s\n",
+		reconstructed.SQLType(),
+	)
 
 	// Output:
 	// Serialized MAP<VARCHAR, INTEGER> to 175 bytes
@@ -1297,15 +2005,28 @@ func Example_catalogSerialization() {
 	cat := catalog.NewCatalog()
 
 	// Create a simple table: users(id INTEGER, name VARCHAR)
-	intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	intType, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	varcharType, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 
-	idCol := catalog.NewColumnDef("id", dukdb.TYPE_INTEGER)
+	idCol := catalog.NewColumnDef(
+		"id",
+		dukdb.TYPE_INTEGER,
+	)
 	idCol.TypeInfo = intType
-	nameCol := catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR)
+	nameCol := catalog.NewColumnDef(
+		"name",
+		dukdb.TYPE_VARCHAR,
+	)
 	nameCol.TypeInfo = varcharType
 
-	tableDef := catalog.NewTableDef("users", []*catalog.ColumnDef{idCol, nameCol})
+	tableDef := catalog.NewTableDef(
+		"users",
+		[]*catalog.ColumnDef{idCol, nameCol},
+	)
 	_ = cat.CreateTable(tableDef)
 
 	// Serialize the catalog to a buffer (simulating file write)
@@ -1313,7 +2034,10 @@ func Example_catalogSerialization() {
 	_ = WriteHeader(buf)
 	_ = SerializeCatalog(buf, cat)
 
-	fmt.Printf("Serialized catalog to %d bytes\n", buf.Len())
+	fmt.Printf(
+		"Serialized catalog to %d bytes\n",
+		buf.Len(),
+	)
 
 	// Deserialize the catalog from the buffer
 	reader := bytes.NewReader(buf.Bytes())
@@ -1323,9 +2047,21 @@ func Example_catalogSerialization() {
 	// Verify the table was preserved
 	schema, _ := loadedCat.GetSchema("main")
 	table, _ := schema.GetTable("users")
-	fmt.Printf("Loaded table: %s with %d columns\n", table.Name, len(table.Columns))
-	fmt.Printf("Column 0: %s (%s)\n", table.Columns[0].Name, table.Columns[0].GetTypeInfo().SQLType())
-	fmt.Printf("Column 1: %s (%s)\n", table.Columns[1].Name, table.Columns[1].GetTypeInfo().SQLType())
+	fmt.Printf(
+		"Loaded table: %s with %d columns\n",
+		table.Name,
+		len(table.Columns),
+	)
+	fmt.Printf(
+		"Column 0: %s (%s)\n",
+		table.Columns[0].Name,
+		table.Columns[0].GetTypeInfo().SQLType(),
+	)
+	fmt.Printf(
+		"Column 1: %s (%s)\n",
+		table.Columns[1].Name,
+		table.Columns[1].GetTypeInfo().SQLType(),
+	)
 
 	// Output:
 	// Serialized catalog to 317 bytes
@@ -1340,7 +2076,12 @@ func Example_catalogSerialization() {
 // including the value order which is significant for the type.
 func Example_enumSerialization() {
 	// Create an ENUM TypeInfo with status values
-	enumType, _ := dukdb.NewEnumInfo("pending", "active", "inactive", "archived")
+	enumType, _ := dukdb.NewEnumInfo(
+		"pending",
+		"active",
+		"inactive",
+		"archived",
+	)
 
 	// Serialize to binary format
 	buf := new(bytes.Buffer)
@@ -1351,11 +2092,16 @@ func Example_enumSerialization() {
 	// Deserialize from binary format
 	reader := NewBinaryReader(buf)
 	_ = reader.Load()
-	reconstructed, _ := DeserializeTypeInfo(reader)
+	reconstructed, _ := DeserializeTypeInfo(
+		reader,
+	)
 
 	// Verify the ENUM values and order were preserved
 	details := reconstructed.Details().(*dukdb.EnumDetails)
-	fmt.Printf("ENUM values: %v\n", details.Values)
+	fmt.Printf(
+		"ENUM values: %v\n",
+		details.Values,
+	)
 
 	// Output:
 	// ENUM values: [pending active inactive archived]

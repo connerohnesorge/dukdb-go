@@ -30,7 +30,8 @@ func convertToType[T any](src any) (T, error) {
 		// Create new pointer and convert element
 		elemType := targetType.Elem()
 		newPtr := reflect.New(elemType)
-		if srcValue.Type().AssignableTo(elemType) {
+		if srcValue.Type().
+			AssignableTo(elemType) {
 			newPtr.Elem().Set(srcValue)
 		} else if srcValue.Type().ConvertibleTo(elemType) {
 			newPtr.Elem().Set(srcValue.Convert(elemType))
@@ -42,16 +43,21 @@ func convertToType[T any](src any) (T, error) {
 	}
 
 	// Numeric conversions (int8-int64, uint8-uint64, float32, float64)
-	if isNumericKind(targetType.Kind()) && isNumericKind(srcValue.Kind()) {
+	if isNumericKind(targetType.Kind()) &&
+		isNumericKind(srcValue.Kind()) {
 		if srcValue.CanConvert(targetType) {
 			return srcValue.Convert(targetType).Interface().(T), nil
 		}
 	}
 
 	// String to numeric conversions
-	if srcValue.Kind() == reflect.String && isNumericKind(targetType.Kind()) {
+	if srcValue.Kind() == reflect.String &&
+		isNumericKind(targetType.Kind()) {
 		strVal := srcValue.String()
-		converted, err := stringToNumeric(strVal, targetType.Kind())
+		converted, err := stringToNumeric(
+			strVal,
+			targetType.Kind(),
+		)
 		if err != nil {
 			return zero, err
 		}
@@ -91,25 +97,41 @@ func convertToType[T any](src any) (T, error) {
 		return any(i).(T), nil
 	}
 
-	return zero, fmt.Errorf("cannot convert %T to %T", src, zero)
+	return zero, fmt.Errorf(
+		"cannot convert %T to %T",
+		src,
+		zero,
+	)
 }
 
 // isNumericKind returns true if the kind is a numeric type.
 func isNumericKind(k reflect.Kind) bool {
-	return k >= reflect.Int && k <= reflect.Float64
+	return k >= reflect.Int &&
+		k <= reflect.Float64
 }
 
 // stringToNumeric converts a string to a numeric value.
-func stringToNumeric(s string, kind reflect.Kind) (any, error) {
+func stringToNumeric(
+	s string,
+	kind reflect.Kind,
+) (any, error) {
 	var result any
 	var err error
 
 	switch kind {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflect.Int,
+		reflect.Int8,
+		reflect.Int16,
+		reflect.Int32,
+		reflect.Int64:
 		var v int64
 		_, err = fmt.Sscanf(s, "%d", &v)
 		result = v
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64:
 		var v uint64
 		_, err = fmt.Sscanf(s, "%d", &v)
 		result = v
@@ -118,11 +140,18 @@ func stringToNumeric(s string, kind reflect.Kind) (any, error) {
 		_, err = fmt.Sscanf(s, "%f", &v)
 		result = v
 	default:
-		return nil, fmt.Errorf("unsupported numeric kind: %v", kind)
+		return nil, fmt.Errorf(
+			"unsupported numeric kind: %v",
+			kind,
+		)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse %q as numeric: %w", s, err)
+		return nil, fmt.Errorf(
+			"cannot parse %q as numeric: %w",
+			s,
+			err,
+		)
 	}
 
 	return result, nil
@@ -130,7 +159,10 @@ func stringToNumeric(s string, kind reflect.Kind) (any, error) {
 
 // setFieldValue sets a reflect.Value from an any value.
 // Supports direct assignment, type conversion, and nested types.
-func setFieldValue(field reflect.Value, val any) error {
+func setFieldValue(
+	field reflect.Value,
+	val any,
+) error {
 	if val == nil {
 		// For pointer fields, set to nil
 		if field.Kind() == reflect.Ptr {
@@ -149,7 +181,8 @@ func setFieldValue(field reflect.Value, val any) error {
 	// Handle pointer fields
 	if field.Kind() == reflect.Ptr {
 		if valValue.Kind() == reflect.Ptr {
-			if valValue.Type().AssignableTo(field.Type()) {
+			if valValue.Type().
+				AssignableTo(field.Type()) {
 				field.Set(valValue)
 
 				return nil
@@ -165,7 +198,10 @@ func setFieldValue(field reflect.Value, val any) error {
 	}
 
 	// Handle nested struct fields (STRUCT with STRUCT field)
-	if field.Kind() == reflect.Struct && field.Type() != reflect.TypeOf(time.Time{}) {
+	if field.Kind() == reflect.Struct &&
+		field.Type() != reflect.TypeOf(
+			time.Time{},
+		) {
 		if m, ok := val.(map[string]any); ok {
 			for i := 0; i < field.NumField(); i++ {
 				sf := field.Type().Field(i)
@@ -175,7 +211,11 @@ func setFieldValue(field reflect.Value, val any) error {
 				}
 				if v, exists := m[strings.ToLower(name)]; exists {
 					if err := setFieldValue(field.Field(i), v); err != nil {
-						return fmt.Errorf("field %s: %w", name, err)
+						return fmt.Errorf(
+							"field %s: %w",
+							name,
+							err,
+						)
 					}
 				}
 			}
@@ -187,10 +227,18 @@ func setFieldValue(field reflect.Value, val any) error {
 	// Handle nested slice fields (STRUCT with LIST field)
 	if field.Kind() == reflect.Slice {
 		if arr, ok := val.([]any); ok {
-			slice := reflect.MakeSlice(field.Type(), len(arr), len(arr))
+			slice := reflect.MakeSlice(
+				field.Type(),
+				len(arr),
+				len(arr),
+			)
 			for i, elem := range arr {
 				if err := setFieldValue(slice.Index(i), elem); err != nil {
-					return fmt.Errorf("element %d: %w", i, err)
+					return fmt.Errorf(
+						"element %d: %w",
+						i,
+						err,
+					)
 				}
 			}
 			field.Set(slice)
@@ -202,15 +250,25 @@ func setFieldValue(field reflect.Value, val any) error {
 	// Handle nested map fields
 	if field.Kind() == reflect.Map {
 		if m, ok := val.(map[any]any); ok {
-			newMap := reflect.MakeMap(field.Type())
+			newMap := reflect.MakeMap(
+				field.Type(),
+			)
 			for k, v := range m {
-				keyVal := reflect.New(field.Type().Key()).Elem()
+				keyVal := reflect.New(field.Type().Key()).
+					Elem()
 				if err := setFieldValue(keyVal, k); err != nil {
-					return fmt.Errorf("map key: %w", err)
+					return fmt.Errorf(
+						"map key: %w",
+						err,
+					)
 				}
-				valVal := reflect.New(field.Type().Elem()).Elem()
+				valVal := reflect.New(field.Type().Elem()).
+					Elem()
 				if err := setFieldValue(valVal, v); err != nil {
-					return fmt.Errorf("map value: %w", err)
+					return fmt.Errorf(
+						"map value: %w",
+						err,
+					)
 				}
 				newMap.SetMapIndex(keyVal, valVal)
 			}
@@ -221,20 +279,26 @@ func setFieldValue(field reflect.Value, val any) error {
 	}
 
 	// Direct assignment
-	if valValue.Type().AssignableTo(field.Type()) {
+	if valValue.Type().
+		AssignableTo(field.Type()) {
 		field.Set(valValue)
 
 		return nil
 	}
 
 	// Convertible types
-	if valValue.Type().ConvertibleTo(field.Type()) {
+	if valValue.Type().
+		ConvertibleTo(field.Type()) {
 		field.Set(valValue.Convert(field.Type()))
 
 		return nil
 	}
 
-	return fmt.Errorf("cannot convert %T to %s", val, field.Type())
+	return fmt.Errorf(
+		"cannot convert %T to %s",
+		val,
+		field.Type(),
+	)
 }
 
 // toAnySlice converts a typed slice to []any for driver binding.
@@ -254,11 +318,17 @@ func parseUUID(s string) ([16]byte, error) {
 	// Remove dashes from standard format
 	s = strings.ReplaceAll(s, "-", "")
 	if len(s) != 32 {
-		return uuid, fmt.Errorf("invalid UUID length: expected 32 hex chars, got %d", len(s))
+		return uuid, fmt.Errorf(
+			"invalid UUID length: expected 32 hex chars, got %d",
+			len(s),
+		)
 	}
 	_, err := hex.Decode(uuid[:], []byte(s))
 	if err != nil {
-		return uuid, fmt.Errorf("invalid UUID hex: %w", err)
+		return uuid, fmt.Errorf(
+			"invalid UUID hex: %w",
+			err,
+		)
 	}
 
 	return uuid, nil
@@ -329,7 +399,9 @@ func convertToDecimal(src any) (Decimal, error) {
 }
 
 // convertToInterval converts to Interval type.
-func convertToInterval(src any) (Interval, error) {
+func convertToInterval(
+	src any,
+) (Interval, error) {
 	switch v := src.(type) {
 	case Interval:
 		return v, nil
@@ -348,7 +420,11 @@ func NewDecimalFromFloat(f float64) Decimal {
 	d, err := ParseDecimal(s)
 	if err != nil {
 		// Fallback to zero decimal
-		return Decimal{Width: 18, Scale: 0, Value: big.NewInt(0)}
+		return Decimal{
+			Width: 18,
+			Scale: 0,
+			Value: big.NewInt(0),
+		}
 	}
 
 	return d
@@ -358,7 +434,9 @@ func NewDecimalFromFloat(f float64) Decimal {
 func ParseDecimal(s string) (Decimal, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return Decimal{}, fmt.Errorf("empty decimal string")
+		return Decimal{}, fmt.Errorf(
+			"empty decimal string",
+		)
 	}
 
 	// Handle negative sign
@@ -374,7 +452,10 @@ func ParseDecimal(s string) (Decimal, error) {
 	// Split by decimal point
 	parts := strings.Split(s, ".")
 	if len(parts) > 2 {
-		return Decimal{}, fmt.Errorf("invalid decimal format: %s", s)
+		return Decimal{}, fmt.Errorf(
+			"invalid decimal format: %s",
+			s,
+		)
 	}
 
 	var intPart, fracPart string
@@ -399,7 +480,10 @@ func ParseDecimal(s string) (Decimal, error) {
 
 	value := new(big.Int)
 	if _, ok := value.SetString(combined, 10); !ok {
-		return Decimal{}, fmt.Errorf("invalid decimal digits: %s", combined)
+		return Decimal{}, fmt.Errorf(
+			"invalid decimal digits: %s",
+			combined,
+		)
 	}
 
 	if negative {
@@ -434,7 +518,10 @@ func ParseInterval(s string) (Interval, error) {
 		}
 
 		if i+1 < len(parts) {
-			unit := strings.TrimSuffix(parts[i+1], "s") // Handle plural
+			unit := strings.TrimSuffix(
+				parts[i+1],
+				"s",
+			) // Handle plural
 			switch unit {
 			case "year":
 				interval.Months += int32(num * 12)

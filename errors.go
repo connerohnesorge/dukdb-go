@@ -265,33 +265,65 @@ const (
 // getError wraps an error with the driver prefix and base error.
 func getError(errDriver, err error) error {
 	if err == nil {
-		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
+		return fmt.Errorf(
+			"%s: %w",
+			driverErrMsg,
+			errDriver,
+		)
 	}
 
-	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
+	return fmt.Errorf(
+		"%s: %w: %s",
+		driverErrMsg,
+		errDriver,
+		err.Error(),
+	)
 }
 
 // unsupportedTypeError creates an error for unsupported types.
 func unsupportedTypeError(name string) error {
-	return fmt.Errorf("%s: %s", unsupportedTypeErrMsg, name)
+	return fmt.Errorf(
+		"%s: %s",
+		unsupportedTypeErrMsg,
+		name,
+	)
 }
 
 // tryOtherFuncError creates an error suggesting a different function.
 func tryOtherFuncError(hint string) error {
-	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
+	return fmt.Errorf(
+		"%s: %s",
+		tryOtherFuncErrMsg,
+		hint,
+	)
 }
 
 // addIndexToError adds an index to an error message.
 func addIndexToError(err error, idx int) error {
-	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+	return fmt.Errorf(
+		"%w: %s: %d",
+		err,
+		indexErrMsg,
+		idx,
+	)
 }
 
 // interfaceIsNilError creates an error for nil interface parameters.
-func interfaceIsNilError(interfaceName string) error {
-	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
+func interfaceIsNilError(
+	interfaceName string,
+) error {
+	return fmt.Errorf(
+		"%s: %s",
+		interfaceIsNilErrMsg,
+		interfaceName,
+	)
 }
 
 // duplicateNameError creates an error for duplicate names.
 func duplicateNameError(name string) error {
-	return fmt.Errorf("%s: %s", duplicateNameErrMsg, name)
+	return fmt.Errorf(
+		"%s: %s",
+		duplicateNameErrMsg,
+		name,
+	)
 }

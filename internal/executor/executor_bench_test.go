@@ -22,29 +22,63 @@ func BenchmarkSequentialScan_100K(b *testing.B) {
 	benchmarkSequentialScan(b, 100_000)
 }
 
-func benchmarkSequentialScan(b *testing.B, rowCount int) {
+func benchmarkSequentialScan(
+	b *testing.B,
+	rowCount int,
+) {
 	// Setup: Create table with test data
 	stor := storage.NewStorage()
-	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE, dukdb.TYPE_VARCHAR}
-	table, err := stor.CreateTable("bench_table", columnTypes)
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_VARCHAR,
+	}
+	table, err := stor.CreateTable(
+		"bench_table",
+		columnTypes,
+	)
 	if err != nil {
-		b.Fatalf("Failed to create table: %v", err)
+		b.Fatalf(
+			"Failed to create table: %v",
+			err,
+		)
 	}
 
 	// Insert test data
 	for i := range rowCount {
-		err := table.AppendRow([]any{int32(i), float64(i) * 1.5, "value_" + string(rune('0'+i%10))})
+		err := table.AppendRow(
+			[]any{
+				int32(i),
+				float64(i) * 1.5,
+				"value_" + string(rune('0'+i%10)),
+			},
+		)
 		if err != nil {
-			b.Fatalf("Failed to insert row: %v", err)
+			b.Fatalf(
+				"Failed to insert row: %v",
+				err,
+			)
 		}
 	}
 
 	// Create table definition
-	tableDef := catalog.NewTableDef("bench_table", []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-		catalog.NewColumnDef("value", dukdb.TYPE_DOUBLE),
-		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
-	})
+	tableDef := catalog.NewTableDef(
+		"bench_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"id",
+				dukdb.TYPE_INTEGER,
+			),
+			catalog.NewColumnDef(
+				"value",
+				dukdb.TYPE_DOUBLE,
+			),
+			catalog.NewColumnDef(
+				"name",
+				dukdb.TYPE_VARCHAR,
+			),
+		},
+	)
 
 	// Create scan plan
 	plan := &planner.PhysicalScan{
@@ -56,9 +90,15 @@ func benchmarkSequentialScan(b *testing.B, rowCount int) {
 	b.ReportAllocs()
 
 	for range b.N {
-		scanOp, err := NewPhysicalScanOperator(plan, stor)
+		scanOp, err := NewPhysicalScanOperator(
+			plan,
+			stor,
+		)
 		if err != nil {
-			b.Fatalf("Failed to create scan operator: %v", err)
+			b.Fatalf(
+				"Failed to create scan operator: %v",
+				err,
+			)
 		}
 
 		// Scan all data
@@ -75,47 +115,89 @@ func benchmarkSequentialScan(b *testing.B, rowCount int) {
 		}
 
 		if totalRows != rowCount {
-			b.Fatalf("Expected %d rows, got %d", rowCount, totalRows)
+			b.Fatalf(
+				"Expected %d rows, got %d",
+				rowCount,
+				totalRows,
+			)
 		}
 	}
 }
 
 // BenchmarkFilteredScan_1Percent benchmarks filtering with 1% selectivity
-func BenchmarkFilteredScan_1Percent(b *testing.B) {
-	benchmarkFilteredScan(b, 10_000, 100) // 1% of 10K
+func BenchmarkFilteredScan_1Percent(
+	b *testing.B,
+) {
+	benchmarkFilteredScan(
+		b,
+		10_000,
+		100,
+	) // 1% of 10K
 }
 
 // BenchmarkFilteredScan_10Percent benchmarks filtering with 10% selectivity
-func BenchmarkFilteredScan_10Percent(b *testing.B) {
-	benchmarkFilteredScan(b, 10_000, 1_000) // 10% of 10K
+func BenchmarkFilteredScan_10Percent(
+	b *testing.B,
+) {
+	benchmarkFilteredScan(
+		b,
+		10_000,
+		1_000,
+	) // 10% of 10K
 }
 
 // BenchmarkFilteredScan_50Percent benchmarks filtering with 50% selectivity
-func BenchmarkFilteredScan_50Percent(b *testing.B) {
-	benchmarkFilteredScan(b, 10_000, 5_000) // 50% of 10K
+func BenchmarkFilteredScan_50Percent(
+	b *testing.B,
+) {
+	benchmarkFilteredScan(
+		b,
+		10_000,
+		5_000,
+	) // 50% of 10K
 }
 
-func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
+func benchmarkFilteredScan(
+	b *testing.B,
+	rowCount, threshold int,
+) {
 	// Setup: Create table with test data
 	stor := storage.NewStorage()
-	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER}
-	table, err := stor.CreateTable("bench_filter", columnTypes)
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+	}
+	table, err := stor.CreateTable(
+		"bench_filter",
+		columnTypes,
+	)
 	if err != nil {
-		b.Fatalf("Failed to create table: %v", err)
+		b.Fatalf(
+			"Failed to create table: %v",
+			err,
+		)
 	}
 
 	// Insert test data
 	for i := range rowCount {
 		err := table.AppendRow([]any{int32(i)})
 		if err != nil {
-			b.Fatalf("Failed to insert row: %v", err)
+			b.Fatalf(
+				"Failed to insert row: %v",
+				err,
+			)
 		}
 	}
 
 	// Create table definition
-	tableDef := catalog.NewTableDef("bench_filter", []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-	})
+	tableDef := catalog.NewTableDef(
+		"bench_filter",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"id",
+				dukdb.TYPE_INTEGER,
+			),
+		},
+	)
 
 	// Create scan operator
 	scanPlan := &planner.PhysicalScan{
@@ -124,7 +206,9 @@ func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -151,12 +235,24 @@ func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
 	b.ReportAllocs()
 
 	for range b.N {
-		scanOp, err := NewPhysicalScanOperator(scanPlan, stor)
+		scanOp, err := NewPhysicalScanOperator(
+			scanPlan,
+			stor,
+		)
 		if err != nil {
-			b.Fatalf("Failed to create scan operator: %v", err)
+			b.Fatalf(
+				"Failed to create scan operator: %v",
+				err,
+			)
 		}
 
-		filterOp := NewPhysicalFilterOperator(scanOp, nil, predicate, exec, ctx)
+		filterOp := NewPhysicalFilterOperator(
+			scanOp,
+			nil,
+			predicate,
+			exec,
+			ctx,
+		)
 
 		// Count filtered results
 		totalRows := 0
@@ -172,7 +268,11 @@ func benchmarkFilteredScan(b *testing.B, rowCount, threshold int) {
 		}
 
 		if totalRows != threshold {
-			b.Fatalf("Expected %d rows, got %d", threshold, totalRows)
+			b.Fatalf(
+				"Expected %d rows, got %d",
+				threshold,
+				totalRows,
+			)
 		}
 	}
 }
@@ -187,7 +287,11 @@ func BenchmarkAggregation_Count(b *testing.B) {
 	benchmarkAggregationCount(b, 10_000)
 }
 
-func benchmarkAggregation(b *testing.B, aggFunc string, rowCount int) {
+func benchmarkAggregation(
+	b *testing.B,
+	aggFunc string,
+	rowCount int,
+) {
 	// Setup: Create table with test data
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 
@@ -205,7 +309,9 @@ func benchmarkAggregation(b *testing.B, aggFunc string, rowCount int) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: chunks,
 		types:  typeInfos,
@@ -246,7 +352,10 @@ func benchmarkAggregation(b *testing.B, aggFunc string, rowCount int) {
 			ctx,
 		)
 		if err != nil {
-			b.Fatalf("Failed to create aggregate operator: %v", err)
+			b.Fatalf(
+				"Failed to create aggregate operator: %v",
+				err,
+			)
 		}
 
 		// Get result
@@ -255,15 +364,23 @@ func benchmarkAggregation(b *testing.B, aggFunc string, rowCount int) {
 			b.Fatalf("Aggregate error: %v", err)
 		}
 		if resultChunk == nil {
-			b.Fatal("Expected result chunk, got nil")
+			b.Fatal(
+				"Expected result chunk, got nil",
+			)
 		}
 		if resultChunk.Count() != 1 {
-			b.Fatalf("Expected 1 row, got %d", resultChunk.Count())
+			b.Fatalf(
+				"Expected 1 row, got %d",
+				resultChunk.Count(),
+			)
 		}
 	}
 }
 
-func benchmarkAggregationCount(b *testing.B, rowCount int) {
+func benchmarkAggregationCount(
+	b *testing.B,
+	rowCount int,
+) {
 	// Setup: Create table with test data
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 
@@ -281,7 +398,9 @@ func benchmarkAggregationCount(b *testing.B, rowCount int) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: chunks,
 		types:  typeInfos,
@@ -318,7 +437,10 @@ func benchmarkAggregationCount(b *testing.B, rowCount int) {
 			ctx,
 		)
 		if err != nil {
-			b.Fatalf("Failed to create aggregate operator: %v", err)
+			b.Fatalf(
+				"Failed to create aggregate operator: %v",
+				err,
+			)
 		}
 
 		// Get result
@@ -327,10 +449,15 @@ func benchmarkAggregationCount(b *testing.B, rowCount int) {
 			b.Fatalf("Aggregate error: %v", err)
 		}
 		if resultChunk == nil {
-			b.Fatal("Expected result chunk, got nil")
+			b.Fatal(
+				"Expected result chunk, got nil",
+			)
 		}
 		if resultChunk.Count() != 1 {
-			b.Fatalf("Expected 1 row, got %d", resultChunk.Count())
+			b.Fatalf(
+				"Expected 1 row, got %d",
+				resultChunk.Count(),
+			)
 		}
 	}
 }
@@ -340,7 +467,10 @@ func BenchmarkHashJoin_10K(b *testing.B) {
 	benchmarkHashJoin(b, 10_000)
 }
 
-func benchmarkHashJoin(b *testing.B, rowCount int) {
+func benchmarkHashJoin(
+	b *testing.B,
+	rowCount int,
+) {
 	// Setup: Create two tables for join
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
@@ -350,30 +480,64 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 	}
 
 	// Create left table
-	leftTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	leftTable, err := stor.CreateTable("left_table", leftTypes)
+	leftTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	leftTable, err := stor.CreateTable(
+		"left_table",
+		leftTypes,
+	)
 	if err != nil {
-		b.Fatalf("Failed to create left table: %v", err)
+		b.Fatalf(
+			"Failed to create left table: %v",
+			err,
+		)
 	}
 
 	for i := range rowCount {
-		err := leftTable.AppendRow([]any{int64(i), "left_" + string(rune('0'+i%10))})
+		err := leftTable.AppendRow(
+			[]any{
+				int64(i),
+				"left_" + string(rune('0'+i%10)),
+			},
+		)
 		if err != nil {
-			b.Fatalf("Failed to insert into left table: %v", err)
+			b.Fatalf(
+				"Failed to insert into left table: %v",
+				err,
+			)
 		}
 	}
 
 	// Create right table
-	rightTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	rightTable, err := stor.CreateTable("right_table", rightTypes)
+	rightTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	rightTable, err := stor.CreateTable(
+		"right_table",
+		rightTypes,
+	)
 	if err != nil {
-		b.Fatalf("Failed to create right table: %v", err)
+		b.Fatalf(
+			"Failed to create right table: %v",
+			err,
+		)
 	}
 
 	for i := range rowCount {
-		err := rightTable.AppendRow([]any{int64(i), "right_" + string(rune('0'+i%10))})
+		err := rightTable.AppendRow(
+			[]any{
+				int64(i),
+				"right_" + string(rune('0'+i%10)),
+			},
+		)
 		if err != nil {
-			b.Fatalf("Failed to insert into right table: %v", err)
+			b.Fatalf(
+				"Failed to insert into right table: %v",
+				err,
+			)
 		}
 	}
 
@@ -385,16 +549,26 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 			TableDef: &catalog.TableDef{
 				Name: "left_table",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: leftTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -405,27 +579,57 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 			TableDef: &catalog.TableDef{
 				Name: "right_table",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: rightTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
 	// Define column bindings for join
 	leftColumns := []planner.ColumnBinding{
-		{Table: "l", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "l", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "l",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "l",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 	rightColumns := []planner.ColumnBinding{
-		{Table: "r", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "r", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "r",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "r",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	// Join condition: l.id = r.id
@@ -463,7 +667,10 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 			ctx,
 		)
 		if err != nil {
-			b.Fatalf("Failed to create join operator: %v", err)
+			b.Fatalf(
+				"Failed to create join operator: %v",
+				err,
+			)
 		}
 
 		// Count join results
@@ -480,7 +687,11 @@ func benchmarkHashJoin(b *testing.B, rowCount int) {
 		}
 
 		if totalRows != rowCount {
-			b.Fatalf("Expected %d rows, got %d", rowCount, totalRows)
+			b.Fatalf(
+				"Expected %d rows, got %d",
+				rowCount,
+				totalRows,
+			)
 		}
 	}
 }
@@ -508,7 +719,9 @@ func benchmarkSort(b *testing.B, rowCount int) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: chunks,
 		types:  typeInfos,
@@ -547,7 +760,10 @@ func benchmarkSort(b *testing.B, rowCount int) {
 			ctx,
 		)
 		if err != nil {
-			b.Fatalf("Failed to create sort operator: %v", err)
+			b.Fatalf(
+				"Failed to create sort operator: %v",
+				err,
+			)
 		}
 
 		// Collect all results
@@ -564,7 +780,11 @@ func benchmarkSort(b *testing.B, rowCount int) {
 		}
 
 		if totalRows != rowCount {
-			b.Fatalf("Expected %d rows, got %d", rowCount, totalRows)
+			b.Fatalf(
+				"Expected %d rows, got %d",
+				rowCount,
+				totalRows,
+			)
 		}
 	}
 }

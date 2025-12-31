@@ -36,7 +36,9 @@ type ResultSet struct {
 var _ driver.Rows = (*ResultSet)(nil)
 
 // Compile-time check that ResultSet implements driver.RowsColumnTypeDatabaseTypeName
-var _ driver.RowsColumnTypeDatabaseTypeName = (*ResultSet)(nil)
+var _ driver.RowsColumnTypeDatabaseTypeName = (*ResultSet)(
+	nil,
+)
 
 // NewResultSet creates a new ResultSet from operator output.
 // chunks contains the data chunks from query execution,
@@ -74,7 +76,9 @@ func (rs *ResultSet) Close() error {
 // Next advances to the next row and populates dest with the row's values.
 // Returns io.EOF when there are no more rows.
 // This implements the driver.Rows interface.
-func (rs *ResultSet) Next(dest []driver.Value) error {
+func (rs *ResultSet) Next(
+	dest []driver.Value,
+) error {
 	// Check if the result set is closed
 	if rs.closed {
 		return errors.New("result set is closed")
@@ -103,11 +107,16 @@ func (rs *ResultSet) Next(dest []driver.Value) error {
 		// Extract values from the current row
 		numCols := chunk.ColumnCount()
 		if len(dest) < numCols {
-			return errors.New("destination slice too small")
+			return errors.New(
+				"destination slice too small",
+			)
 		}
 
 		for col := range numCols {
-			value := chunk.GetValue(rs.currentRow, col)
+			value := chunk.GetValue(
+				rs.currentRow,
+				col,
+			)
 			dest[col] = toDriverValue(value)
 		}
 
@@ -166,7 +175,9 @@ func toDriverValue(value any) driver.Value {
 // This implements the driver.RowsColumnTypeDatabaseTypeName interface.
 // It returns the SQL type string (e.g., "INTEGER", "VARCHAR", "DECIMAL(10,2)") for the column.
 // If the index is out of bounds, it returns an empty string.
-func (rs *ResultSet) ColumnTypeDatabaseTypeName(index int) string {
+func (rs *ResultSet) ColumnTypeDatabaseTypeName(
+	index int,
+) string {
 	// Validate index bounds
 	if index < 0 || index >= len(rs.types) {
 		return ""
@@ -180,7 +191,9 @@ func (rs *ResultSet) ColumnTypeDatabaseTypeName(index int) string {
 // This is a dukdb-specific extension that provides access to complete type metadata
 // including InternalType, Details, and SQLType.
 // If the index is out of bounds, it returns nil.
-func (rs *ResultSet) ColumnTypeInfo(index int) dukdb.TypeInfo {
+func (rs *ResultSet) ColumnTypeInfo(
+	index int,
+) dukdb.TypeInfo {
 	// Validate index bounds
 	if index < 0 || index >= len(rs.types) {
 		return nil

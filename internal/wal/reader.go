@@ -17,10 +17,14 @@ import (
 )
 
 // ErrChecksumMismatch indicates a checksum validation failure.
-var ErrChecksumMismatch = errors.New("WAL checksum mismatch")
+var ErrChecksumMismatch = errors.New(
+	"WAL checksum mismatch",
+)
 
 // ErrTornWrite indicates a partial/torn write was detected.
-var ErrTornWrite = errors.New("WAL torn write detected")
+var ErrTornWrite = errors.New(
+	"WAL torn write detected",
+)
 
 // Reader reads WAL entries from a file.
 type Reader struct {
@@ -33,10 +37,16 @@ type Reader struct {
 }
 
 // NewReader creates a new WAL reader.
-func NewReader(path string, clock quartz.Clock) (*Reader, error) {
+func NewReader(
+	path string,
+	clock quartz.Clock,
+) (*Reader, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open WAL file: %w", err)
+		return nil, fmt.Errorf(
+			"failed to open WAL file: %w",
+			err,
+		)
 	}
 
 	r := &Reader{
@@ -51,7 +61,10 @@ func NewReader(path string, clock quartz.Clock) (*Reader, error) {
 	if err := r.header.Deserialize(r.reader); err != nil {
 		_ = file.Close()
 
-		return nil, fmt.Errorf("failed to read WAL header: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read WAL header: %w",
+			err,
+		)
 	}
 	r.position = HeaderSize
 
@@ -72,59 +85,91 @@ func (r *Reader) ReadEntry() (Entry, error) {
 			return nil, io.EOF
 		}
 
-		return nil, fmt.Errorf("failed to read entry size: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read entry size: %w",
+			err,
+		)
 	}
 
 	var checksumValue uint64
 	if err := binary.Read(r.reader, binary.LittleEndian, &checksumValue); err != nil {
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if err == io.EOF ||
+			err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
 
-		return nil, fmt.Errorf("failed to read entry checksum: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read entry checksum: %w",
+			err,
+		)
 	}
 
 	var entryType EntryType
 	if err := binary.Read(r.reader, binary.LittleEndian, &entryType); err != nil {
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if err == io.EOF ||
+			err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
 
-		return nil, fmt.Errorf("failed to read entry type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read entry type: %w",
+			err,
+		)
 	}
 
 	// Read entry data
 	data := make([]byte, size)
 	if _, err := io.ReadFull(r.reader, data); err != nil {
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if err == io.EOF ||
+			err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
 
-		return nil, fmt.Errorf("failed to read entry data: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read entry data: %w",
+			err,
+		)
 	}
 
 	// Verify checksum
 	checksum := crc64.New(r.checksum)
-	_ = binary.Write(checksum, binary.LittleEndian, size)
+	_ = binary.Write(
+		checksum,
+		binary.LittleEndian,
+		size,
+	)
 	_, _ = checksum.Write([]byte{byte(entryType)})
 	_, _ = checksum.Write(data)
 	if checksum.Sum64() != checksumValue {
-		return nil, fmt.Errorf("%w at position %d", ErrChecksumMismatch, r.position)
+		return nil, fmt.Errorf(
+			"%w at position %d",
+			ErrChecksumMismatch,
+			r.position,
+		)
 	}
 
 	r.position += EntryHeaderSize + int64(size)
 
 	// Deserialize entry based on type
-	entry, err := r.deserializeEntry(entryType, data)
+	entry, err := r.deserializeEntry(
+		entryType,
+		data,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize entry: %w", err)
+		return nil, fmt.Errorf(
+			"failed to deserialize entry: %w",
+			err,
+		)
 	}
 
 	return entry, nil
 }
 
 // deserializeEntry deserializes an entry based on its type.
-func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, error) {
+func (r *Reader) deserializeEntry(
+	entryType EntryType,
+	data []byte,
+) (Entry, error) {
 	reader := bytes.NewReader(data)
 
 	switch entryType {
@@ -268,7 +313,10 @@ func (r *Reader) deserializeEntry(entryType EntryType, data []byte) (Entry, erro
 		return entry, nil
 
 	default:
-		return nil, fmt.Errorf("unknown entry type: %d", entryType)
+		return nil, fmt.Errorf(
+			"unknown entry type: %d",
+			entryType,
+		)
 	}
 }
 
@@ -304,7 +352,10 @@ func (r *Reader) ReadAll() ([]Entry, error) {
 }
 
 // Recover replays committed transactions from the WAL.
-func (r *Reader) Recover(cat *catalog.Catalog, store *storage.Storage) error {
+func (r *Reader) Recover(
+	cat *catalog.Catalog,
+	store *storage.Storage,
+) error {
 	// Track transactions
 	activeTxns := make(map[uint64][]Entry)
 	committedTxns := make(map[uint64]bool)
@@ -321,7 +372,10 @@ func (r *Reader) Recover(cat *catalog.Catalog, store *storage.Storage) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read WAL entry: %w", err)
+			return fmt.Errorf(
+				"failed to read WAL entry: %w",
+				err,
+			)
 		}
 
 		switch e := entry.(type) {
@@ -355,7 +409,10 @@ func (r *Reader) Recover(cat *catalog.Catalog, store *storage.Storage) error {
 	// Replay catalog entries first
 	for _, entry := range catalogEntries {
 		if err := r.replayCatalogEntry(entry, cat, store); err != nil {
-			return fmt.Errorf("failed to replay catalog entry: %w", err)
+			return fmt.Errorf(
+				"failed to replay catalog entry: %w",
+				err,
+			)
 		}
 	}
 
@@ -364,7 +421,10 @@ func (r *Reader) Recover(cat *catalog.Catalog, store *storage.Storage) error {
 		if committedTxns[txnID] {
 			for _, entry := range entries {
 				if err := r.replayDataEntry(entry, cat, store); err != nil {
-					return fmt.Errorf("failed to replay data entry: %w", err)
+					return fmt.Errorf(
+						"failed to replay data entry: %w",
+						err,
+					)
 				}
 			}
 		}
@@ -374,7 +434,11 @@ func (r *Reader) Recover(cat *catalog.Catalog, store *storage.Storage) error {
 }
 
 // replayCatalogEntry replays a catalog entry.
-func (r *Reader) replayCatalogEntry(entry Entry, cat *catalog.Catalog, store *storage.Storage) error {
+func (r *Reader) replayCatalogEntry(
+	entry Entry,
+	cat *catalog.Catalog,
+	store *storage.Storage,
+) error {
 	switch e := entry.(type) {
 	case *CreateSchemaEntry:
 		_, err := cat.CreateSchema(e.Name)
@@ -439,7 +503,11 @@ func (r *Reader) replayCatalogEntry(entry Entry, cat *catalog.Catalog, store *st
 }
 
 // replayDataEntry replays a data entry.
-func (r *Reader) replayDataEntry(entry Entry, cat *catalog.Catalog, store *storage.Storage) error {
+func (r *Reader) replayDataEntry(
+	entry Entry,
+	cat *catalog.Catalog,
+	store *storage.Storage,
+) error {
 	switch e := entry.(type) {
 	case *InsertEntry:
 		table, ok := store.GetTable(e.Table)

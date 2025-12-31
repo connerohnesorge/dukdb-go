@@ -34,7 +34,9 @@ func (e *Executor) executeDelete(
 		}
 
 		// Count the rows that would be deleted
-		rowsAffected = int64(len(sourceResult.Rows))
+		rowsAffected = int64(
+			len(sourceResult.Rows),
+		)
 
 		// For now, we implement DELETE by:
 		// 1. Collecting all non-deleted rows
@@ -57,7 +59,10 @@ func (e *Executor) executeDelete(
 			}
 
 			for i := 0; i < chunk.Count(); i++ {
-				row := make([]any, chunk.ColumnCount())
+				row := make(
+					[]any,
+					chunk.ColumnCount(),
+				)
 				for j := 0; j < chunk.ColumnCount(); j++ {
 					row[j] = chunk.GetValue(i, j)
 				}
@@ -84,7 +89,11 @@ func (e *Executor) executeDelete(
 			if plan.Source != nil {
 				// Re-execute the filter condition
 				if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
-					passes, err := e.evaluateExprAsBool(ctx, filter.Condition, rowMap)
+					passes, err := e.evaluateExprAsBool(
+						ctx,
+						filter.Condition,
+						rowMap,
+					)
 					if err != nil {
 						return nil, err
 					}
@@ -107,7 +116,10 @@ func (e *Executor) executeDelete(
 			return nil, err
 		}
 
-		newTable, err := e.storage.CreateTable(plan.Table, table.ColumnTypes())
+		newTable, err := e.storage.CreateTable(
+			plan.Table,
+			table.ColumnTypes(),
+		)
 		if err != nil {
 			return nil, err
 		}

@@ -28,7 +28,11 @@ func (m *boundTestMockBackendStmt) Query(
 	ctx context.Context,
 	args []driver.NamedValue,
 ) ([]map[string]any, []string, error) {
-	return []map[string]any{{"col": "value"}}, []string{"col"}, nil
+	return []map[string]any{
+			{"col": "value"},
+		}, []string{
+			"col",
+		}, nil
 }
 
 func (m *boundTestMockBackendStmt) Close() error {
@@ -43,7 +47,9 @@ func (m *boundTestMockBackendStmt) NumInput() int {
 
 func TestBind(t *testing.T) {
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 3},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 3,
+		},
 	}
 
 	t.Run("valid bind", func(t *testing.T) {
@@ -58,19 +64,32 @@ func TestBind(t *testing.T) {
 	t.Run("invalid index", func(t *testing.T) {
 		err := stmt.Bind(0, "value")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "must be >= 1")
+		assert.Contains(
+			t,
+			err.Error(),
+			"must be >= 1",
+		)
 	})
 
-	t.Run("out of range index", func(t *testing.T) {
-		err := stmt.Bind(10, "value")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "out of range")
-	})
+	t.Run(
+		"out of range index",
+		func(t *testing.T) {
+			err := stmt.Bind(10, "value")
+			require.Error(t, err)
+			assert.Contains(
+				t,
+				err.Error(),
+				"out of range",
+			)
+		},
+	)
 
 	t.Run("closed statement", func(t *testing.T) {
 		closedStmt := &Stmt{
-			backendStmt: &boundTestMockBackendStmt{numParams: 3},
-			closed:      true,
+			backendStmt: &boundTestMockBackendStmt{
+				numParams: 3,
+			},
+			closed: true,
 		}
 		err := closedStmt.Bind(1, "value")
 		require.Error(t, err)
@@ -80,7 +99,9 @@ func TestBind(t *testing.T) {
 
 func TestExecBound(t *testing.T) {
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 2},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 2,
+		},
 	}
 
 	// Bind parameters
@@ -98,23 +119,34 @@ func TestExecBound(t *testing.T) {
 
 func TestQueryBound(t *testing.T) {
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind parameter
-	require.NoError(t, stmt.Bind(1, "query_value"))
+	require.NoError(
+		t,
+		stmt.Bind(1, "query_value"),
+	)
 
 	rows, err := stmt.QueryBound()
 	require.NoError(t, err)
 	require.NotNil(t, rows)
 	defer rows.Close()
 
-	assert.Equal(t, []string{"col"}, rows.Columns())
+	assert.Equal(
+		t,
+		[]string{"col"},
+		rows.Columns(),
+	)
 }
 
 func TestClearBound(t *testing.T) {
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 2},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 2,
+		},
 	}
 
 	// Bind parameters
@@ -130,11 +162,15 @@ func TestClearBound(t *testing.T) {
 
 // TestExecBoundContextClockTimeout tests deterministic timeout behavior using quartz.Mock.
 // This test verifies that ExecBoundContextClock properly checks deadlines using the injected clock.
-func TestExecBoundContextClockTimeout(t *testing.T) {
+func TestExecBoundContextClockTimeout(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind a parameter
@@ -147,24 +183,38 @@ func TestExecBoundContextClockTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a context with the mock clock's deadline for the function to check
-	ctxWithDeadline, cancel := context.WithDeadline(ctx, deadline)
+	ctxWithDeadline, cancel := context.WithDeadline(
+		ctx,
+		deadline,
+	)
 	defer cancel()
 
 	// Advance past deadline using mock clock (no MustWait needed - just advance)
 	mClock.Advance(2 * time.Second)
 
 	// Now the clock says we're past the deadline
-	_, err := stmt.ExecBoundContextClock(ctxWithDeadline, mClock)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := stmt.ExecBoundContextClock(
+		ctxWithDeadline,
+		mClock,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
 // TestQueryBoundContextClockTimeout tests deterministic timeout behavior using quartz.Mock.
 // This test verifies that QueryBoundContextClock properly checks deadlines using the injected clock.
-func TestQueryBoundContextClockTimeout(t *testing.T) {
+func TestQueryBoundContextClockTimeout(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind a parameter
@@ -177,23 +227,37 @@ func TestQueryBoundContextClockTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a context with the mock clock's deadline for the function to check
-	ctxWithDeadline, cancel := context.WithDeadline(ctx, deadline)
+	ctxWithDeadline, cancel := context.WithDeadline(
+		ctx,
+		deadline,
+	)
 	defer cancel()
 
 	// Advance past deadline using mock clock (no MustWait needed - just advance)
 	mClock.Advance(2 * time.Second)
 
 	// Now the clock says we're past the deadline
-	_, err := stmt.QueryBoundContextClock(ctxWithDeadline, mClock)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := stmt.QueryBoundContextClock(
+		ctxWithDeadline,
+		mClock,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
 // TestExecBoundContextClockSuccess tests that execution succeeds when no deadline is set.
-func TestExecBoundContextClockSuccess(t *testing.T) {
+func TestExecBoundContextClockSuccess(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind a parameter
@@ -202,7 +266,10 @@ func TestExecBoundContextClockSuccess(t *testing.T) {
 	// Use context without deadline - clock check is skipped when no deadline
 	ctx := context.Background()
 
-	result, err := stmt.ExecBoundContextClock(ctx, mClock)
+	result, err := stmt.ExecBoundContextClock(
+		ctx,
+		mClock,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -212,11 +279,15 @@ func TestExecBoundContextClockSuccess(t *testing.T) {
 }
 
 // TestQueryBoundContextClockSuccess tests that query succeeds when no deadline is set.
-func TestQueryBoundContextClockSuccess(t *testing.T) {
+func TestQueryBoundContextClockSuccess(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind a parameter
@@ -225,20 +296,31 @@ func TestQueryBoundContextClockSuccess(t *testing.T) {
 	// Use context without deadline - clock check is skipped when no deadline
 	ctx := context.Background()
 
-	rows, err := stmt.QueryBoundContextClock(ctx, mClock)
+	rows, err := stmt.QueryBoundContextClock(
+		ctx,
+		mClock,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, rows)
 	defer rows.Close()
 
-	assert.Equal(t, []string{"col"}, rows.Columns())
+	assert.Equal(
+		t,
+		[]string{"col"},
+		rows.Columns(),
+	)
 }
 
 // TestExecBoundContextClockBeforeDeadline tests that execution succeeds when clock shows we're before deadline.
-func TestExecBoundContextClockBeforeDeadline(t *testing.T) {
+func TestExecBoundContextClockBeforeDeadline(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	stmt := &Stmt{
-		backendStmt: &boundTestMockBackendStmt{numParams: 1},
+		backendStmt: &boundTestMockBackendStmt{
+			numParams: 1,
+		},
 	}
 
 	// Bind a parameter
@@ -247,11 +329,17 @@ func TestExecBoundContextClockBeforeDeadline(t *testing.T) {
 	// Use a real-time deadline that won't expire (1 hour from now)
 	// The context's deadline is checked using clock.Until(), which uses the mock clock
 	// Since the real deadline is in the future, clock.Until returns positive duration
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Hour))
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		time.Now().Add(1*time.Hour),
+	)
 	defer cancel()
 
 	// The mock clock hasn't advanced, so clock.Until(future_deadline) returns positive
-	result, err := stmt.ExecBoundContextClock(ctx, mClock)
+	result, err := stmt.ExecBoundContextClock(
+		ctx,
+		mClock,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }

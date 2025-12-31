@@ -279,7 +279,10 @@ func (e *Executor) executeVirtualTableScan(
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("failed to scan virtual table: %v", err),
+			Msg: fmt.Sprintf(
+				"failed to scan virtual table: %v",
+				err,
+			),
 		}
 	}
 	defer it.Close()
@@ -326,7 +329,10 @@ func (e *Executor) executeVirtualTableScan(
 	if err := it.Err(); err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("error iterating virtual table: %v", err),
+			Msg: fmt.Sprintf(
+				"error iterating virtual table: %v",
+				err,
+			),
 		}
 	}
 

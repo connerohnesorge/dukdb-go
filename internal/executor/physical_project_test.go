@@ -14,25 +14,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPhysicalProjectOperator_ProjectSingleColumn(t *testing.T) {
+func TestPhysicalProjectOperator_ProjectSingleColumn(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator that produces chunks with 3 columns (a, b, c)
 	chunk := storage.NewDataChunk([]dukdb.Type{
 		dukdb.TYPE_INTEGER,
 		dukdb.TYPE_INTEGER,
 		dukdb.TYPE_INTEGER,
 	})
-	chunk.AppendRow([]any{int32(1), int32(2), int32(3)})
-	chunk.AppendRow([]any{int32(4), int32(5), int32(6)})
+	chunk.AppendRow(
+		[]any{int32(1), int32(2), int32(3)},
+	)
+	chunk.AppendRow(
+		[]any{int32(4), int32(5), int32(6)},
+	)
 
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Column: "b", Type: dukdb.TYPE_INTEGER, ColumnIdx: 1},
-		{Column: "c", Type: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Column:    "b",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 1,
+		},
+		{
+			Column:    "c",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 2,
+		},
 	}
 
 	types := make([]dukdb.TypeInfo, 3)
 	for i := range types {
-		types[i] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+		types[i] = &basicTypeInfo{
+			typ: dukdb.TYPE_INTEGER,
+		}
 	}
 
 	mockChild := &mockPhysicalOperator{
@@ -52,9 +72,17 @@ func TestPhysicalProjectOperator_ProjectSingleColumn(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Execute projection
@@ -67,8 +95,16 @@ func TestPhysicalProjectOperator_ProjectSingleColumn(t *testing.T) {
 	assert.Equal(t, 2, result.Count())
 
 	// Verify values (should be column b: 2, 5)
-	assert.Equal(t, int32(2), result.GetValue(0, 0))
-	assert.Equal(t, int32(5), result.GetValue(1, 0))
+	assert.Equal(
+		t,
+		int32(2),
+		result.GetValue(0, 0),
+	)
+	assert.Equal(
+		t,
+		int32(5),
+		result.GetValue(1, 0),
+	)
 
 	// Verify no more data
 	result, err = projectOp.Next()
@@ -76,25 +112,45 @@ func TestPhysicalProjectOperator_ProjectSingleColumn(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestPhysicalProjectOperator_ProjectMultipleColumnsReordered(t *testing.T) {
+func TestPhysicalProjectOperator_ProjectMultipleColumnsReordered(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator that produces chunks with 3 columns (a, b, c)
 	chunk := storage.NewDataChunk([]dukdb.Type{
 		dukdb.TYPE_INTEGER,
 		dukdb.TYPE_INTEGER,
 		dukdb.TYPE_INTEGER,
 	})
-	chunk.AppendRow([]any{int32(1), int32(2), int32(3)})
-	chunk.AppendRow([]any{int32(4), int32(5), int32(6)})
+	chunk.AppendRow(
+		[]any{int32(1), int32(2), int32(3)},
+	)
+	chunk.AppendRow(
+		[]any{int32(4), int32(5), int32(6)},
+	)
 
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Column: "b", Type: dukdb.TYPE_INTEGER, ColumnIdx: 1},
-		{Column: "c", Type: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Column:    "b",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 1,
+		},
+		{
+			Column:    "c",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 2,
+		},
 	}
 
 	types := make([]dukdb.TypeInfo, 3)
 	for i := range types {
-		types[i] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+		types[i] = &basicTypeInfo{
+			typ: dukdb.TYPE_INTEGER,
+		}
 	}
 
 	mockChild := &mockPhysicalOperator{
@@ -118,9 +174,17 @@ func TestPhysicalProjectOperator_ProjectMultipleColumnsReordered(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Execute projection
@@ -133,13 +197,31 @@ func TestPhysicalProjectOperator_ProjectMultipleColumnsReordered(t *testing.T) {
 	assert.Equal(t, 2, result.Count())
 
 	// Verify values (should be c, a: [3, 1], [6, 4])
-	assert.Equal(t, int32(3), result.GetValue(0, 0)) // row 0, col 0 (c)
-	assert.Equal(t, int32(1), result.GetValue(0, 1)) // row 0, col 1 (a)
-	assert.Equal(t, int32(6), result.GetValue(1, 0)) // row 1, col 0 (c)
-	assert.Equal(t, int32(4), result.GetValue(1, 1)) // row 1, col 1 (a)
+	assert.Equal(
+		t,
+		int32(3),
+		result.GetValue(0, 0),
+	) // row 0, col 0 (c)
+	assert.Equal(
+		t,
+		int32(1),
+		result.GetValue(0, 1),
+	) // row 0, col 1 (a)
+	assert.Equal(
+		t,
+		int32(6),
+		result.GetValue(1, 0),
+	) // row 1, col 0 (c)
+	assert.Equal(
+		t,
+		int32(4),
+		result.GetValue(1, 1),
+	) // row 1, col 1 (a)
 }
 
-func TestPhysicalProjectOperator_ProjectWithExpression(t *testing.T) {
+func TestPhysicalProjectOperator_ProjectWithExpression(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator that produces chunks with 2 columns (a, b)
 	chunk := storage.NewDataChunk([]dukdb.Type{
 		dukdb.TYPE_INTEGER,
@@ -149,13 +231,23 @@ func TestPhysicalProjectOperator_ProjectWithExpression(t *testing.T) {
 	chunk.AppendRow([]any{int32(20), int32(3)})
 
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Column: "b", Type: dukdb.TYPE_INTEGER, ColumnIdx: 1},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Column:    "b",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 1,
+		},
 	}
 
 	types := make([]dukdb.TypeInfo, 2)
 	for i := range types {
-		types[i] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+		types[i] = &basicTypeInfo{
+			typ: dukdb.TYPE_INTEGER,
+		}
 	}
 
 	mockChild := &mockPhysicalOperator{
@@ -183,9 +275,17 @@ func TestPhysicalProjectOperator_ProjectWithExpression(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Execute projection
@@ -206,7 +306,9 @@ func TestPhysicalProjectOperator_ProjectWithExpression(t *testing.T) {
 	assert.NotNil(t, val1)
 }
 
-func TestPhysicalProjectOperator_ProjectWithLiteral(t *testing.T) {
+func TestPhysicalProjectOperator_ProjectWithLiteral(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator that produces chunks with 1 column
 	chunk := storage.NewDataChunk([]dukdb.Type{
 		dukdb.TYPE_INTEGER,
@@ -215,7 +317,11 @@ func TestPhysicalProjectOperator_ProjectWithLiteral(t *testing.T) {
 	chunk.AppendRow([]any{int32(2)})
 
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
 	}
 
 	types := []dukdb.TypeInfo{
@@ -243,9 +349,17 @@ func TestPhysicalProjectOperator_ProjectWithLiteral(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Execute projection
@@ -258,17 +372,43 @@ func TestPhysicalProjectOperator_ProjectWithLiteral(t *testing.T) {
 	assert.Equal(t, 2, result.Count())
 
 	// Verify values
-	assert.Equal(t, int32(1), result.GetValue(0, 0)) // row 0, col 0 (a)
-	assert.Equal(t, int64(42), result.GetValue(0, 1)) // row 0, col 1 (literal)
-	assert.Equal(t, int32(2), result.GetValue(1, 0)) // row 1, col 0 (a)
-	assert.Equal(t, int64(42), result.GetValue(1, 1)) // row 1, col 1 (literal)
+	assert.Equal(
+		t,
+		int32(1),
+		result.GetValue(0, 0),
+	) // row 0, col 0 (a)
+	assert.Equal(
+		t,
+		int64(42),
+		result.GetValue(0, 1),
+	) // row 0, col 1 (literal)
+	assert.Equal(
+		t,
+		int32(2),
+		result.GetValue(1, 0),
+	) // row 1, col 0 (a)
+	assert.Equal(
+		t,
+		int64(42),
+		result.GetValue(1, 1),
+	) // row 1, col 1 (literal)
 }
 
-func TestPhysicalProjectOperator_GetTypes(t *testing.T) {
+func TestPhysicalProjectOperator_GetTypes(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Column: "b", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Column:    "b",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	types := []dukdb.TypeInfo{
@@ -297,22 +437,44 @@ func TestPhysicalProjectOperator_GetTypes(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Verify types
 	resultTypes := projectOp.GetTypes()
 	assert.Equal(t, 2, len(resultTypes))
-	assert.Equal(t, dukdb.TYPE_VARCHAR, resultTypes[0].InternalType())
-	assert.Equal(t, dukdb.TYPE_INTEGER, resultTypes[1].InternalType())
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		resultTypes[0].InternalType(),
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_INTEGER,
+		resultTypes[1].InternalType(),
+	)
 }
 
-func TestPhysicalProjectOperator_EmptyInput(t *testing.T) {
+func TestPhysicalProjectOperator_EmptyInput(
+	t *testing.T,
+) {
 	// Setup: Create a mock child operator with no data
 	childColumns := []planner.ColumnBinding{
-		{Column: "a", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
+		{
+			Column:    "a",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
 	}
 
 	types := []dukdb.TypeInfo{
@@ -335,13 +497,24 @@ func TestPhysicalProjectOperator_EmptyInput(t *testing.T) {
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	executor := NewExecutor(cat, stor)
-	ctx := &ExecutionContext{Context: context.Background()}
+	ctx := &ExecutionContext{
+		Context: context.Background(),
+	}
 
-	projectOp, err := NewPhysicalProjectOperator(mockChild, childColumns, expressions, executor, ctx)
+	projectOp, err := NewPhysicalProjectOperator(
+		mockChild,
+		childColumns,
+		expressions,
+		executor,
+		ctx,
+	)
 	require.NoError(t, err)
 
 	// Execute projection
 	result, err := projectOp.Next()
 	require.NoError(t, err)
-	assert.Nil(t, result) // Should return nil for empty input
+	assert.Nil(
+		t,
+		result,
+	) // Should return nil for empty input
 }

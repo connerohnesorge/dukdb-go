@@ -29,13 +29,21 @@ const (
 
 var (
 	// ErrInvalidMagic indicates the file has an invalid magic number
-	ErrInvalidMagic = errors.New("invalid magic number")
+	ErrInvalidMagic = errors.New(
+		"invalid magic number",
+	)
 	// ErrUnsupportedVersion indicates the file format version is not supported
-	ErrUnsupportedVersion = errors.New("unsupported file format version")
+	ErrUnsupportedVersion = errors.New(
+		"unsupported file format version",
+	)
 	// ErrChecksumMismatch indicates the file checksum does not match
-	ErrChecksumMismatch = errors.New("checksum mismatch")
+	ErrChecksumMismatch = errors.New(
+		"checksum mismatch",
+	)
 	// ErrCorruptedFile indicates the file is corrupted
-	ErrCorruptedFile = errors.New("corrupted file")
+	ErrCorruptedFile = errors.New(
+		"corrupted file",
+	)
 )
 
 // Header represents the database file header (64 bytes)
@@ -81,10 +89,15 @@ type FileManager struct {
 }
 
 // CreateFile creates a new database file at the given path
-func CreateFile(path string) (*FileManager, error) {
+func CreateFile(
+	path string,
+) (*FileManager, error) {
 	file, err := os.Create(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
+		return nil, fmt.Errorf(
+			"failed to create file: %w",
+			err,
+		)
 	}
 
 	fm := &FileManager{
@@ -114,7 +127,10 @@ func CreateFile(path string) (*FileManager, error) {
 func OpenFile(path string) (*FileManager, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, fmt.Errorf(
+			"failed to open file: %w",
+			err,
+		)
 	}
 
 	fm := &FileManager{
@@ -181,7 +197,10 @@ func newHeader() *Header {
 // writeHeader writes the header to the file
 func (fm *FileManager) writeHeader() error {
 	if _, err := fm.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to header: %w", err)
+		return fmt.Errorf(
+			"failed to seek to header: %w",
+			err,
+		)
 	}
 
 	buf := new(bytes.Buffer)
@@ -223,11 +242,18 @@ func (fm *FileManager) writeHeader() error {
 
 	// Verify header size
 	if buf.Len() != HeaderSize {
-		return fmt.Errorf("header size mismatch: got %d, expected %d", buf.Len(), HeaderSize)
+		return fmt.Errorf(
+			"header size mismatch: got %d, expected %d",
+			buf.Len(),
+			HeaderSize,
+		)
 	}
 
 	if _, err := fm.file.Write(buf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
+		return fmt.Errorf(
+			"failed to write header: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -236,12 +262,18 @@ func (fm *FileManager) writeHeader() error {
 // readHeader reads and validates the file header
 func (fm *FileManager) readHeader() (*Header, error) {
 	if _, err := fm.file.Seek(0, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to header: %w", err)
+		return nil, fmt.Errorf(
+			"failed to seek to header: %w",
+			err,
+		)
 	}
 
 	headerBuf := make([]byte, HeaderSize)
 	if _, err := io.ReadFull(fm.file, headerBuf); err != nil {
-		return nil, fmt.Errorf("failed to read header: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read header: %w",
+			err,
+		)
 	}
 
 	reader := bytes.NewReader(headerBuf)
@@ -292,27 +324,44 @@ func (fm *FileManager) readHeader() (*Header, error) {
 }
 
 // WriteCatalog writes the catalog data to the file
-func (fm *FileManager) WriteCatalog(data []byte) error {
+func (fm *FileManager) WriteCatalog(
+	data []byte,
+) error {
 	// Compress catalog data with gzip
 	var buf bytes.Buffer
-	gzWriter, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
+	gzWriter, err := gzip.NewWriterLevel(
+		&buf,
+		gzip.DefaultCompression,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create gzip writer: %w", err)
+		return fmt.Errorf(
+			"failed to create gzip writer: %w",
+			err,
+		)
 	}
 
 	if _, err := gzWriter.Write(data); err != nil {
 		_ = gzWriter.Close()
 
-		return fmt.Errorf("failed to write catalog data: %w", err)
+		return fmt.Errorf(
+			"failed to write catalog data: %w",
+			err,
+		)
 	}
 
 	if err := gzWriter.Close(); err != nil {
-		return fmt.Errorf("failed to close gzip writer: %w", err)
+		return fmt.Errorf(
+			"failed to close gzip writer: %w",
+			err,
+		)
 	}
 
 	// Seek to current data offset (after all blocks)
 	if _, err := fm.file.Seek(fm.dataOffset, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to catalog position: %w", err)
+		return fmt.Errorf(
+			"failed to seek to catalog position: %w",
+			err,
+		)
 	}
 
 	// Record catalog offset
@@ -320,7 +369,10 @@ func (fm *FileManager) WriteCatalog(data []byte) error {
 
 	// Write compressed catalog
 	if _, err := fm.file.Write(buf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write catalog: %w", err)
+		return fmt.Errorf(
+			"failed to write catalog: %w",
+			err,
+		)
 	}
 
 	// Update data offset
@@ -336,7 +388,10 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 	}
 
 	if _, err := fm.file.Seek(fm.header.CatalogOffset, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to catalog: %w", err)
+		return nil, fmt.Errorf(
+			"failed to seek to catalog: %w",
+			err,
+		)
 	}
 
 	// Calculate catalog size (from catalog offset to block index offset)
@@ -347,37 +402,58 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 
 	compressedData := make([]byte, catalogSize)
 	if _, err := io.ReadFull(fm.file, compressedData); err != nil {
-		return nil, fmt.Errorf("failed to read catalog: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read catalog: %w",
+			err,
+		)
 	}
 
 	// Decompress
-	gzReader, err := gzip.NewReader(bytes.NewReader(compressedData))
+	gzReader, err := gzip.NewReader(
+		bytes.NewReader(compressedData),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+		return nil, fmt.Errorf(
+			"failed to create gzip reader: %w",
+			err,
+		)
 	}
 	defer gzReader.Close()
 
 	data, err := io.ReadAll(gzReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decompress catalog: %w", err)
+		return nil, fmt.Errorf(
+			"failed to decompress catalog: %w",
+			err,
+		)
 	}
 
 	return data, nil
 }
 
 // WriteBlock writes a data block to the file
-func (fm *FileManager) WriteBlock(tableName string, rgID int, data []byte) error {
+func (fm *FileManager) WriteBlock(
+	tableName string,
+	rgID int,
+	data []byte,
+) error {
 	// Calculate checksum
 	checksum := sha256.Sum256(data)
 
 	// Seek to current data offset
 	if _, err := fm.file.Seek(fm.dataOffset, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to block position: %w", err)
+		return fmt.Errorf(
+			"failed to seek to block position: %w",
+			err,
+		)
 	}
 
 	// Write block data
 	if _, err := fm.file.Write(data); err != nil {
-		return fmt.Errorf("failed to write block: %w", err)
+		return fmt.Errorf(
+			"failed to write block: %w",
+			err,
+		)
 	}
 
 	// Record block info
@@ -398,14 +474,22 @@ func (fm *FileManager) WriteBlock(tableName string, rgID int, data []byte) error
 }
 
 // ReadBlock reads a data block from the file
-func (fm *FileManager) ReadBlock(info BlockInfo) ([]byte, error) {
+func (fm *FileManager) ReadBlock(
+	info BlockInfo,
+) ([]byte, error) {
 	if _, err := fm.file.Seek(info.Offset, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to block: %w", err)
+		return nil, fmt.Errorf(
+			"failed to seek to block: %w",
+			err,
+		)
 	}
 
 	data := make([]byte, info.Size)
 	if _, err := io.ReadFull(fm.file, data); err != nil {
-		return nil, fmt.Errorf("failed to read block: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read block: %w",
+			err,
+		)
 	}
 
 	// Verify checksum
@@ -424,7 +508,10 @@ func (fm *FileManager) writeBlockIndex() error {
 
 	// Seek to current position
 	if _, err := fm.file.Seek(fm.dataOffset, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to block index position: %w", err)
+		return fmt.Errorf(
+			"failed to seek to block index position: %w",
+			err,
+		)
 	}
 
 	buf := new(bytes.Buffer)
@@ -463,7 +550,10 @@ func (fm *FileManager) writeBlockIndex() error {
 	}
 
 	if _, err := fm.file.Write(buf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write block index: %w", err)
+		return fmt.Errorf(
+			"failed to write block index: %w",
+			err,
+		)
 	}
 
 	fm.dataOffset += int64(buf.Len())
@@ -478,13 +568,19 @@ func (fm *FileManager) readBlockIndex() ([]BlockInfo, error) {
 	}
 
 	if _, err := fm.file.Seek(fm.header.BlockIndexOffset, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to block index: %w", err)
+		return nil, fmt.Errorf(
+			"failed to seek to block index: %w",
+			err,
+		)
 	}
 
 	// Read entry count
 	var count uint32
 	if err := binary.Read(fm.file, binary.LittleEndian, &count); err != nil {
-		return nil, fmt.Errorf("failed to read block count: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read block count: %w",
+			err,
+		)
 	}
 
 	blocks := make([]BlockInfo, count)
@@ -493,30 +589,45 @@ func (fm *FileManager) readBlockIndex() ([]BlockInfo, error) {
 		// Read table name
 		tableName, err := readString(fm.file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read table name: %w", err)
+			return nil, fmt.Errorf(
+				"failed to read table name: %w",
+				err,
+			)
 		}
 		blocks[i].TableName = tableName
 
 		// Read row group ID
 		var rgID uint32
 		if err := binary.Read(fm.file, binary.LittleEndian, &rgID); err != nil {
-			return nil, fmt.Errorf("failed to read row group ID: %w", err)
+			return nil, fmt.Errorf(
+				"failed to read row group ID: %w",
+				err,
+			)
 		}
 		blocks[i].RowGroupID = int(rgID)
 
 		// Read offset
 		if err := binary.Read(fm.file, binary.LittleEndian, &blocks[i].Offset); err != nil {
-			return nil, fmt.Errorf("failed to read block offset: %w", err)
+			return nil, fmt.Errorf(
+				"failed to read block offset: %w",
+				err,
+			)
 		}
 
 		// Read size
 		if err := binary.Read(fm.file, binary.LittleEndian, &blocks[i].Size); err != nil {
-			return nil, fmt.Errorf("failed to read block size: %w", err)
+			return nil, fmt.Errorf(
+				"failed to read block size: %w",
+				err,
+			)
 		}
 
 		// Read checksum
 		if _, err := io.ReadFull(fm.file, blocks[i].Checksum[:]); err != nil {
-			return nil, fmt.Errorf("failed to read block checksum: %w", err)
+			return nil, fmt.Errorf(
+				"failed to read block checksum: %w",
+				err,
+			)
 		}
 	}
 
@@ -524,13 +635,21 @@ func (fm *FileManager) readBlockIndex() ([]BlockInfo, error) {
 }
 
 // writeFooter writes the footer with the file checksum
-func (fm *FileManager) writeFooter(checksum [32]byte) error {
+func (fm *FileManager) writeFooter(
+	checksum [32]byte,
+) error {
 	if _, err := fm.file.Seek(fm.dataOffset, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to footer position: %w", err)
+		return fmt.Errorf(
+			"failed to seek to footer position: %w",
+			err,
+		)
 	}
 
 	if _, err := fm.file.Write(checksum[:]); err != nil {
-		return fmt.Errorf("failed to write footer: %w", err)
+		return fmt.Errorf(
+			"failed to write footer: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -587,7 +706,10 @@ func (fm *FileManager) calculateChecksum() ([32]byte, error) {
 func VerifyFile(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return fmt.Errorf(
+			"failed to open file: %w",
+			err,
+		)
 	}
 	defer file.Close()
 
@@ -635,7 +757,10 @@ func VerifyFile(path string) error {
 	}
 
 	calculatedChecksum := h.Sum(nil)
-	if !bytes.Equal(calculatedChecksum, storedChecksum[:]) {
+	if !bytes.Equal(
+		calculatedChecksum,
+		storedChecksum[:],
+	) {
 		return ErrChecksumMismatch
 	}
 
@@ -692,7 +817,9 @@ func readVarint(r io.Reader) (uint64, error) {
 		}
 		shift += 7
 		if shift >= 64 {
-			return 0, errors.New("varint overflow")
+			return 0, errors.New(
+				"varint overflow",
+			)
 		}
 	}
 
@@ -742,12 +869,16 @@ type TypeJSON struct {
 }
 
 // MarshalCatalog marshals catalog data to JSON bytes
-func MarshalCatalog(catalog *CatalogJSON) ([]byte, error) {
+func MarshalCatalog(
+	catalog *CatalogJSON,
+) ([]byte, error) {
 	return json.Marshal(catalog)
 }
 
 // UnmarshalCatalog unmarshals JSON bytes to catalog data
-func UnmarshalCatalog(data []byte) (*CatalogJSON, error) {
+func UnmarshalCatalog(
+	data []byte,
+) (*CatalogJSON, error) {
 	var catalog CatalogJSON
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		return nil, err

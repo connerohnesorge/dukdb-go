@@ -19,23 +19,34 @@ func setupArrowTest(t *testing.T) {
 	setupTestMockBackend()
 }
 
-func TestNewArrowFromConnInvalidType(t *testing.T) {
+func TestNewArrowFromConnInvalidType(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	// Create a mock driver.Conn that's not a *Conn
 	_, err := NewArrowFromConn(&fakeConn{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "must be a *dukdb.Conn")
+	assert.Contains(
+		t,
+		err.Error(),
+		"must be a *dukdb.Conn",
+	)
 }
 
 func TestArrowWithClock(t *testing.T) {
 	setupArrowTest(t)
 
 	// Create a connection through the connector
-	connector, err := NewConnector(":memory:", nil)
+	connector, err := NewConnector(
+		":memory:",
+		nil,
+	)
 	require.NoError(t, err)
 
-	conn, err := connector.Connect(context.Background())
+	conn, err := connector.Connect(
+		context.Background(),
+	)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -43,19 +54,30 @@ func TestArrowWithClock(t *testing.T) {
 	require.NoError(t, err)
 
 	mockClock := quartz.NewMock(t)
-	arrowWithClock := arrowConn.WithClock(mockClock)
+	arrowWithClock := arrowConn.WithClock(
+		mockClock,
+	)
 
 	assert.NotSame(t, arrowConn, arrowWithClock)
-	assert.Equal(t, mockClock, arrowWithClock.Clock())
+	assert.Equal(
+		t,
+		mockClock,
+		arrowWithClock.Clock(),
+	)
 }
 
 func TestArrowWithAllocator(t *testing.T) {
 	setupArrowTest(t)
 
-	connector, err := NewConnector(":memory:", nil)
+	connector, err := NewConnector(
+		":memory:",
+		nil,
+	)
 	require.NoError(t, err)
 
-	conn, err := connector.Connect(context.Background())
+	conn, err := connector.Connect(
+		context.Background(),
+	)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -63,18 +85,27 @@ func TestArrowWithAllocator(t *testing.T) {
 	require.NoError(t, err)
 
 	customAlloc := memory.NewGoAllocator()
-	arrowWithAlloc := arrowConn.WithAllocator(customAlloc)
+	arrowWithAlloc := arrowConn.WithAllocator(
+		customAlloc,
+	)
 
 	assert.NotSame(t, arrowConn, arrowWithAlloc)
 }
 
-func TestArrowContextDeadlineExceeded(t *testing.T) {
+func TestArrowContextDeadlineExceeded(
+	t *testing.T,
+) {
 	setupArrowTest(t)
 
-	connector, err := NewConnector(":memory:", nil)
+	connector, err := NewConnector(
+		":memory:",
+		nil,
+	)
 	require.NoError(t, err)
 
-	conn, err := connector.Connect(context.Background())
+	conn, err := connector.Connect(
+		context.Background(),
+	)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -83,53 +114,111 @@ func TestArrowContextDeadlineExceeded(t *testing.T) {
 
 	// Use mock clock for deterministic testing
 	mockClock := quartz.NewMock(t)
-	arrowWithClock := arrowConn.WithClock(mockClock)
+	arrowWithClock := arrowConn.WithClock(
+		mockClock,
+	)
 
 	// Set deadline in the past
-	deadline := mockClock.Now().Add(-1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	deadline := mockClock.Now().
+		Add(-1 * time.Second)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
-	_, err = arrowWithClock.QueryContext(ctx, "SELECT 1")
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err = arrowWithClock.QueryContext(
+		ctx,
+		"SELECT 1",
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
-func TestDuckDBTypeToArrowPrimitives(t *testing.T) {
+func TestDuckDBTypeToArrowPrimitives(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	testCases := []struct {
 		duckdbType Type
 		arrowType  arrow.DataType
 	}{
-		{TYPE_BOOLEAN, arrow.FixedWidthTypes.Boolean},
+		{
+			TYPE_BOOLEAN,
+			arrow.FixedWidthTypes.Boolean,
+		},
 		{TYPE_TINYINT, arrow.PrimitiveTypes.Int8},
-		{TYPE_SMALLINT, arrow.PrimitiveTypes.Int16},
-		{TYPE_INTEGER, arrow.PrimitiveTypes.Int32},
+		{
+			TYPE_SMALLINT,
+			arrow.PrimitiveTypes.Int16,
+		},
+		{
+			TYPE_INTEGER,
+			arrow.PrimitiveTypes.Int32,
+		},
 		{TYPE_BIGINT, arrow.PrimitiveTypes.Int64},
-		{TYPE_UTINYINT, arrow.PrimitiveTypes.Uint8},
-		{TYPE_USMALLINT, arrow.PrimitiveTypes.Uint16},
-		{TYPE_UINTEGER, arrow.PrimitiveTypes.Uint32},
-		{TYPE_UBIGINT, arrow.PrimitiveTypes.Uint64},
-		{TYPE_FLOAT, arrow.PrimitiveTypes.Float32},
-		{TYPE_DOUBLE, arrow.PrimitiveTypes.Float64},
+		{
+			TYPE_UTINYINT,
+			arrow.PrimitiveTypes.Uint8,
+		},
+		{
+			TYPE_USMALLINT,
+			arrow.PrimitiveTypes.Uint16,
+		},
+		{
+			TYPE_UINTEGER,
+			arrow.PrimitiveTypes.Uint32,
+		},
+		{
+			TYPE_UBIGINT,
+			arrow.PrimitiveTypes.Uint64,
+		},
+		{
+			TYPE_FLOAT,
+			arrow.PrimitiveTypes.Float32,
+		},
+		{
+			TYPE_DOUBLE,
+			arrow.PrimitiveTypes.Float64,
+		},
 		{TYPE_VARCHAR, arrow.BinaryTypes.String},
 		{TYPE_BLOB, arrow.BinaryTypes.Binary},
 		{TYPE_DATE, arrow.FixedWidthTypes.Date32},
-		{TYPE_INTERVAL, arrow.FixedWidthTypes.MonthDayNanoInterval},
+		{
+			TYPE_INTERVAL,
+			arrow.FixedWidthTypes.MonthDayNanoInterval,
+		},
 		{TYPE_SQLNULL, arrow.Null},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.duckdbType.String(), func(t *testing.T) {
-			typeInfo := &typeInfo{typ: tc.duckdbType}
-			result, err := duckdbTypeToArrow(typeInfo)
-			require.NoError(t, err)
-			assert.Equal(t, tc.arrowType, result)
-		})
+		t.Run(
+			tc.duckdbType.String(),
+			func(t *testing.T) {
+				typeInfo := &typeInfo{
+					typ: tc.duckdbType,
+				}
+				result, err := duckdbTypeToArrow(
+					typeInfo,
+				)
+				require.NoError(t, err)
+				assert.Equal(
+					t,
+					tc.arrowType,
+					result,
+				)
+			},
+		)
 	}
 }
 
-func TestDuckDBTypeToArrowTimestamps(t *testing.T) {
+func TestDuckDBTypeToArrowTimestamps(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -137,23 +226,55 @@ func TestDuckDBTypeToArrowTimestamps(t *testing.T) {
 		duckdbType Type
 		unit       arrow.TimeUnit
 	}{
-		{"TIMESTAMP", TYPE_TIMESTAMP, arrow.Microsecond},
-		{"TIMESTAMP_TZ", TYPE_TIMESTAMP_TZ, arrow.Microsecond},
-		{"TIMESTAMP_S", TYPE_TIMESTAMP_S, arrow.Second},
-		{"TIMESTAMP_MS", TYPE_TIMESTAMP_MS, arrow.Millisecond},
-		{"TIMESTAMP_NS", TYPE_TIMESTAMP_NS, arrow.Nanosecond},
+		{
+			"TIMESTAMP",
+			TYPE_TIMESTAMP,
+			arrow.Microsecond,
+		},
+		{
+			"TIMESTAMP_TZ",
+			TYPE_TIMESTAMP_TZ,
+			arrow.Microsecond,
+		},
+		{
+			"TIMESTAMP_S",
+			TYPE_TIMESTAMP_S,
+			arrow.Second,
+		},
+		{
+			"TIMESTAMP_MS",
+			TYPE_TIMESTAMP_MS,
+			arrow.Millisecond,
+		},
+		{
+			"TIMESTAMP_NS",
+			TYPE_TIMESTAMP_NS,
+			arrow.Nanosecond,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			typeInfo := &typeInfo{typ: tc.duckdbType}
-			result, err := duckdbTypeToArrow(typeInfo)
+			typeInfo := &typeInfo{
+				typ: tc.duckdbType,
+			}
+			result, err := duckdbTypeToArrow(
+				typeInfo,
+			)
 			require.NoError(t, err)
 
 			tsType, ok := result.(*arrow.TimestampType)
-			require.True(t, ok, "expected TimestampType")
+			require.True(
+				t,
+				ok,
+				"expected TimestampType",
+			)
 			assert.Equal(t, tc.unit, tsType.Unit)
-			assert.Equal(t, "UTC", tsType.TimeZone)
+			assert.Equal(
+				t,
+				"UTC",
+				tsType.TimeZone,
+			)
 		})
 	}
 }
@@ -171,10 +292,18 @@ func TestDuckDBTypeToArrowTime(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			typeInfo := &typeInfo{typ: tc.duckdbType}
-			result, err := duckdbTypeToArrow(typeInfo)
+			typeInfo := &typeInfo{
+				typ: tc.duckdbType,
+			}
+			result, err := duckdbTypeToArrow(
+				typeInfo,
+			)
 			require.NoError(t, err)
-			assert.Equal(t, arrow.FixedWidthTypes.Time64us, result)
+			assert.Equal(
+				t,
+				arrow.FixedWidthTypes.Time64us,
+				result,
+			)
 		})
 	}
 }
@@ -187,7 +316,11 @@ func TestDuckDBTypeToArrowUUID(t *testing.T) {
 	require.NoError(t, err)
 
 	fsb, ok := result.(*arrow.FixedSizeBinaryType)
-	require.True(t, ok, "expected FixedSizeBinaryType")
+	require.True(
+		t,
+		ok,
+		"expected FixedSizeBinaryType",
+	)
 	assert.Equal(t, 16, fsb.ByteWidth)
 }
 
@@ -204,13 +337,25 @@ func TestDuckDBTypeToArrowHugeInt(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			typeInfo := &typeInfo{typ: tc.duckdbType}
-			result, err := duckdbTypeToArrow(typeInfo)
+			typeInfo := &typeInfo{
+				typ: tc.duckdbType,
+			}
+			result, err := duckdbTypeToArrow(
+				typeInfo,
+			)
 			require.NoError(t, err)
 
 			dec, ok := result.(*arrow.Decimal128Type)
-			require.True(t, ok, "expected Decimal128Type")
-			assert.EqualValues(t, 38, dec.Precision)
+			require.True(
+				t,
+				ok,
+				"expected Decimal128Type",
+			)
+			assert.EqualValues(
+				t,
+				38,
+				dec.Precision,
+			)
 			assert.EqualValues(t, 0, dec.Scale)
 		})
 	}
@@ -247,7 +392,11 @@ func TestDuckDBTypeToArrowList(t *testing.T) {
 
 	listType, ok := result.(*arrow.ListType)
 	require.True(t, ok, "expected ListType")
-	assert.Equal(t, arrow.PrimitiveTypes.Int32, listType.Elem())
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Int32,
+		listType.Elem(),
+	)
 }
 
 func TestDuckDBTypeToArrowArray(t *testing.T) {
@@ -264,8 +413,16 @@ func TestDuckDBTypeToArrowArray(t *testing.T) {
 	require.NoError(t, err)
 
 	fslType, ok := result.(*arrow.FixedSizeListType)
-	require.True(t, ok, "expected FixedSizeListType")
-	assert.Equal(t, arrow.PrimitiveTypes.Int32, fslType.Elem())
+	require.True(
+		t,
+		ok,
+		"expected FixedSizeListType",
+	)
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Int32,
+		fslType.Elem(),
+	)
 	assert.EqualValues(t, 5, fslType.Len())
 }
 
@@ -282,10 +439,16 @@ func TestDuckDBTypeToArrowStruct(t *testing.T) {
 	idEntry, err := NewStructEntry(intInfo, "id")
 	require.NoError(t, err)
 
-	nameEntry, err := NewStructEntry(strInfo, "name")
+	nameEntry, err := NewStructEntry(
+		strInfo,
+		"name",
+	)
 	require.NoError(t, err)
 
-	structInfo, err := NewStructInfo(idEntry, nameEntry)
+	structInfo, err := NewStructInfo(
+		idEntry,
+		nameEntry,
+	)
 	require.NoError(t, err)
 
 	result, err := duckdbTypeToArrow(structInfo)
@@ -294,10 +457,26 @@ func TestDuckDBTypeToArrowStruct(t *testing.T) {
 	structType, ok := result.(*arrow.StructType)
 	require.True(t, ok, "expected StructType")
 	require.Len(t, structType.Fields(), 2)
-	assert.Equal(t, "id", structType.Field(0).Name)
-	assert.Equal(t, arrow.PrimitiveTypes.Int32, structType.Field(0).Type)
-	assert.Equal(t, "name", structType.Field(1).Name)
-	assert.Equal(t, arrow.BinaryTypes.String, structType.Field(1).Type)
+	assert.Equal(
+		t,
+		"id",
+		structType.Field(0).Name,
+	)
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Int32,
+		structType.Field(0).Type,
+	)
+	assert.Equal(
+		t,
+		"name",
+		structType.Field(1).Name,
+	)
+	assert.Equal(
+		t,
+		arrow.BinaryTypes.String,
+		structType.Field(1).Type,
+	)
 }
 
 func TestDuckDBTypeToArrowMap(t *testing.T) {
@@ -318,15 +497,27 @@ func TestDuckDBTypeToArrowMap(t *testing.T) {
 
 	mapType, ok := result.(*arrow.MapType)
 	require.True(t, ok, "expected MapType")
-	assert.Equal(t, arrow.BinaryTypes.String, mapType.KeyType())
-	assert.Equal(t, arrow.PrimitiveTypes.Int32, mapType.ItemType())
+	assert.Equal(
+		t,
+		arrow.BinaryTypes.String,
+		mapType.KeyType(),
+	)
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Int32,
+		mapType.ItemType(),
+	)
 }
 
 func TestDuckDBTypeToArrowEnum(t *testing.T) {
 	t.Parallel()
 
 	// Create an enum type info
-	enumInfo, err := NewEnumInfo("small", "medium", "large")
+	enumInfo, err := NewEnumInfo(
+		"small",
+		"medium",
+		"large",
+	)
 	require.NoError(t, err)
 
 	result, err := duckdbTypeToArrow(enumInfo)
@@ -334,8 +525,16 @@ func TestDuckDBTypeToArrowEnum(t *testing.T) {
 
 	dictType, ok := result.(*arrow.DictionaryType)
 	require.True(t, ok, "expected DictionaryType")
-	assert.Equal(t, arrow.PrimitiveTypes.Uint32, dictType.IndexType)
-	assert.Equal(t, arrow.BinaryTypes.String, dictType.ValueType)
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Uint32,
+		dictType.IndexType,
+	)
+	assert.Equal(
+		t,
+		arrow.BinaryTypes.String,
+		dictType.ValueType,
+	)
 }
 
 func TestDuckDBTypeToArrowBit(t *testing.T) {
@@ -344,7 +543,11 @@ func TestDuckDBTypeToArrowBit(t *testing.T) {
 	typeInfo := &typeInfo{typ: TYPE_BIT}
 	result, err := duckdbTypeToArrow(typeInfo)
 	require.NoError(t, err)
-	assert.Equal(t, arrow.BinaryTypes.Binary, result)
+	assert.Equal(
+		t,
+		arrow.BinaryTypes.Binary,
+		result,
+	)
 }
 
 func TestDuckDBTypeToArrowUnion(t *testing.T) {
@@ -357,7 +560,10 @@ func TestDuckDBTypeToArrowUnion(t *testing.T) {
 	strInfo, err := NewTypeInfo(TYPE_VARCHAR)
 	require.NoError(t, err)
 
-	unionInfo, err := NewUnionInfo([]TypeInfo{intInfo, strInfo}, []string{"number", "text"})
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{intInfo, strInfo},
+		[]string{"number", "text"},
+	)
 	require.NoError(t, err)
 
 	result, err := duckdbTypeToArrow(unionInfo)
@@ -366,23 +572,47 @@ func TestDuckDBTypeToArrowUnion(t *testing.T) {
 	unionType, ok := result.(*arrow.DenseUnionType)
 	require.True(t, ok, "expected DenseUnionType")
 	require.Len(t, unionType.Fields(), 2)
-	assert.Equal(t, "number", unionType.Fields()[0].Name)
-	assert.Equal(t, arrow.PrimitiveTypes.Int32, unionType.Fields()[0].Type)
-	assert.Equal(t, "text", unionType.Fields()[1].Name)
-	assert.Equal(t, arrow.BinaryTypes.String, unionType.Fields()[1].Type)
+	assert.Equal(
+		t,
+		"number",
+		unionType.Fields()[0].Name,
+	)
+	assert.Equal(
+		t,
+		arrow.PrimitiveTypes.Int32,
+		unionType.Fields()[0].Type,
+	)
+	assert.Equal(
+		t,
+		"text",
+		unionType.Fields()[1].Name,
+	)
+	assert.Equal(
+		t,
+		arrow.BinaryTypes.String,
+		unionType.Fields()[1].Type,
+	)
 }
 
-func TestDuckDBTypeToArrowUnsupported(t *testing.T) {
+func TestDuckDBTypeToArrowUnsupported(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	// Use TYPE_INVALID which is not handled in the Arrow conversion
 	typeInfo := &typeInfo{typ: TYPE_INVALID}
 	_, err := duckdbTypeToArrow(typeInfo)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported type")
+	assert.Contains(
+		t,
+		err.Error(),
+		"unsupported type",
+	)
 }
 
-func TestArrowRecordReaderInterface(t *testing.T) {
+func TestArrowRecordReaderInterface(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	// Verify that arrowRecordReader implements array.RecordReader
@@ -400,6 +630,12 @@ func TestArrowRecordReaderInterface(t *testing.T) {
 // fakeConn implements driver.Conn interface for testing
 type fakeConn struct{}
 
-func (f *fakeConn) Prepare(query string) (driver.Stmt, error) { return nil, nil }
-func (f *fakeConn) Close() error                              { return nil }
-func (f *fakeConn) Begin() (driver.Tx, error)                 { return nil, nil }
+func (f *fakeConn) Prepare(
+	query string,
+) (driver.Stmt, error) {
+	return nil, nil
+}
+
+func (f *fakeConn) Close() error { return nil }
+
+func (f *fakeConn) Begin() (driver.Tx, error) { return nil, nil }

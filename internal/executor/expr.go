@@ -153,7 +153,8 @@ func (e *Executor) evaluateBinaryExpr(
 			return left == nil &&
 				right == nil, nil
 		case parser.OpIsNot:
-			return left != nil || right != nil, nil
+			return left != nil ||
+				right != nil, nil
 		default:
 			return nil, nil
 		}

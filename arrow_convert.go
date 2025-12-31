@@ -15,12 +15,20 @@ import (
 // DataChunkToRecordBatch converts a DataChunk to an Arrow RecordBatch.
 // Uses copy semantics for memory safety (Arrow and Go have different buffer management).
 // The caller is responsible for releasing the returned Record.
-func DataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, alloc memory.Allocator) (arrow.Record, error) {
+func DataChunkToRecordBatch(
+	chunk *DataChunk,
+	schema *arrow.Schema,
+	alloc memory.Allocator,
+) (arrow.Record, error) {
 	if chunk == nil {
-		return nil, errors.New("chunk cannot be nil")
+		return nil, errors.New(
+			"chunk cannot be nil",
+		)
 	}
 	if schema == nil {
-		return nil, errors.New("schema cannot be nil")
+		return nil, errors.New(
+			"schema cannot be nil",
+		)
 	}
 	if alloc == nil {
 		alloc = memory.DefaultAllocator
@@ -28,7 +36,11 @@ func DataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, alloc memory
 
 	numCols := len(schema.Fields())
 	if chunk.GetColumnCount() != numCols {
-		return nil, fmt.Errorf("column count mismatch: chunk has %d, schema has %d", chunk.GetColumnCount(), numCols)
+		return nil, fmt.Errorf(
+			"column count mismatch: chunk has %d, schema has %d",
+			chunk.GetColumnCount(),
+			numCols,
+		)
 	}
 
 	arrays := make([]arrow.Array, numCols)
@@ -42,15 +54,29 @@ func DataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, alloc memory
 	}()
 
 	for i := range numCols {
-		arr, err := vectorToArrowArray(chunk, i, schema.Field(i).Type, alloc)
+		arr, err := vectorToArrowArray(
+			chunk,
+			i,
+			schema.Field(i).Type,
+			alloc,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("column %d (%s): %w", i, schema.Field(i).Name, err)
+			return nil, fmt.Errorf(
+				"column %d (%s): %w",
+				i,
+				schema.Field(i).Name,
+				err,
+			)
 		}
 		arrays[i] = arr
 	}
 
 	// Create record - takes ownership of arrays
-	record := array.NewRecord(schema, arrays, int64(chunk.GetSize()))
+	record := array.NewRecord(
+		schema,
+		arrays,
+		int64(chunk.GetSize()),
+	)
 
 	// Clear the defer cleanup since record now owns the arrays
 	for i := range arrays {
@@ -62,7 +88,12 @@ func DataChunkToRecordBatch(chunk *DataChunk, schema *arrow.Schema, alloc memory
 
 // vectorToArrowArray converts a column from a DataChunk to an Arrow Array.
 // Uses copy semantics for safety.
-func vectorToArrowArray(chunk *DataChunk, colIdx int, dt arrow.DataType, alloc memory.Allocator) (arrow.Array, error) {
+func vectorToArrowArray(
+	chunk *DataChunk,
+	colIdx int,
+	dt arrow.DataType,
+	alloc memory.Allocator,
+) (arrow.Array, error) {
 	size := chunk.GetSize()
 	builder := array.NewBuilder(alloc, dt)
 	defer builder.Release()
@@ -72,11 +103,19 @@ func vectorToArrowArray(chunk *DataChunk, colIdx int, dt arrow.DataType, alloc m
 	for rowIdx := range size {
 		val, err := chunk.GetValue(colIdx, rowIdx)
 		if err != nil {
-			return nil, fmt.Errorf("row %d: %w", rowIdx, err)
+			return nil, fmt.Errorf(
+				"row %d: %w",
+				rowIdx,
+				err,
+			)
 		}
 
 		if err := appendValueToBuilder(builder, val, dt); err != nil {
-			return nil, fmt.Errorf("row %d: %w", rowIdx, err)
+			return nil, fmt.Errorf(
+				"row %d: %w",
+				rowIdx,
+				err,
+			)
 		}
 	}
 
@@ -84,7 +123,11 @@ func vectorToArrowArray(chunk *DataChunk, colIdx int, dt arrow.DataType, alloc m
 }
 
 // appendValueToBuilder appends a Go value to an Arrow builder.
-func appendValueToBuilder(builder array.Builder, val any, dt arrow.DataType) error {
+func appendValueToBuilder(
+	builder array.Builder,
+	val any,
+	dt arrow.DataType,
+) error {
 	if val == nil {
 		builder.AppendNull()
 
@@ -377,7 +420,10 @@ func appendValueToBuilder(builder array.Builder, val any, dt arrow.DataType) err
 // RecordBatchToDataChunk converts an Arrow RecordBatch to a DataChunk.
 // The chunk must be pre-initialized with the correct column types.
 // Uses copy semantics for memory safety.
-func RecordBatchToDataChunk(record arrow.Record, chunk *DataChunk) error {
+func RecordBatchToDataChunk(
+	record arrow.Record,
+	chunk *DataChunk,
+) error {
 	if record == nil {
 		return errors.New("record cannot be nil")
 	}
@@ -389,11 +435,19 @@ func RecordBatchToDataChunk(record arrow.Record, chunk *DataChunk) error {
 	numCols := int(record.NumCols())
 
 	if chunk.GetColumnCount() != numCols {
-		return fmt.Errorf("column count mismatch: chunk has %d, record has %d", chunk.GetColumnCount(), numCols)
+		return fmt.Errorf(
+			"column count mismatch: chunk has %d, record has %d",
+			chunk.GetColumnCount(),
+			numCols,
+		)
 	}
 
 	if numRows > GetDataChunkCapacity() {
-		return fmt.Errorf("record has %d rows, exceeds chunk capacity %d", numRows, GetDataChunkCapacity())
+		return fmt.Errorf(
+			"record has %d rows, exceeds chunk capacity %d",
+			numRows,
+			GetDataChunkCapacity(),
+		)
 	}
 
 	if err := chunk.SetSize(numRows); err != nil {
@@ -403,7 +457,11 @@ func RecordBatchToDataChunk(record arrow.Record, chunk *DataChunk) error {
 	for colIdx := range numCols {
 		arr := record.Column(colIdx)
 		if err := arrowArrayToChunkColumn(arr, chunk, colIdx); err != nil {
-			return fmt.Errorf("column %d: %w", colIdx, err)
+			return fmt.Errorf(
+				"column %d: %w",
+				colIdx,
+				err,
+			)
 		}
 	}
 
@@ -411,11 +469,22 @@ func RecordBatchToDataChunk(record arrow.Record, chunk *DataChunk) error {
 }
 
 // arrowArrayToChunkColumn copies values from an Arrow Array to a DataChunk column.
-func arrowArrayToChunkColumn(arr arrow.Array, chunk *DataChunk, colIdx int) error {
+func arrowArrayToChunkColumn(
+	arr arrow.Array,
+	chunk *DataChunk,
+	colIdx int,
+) error {
 	for rowIdx := 0; rowIdx < arr.Len(); rowIdx++ {
-		val := extractArrowValueForConversion(arr, rowIdx)
+		val := extractArrowValueForConversion(
+			arr,
+			rowIdx,
+		)
 		if err := chunk.SetValue(colIdx, rowIdx, val); err != nil {
-			return fmt.Errorf("row %d: %w", rowIdx, err)
+			return fmt.Errorf(
+				"row %d: %w",
+				rowIdx,
+				err,
+			)
 		}
 	}
 
@@ -424,7 +493,10 @@ func arrowArrayToChunkColumn(arr arrow.Array, chunk *DataChunk, colIdx int) erro
 
 // extractArrowValueForConversion extracts a Go value from an Arrow array at the given index.
 // Returns nil for NULL values.
-func extractArrowValueForConversion(arr arrow.Array, idx int) any {
+func extractArrowValueForConversion(
+	arr arrow.Array,
+	idx int,
+) any {
 	if arr.IsNull(idx) {
 		return nil
 	}
@@ -579,16 +651,29 @@ func extractArrowValueForConversion(arr arrow.Array, idx int) any {
 }
 
 // SchemaFromTypes creates an Arrow schema from DuckDB type information.
-func SchemaFromTypes(names []string, types []TypeInfo) (*arrow.Schema, error) {
+func SchemaFromTypes(
+	names []string,
+	types []TypeInfo,
+) (*arrow.Schema, error) {
 	if len(names) != len(types) {
-		return nil, fmt.Errorf("names and types length mismatch: %d vs %d", len(names), len(types))
+		return nil, fmt.Errorf(
+			"names and types length mismatch: %d vs %d",
+			len(names),
+			len(types),
+		)
 	}
 
 	fields := make([]arrow.Field, len(types))
 	for i, typeInfo := range types {
-		arrowType, err := duckdbTypeToArrow(typeInfo)
+		arrowType, err := duckdbTypeToArrow(
+			typeInfo,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("column %s: %w", names[i], err)
+			return nil, fmt.Errorf(
+				"column %s: %w",
+				names[i],
+				err,
+			)
 		}
 		fields[i] = arrow.Field{
 			Name:     names[i],
@@ -601,14 +686,22 @@ func SchemaFromTypes(names []string, types []TypeInfo) (*arrow.Schema, error) {
 }
 
 // TypesFromSchema extracts DuckDB type information from an Arrow schema.
-func TypesFromSchema(schema *arrow.Schema) ([]TypeInfo, error) {
+func TypesFromSchema(
+	schema *arrow.Schema,
+) ([]TypeInfo, error) {
 	fields := schema.Fields()
 	types := make([]TypeInfo, len(fields))
 
 	for i, field := range fields {
-		typeInfo, err := arrowTypeToDuckDB(field.Type)
+		typeInfo, err := arrowTypeToDuckDB(
+			field.Type,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("column %s: %w", field.Name, err)
+			return nil, fmt.Errorf(
+				"column %s: %w",
+				field.Name,
+				err,
+			)
 		}
 		types[i] = typeInfo
 	}

@@ -51,21 +51,42 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
 
 			if err == nil && tt.skipOK {
-				t.Skip("Parser accepts this syntax (lenient parsing)")
+				t.Skip(
+					"Parser accepts this syntax (lenient parsing)",
+				)
 
 				return
 			}
 
-			require.Error(t, err, "invalid SQL should return error")
+			require.Error(
+				t,
+				err,
+				"invalid SQL should return error",
+			)
 
 			// Check that it's a DuckDB Error with ErrorTypeParser
 			var dukErr *dukdb.Error
 			if errors.As(err, &dukErr) {
-				assert.Equal(t, dukdb.ErrorTypeParser, dukErr.Type, "should be ErrorTypeParser")
-				assert.Contains(t, dukErr.Msg, tt.errMsg, "error message should indicate parser error")
+				assert.Equal(
+					t,
+					dukdb.ErrorTypeParser,
+					dukErr.Type,
+					"should be ErrorTypeParser",
+				)
+				assert.Contains(
+					t,
+					dukErr.Msg,
+					tt.errMsg,
+					"error message should indicate parser error",
+				)
 			} else {
 				t.Logf("Warning: error is not *dukdb.Error: %T - %v", err, err)
 				// For now, just verify we got an error
@@ -103,18 +124,36 @@ func TestPhaseD_Error_Catalog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
-			require.Error(t, err, "operation on non-existent table should error")
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
+			require.Error(
+				t,
+				err,
+				"operation on non-existent table should error",
+			)
 
 			// Check that it's ErrorTypeCatalog or ErrorTypeBinder
 			// (Binder may return the error before it reaches catalog)
 			var dukErr *dukdb.Error
 			if errors.As(err, &dukErr) {
 				// Accept either Catalog or Binder error type
-				if dukErr.Type != dukdb.ErrorTypeCatalog && dukErr.Type != dukdb.ErrorTypeBinder {
-					t.Errorf("Expected ErrorTypeCatalog or ErrorTypeBinder, got %v", dukErr.Type)
+				if dukErr.Type != dukdb.ErrorTypeCatalog &&
+					dukErr.Type != dukdb.ErrorTypeBinder {
+					t.Errorf(
+						"Expected ErrorTypeCatalog or ErrorTypeBinder, got %v",
+						dukErr.Type,
+					)
 				}
-				assert.Contains(t, dukErr.Msg, tt.errMsg, "error message should mention table not found")
+				assert.Contains(
+					t,
+					dukErr.Msg,
+					tt.errMsg,
+					"error message should mention table not found",
+				)
 			} else {
 				t.Logf("Warning: error is not *dukdb.Error: %T - %v", err, err)
 				assert.Error(t, err)
@@ -128,7 +167,12 @@ func TestPhaseD_Error_Binder(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table first
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE users (id INTEGER, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE users (id INTEGER, name VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -155,14 +199,33 @@ func TestPhaseD_Error_Binder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
-			require.Error(t, err, "reference to non-existent column should error")
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
+			require.Error(
+				t,
+				err,
+				"reference to non-existent column should error",
+			)
 
 			// Check that it's ErrorTypeBinder
 			var dukErr *dukdb.Error
 			if errors.As(err, &dukErr) {
-				assert.Equal(t, dukdb.ErrorTypeBinder, dukErr.Type, "should be ErrorTypeBinder")
-				assert.Contains(t, dukErr.Msg, tt.errMsg, "error message should indicate binder error")
+				assert.Equal(
+					t,
+					dukdb.ErrorTypeBinder,
+					dukErr.Type,
+					"should be ErrorTypeBinder",
+				)
+				assert.Contains(
+					t,
+					dukErr.Msg,
+					tt.errMsg,
+					"error message should indicate binder error",
+				)
 			} else {
 				t.Logf("Warning: error is not *dukdb.Error: %T - %v", err, err)
 				assert.Error(t, err)
@@ -176,7 +239,12 @@ func TestPhaseD_Error_MismatchType(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE data (id INTEGER, value INTEGER)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE data (id INTEGER, value INTEGER)",
+	)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -200,10 +268,20 @@ func TestPhaseD_Error_MismatchType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setup != "" {
-				_, _ = executeQuery(t, exec, cat, tt.setup)
+				_, _ = executeQuery(
+					t,
+					exec,
+					cat,
+					tt.setup,
+				)
 			}
 
-			_, err := executeQuery(t, exec, cat, tt.sql)
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
 
 			// Type mismatches might be caught at different stages
 			// They could be parser, binder, or executor errors
@@ -227,7 +305,11 @@ func TestPhaseD_Error_MismatchType(t *testing.T) {
 						}
 					}
 					if !found {
-						t.Logf("Got error type %v, expected one of %v", dukErr.Type, validTypes)
+						t.Logf(
+							"Got error type %v, expected one of %v",
+							dukErr.Type,
+							validTypes,
+						)
 					}
 				}
 			} else {
@@ -244,13 +326,28 @@ func TestPhaseD_Error_DivideByZero(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table for testing
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE numbers (x INTEGER, y INTEGER)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE numbers (x INTEGER, y INTEGER)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO numbers (x, y) VALUES (10, 0)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO numbers (x, y) VALUES (10, 0)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO numbers (x, y) VALUES (20, 5)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO numbers (x, y) VALUES (20, 5)",
+	)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -277,12 +374,26 @@ func TestPhaseD_Error_DivideByZero(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
-			require.Error(t, err, "division by zero should return error")
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
+			require.Error(
+				t,
+				err,
+				"division by zero should return error",
+			)
 
 			// Check if it's the division by zero error
-			if errors.Is(err, dukdb.ErrDivisionByZero) {
-				t.Log("Got expected ErrDivisionByZero")
+			if errors.Is(
+				err,
+				dukdb.ErrDivisionByZero,
+			) {
+				t.Log(
+					"Got expected ErrDivisionByZero",
+				)
 			} else {
 				// Check if it's a typed error
 				var dukErr *dukdb.Error
@@ -314,25 +425,44 @@ func TestPhaseD_Error_Constraint(t *testing.T) {
 
 	// Try to create a table with PRIMARY KEY (if supported)
 	// If PRIMARY KEY is not supported yet, this test will be skipped
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR)",
+	)
 	if err != nil {
-		t.Skip("PRIMARY KEY constraints not yet implemented")
+		t.Skip(
+			"PRIMARY KEY constraints not yet implemented",
+		)
 
 		return
 	}
 
 	// Insert a row
-	_, err = executeQuery(t, exec, cat, "INSERT INTO users (id, name) VALUES (1, 'Alice')")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO users (id, name) VALUES (1, 'Alice')",
+	)
 	require.NoError(t, err)
 
 	// Try to insert duplicate primary key
-	_, err = executeQuery(t, exec, cat, "INSERT INTO users (id, name) VALUES (1, 'Bob')")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO users (id, name) VALUES (1, 'Bob')",
+	)
 	if err != nil {
 		var dukErr *dukdb.Error
 		if errors.As(err, &dukErr) {
 			// Should be ErrorTypeConstraint
 			if dukErr.Type == dukdb.ErrorTypeConstraint {
-				t.Log("Got ErrorTypeConstraint for duplicate key")
+				t.Log(
+					"Got ErrorTypeConstraint for duplicate key",
+				)
 			} else {
 				t.Logf("Got error type %v for constraint violation (may not be fully implemented)", dukErr.Type)
 			}
@@ -353,14 +483,20 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 		skipOK        bool     // Allow skipping if no error
 	}{
 		{
-			name:          "missing table name in error",
-			sql:           "SELECT * FROM missing_table",
-			expectedInMsg: []string{"table", "missing_table"},
+			name: "missing table name in error",
+			sql:  "SELECT * FROM missing_table",
+			expectedInMsg: []string{
+				"table",
+				"missing_table",
+			},
 		},
 		{
-			name:          "division by zero mentions operation",
-			sql:           "SELECT 1/0",
-			expectedInMsg: []string{"division", "zero"},
+			name: "division by zero mentions operation",
+			sql:  "SELECT 1/0",
+			expectedInMsg: []string{
+				"division",
+				"zero",
+			},
 		},
 		{
 			name:          "syntax error is clear",
@@ -372,21 +508,42 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
 
 			if err == nil && tt.skipOK {
-				t.Skip("Query succeeded (lenient parser)")
+				t.Skip(
+					"Query succeeded (lenient parser)",
+				)
 
 				return
 			}
 
-			require.Error(t, err, "query should fail")
+			require.Error(
+				t,
+				err,
+				"query should fail",
+			)
 
 			errMsg := err.Error()
-			assert.NotEmpty(t, errMsg, "error message should not be empty")
+			assert.NotEmpty(
+				t,
+				errMsg,
+				"error message should not be empty",
+			)
 
 			for _, expected := range tt.expectedInMsg {
-				assert.Contains(t, errMsg, expected, "error message should contain '%s'", expected)
+				assert.Contains(
+					t,
+					errMsg,
+					expected,
+					"error message should contain '%s'",
+					expected,
+				)
 			}
 
 			t.Logf("Error message: %s", errMsg)
@@ -395,11 +552,18 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 }
 
 // TestPhaseD_Error_TypeClassification verifies errors are classified correctly.
-func TestPhaseD_Error_TypeClassification(t *testing.T) {
+func TestPhaseD_Error_TypeClassification(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table for testing
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE test (id INTEGER, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE test (id INTEGER, name VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -409,34 +573,53 @@ func TestPhaseD_Error_TypeClassification(t *testing.T) {
 		skipOK        bool              // Allow skipping if no error
 	}{
 		{
-			name:          "parser error",
-			sql:           "SELECT * users", // Missing FROM
-			expectedTypes: []dukdb.ErrorType{dukdb.ErrorTypeParser, dukdb.ErrorTypeSyntax},
-			skipOK:        true, // Parser may accept this
+			name: "parser error",
+			sql:  "SELECT * users", // Missing FROM
+			expectedTypes: []dukdb.ErrorType{
+				dukdb.ErrorTypeParser,
+				dukdb.ErrorTypeSyntax,
+			},
+			skipOK: true, // Parser may accept this
 		},
 		{
-			name:          "catalog error",
-			sql:           "SELECT * FROM nonexistent",
-			expectedTypes: []dukdb.ErrorType{dukdb.ErrorTypeCatalog, dukdb.ErrorTypeBinder}, // Binder may catch it first
+			name: "catalog error",
+			sql:  "SELECT * FROM nonexistent",
+			expectedTypes: []dukdb.ErrorType{
+				dukdb.ErrorTypeCatalog,
+				dukdb.ErrorTypeBinder,
+			}, // Binder may catch it first
 		},
 		{
-			name:          "binder error",
-			sql:           "SELECT bad_column FROM test",
-			expectedTypes: []dukdb.ErrorType{dukdb.ErrorTypeBinder},
+			name: "binder error",
+			sql:  "SELECT bad_column FROM test",
+			expectedTypes: []dukdb.ErrorType{
+				dukdb.ErrorTypeBinder,
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeQuery(t, exec, cat, tt.sql)
+			_, err := executeQuery(
+				t,
+				exec,
+				cat,
+				tt.sql,
+			)
 
 			if err == nil && tt.skipOK {
-				t.Skip("Query succeeded (lenient parser)")
+				t.Skip(
+					"Query succeeded (lenient parser)",
+				)
 
 				return
 			}
 
-			require.Error(t, err, "query should fail")
+			require.Error(
+				t,
+				err,
+				"query should fail",
+			)
 
 			var dukErr *dukdb.Error
 			if errors.As(err, &dukErr) {
@@ -451,7 +634,10 @@ func TestPhaseD_Error_TypeClassification(t *testing.T) {
 				}
 
 				if found {
-					t.Logf("Got expected error type: %v", dukErr.Type)
+					t.Logf(
+						"Got expected error type: %v",
+						dukErr.Type,
+					)
 				} else {
 					t.Logf("Got error type %v, expected one of %v", dukErr.Type, tt.expectedTypes)
 					// Don't fail the test, just log it

@@ -23,24 +23,66 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 	}
 
 	// Create left table: a (id INT, name VARCHAR)
-	leftTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	leftTable, err := stor.CreateTable("a", leftTypes)
+	leftTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	leftTable, err := stor.CreateTable(
+		"a",
+		leftTypes,
+	)
 	require.NoError(t, err)
 
 	// Insert data into left table
-	require.NoError(t, leftTable.AppendRow([]any{int64(1), "Alice"}))
-	require.NoError(t, leftTable.AppendRow([]any{int64(2), "Bob"}))
-	require.NoError(t, leftTable.AppendRow([]any{int64(3), "Charlie"}))
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(1), "Alice"},
+		),
+	)
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(2), "Bob"},
+		),
+	)
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(3), "Charlie"},
+		),
+	)
 
 	// Create right table: b (id INT, city VARCHAR)
-	rightTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	rightTable, err := stor.CreateTable("b", rightTypes)
+	rightTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	rightTable, err := stor.CreateTable(
+		"b",
+		rightTypes,
+	)
 	require.NoError(t, err)
 
 	// Insert data into right table
-	require.NoError(t, rightTable.AppendRow([]any{int64(1), "NYC"}))
-	require.NoError(t, rightTable.AppendRow([]any{int64(2), "SF"}))
-	require.NoError(t, rightTable.AppendRow([]any{int64(4), "LA"}))
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(1), "NYC"},
+		),
+	)
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(2), "SF"},
+		),
+	)
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(4), "LA"},
+		),
+	)
 
 	// Create left scan operator
 	leftScan := &PhysicalScanOperator{
@@ -50,16 +92,26 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "a",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: leftTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -71,16 +123,26 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "b",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "city", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "city",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: rightTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -102,12 +164,32 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 
 	// Create column bindings
 	leftColumns := []planner.ColumnBinding{
-		{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "a", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "a",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "a",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 	rightColumns := []planner.ColumnBinding{
-		{Table: "b", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "b", Column: "city", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "b",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "b",
+			Column:    "city",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	// Create hash join operator
@@ -133,7 +215,10 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 		}
 
 		for i := 0; i < chunk.Count(); i++ {
-			row := make([]any, chunk.ColumnCount())
+			row := make(
+				[]any,
+				chunk.ColumnCount(),
+			)
 			for j := 0; j < chunk.ColumnCount(); j++ {
 				row[j] = chunk.GetValue(i, j)
 			}
@@ -163,7 +248,9 @@ func TestPhysicalHashJoinBasic(t *testing.T) {
 	assert.Equal(t, "SF", results[1][3])
 }
 
-func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
+func TestPhysicalHashJoinMultipleMatches(
+	t *testing.T,
+) {
 	// Create catalog and storage
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
@@ -173,23 +260,60 @@ func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
 	}
 
 	// Create left table: orders (customer_id INT, amount DOUBLE)
-	leftTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE}
-	leftTable, err := stor.CreateTable("orders", leftTypes)
+	leftTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_DOUBLE,
+	}
+	leftTable, err := stor.CreateTable(
+		"orders",
+		leftTypes,
+	)
 	require.NoError(t, err)
 
 	// Insert data - multiple orders for same customer
-	require.NoError(t, leftTable.AppendRow([]any{int64(1), 100.0}))
-	require.NoError(t, leftTable.AppendRow([]any{int64(1), 200.0}))
-	require.NoError(t, leftTable.AppendRow([]any{int64(2), 150.0}))
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(1), 100.0},
+		),
+	)
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(1), 200.0},
+		),
+	)
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(2), 150.0},
+		),
+	)
 
 	// Create right table: customers (id INT, name VARCHAR)
-	rightTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	rightTable, err := stor.CreateTable("customers", rightTypes)
+	rightTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	rightTable, err := stor.CreateTable(
+		"customers",
+		rightTypes,
+	)
 	require.NoError(t, err)
 
 	// Insert data
-	require.NoError(t, rightTable.AppendRow([]any{int64(1), "Alice"}))
-	require.NoError(t, rightTable.AppendRow([]any{int64(2), "Bob"}))
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(1), "Alice"},
+		),
+	)
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(2), "Bob"},
+		),
+	)
 
 	// Create operators
 	leftScan := &PhysicalScanOperator{
@@ -199,16 +323,26 @@ func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "orders",
 				Columns: []*catalog.ColumnDef{
-					{Name: "customer_id", Type: dukdb.TYPE_INTEGER},
-					{Name: "amount", Type: dukdb.TYPE_DOUBLE},
+					{
+						Name: "customer_id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "amount",
+						Type: dukdb.TYPE_DOUBLE,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: leftTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_DOUBLE},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_DOUBLE,
+			},
 		},
 	}
 
@@ -219,16 +353,26 @@ func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "customers",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: rightTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -249,12 +393,32 @@ func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
 	}
 
 	leftColumns := []planner.ColumnBinding{
-		{Table: "orders", Column: "customer_id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "orders", Column: "amount", Type: dukdb.TYPE_DOUBLE, ColumnIdx: 1},
+		{
+			Table:     "orders",
+			Column:    "customer_id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "orders",
+			Column:    "amount",
+			Type:      dukdb.TYPE_DOUBLE,
+			ColumnIdx: 1,
+		},
 	}
 	rightColumns := []planner.ColumnBinding{
-		{Table: "customers", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "customers", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "customers",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "customers",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	joinOp, err := NewPhysicalHashJoinOperator(
@@ -279,7 +443,10 @@ func TestPhysicalHashJoinMultipleMatches(t *testing.T) {
 		}
 
 		for i := 0; i < chunk.Count(); i++ {
-			row := make([]any, chunk.ColumnCount())
+			row := make(
+				[]any,
+				chunk.ColumnCount(),
+			)
 			for j := 0; j < chunk.ColumnCount(); j++ {
 				row[j] = chunk.GetValue(i, j)
 			}
@@ -317,16 +484,38 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 	}
 
 	// Create left table
-	leftTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	leftTable, err := stor.CreateTable("a", leftTypes)
+	leftTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	leftTable, err := stor.CreateTable(
+		"a",
+		leftTypes,
+	)
 	require.NoError(t, err)
-	require.NoError(t, leftTable.AppendRow([]any{int64(1), "Alice"}))
+	require.NoError(
+		t,
+		leftTable.AppendRow(
+			[]any{int64(1), "Alice"},
+		),
+	)
 
 	// Create right table with no matching IDs
-	rightTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	rightTable, err := stor.CreateTable("b", rightTypes)
+	rightTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	rightTable, err := stor.CreateTable(
+		"b",
+		rightTypes,
+	)
 	require.NoError(t, err)
-	require.NoError(t, rightTable.AppendRow([]any{int64(2), "Bob"}))
+	require.NoError(
+		t,
+		rightTable.AppendRow(
+			[]any{int64(2), "Bob"},
+		),
+	)
 
 	// Create operators
 	leftScan := &PhysicalScanOperator{
@@ -336,16 +525,26 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "a",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: leftTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -356,16 +555,26 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "b",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "city", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "city",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: rightTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -385,12 +594,32 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 	}
 
 	leftColumns := []planner.ColumnBinding{
-		{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "a", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "a",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "a",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 	rightColumns := []planner.ColumnBinding{
-		{Table: "b", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "b", Column: "city", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "b",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "b",
+			Column:    "city",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	joinOp, err := NewPhysicalHashJoinOperator(
@@ -415,7 +644,10 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 		}
 
 		for i := 0; i < chunk.Count(); i++ {
-			row := make([]any, chunk.ColumnCount())
+			row := make(
+				[]any,
+				chunk.ColumnCount(),
+			)
 			for j := 0; j < chunk.ColumnCount(); j++ {
 				row[j] = chunk.GetValue(i, j)
 			}
@@ -427,7 +659,9 @@ func TestPhysicalHashJoinNoMatches(t *testing.T) {
 	assert.Len(t, results, 0)
 }
 
-func TestPhysicalHashJoinEmptyTables(t *testing.T) {
+func TestPhysicalHashJoinEmptyTables(
+	t *testing.T,
+) {
 	// Create catalog and storage
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
@@ -437,12 +671,24 @@ func TestPhysicalHashJoinEmptyTables(t *testing.T) {
 	}
 
 	// Create empty tables
-	leftTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	leftTable, err := stor.CreateTable("a", leftTypes)
+	leftTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	leftTable, err := stor.CreateTable(
+		"a",
+		leftTypes,
+	)
 	require.NoError(t, err)
 
-	rightTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
-	rightTable, err := stor.CreateTable("b", rightTypes)
+	rightTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	rightTable, err := stor.CreateTable(
+		"b",
+		rightTypes,
+	)
 	require.NoError(t, err)
 
 	// Create operators
@@ -453,16 +699,26 @@ func TestPhysicalHashJoinEmptyTables(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "a",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "name", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "name",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: leftTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -473,16 +729,26 @@ func TestPhysicalHashJoinEmptyTables(t *testing.T) {
 			TableDef: &catalog.TableDef{
 				Name: "b",
 				Columns: []*catalog.ColumnDef{
-					{Name: "id", Type: dukdb.TYPE_INTEGER},
-					{Name: "city", Type: dukdb.TYPE_VARCHAR},
+					{
+						Name: "id",
+						Type: dukdb.TYPE_INTEGER,
+					},
+					{
+						Name: "city",
+						Type: dukdb.TYPE_VARCHAR,
+					},
 				},
 			},
 		},
 		storage: stor,
 		scanner: rightTable.Scan(),
 		types: []dukdb.TypeInfo{
-			&basicTypeInfo{typ: dukdb.TYPE_INTEGER},
-			&basicTypeInfo{typ: dukdb.TYPE_VARCHAR},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_INTEGER,
+			},
+			&basicTypeInfo{
+				typ: dukdb.TYPE_VARCHAR,
+			},
 		},
 	}
 
@@ -502,12 +768,32 @@ func TestPhysicalHashJoinEmptyTables(t *testing.T) {
 	}
 
 	leftColumns := []planner.ColumnBinding{
-		{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "a", Column: "name", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "a",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "a",
+			Column:    "name",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 	rightColumns := []planner.ColumnBinding{
-		{Table: "b", Column: "id", Type: dukdb.TYPE_INTEGER, ColumnIdx: 0},
-		{Table: "b", Column: "city", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+		{
+			Table:     "b",
+			Column:    "id",
+			Type:      dukdb.TYPE_INTEGER,
+			ColumnIdx: 0,
+		},
+		{
+			Table:     "b",
+			Column:    "city",
+			Type:      dukdb.TYPE_VARCHAR,
+			ColumnIdx: 1,
+		},
 	}
 
 	joinOp, err := NewPhysicalHashJoinOperator(

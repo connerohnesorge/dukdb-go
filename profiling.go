@@ -33,7 +33,9 @@ type ProfilingContext struct {
 
 // NewProfilingContext creates a new ProfilingContext with the given clock.
 // If clock is nil, the real system clock is used.
-func NewProfilingContext(clock quartz.Clock) *ProfilingContext {
+func NewProfilingContext(
+	clock quartz.Clock,
+) *ProfilingContext {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
@@ -45,7 +47,9 @@ func NewProfilingContext(clock quartz.Clock) *ProfilingContext {
 }
 
 // WithClock returns a new ProfilingContext with the given clock.
-func (p *ProfilingContext) WithClock(clock quartz.Clock) *ProfilingContext {
+func (p *ProfilingContext) WithClock(
+	clock quartz.Clock,
+) *ProfilingContext {
 	return &ProfilingContext{
 		clock:   clock,
 		enabled: p.enabled,
@@ -107,7 +111,11 @@ func (p *ProfilingContext) Elapsed() time.Duration {
 }
 
 // AddOperator adds an operator node to the profiling tree.
-func (p *ProfilingContext) AddOperator(operatorType string, rows int, timing time.Duration) {
+func (p *ProfilingContext) AddOperator(
+	operatorType string,
+	rows int,
+	timing time.Duration,
+) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if !p.enabled || p.root == nil {
@@ -118,15 +126,23 @@ func (p *ProfilingContext) AddOperator(operatorType string, rows int, timing tim
 		Metrics: map[string]string{
 			"OPERATOR_TYPE":   operatorType,
 			"OPERATOR_TIMING": timing.String(),
-			"ROWS":            fmt.Sprintf("%d", rows),
+			"ROWS": fmt.Sprintf(
+				"%d",
+				rows,
+			),
 		},
 		Children: nil,
 	}
-	p.root.Children = append(p.root.Children, child)
+	p.root.Children = append(
+		p.root.Children,
+		child,
+	)
 }
 
 // Complete finalizes the profiling data with total metrics.
-func (p *ProfilingContext) Complete(rowsReturned int) {
+func (p *ProfilingContext) Complete(
+	rowsReturned int,
+) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if !p.enabled || p.root == nil {
@@ -135,7 +151,10 @@ func (p *ProfilingContext) Complete(rowsReturned int) {
 
 	elapsed := p.clock.Since(p.startTime)
 	p.root.Metrics["TOTAL_TIME"] = elapsed.String()
-	p.root.Metrics["ROWS_RETURNED"] = fmt.Sprintf("%d", rowsReturned)
+	p.root.Metrics["ROWS_RETURNED"] = fmt.Sprintf(
+		"%d",
+		rowsReturned,
+	)
 }
 
 // GetInfo returns the current profiling info and clears it.
@@ -159,18 +178,26 @@ func (p *ProfilingContext) GetInfo() (*ProfilingInfo, error) {
 
 // Error variables for profiling operations.
 var (
-	errProfilingNotEnabled = errors.New("profiling is not enabled")
-	errProfilingInfoEmpty  = errors.New("profiling info is empty")
+	errProfilingNotEnabled = errors.New(
+		"profiling is not enabled",
+	)
+	errProfilingInfoEmpty = errors.New(
+		"profiling info is empty",
+	)
 )
 
 // GetProfilingInfo obtains all available metrics set by the current connection.
 // Profiling must be enabled via PRAGMA enable_profiling before executing queries.
-func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
+func GetProfilingInfo(
+	c *sql.Conn,
+) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
 		conn, ok := driverConn.(*Conn)
 		if !ok {
-			return errors.New("invalid driver connection type")
+			return errors.New(
+				"invalid driver connection type",
+			)
 		}
 
 		if conn.profiling == nil {
@@ -200,7 +227,10 @@ type operatorMetrics struct {
 }
 
 // newOperatorMetrics creates a new operatorMetrics with the given clock.
-func newOperatorMetrics(clock quartz.Clock, operatorType string) *operatorMetrics {
+func newOperatorMetrics(
+	clock quartz.Clock,
+	operatorType string,
+) *operatorMetrics {
 	return &operatorMetrics{
 		clock:       clock,
 		operatorTyp: operatorType,

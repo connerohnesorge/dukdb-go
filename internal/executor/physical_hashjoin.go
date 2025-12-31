@@ -49,12 +49,17 @@ func NewPhysicalHashJoinOperator(
 	// Build output types: left columns followed by right columns
 	numLeft := len(leftColumns)
 	numRight := len(rightColumns)
-	types := make([]dukdb.TypeInfo, numLeft+numRight)
+	types := make(
+		[]dukdb.TypeInfo,
+		numLeft+numRight,
+	)
 
 	for i, col := range leftColumns {
 		info, err := dukdb.NewTypeInfo(col.Type)
 		if err != nil {
-			types[i] = &basicTypeInfo{typ: col.Type}
+			types[i] = &basicTypeInfo{
+				typ: col.Type,
+			}
 		} else {
 			types[i] = info
 		}
@@ -63,23 +68,27 @@ func NewPhysicalHashJoinOperator(
 	for i, col := range rightColumns {
 		info, err := dukdb.NewTypeInfo(col.Type)
 		if err != nil {
-			types[numLeft+i] = &basicTypeInfo{typ: col.Type}
+			types[numLeft+i] = &basicTypeInfo{
+				typ: col.Type,
+			}
 		} else {
 			types[numLeft+i] = info
 		}
 	}
 
 	return &PhysicalHashJoinOperator{
-		left:            left,
-		right:           right,
-		leftColumns:     leftColumns,
-		rightColumns:    rightColumns,
-		joinType:        joinType,
-		condition:       condition,
-		executor:        executor,
-		ctx:             ctx,
-		types:           types,
-		hashTable:       make(map[string][]map[string]any),
+		left:         left,
+		right:        right,
+		leftColumns:  leftColumns,
+		rightColumns: rightColumns,
+		joinType:     joinType,
+		condition:    condition,
+		executor:     executor,
+		ctx:          ctx,
+		types:        types,
+		hashTable: make(
+			map[string][]map[string]any,
+		),
 		hashTableBuilt:  false,
 		currentMatches:  nil,
 		currentMatchIdx: 0,
@@ -104,7 +113,10 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 	// Probe phase: stream through left side and probe hash table
 	numLeft := len(op.leftColumns)
 	numRight := len(op.rightColumns)
-	outputTypes := make([]dukdb.Type, numLeft+numRight)
+	outputTypes := make(
+		[]dukdb.Type,
+		numLeft+numRight,
+	)
 
 	for i, col := range op.leftColumns {
 		outputTypes[i] = col.Type
@@ -113,17 +125,26 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 		outputTypes[numLeft+i] = col.Type
 	}
 
-	outputChunk := storage.NewDataChunkWithCapacity(outputTypes, storage.StandardVectorSize)
+	outputChunk := storage.NewDataChunkWithCapacity(
+		outputTypes,
+		storage.StandardVectorSize,
+	)
 
 	for {
 		// Try to emit from current matches
-		if op.currentMatches != nil && op.currentMatchIdx < len(op.currentMatches) {
+		if op.currentMatches != nil &&
+			op.currentMatchIdx < len(
+				op.currentMatches,
+			) {
 			// Get current left row and right match
 			rightRow := op.currentMatches[op.currentMatchIdx]
 			op.currentMatchIdx++
 
 			// Combine rows and append to output
-			values := make([]any, numLeft+numRight)
+			values := make(
+				[]any,
+				numLeft+numRight,
+			)
 			for i, col := range op.leftColumns {
 				colKey := col.Column
 				if col.Table != "" {
@@ -162,7 +183,8 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 		}
 
 		// Need new left row
-		if op.leftChunk == nil || op.leftRowIdx >= op.leftChunk.Count() {
+		if op.leftChunk == nil ||
+			op.leftRowIdx >= op.leftChunk.Count() {
 			// Get next chunk from left child
 			chunk, err := op.left.Next()
 			if err != nil {
@@ -183,11 +205,17 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 
 		// Probe hash table with current left row
 		if op.leftRowIdx < op.leftChunk.Count() {
-			op.currentLeftRow = op.rowMapFromChunk(op.leftChunk, op.leftRowIdx, op.leftColumns)
+			op.currentLeftRow = op.rowMapFromChunk(
+				op.leftChunk,
+				op.leftRowIdx,
+				op.leftColumns,
+			)
 			op.leftRowIdx++
 
 			// Extract join key from left row
-			joinKey, err := op.extractJoinKey(op.currentLeftRow)
+			joinKey, err := op.extractJoinKey(
+				op.currentLeftRow,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -203,13 +231,18 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 			op.currentMatchIdx = 0
 
 			// If no matches and it's an INNER join, skip this left row
-			if len(op.currentMatches) == 0 && op.joinType == planner.JoinTypeInner {
+			if len(op.currentMatches) == 0 &&
+				op.joinType == planner.JoinTypeInner {
 				continue
 			}
 
 			// If no matches but it's a LEFT join, emit left row with NULLs for right
-			if len(op.currentMatches) == 0 && op.joinType == planner.JoinTypeLeft {
-				values := make([]any, numLeft+numRight)
+			if len(op.currentMatches) == 0 &&
+				op.joinType == planner.JoinTypeLeft {
+				values := make(
+					[]any,
+					numLeft+numRight,
+				)
 				for i, col := range op.leftColumns {
 					colKey := col.Column
 					if col.Table != "" {
@@ -257,10 +290,16 @@ func (op *PhysicalHashJoinOperator) buildHashTable() error {
 
 		// Process each row in the chunk
 		for rowIdx := 0; rowIdx < chunk.Count(); rowIdx++ {
-			rowMap := op.rowMapFromChunk(chunk, rowIdx, op.rightColumns)
+			rowMap := op.rowMapFromChunk(
+				chunk,
+				rowIdx,
+				op.rightColumns,
+			)
 
 			// Extract join key
-			joinKey, err := op.extractJoinKey(rowMap)
+			joinKey, err := op.extractJoinKey(
+				rowMap,
+			)
 			if err != nil {
 				return err
 			}
@@ -271,7 +310,10 @@ func (op *PhysicalHashJoinOperator) buildHashTable() error {
 			}
 
 			// Add to hash table
-			op.hashTable[joinKey] = append(op.hashTable[joinKey], rowMap)
+			op.hashTable[joinKey] = append(
+				op.hashTable[joinKey],
+				rowMap,
+			)
 		}
 	}
 
@@ -281,7 +323,9 @@ func (op *PhysicalHashJoinOperator) buildHashTable() error {
 // extractJoinKey extracts the join key from a row based on the join condition.
 // For equi-joins, the condition should be a binary equality expression.
 // Returns empty string for NULL keys.
-func (op *PhysicalHashJoinOperator) extractJoinKey(row map[string]any) (string, error) {
+func (op *PhysicalHashJoinOperator) extractJoinKey(
+	row map[string]any,
+) (string, error) {
 	if op.condition == nil {
 		// Cross join - no condition
 		return "cross-join-key", nil
@@ -299,12 +343,20 @@ func (op *PhysicalHashJoinOperator) extractJoinKey(row map[string]any) (string, 
 	// Try to evaluate both sides of the join condition
 	// For a.id = b.id, when building hash table from b, we get b.id
 	// When probing from a, we get a.id
-	leftVal, leftErr := op.executor.evaluateExpr(op.ctx, binExpr.Left, row)
+	leftVal, leftErr := op.executor.evaluateExpr(
+		op.ctx,
+		binExpr.Left,
+		row,
+	)
 	if leftErr == nil && leftVal != nil {
 		return formatValue(leftVal), nil
 	}
 
-	rightVal, rightErr := op.executor.evaluateExpr(op.ctx, binExpr.Right, row)
+	rightVal, rightErr := op.executor.evaluateExpr(
+		op.ctx,
+		binExpr.Right,
+		row,
+	)
 	if rightErr == nil && rightVal != nil {
 		return formatValue(rightVal), nil
 	}

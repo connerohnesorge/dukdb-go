@@ -560,7 +560,9 @@ func (s *Stmt) ColumnType(n int) (Type, error) {
 }
 
 // ColumnTypeInfo returns extended type info for the column at the given index (0-based).
-func (s *Stmt) ColumnTypeInfo(n int) (TypeInfo, error) {
+func (s *Stmt) ColumnTypeInfo(
+	n int,
+) (TypeInfo, error) {
 	if s.closed {
 		return nil, errClosedStmt
 	}
@@ -667,12 +669,16 @@ func (s *Stmt) ClearBound() {
 // ExecBound executes the statement with bound parameters.
 // Parameters must be bound using Bind before calling this method.
 func (s *Stmt) ExecBound() (driver.Result, error) {
-	return s.ExecBoundContext(context.Background())
+	return s.ExecBoundContext(
+		context.Background(),
+	)
 }
 
 // ExecBoundContext executes the statement with bound parameters and context.
 // Parameters must be bound using Bind before calling this method.
-func (s *Stmt) ExecBoundContext(ctx context.Context) (driver.Result, error) {
+func (s *Stmt) ExecBoundContext(
+	ctx context.Context,
+) (driver.Result, error) {
 	if s.closed {
 		return nil, errClosedStmt
 	}
@@ -685,12 +691,16 @@ func (s *Stmt) ExecBoundContext(ctx context.Context) (driver.Result, error) {
 // QueryBound executes the statement with bound parameters and returns rows.
 // Parameters must be bound using Bind before calling this method.
 func (s *Stmt) QueryBound() (driver.Rows, error) {
-	return s.QueryBoundContext(context.Background())
+	return s.QueryBoundContext(
+		context.Background(),
+	)
 }
 
 // QueryBoundContext executes the statement with bound parameters and context.
 // Parameters must be bound using Bind before calling this method.
-func (s *Stmt) QueryBoundContext(ctx context.Context) (driver.Rows, error) {
+func (s *Stmt) QueryBoundContext(
+	ctx context.Context,
+) (driver.Rows, error) {
 	if s.closed {
 		return nil, errClosedStmt
 	}
@@ -703,7 +713,10 @@ func (s *Stmt) QueryBoundContext(ctx context.Context) (driver.Rows, error) {
 // ExecBoundContextClock executes the statement with bound parameters using a clock
 // for deterministic deadline checking. This is primarily for testing.
 // Parameters must be bound using Bind before calling this method.
-func (s *Stmt) ExecBoundContextClock(ctx context.Context, clock quartz.Clock) (driver.Result, error) {
+func (s *Stmt) ExecBoundContextClock(
+	ctx context.Context,
+	clock quartz.Clock,
+) (driver.Result, error) {
 	if s.closed {
 		return nil, errClosedStmt
 	}
@@ -723,7 +736,10 @@ func (s *Stmt) ExecBoundContextClock(ctx context.Context, clock quartz.Clock) (d
 // QueryBoundContextClock executes the statement with bound parameters using a clock
 // for deterministic deadline checking. This is primarily for testing.
 // Parameters must be bound using Bind before calling this method.
-func (s *Stmt) QueryBoundContextClock(ctx context.Context, clock quartz.Clock) (driver.Rows, error) {
+func (s *Stmt) QueryBoundContextClock(
+	ctx context.Context,
+	clock quartz.Clock,
+) (driver.Rows, error) {
 	if s.closed {
 		return nil, errClosedStmt
 	}

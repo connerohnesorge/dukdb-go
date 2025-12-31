@@ -18,51 +18,129 @@ func BenchmarkSerializeTypeInfo(b *testing.B) {
 		typeInfo dukdb.TypeInfo
 	}{
 		{
-			name:     "Primitive_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)),
+			name: "Primitive_INTEGER",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				),
+			),
 		},
 		{
-			name:     "Primitive_VARCHAR",
-			typeInfo: mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)),
+			name: "Primitive_VARCHAR",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				),
+			),
 		},
 		{
-			name:     "DECIMAL_18_4",
-			typeInfo: mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4)),
+			name: "DECIMAL_18_4",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewDecimalInfo(18, 4),
+			),
 		},
 		{
-			name:     "ENUM_3_values",
-			typeInfo: mustNewTypeInfo(dukdb.NewEnumInfo("RED", "GREEN", "BLUE")),
+			name: "ENUM_3_values",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewEnumInfo(
+					"RED",
+					"GREEN",
+					"BLUE",
+				),
+			),
 		},
 		{
-			name:     "LIST_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewListInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)))),
+			name: "LIST_INTEGER",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewListInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_INTEGER,
+						),
+					),
+				),
+			),
 		},
 		{
-			name:     "ARRAY_VARCHAR_10",
-			typeInfo: mustNewTypeInfo(dukdb.NewArrayInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), 10)),
+			name: "ARRAY_VARCHAR_10",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewArrayInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_VARCHAR,
+						),
+					),
+					10,
+				),
+			),
 		},
 		{
 			name: "STRUCT_2_fields",
-			typeInfo: mustNewTypeInfo(dukdb.NewStructInfo(
-				mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)), "id"),
-				mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "name"),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewStructInfo(
+					mustNewStructEntry(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_INTEGER,
+							),
+						),
+						"id",
+					),
+					mustNewStructEntry(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_VARCHAR,
+							),
+						),
+						"name",
+					),
+				),
+			),
 		},
 		{
 			name: "MAP_VARCHAR_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewMapInfo(
-				mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)),
-				mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewMapInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_VARCHAR,
+						),
+					),
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_INTEGER,
+						),
+					),
+				),
+			),
 		},
 		{
 			name: "Complex_Nested",
-			typeInfo: mustNewTypeInfo(dukdb.NewListInfo(
-				mustNewTypeInfo(dukdb.NewStructInfo(
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "key"),
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4)), "value"),
-				)),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewListInfo(
+					mustNewTypeInfo(
+						dukdb.NewStructInfo(
+							mustNewStructEntry(
+								mustNewTypeInfo(
+									dukdb.NewTypeInfo(
+										dukdb.TYPE_VARCHAR,
+									),
+								),
+								"key",
+							),
+							mustNewStructEntry(
+								mustNewTypeInfo(
+									dukdb.NewDecimalInfo(
+										18,
+										4,
+									),
+								),
+								"value",
+							),
+						),
+					),
+				),
+			),
 		},
 	}
 
@@ -74,10 +152,16 @@ func BenchmarkSerializeTypeInfo(b *testing.B) {
 				buf := new(bytes.Buffer)
 				w := NewBinaryWriter(buf)
 				if err := SerializeTypeInfo(w, tc.typeInfo); err != nil {
-					b.Fatalf("SerializeTypeInfo failed: %v", err)
+					b.Fatalf(
+						"SerializeTypeInfo failed: %v",
+						err,
+					)
 				}
 				if err := w.Flush(); err != nil {
-					b.Fatalf("Flush failed: %v", err)
+					b.Fatalf(
+						"Flush failed: %v",
+						err,
+					)
 				}
 			}
 		})
@@ -92,51 +176,129 @@ func BenchmarkDeserializeTypeInfo(b *testing.B) {
 		typeInfo dukdb.TypeInfo
 	}{
 		{
-			name:     "Primitive_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)),
+			name: "Primitive_INTEGER",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				),
+			),
 		},
 		{
-			name:     "Primitive_VARCHAR",
-			typeInfo: mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)),
+			name: "Primitive_VARCHAR",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				),
+			),
 		},
 		{
-			name:     "DECIMAL_18_4",
-			typeInfo: mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4)),
+			name: "DECIMAL_18_4",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewDecimalInfo(18, 4),
+			),
 		},
 		{
-			name:     "ENUM_3_values",
-			typeInfo: mustNewTypeInfo(dukdb.NewEnumInfo("RED", "GREEN", "BLUE")),
+			name: "ENUM_3_values",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewEnumInfo(
+					"RED",
+					"GREEN",
+					"BLUE",
+				),
+			),
 		},
 		{
-			name:     "LIST_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewListInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)))),
+			name: "LIST_INTEGER",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewListInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_INTEGER,
+						),
+					),
+				),
+			),
 		},
 		{
-			name:     "ARRAY_VARCHAR_10",
-			typeInfo: mustNewTypeInfo(dukdb.NewArrayInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), 10)),
+			name: "ARRAY_VARCHAR_10",
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewArrayInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_VARCHAR,
+						),
+					),
+					10,
+				),
+			),
 		},
 		{
 			name: "STRUCT_2_fields",
-			typeInfo: mustNewTypeInfo(dukdb.NewStructInfo(
-				mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)), "id"),
-				mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "name"),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewStructInfo(
+					mustNewStructEntry(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_INTEGER,
+							),
+						),
+						"id",
+					),
+					mustNewStructEntry(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_VARCHAR,
+							),
+						),
+						"name",
+					),
+				),
+			),
 		},
 		{
 			name: "MAP_VARCHAR_INTEGER",
-			typeInfo: mustNewTypeInfo(dukdb.NewMapInfo(
-				mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)),
-				mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewMapInfo(
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_VARCHAR,
+						),
+					),
+					mustNewTypeInfo(
+						dukdb.NewTypeInfo(
+							dukdb.TYPE_INTEGER,
+						),
+					),
+				),
+			),
 		},
 		{
 			name: "Complex_Nested",
-			typeInfo: mustNewTypeInfo(dukdb.NewListInfo(
-				mustNewTypeInfo(dukdb.NewStructInfo(
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "key"),
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4)), "value"),
-				)),
-			)),
+			typeInfo: mustNewTypeInfo(
+				dukdb.NewListInfo(
+					mustNewTypeInfo(
+						dukdb.NewStructInfo(
+							mustNewStructEntry(
+								mustNewTypeInfo(
+									dukdb.NewTypeInfo(
+										dukdb.TYPE_VARCHAR,
+									),
+								),
+								"key",
+							),
+							mustNewStructEntry(
+								mustNewTypeInfo(
+									dukdb.NewDecimalInfo(
+										18,
+										4,
+									),
+								),
+								"value",
+							),
+						),
+					),
+				),
+			),
 		},
 	}
 
@@ -145,10 +307,16 @@ func BenchmarkDeserializeTypeInfo(b *testing.B) {
 		buf := new(bytes.Buffer)
 		w := NewBinaryWriter(buf)
 		if err := SerializeTypeInfo(w, tc.typeInfo); err != nil {
-			b.Fatalf("Setup SerializeTypeInfo failed: %v", err)
+			b.Fatalf(
+				"Setup SerializeTypeInfo failed: %v",
+				err,
+			)
 		}
 		if err := w.Flush(); err != nil {
-			b.Fatalf("Setup Flush failed: %v", err)
+			b.Fatalf(
+				"Setup Flush failed: %v",
+				err,
+			)
 		}
 		serialized := buf.Bytes()
 
@@ -156,12 +324,20 @@ func BenchmarkDeserializeTypeInfo(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				r := NewBinaryReader(bytes.NewReader(serialized))
+				r := NewBinaryReader(
+					bytes.NewReader(serialized),
+				)
 				if err := r.Load(); err != nil {
-					b.Fatalf("Load failed: %v", err)
+					b.Fatalf(
+						"Load failed: %v",
+						err,
+					)
 				}
 				if _, err := DeserializeTypeInfo(r); err != nil {
-					b.Fatalf("DeserializeTypeInfo failed: %v", err)
+					b.Fatalf(
+						"DeserializeTypeInfo failed: %v",
+						err,
+					)
 				}
 			}
 		})
@@ -179,11 +355,18 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 	}
 
 	for i := range 100 {
-		tableName := "table_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10))
+		tableName := "table_" + string(
+			rune('0'+i%10),
+		) + string(
+			rune('0'+(i/10)%10),
+		)
 		tableDef := &catalog.TableDef{
-			Name:    tableName,
-			Schema:  "test_schema",
-			Columns: make([]*catalog.ColumnDef, 10),
+			Name:   tableName,
+			Schema: "test_schema",
+			Columns: make(
+				[]*catalog.ColumnDef,
+				10,
+			),
 		}
 
 		// Create 10 columns with various types
@@ -191,32 +374,88 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 			var typeInfo dukdb.TypeInfo
 			switch j {
 			case 0:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_INTEGER,
+					),
+				)
 			case 1:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_VARCHAR,
+					),
+				)
 			case 2:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_BIGINT))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_BIGINT,
+					),
+				)
 			case 3:
-				typeInfo = mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewDecimalInfo(18, 4),
+				)
 			case 4:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_TIMESTAMP))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_TIMESTAMP,
+					),
+				)
 			case 5:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_DATE))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_DATE,
+					),
+				)
 			case 6:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_BOOLEAN))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_BOOLEAN,
+					),
+				)
 			case 7:
-				typeInfo = mustNewTypeInfo(dukdb.NewListInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR))))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewListInfo(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_VARCHAR,
+							),
+						),
+					),
+				)
 			case 8:
-				typeInfo = mustNewTypeInfo(dukdb.NewStructInfo(
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)), "x"),
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "y"),
-				))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewStructInfo(
+						mustNewStructEntry(
+							mustNewTypeInfo(
+								dukdb.NewTypeInfo(
+									dukdb.TYPE_INTEGER,
+								),
+							),
+							"x",
+						),
+						mustNewStructEntry(
+							mustNewTypeInfo(
+								dukdb.NewTypeInfo(
+									dukdb.TYPE_VARCHAR,
+								),
+							),
+							"y",
+						),
+					),
+				)
 			case 9:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_DOUBLE))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_DOUBLE,
+					),
+				)
 			}
 
 			tableDef.Columns[j] = &catalog.ColumnDef{
-				Name:     "col_" + string(rune('0'+j)),
+				Name: "col_" + string(
+					rune('0'+j),
+				),
 				Type:     typeInfo.InternalType(),
 				Nullable: true,
 			}
@@ -230,7 +469,10 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 	for range b.N {
 		buf := new(bytes.Buffer)
 		if err := SerializeCatalog(buf, cat); err != nil {
-			b.Fatalf("SerializeCatalog failed: %v", err)
+			b.Fatalf(
+				"SerializeCatalog failed: %v",
+				err,
+			)
 		}
 	}
 }
@@ -246,43 +488,106 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 	}
 
 	for i := range 100 {
-		tableName := "table_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10))
+		tableName := "table_" + string(
+			rune('0'+i%10),
+		) + string(
+			rune('0'+(i/10)%10),
+		)
 		tableDef := &catalog.TableDef{
-			Name:    tableName,
-			Schema:  "test_schema",
-			Columns: make([]*catalog.ColumnDef, 10),
+			Name:   tableName,
+			Schema: "test_schema",
+			Columns: make(
+				[]*catalog.ColumnDef,
+				10,
+			),
 		}
 
 		for j := range 10 {
 			var typeInfo dukdb.TypeInfo
 			switch j {
 			case 0:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_INTEGER,
+					),
+				)
 			case 1:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_VARCHAR,
+					),
+				)
 			case 2:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_BIGINT))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_BIGINT,
+					),
+				)
 			case 3:
-				typeInfo = mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewDecimalInfo(18, 4),
+				)
 			case 4:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_TIMESTAMP))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_TIMESTAMP,
+					),
+				)
 			case 5:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_DATE))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_DATE,
+					),
+				)
 			case 6:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_BOOLEAN))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_BOOLEAN,
+					),
+				)
 			case 7:
-				typeInfo = mustNewTypeInfo(dukdb.NewListInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR))))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewListInfo(
+						mustNewTypeInfo(
+							dukdb.NewTypeInfo(
+								dukdb.TYPE_VARCHAR,
+							),
+						),
+					),
+				)
 			case 8:
-				typeInfo = mustNewTypeInfo(dukdb.NewStructInfo(
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)), "x"),
-					mustNewStructEntry(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)), "y"),
-				))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewStructInfo(
+						mustNewStructEntry(
+							mustNewTypeInfo(
+								dukdb.NewTypeInfo(
+									dukdb.TYPE_INTEGER,
+								),
+							),
+							"x",
+						),
+						mustNewStructEntry(
+							mustNewTypeInfo(
+								dukdb.NewTypeInfo(
+									dukdb.TYPE_VARCHAR,
+								),
+							),
+							"y",
+						),
+					),
+				)
 			case 9:
-				typeInfo = mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_DOUBLE))
+				typeInfo = mustNewTypeInfo(
+					dukdb.NewTypeInfo(
+						dukdb.TYPE_DOUBLE,
+					),
+				)
 			}
 
 			tableDef.Columns[j] = &catalog.ColumnDef{
-				Name:     "col_" + string(rune('0'+j)),
+				Name: "col_" + string(
+					rune('0'+j),
+				),
 				Type:     typeInfo.InternalType(),
 				Nullable: true,
 			}
@@ -294,7 +599,10 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 	// Pre-serialize the catalog
 	buf := new(bytes.Buffer)
 	if err := SerializeCatalog(buf, cat); err != nil {
-		b.Fatalf("Setup SerializeCatalog failed: %v", err)
+		b.Fatalf(
+			"Setup SerializeCatalog failed: %v",
+			err,
+		)
 	}
 	serialized := buf.Bytes()
 
@@ -346,19 +654,30 @@ func BenchmarkChecksum(b *testing.B) {
 // never causes panics - only errors should be returned.
 func FuzzBinaryReader(f *testing.F) {
 	// Seed corpus with some valid binary data
-	f.Add([]byte{0x01, 0x00, 0x00, 0x00}) // Property count = 1
-	f.Add([]byte{0x00, 0x00, 0x00, 0x00}) // Property count = 0
-	f.Add([]byte{0x05, 0x00, 0x00, 0x00}) // Property count = 5
+	f.Add(
+		[]byte{0x01, 0x00, 0x00, 0x00},
+	) // Property count = 1
+	f.Add(
+		[]byte{0x00, 0x00, 0x00, 0x00},
+	) // Property count = 0
+	f.Add(
+		[]byte{0x05, 0x00, 0x00, 0x00},
+	) // Property count = 5
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// This should never panic - only return errors
 		defer func() {
 			if r := recover(); r != nil {
-				t.Errorf("BinaryReader panicked on input: %v", r)
+				t.Errorf(
+					"BinaryReader panicked on input: %v",
+					r,
+				)
 			}
 		}()
 
-		r := NewBinaryReader(bytes.NewReader(data))
+		r := NewBinaryReader(
+			bytes.NewReader(data),
+		)
 		_ = r.Load() // May fail, but should not panic
 
 		// Try reading various properties
@@ -374,10 +693,26 @@ func FuzzBinaryReader(f *testing.F) {
 		_ = r.ReadProperty(100, &str)
 		_ = r.ReadProperty(100, &b)
 
-		_ = r.ReadPropertyWithDefault(100, &u8, uint8(0))
-		_ = r.ReadPropertyWithDefault(100, &u32, uint32(0))
-		_ = r.ReadPropertyWithDefault(100, &u64, uint64(0))
-		_ = r.ReadPropertyWithDefault(100, &str, "")
+		_ = r.ReadPropertyWithDefault(
+			100,
+			&u8,
+			uint8(0),
+		)
+		_ = r.ReadPropertyWithDefault(
+			100,
+			&u32,
+			uint32(0),
+		)
+		_ = r.ReadPropertyWithDefault(
+			100,
+			&u64,
+			uint64(0),
+		)
+		_ = r.ReadPropertyWithDefault(
+			100,
+			&str,
+			"",
+		)
 
 		_, _ = r.ReadList(100)
 	})
@@ -387,24 +722,41 @@ func FuzzBinaryReader(f *testing.F) {
 // panics - only errors should be returned.
 func FuzzTypeInfoDeserializer(f *testing.F) {
 	// Seed corpus with some valid TypeInfo serializations
-	primitiveInt := mustSerializeTypeInfo(mustNewTypeInfo(dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)))
+	primitiveInt := mustSerializeTypeInfo(
+		mustNewTypeInfo(
+			dukdb.NewTypeInfo(dukdb.TYPE_INTEGER),
+		),
+	)
 	f.Add(primitiveInt)
 
-	decimal := mustSerializeTypeInfo(mustNewTypeInfo(dukdb.NewDecimalInfo(18, 4)))
+	decimal := mustSerializeTypeInfo(
+		mustNewTypeInfo(
+			dukdb.NewDecimalInfo(18, 4),
+		),
+	)
 	f.Add(decimal)
 
-	enum := mustSerializeTypeInfo(mustNewTypeInfo(dukdb.NewEnumInfo("A", "B")))
+	enum := mustSerializeTypeInfo(
+		mustNewTypeInfo(
+			dukdb.NewEnumInfo("A", "B"),
+		),
+	)
 	f.Add(enum)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// This should never panic - only return errors
 		defer func() {
 			if r := recover(); r != nil {
-				t.Errorf("DeserializeTypeInfo panicked on input: %v", r)
+				t.Errorf(
+					"DeserializeTypeInfo panicked on input: %v",
+					r,
+				)
 			}
 		}()
 
-		r := NewBinaryReader(bytes.NewReader(data))
+		r := NewBinaryReader(
+			bytes.NewReader(data),
+		)
 		if err := r.Load(); err != nil {
 			// Load can fail on invalid data, that's OK
 			return
@@ -447,7 +799,10 @@ func FuzzCatalogDeserializer(f *testing.F) {
 		// This should never panic - only return errors
 		defer func() {
 			if r := recover(); r != nil {
-				t.Errorf("Catalog deserializer panicked on input: %v", r)
+				t.Errorf(
+					"Catalog deserializer panicked on input: %v",
+					r,
+				)
 			}
 		}()
 
@@ -460,7 +815,10 @@ func FuzzCatalogDeserializer(f *testing.F) {
 
 // Helper functions for test setup
 
-func mustNewTypeInfo(ti dukdb.TypeInfo, err error) dukdb.TypeInfo {
+func mustNewTypeInfo(
+	ti dukdb.TypeInfo,
+	err error,
+) dukdb.TypeInfo {
 	if err != nil {
 		panic(err)
 	}
@@ -468,7 +826,10 @@ func mustNewTypeInfo(ti dukdb.TypeInfo, err error) dukdb.TypeInfo {
 	return ti
 }
 
-func mustNewStructEntry(ti dukdb.TypeInfo, name string) dukdb.StructEntry {
+func mustNewStructEntry(
+	ti dukdb.TypeInfo,
+	name string,
+) dukdb.StructEntry {
 	entry, err := dukdb.NewStructEntry(ti, name)
 	if err != nil {
 		panic(err)
@@ -477,7 +838,9 @@ func mustNewStructEntry(ti dukdb.TypeInfo, name string) dukdb.StructEntry {
 	return entry
 }
 
-func mustSerializeTypeInfo(ti dukdb.TypeInfo) []byte {
+func mustSerializeTypeInfo(
+	ti dukdb.TypeInfo,
+) []byte {
 	buf := new(bytes.Buffer)
 	w := NewBinaryWriter(buf)
 	if err := SerializeTypeInfo(w, ti); err != nil {

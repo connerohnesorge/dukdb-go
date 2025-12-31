@@ -9,7 +9,9 @@ import (
 // ExampleNewTypeInfo demonstrates creating TypeInfo for primitive types.
 func ExampleNewTypeInfo() {
 	// Create TypeInfo for an integer column
-	intInfo, err := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	intInfo, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -17,11 +19,16 @@ func ExampleNewTypeInfo() {
 	fmt.Println("SQL:", intInfo.SQLType())
 
 	// Create TypeInfo for a varchar column
-	varcharInfo, err := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	varcharInfo, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Type:", varcharInfo.InternalType())
+	fmt.Println(
+		"Type:",
+		varcharInfo.InternalType(),
+	)
 	fmt.Println("SQL:", varcharInfo.SQLType())
 
 	// Output:
@@ -54,7 +61,12 @@ func ExampleNewDecimalInfo() {
 // ExampleNewEnumInfo demonstrates creating ENUM type information.
 func ExampleNewEnumInfo() {
 	// Create an enum type for t-shirt sizes
-	enumInfo, err := dukdb.NewEnumInfo("small", "medium", "large", "x-large")
+	enumInfo, err := dukdb.NewEnumInfo(
+		"small",
+		"medium",
+		"large",
+		"x-large",
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +84,9 @@ func ExampleNewEnumInfo() {
 // ExampleNewListInfo demonstrates creating LIST type information.
 func ExampleNewListInfo() {
 	// Create a list of integers
-	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	intInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 	listInfo, err := dukdb.NewListInfo(intInfo)
 	if err != nil {
 		panic(err)
@@ -81,7 +95,10 @@ func ExampleNewListInfo() {
 
 	// Access the child type
 	details := listInfo.Details().(*dukdb.ListDetails)
-	fmt.Println("Child type:", details.Child.SQLType())
+	fmt.Println(
+		"Child type:",
+		details.Child.SQLType(),
+	)
 
 	// Output:
 	// SQL: INTEGER[]
@@ -91,8 +108,13 @@ func ExampleNewListInfo() {
 // ExampleNewArrayInfo demonstrates creating fixed-size ARRAY type information.
 func ExampleNewArrayInfo() {
 	// Create a fixed-size array of 3 integers
-	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	arrayInfo, err := dukdb.NewArrayInfo(intInfo, 3)
+	intInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	arrayInfo, err := dukdb.NewArrayInfo(
+		intInfo,
+		3,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -101,7 +123,10 @@ func ExampleNewArrayInfo() {
 	// Access the array details
 	details := arrayInfo.Details().(*dukdb.ArrayDetails)
 	fmt.Println("Size:", details.Size)
-	fmt.Println("Child type:", details.Child.SQLType())
+	fmt.Println(
+		"Child type:",
+		details.Child.SQLType(),
+	)
 
 	// Output:
 	// SQL: INTEGER[3]
@@ -112,10 +137,17 @@ func ExampleNewArrayInfo() {
 // ExampleNewMapInfo demonstrates creating MAP type information.
 func ExampleNewMapInfo() {
 	// Create a map from string to integer
-	keyInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-	valueInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	keyInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
+	valueInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 
-	mapInfo, err := dukdb.NewMapInfo(keyInfo, valueInfo)
+	mapInfo, err := dukdb.NewMapInfo(
+		keyInfo,
+		valueInfo,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -123,8 +155,14 @@ func ExampleNewMapInfo() {
 
 	// Access the key and value types
 	details := mapInfo.Details().(*dukdb.MapDetails)
-	fmt.Println("Key type:", details.Key.SQLType())
-	fmt.Println("Value type:", details.Value.SQLType())
+	fmt.Println(
+		"Key type:",
+		details.Key.SQLType(),
+	)
+	fmt.Println(
+		"Value type:",
+		details.Value.SQLType(),
+	)
 
 	// Output:
 	// SQL: MAP(VARCHAR, INTEGER)
@@ -135,14 +173,27 @@ func ExampleNewMapInfo() {
 // ExampleNewStructInfo demonstrates creating STRUCT type information.
 func ExampleNewStructInfo() {
 	// Create struct entries
-	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	strInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	intInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	strInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 
-	idEntry, _ := dukdb.NewStructEntry(intInfo, "id")
-	nameEntry, _ := dukdb.NewStructEntry(strInfo, "name")
+	idEntry, _ := dukdb.NewStructEntry(
+		intInfo,
+		"id",
+	)
+	nameEntry, _ := dukdb.NewStructEntry(
+		strInfo,
+		"name",
+	)
 
 	// Create the struct type
-	structInfo, err := dukdb.NewStructInfo(idEntry, nameEntry)
+	structInfo, err := dukdb.NewStructInfo(
+		idEntry,
+		nameEntry,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -151,7 +202,11 @@ func ExampleNewStructInfo() {
 	// Access struct fields
 	details := structInfo.Details().(*dukdb.StructDetails)
 	for _, entry := range details.Entries {
-		fmt.Printf("Field %q: %s\n", entry.Name(), entry.Info().SQLType())
+		fmt.Printf(
+			"Field %q: %s\n",
+			entry.Name(),
+			entry.Info().SQLType(),
+		)
 	}
 
 	// Output:
@@ -163,8 +218,12 @@ func ExampleNewStructInfo() {
 // ExampleNewUnionInfo demonstrates creating UNION type information.
 func ExampleNewUnionInfo() {
 	// Create member types
-	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	strInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	intInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	strInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 
 	// Create the union type
 	unionInfo, err := dukdb.NewUnionInfo(
@@ -179,7 +238,11 @@ func ExampleNewUnionInfo() {
 	// Access union members
 	details := unionInfo.Details().(*dukdb.UnionDetails)
 	for _, member := range details.Members {
-		fmt.Printf("Member %q: %s\n", member.Name, member.Type.SQLType())
+		fmt.Printf(
+			"Member %q: %s\n",
+			member.Name,
+			member.Type.SQLType(),
+		)
 	}
 
 	// Output:
@@ -193,19 +256,35 @@ func Example_nestedTypes() {
 	// Create a complex nested type: MAP[VARCHAR, LIST[STRUCT(id INTEGER, name VARCHAR)]]
 
 	// Build from innermost to outermost:
-	intInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-	strInfo, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	intInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
+	strInfo, _ := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 
 	// 1. Create the inner struct
-	idEntry, _ := dukdb.NewStructEntry(intInfo, "id")
-	nameEntry, _ := dukdb.NewStructEntry(strInfo, "name")
-	structInfo, _ := dukdb.NewStructInfo(idEntry, nameEntry)
+	idEntry, _ := dukdb.NewStructEntry(
+		intInfo,
+		"id",
+	)
+	nameEntry, _ := dukdb.NewStructEntry(
+		strInfo,
+		"name",
+	)
+	structInfo, _ := dukdb.NewStructInfo(
+		idEntry,
+		nameEntry,
+	)
 
 	// 2. Wrap in a list
 	listInfo, _ := dukdb.NewListInfo(structInfo)
 
 	// 3. Create the map
-	mapInfo, _ := dukdb.NewMapInfo(strInfo, listInfo)
+	mapInfo, _ := dukdb.NewMapInfo(
+		strInfo,
+		listInfo,
+	)
 
 	fmt.Println("SQL:", mapInfo.SQLType())
 

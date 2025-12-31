@@ -42,10 +42,16 @@ func (chunk *DataChunk) SetSize(size int) error {
 		return errors.New("data chunk is closed")
 	}
 	if size < 0 {
-		return errors.New("size cannot be negative")
+		return errors.New(
+			"size cannot be negative",
+		)
 	}
 	if size > GetDataChunkCapacity() {
-		return fmt.Errorf("size %d exceeds capacity %d", size, GetDataChunkCapacity())
+		return fmt.Errorf(
+			"size %d exceeds capacity %d",
+			size,
+			GetDataChunkCapacity(),
+		)
 	}
 	chunk.size = size
 
@@ -53,18 +59,28 @@ func (chunk *DataChunk) SetSize(size int) error {
 }
 
 // GetValue returns a single value of a column.
-func (chunk *DataChunk) GetValue(colIdx, rowIdx int) (any, error) {
+func (chunk *DataChunk) GetValue(
+	colIdx, rowIdx int,
+) (any, error) {
 	if chunk.closed {
-		return nil, errors.New("data chunk is closed")
+		return nil, errors.New(
+			"data chunk is closed",
+		)
 	}
 
-	actualCol, err := chunk.verifyAndRewriteColIdx(colIdx)
+	actualCol, err := chunk.verifyAndRewriteColIdx(
+		colIdx,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	if rowIdx < 0 || rowIdx >= chunk.size {
-		return nil, fmt.Errorf("row index %d out of range [0, %d)", rowIdx, chunk.size)
+		return nil, fmt.Errorf(
+			"row index %d out of range [0, %d)",
+			rowIdx,
+			chunk.size,
+		)
 	}
 
 	column := &chunk.columns[actualCol]
@@ -76,12 +92,17 @@ func (chunk *DataChunk) GetValue(colIdx, rowIdx int) (any, error) {
 // Note that this requires casting the type for each invocation.
 // If the column is not projected, the value is ignored.
 // NOTE: Custom ENUM types must be passed as string.
-func (chunk *DataChunk) SetValue(colIdx, rowIdx int, val any) error {
+func (chunk *DataChunk) SetValue(
+	colIdx, rowIdx int,
+	val any,
+) error {
 	if chunk.closed {
 		return errors.New("data chunk is closed")
 	}
 
-	actualCol, err := chunk.verifyAndRewriteColIdx(colIdx)
+	actualCol, err := chunk.verifyAndRewriteColIdx(
+		colIdx,
+	)
 	if err != nil {
 		if errors.Is(err, errUnprojectedColumn) {
 			return nil // Silently ignore unprojected columns.
@@ -90,13 +111,23 @@ func (chunk *DataChunk) SetValue(colIdx, rowIdx int, val any) error {
 		return err
 	}
 
-	if rowIdx < 0 || rowIdx >= GetDataChunkCapacity() {
-		return fmt.Errorf("row index %d out of range [0, %d)", rowIdx, GetDataChunkCapacity())
+	if rowIdx < 0 ||
+		rowIdx >= GetDataChunkCapacity() {
+		return fmt.Errorf(
+			"row index %d out of range [0, %d)",
+			rowIdx,
+			GetDataChunkCapacity(),
+		)
 	}
 
 	column := &chunk.columns[actualCol]
 	if err := column.setFn(column, rowIdx, val); err != nil {
-		return fmt.Errorf("failed to set value at row %d, col %d: %w", rowIdx, colIdx, err)
+		return fmt.Errorf(
+			"failed to set value at row %d, col %d: %w",
+			rowIdx,
+			colIdx,
+			err,
+		)
 	}
 
 	return nil
@@ -107,12 +138,18 @@ func (chunk *DataChunk) SetValue(colIdx, rowIdx int, val any) error {
 // require casting the value to `any` (implicitly).
 // If the column is not projected, the value is ignored.
 // NOTE: Custom ENUM types must be passed as string.
-func SetChunkValue[T any](chunk DataChunk, colIdx, rowIdx int, val T) error {
+func SetChunkValue[T any](
+	chunk DataChunk,
+	colIdx, rowIdx int,
+	val T,
+) error {
 	if chunk.closed {
 		return errors.New("data chunk is closed")
 	}
 
-	actualCol, err := chunk.verifyAndRewriteColIdx(colIdx)
+	actualCol, err := chunk.verifyAndRewriteColIdx(
+		colIdx,
+	)
 	if err != nil {
 		if errors.Is(err, errUnprojectedColumn) {
 			return nil
@@ -121,7 +158,11 @@ func SetChunkValue[T any](chunk DataChunk, colIdx, rowIdx int, val T) error {
 		return err
 	}
 
-	return setVectorVal(&chunk.columns[actualCol], rowIdx, val)
+	return setVectorVal(
+		&chunk.columns[actualCol],
+		rowIdx,
+		val,
+	)
 }
 
 // GetColumnCount returns the number of columns in the chunk.
@@ -134,25 +175,40 @@ func (chunk *DataChunk) GetColumnCount() int {
 }
 
 // errUnprojectedColumn is returned when accessing an unprojected column.
-var errUnprojectedColumn = errors.New("unprojected column")
+var errUnprojectedColumn = errors.New(
+	"unprojected column",
+)
 
 // verifyAndRewriteColIdx checks whether the provided column index is valid
 // and rewrites it through the projection if one exists.
-func (chunk *DataChunk) verifyAndRewriteColIdx(colIdx int) (int, error) {
+func (chunk *DataChunk) verifyAndRewriteColIdx(
+	colIdx int,
+) (int, error) {
 	if chunk.projection == nil {
-		if colIdx < 0 || colIdx >= len(chunk.columns) {
-			return colIdx, fmt.Errorf("column index %d out of range [0, %d)", colIdx, len(chunk.columns))
+		if colIdx < 0 ||
+			colIdx >= len(chunk.columns) {
+			return colIdx, fmt.Errorf(
+				"column index %d out of range [0, %d)",
+				colIdx,
+				len(chunk.columns),
+			)
 		}
 
 		return colIdx, nil
 	}
 
-	if colIdx < 0 || colIdx >= len(chunk.projection) {
-		return colIdx, fmt.Errorf("column index %d out of range [0, %d)", colIdx, len(chunk.projection))
+	if colIdx < 0 ||
+		colIdx >= len(chunk.projection) {
+		return colIdx, fmt.Errorf(
+			"column index %d out of range [0, %d)",
+			colIdx,
+			len(chunk.projection),
+		)
 	}
 
 	actualCol := chunk.projection[colIdx]
-	if actualCol < 0 || actualCol >= len(chunk.columns) {
+	if actualCol < 0 ||
+		actualCol >= len(chunk.columns) {
 		return colIdx, errUnprojectedColumn
 	}
 
@@ -160,7 +216,9 @@ func (chunk *DataChunk) verifyAndRewriteColIdx(colIdx int) (int, error) {
 }
 
 // initFromTypes initializes the chunk from type specifications.
-func (chunk *DataChunk) initFromTypes(types []TypeInfo) error {
+func (chunk *DataChunk) initFromTypes(
+	types []TypeInfo,
+) error {
 	columnCount := len(types)
 
 	chunk.columns = make([]vector, columnCount)
@@ -202,7 +260,9 @@ func (chunk *DataChunk) Close() {
 }
 
 // NewDataChunk creates a new DataChunk from type specifications.
-func NewDataChunk(types []TypeInfo) (*DataChunk, error) {
+func NewDataChunk(
+	types []TypeInfo,
+) (*DataChunk, error) {
 	chunk := &DataChunk{}
 	if err := chunk.initFromTypes(types); err != nil {
 		return nil, err
@@ -214,7 +274,10 @@ func NewDataChunk(types []TypeInfo) (*DataChunk, error) {
 // NewDataChunkWithProjection creates a new DataChunk with column projection.
 // projection maps logical column indices to physical column indices.
 // A value of -1 in projection indicates an unprojected column.
-func NewDataChunkWithProjection(types []TypeInfo, projection []int) (*DataChunk, error) {
+func NewDataChunkWithProjection(
+	types []TypeInfo,
+	projection []int,
+) (*DataChunk, error) {
 	chunk, err := NewDataChunk(types)
 	if err != nil {
 		return nil, err

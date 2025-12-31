@@ -30,13 +30,21 @@ func NewUhugeint(val *big.Int) (Uhugeint, error) {
 	}
 
 	if val.Sign() < 0 {
-		return Uhugeint{}, fmt.Errorf("Uhugeint cannot be negative: %s", val.String())
+		return Uhugeint{}, fmt.Errorf(
+			"Uhugeint cannot be negative: %s",
+			val.String(),
+		)
 	}
 
 	// Check if value fits in 128 bits.
-	maxVal, _ := new(big.Int).SetString(UhugeintMaxString, 10)
+	maxVal, _ := new(
+		big.Int,
+	).SetString(UhugeintMaxString, 10)
 	if val.Cmp(maxVal) > 0 {
-		return Uhugeint{}, fmt.Errorf("value exceeds UHUGEINT maximum: %s", val.String())
+		return Uhugeint{}, fmt.Errorf(
+			"value exceeds UHUGEINT maximum: %s",
+			val.String(),
+		)
 	}
 
 	// Split into upper and lower 64-bit parts.
@@ -59,7 +67,9 @@ func NewUhugeintFromUint64(val uint64) Uhugeint {
 }
 
 // NewUhugeintFromParts creates a Uhugeint from upper and lower uint64 values.
-func NewUhugeintFromParts(upper, lower uint64) Uhugeint {
+func NewUhugeintFromParts(
+	upper, lower uint64,
+) Uhugeint {
 	return Uhugeint{lower: lower, upper: upper}
 }
 
@@ -67,7 +77,10 @@ func NewUhugeintFromParts(upper, lower uint64) Uhugeint {
 func (u Uhugeint) ToBigInt() *big.Int {
 	result := new(big.Int).SetUint64(u.upper)
 	result.Lsh(result, 64)
-	result.Add(result, new(big.Int).SetUint64(u.lower))
+	result.Add(
+		result,
+		new(big.Int).SetUint64(u.lower),
+	)
 
 	return result
 }
@@ -148,35 +161,54 @@ func (u Uhugeint) Lower() uint64 {
 }
 
 // Add adds two Uhugeint values. Returns error on overflow.
-func (u Uhugeint) Add(other Uhugeint) (Uhugeint, error) {
-	result := u.ToBigInt().Add(u.ToBigInt(), other.ToBigInt())
+func (u Uhugeint) Add(
+	other Uhugeint,
+) (Uhugeint, error) {
+	result := u.ToBigInt().
+		Add(u.ToBigInt(), other.ToBigInt())
 
 	return NewUhugeint(result)
 }
 
 // Sub subtracts other from u. Returns error if result would be negative.
-func (u Uhugeint) Sub(other Uhugeint) (Uhugeint, error) {
-	result := new(big.Int).Sub(u.ToBigInt(), other.ToBigInt())
+func (u Uhugeint) Sub(
+	other Uhugeint,
+) (Uhugeint, error) {
+	result := new(
+		big.Int,
+	).Sub(u.ToBigInt(), other.ToBigInt())
 	if result.Sign() < 0 {
-		return Uhugeint{}, fmt.Errorf("Uhugeint subtraction would result in negative value")
+		return Uhugeint{}, fmt.Errorf(
+			"Uhugeint subtraction would result in negative value",
+		)
 	}
 
 	return NewUhugeint(result)
 }
 
 // Mul multiplies two Uhugeint values. Returns error on overflow.
-func (u Uhugeint) Mul(other Uhugeint) (Uhugeint, error) {
-	result := new(big.Int).Mul(u.ToBigInt(), other.ToBigInt())
+func (u Uhugeint) Mul(
+	other Uhugeint,
+) (Uhugeint, error) {
+	result := new(
+		big.Int,
+	).Mul(u.ToBigInt(), other.ToBigInt())
 
 	return NewUhugeint(result)
 }
 
 // Div divides u by other. Returns error on division by zero.
-func (u Uhugeint) Div(other Uhugeint) (Uhugeint, error) {
+func (u Uhugeint) Div(
+	other Uhugeint,
+) (Uhugeint, error) {
 	if other.IsZero() {
-		return Uhugeint{}, fmt.Errorf("division by zero")
+		return Uhugeint{}, fmt.Errorf(
+			"division by zero",
+		)
 	}
-	result := new(big.Int).Div(u.ToBigInt(), other.ToBigInt())
+	result := new(
+		big.Int,
+	).Div(u.ToBigInt(), other.ToBigInt())
 
 	return NewUhugeint(result)
 }
@@ -189,7 +221,8 @@ func (u Uhugeint) Cmp(other Uhugeint) int {
 
 // Equal returns true if u equals other.
 func (u Uhugeint) Equal(other Uhugeint) bool {
-	return u.lower == other.lower && u.upper == other.upper
+	return u.lower == other.lower &&
+		u.upper == other.upper
 }
 
 // Bit represents a variable-length bit string.
@@ -209,7 +242,11 @@ func NewBit(bitString string) (Bit, error) {
 	// Validate characters.
 	for i, c := range bitString {
 		if c != '0' && c != '1' {
-			return Bit{}, fmt.Errorf("invalid bit character '%c' at position %d", c, i)
+			return Bit{}, fmt.Errorf(
+				"invalid bit character '%c' at position %d",
+				c,
+				i,
+			)
 		}
 	}
 
@@ -230,7 +267,10 @@ func NewBit(bitString string) (Bit, error) {
 }
 
 // NewBitFromBytes creates a Bit from bytes with specified length.
-func NewBitFromBytes(data []byte, length int) Bit {
+func NewBitFromBytes(
+	data []byte,
+	length int,
+) Bit {
 	if length < 0 {
 		length = 0
 	}
@@ -259,7 +299,11 @@ func NewBitFromBytes(data []byte, length int) Bit {
 // Get returns the bit at position (0-indexed).
 func (b Bit) Get(pos int) (bool, error) {
 	if pos < 0 || pos >= b.length {
-		return false, fmt.Errorf("bit position %d out of range [0, %d)", pos, b.length)
+		return false, fmt.Errorf(
+			"bit position %d out of range [0, %d)",
+			pos,
+			b.length,
+		)
 	}
 	byteIdx := pos / 8
 	bitIdx := 7 - (pos % 8)
@@ -270,7 +314,11 @@ func (b Bit) Get(pos int) (bool, error) {
 // Set sets the bit at position.
 func (b *Bit) Set(pos int, val bool) error {
 	if pos < 0 || pos >= b.length {
-		return fmt.Errorf("bit position %d out of range [0, %d)", pos, b.length)
+		return fmt.Errorf(
+			"bit position %d out of range [0, %d)",
+			pos,
+			b.length,
+		)
 	}
 	byteIdx := pos / 8
 	bitIdx := 7 - (pos % 8)
@@ -365,7 +413,11 @@ func (b Bit) Value() (driver.Value, error) {
 // Both Bits must have the same length.
 func (b Bit) And(other Bit) (Bit, error) {
 	if b.length != other.length {
-		return Bit{}, fmt.Errorf("bit lengths must match: %d vs %d", b.length, other.length)
+		return Bit{}, fmt.Errorf(
+			"bit lengths must match: %d vs %d",
+			b.length,
+			other.length,
+		)
 	}
 	if b.length == 0 {
 		return Bit{}, nil
@@ -376,14 +428,21 @@ func (b Bit) And(other Bit) (Bit, error) {
 		result[i] = b.data[i] & other.data[i]
 	}
 
-	return Bit{data: result, length: b.length}, nil
+	return Bit{
+		data:   result,
+		length: b.length,
+	}, nil
 }
 
 // Or returns the bitwise OR of b and other.
 // Both Bits must have the same length.
 func (b Bit) Or(other Bit) (Bit, error) {
 	if b.length != other.length {
-		return Bit{}, fmt.Errorf("bit lengths must match: %d vs %d", b.length, other.length)
+		return Bit{}, fmt.Errorf(
+			"bit lengths must match: %d vs %d",
+			b.length,
+			other.length,
+		)
 	}
 	if b.length == 0 {
 		return Bit{}, nil
@@ -394,14 +453,21 @@ func (b Bit) Or(other Bit) (Bit, error) {
 		result[i] = b.data[i] | other.data[i]
 	}
 
-	return Bit{data: result, length: b.length}, nil
+	return Bit{
+		data:   result,
+		length: b.length,
+	}, nil
 }
 
 // Xor returns the bitwise XOR of b and other.
 // Both Bits must have the same length.
 func (b Bit) Xor(other Bit) (Bit, error) {
 	if b.length != other.length {
-		return Bit{}, fmt.Errorf("bit lengths must match: %d vs %d", b.length, other.length)
+		return Bit{}, fmt.Errorf(
+			"bit lengths must match: %d vs %d",
+			b.length,
+			other.length,
+		)
 	}
 	if b.length == 0 {
 		return Bit{}, nil
@@ -412,7 +478,10 @@ func (b Bit) Xor(other Bit) (Bit, error) {
 		result[i] = b.data[i] ^ other.data[i]
 	}
 
-	return Bit{data: result, length: b.length}, nil
+	return Bit{
+		data:   result,
+		length: b.length,
+	}, nil
 }
 
 // Not returns the bitwise NOT of b.
@@ -449,7 +518,10 @@ const nanosPerHour = 60 * nanosPerMinute
 type TimeNS int64
 
 // NewTimeNS creates TimeNS from hour, minute, second, and nanosecond components.
-func NewTimeNS(hour, min, sec int, nsec int64) TimeNS {
+func NewTimeNS(
+	hour, min, sec int,
+	nsec int64,
+) TimeNS {
 	total := int64(hour)*nanosPerHour +
 		int64(min)*nanosPerMinute +
 		int64(sec)*nanosPerSecond +
@@ -476,22 +548,47 @@ func (t TimeNS) Components() (hour, min, sec int, nsec int64) {
 func (t TimeNS) ToTime() time.Time {
 	h, m, s, ns := t.Components()
 
-	return time.Date(1970, 1, 1, h, m, s, int(ns), time.UTC)
+	return time.Date(
+		1970,
+		1,
+		1,
+		h,
+		m,
+		s,
+		int(ns),
+		time.UTC,
+	)
 }
 
 // FromTime creates TimeNS from a time.Time value.
 func TimeNSFromTime(t time.Time) TimeNS {
-	return NewTimeNS(t.Hour(), t.Minute(), t.Second(), int64(t.Nanosecond()))
+	return NewTimeNS(
+		t.Hour(),
+		t.Minute(),
+		t.Second(),
+		int64(t.Nanosecond()),
+	)
 }
 
 // String returns the time in "HH:MM:SS.nnnnnnnnn" format.
 func (t TimeNS) String() string {
 	h, m, s, ns := t.Components()
 	if ns == 0 {
-		return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
+		return fmt.Sprintf(
+			"%02d:%02d:%02d",
+			h,
+			m,
+			s,
+		)
 	}
 
-	return fmt.Sprintf("%02d:%02d:%02d.%09d", h, m, s, ns)
+	return fmt.Sprintf(
+		"%02d:%02d:%02d.%09d",
+		h,
+		m,
+		s,
+		ns,
+	)
 }
 
 // Scan implements the sql.Scanner interface.
@@ -571,7 +668,9 @@ func CurrentTimeNS(clock quartz.Clock) TimeNS {
 
 // CurrentTimestampNS returns the current timestamp in nanoseconds since epoch.
 // This enables deterministic testing by using quartz.Mock instead of real time.
-func CurrentTimestampNS(clock quartz.Clock) int64 {
+func CurrentTimestampNS(
+	clock quartz.Clock,
+) int64 {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}

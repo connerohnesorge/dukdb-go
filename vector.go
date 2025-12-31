@@ -137,13 +137,20 @@ func (vec *vector) fillMask() {
 }
 
 // init initializes the vector based on a TypeInfo.
-func (vec *vector) init(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) init(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	t := typeInfo.InternalType()
 
 	// Check for unsupported types.
 	switch t {
 	case TYPE_INVALID, TYPE_ANY, TYPE_BIGNUM:
-		return fmt.Errorf("column index %d: unsupported type %s", colIdx, t.String())
+		return fmt.Errorf(
+			"column index %d: unsupported type %s",
+			colIdx,
+			t.String(),
+		)
 	}
 
 	vec.Type = t
@@ -171,7 +178,11 @@ func (vec *vector) init(typeInfo TypeInfo, colIdx int) error {
 		initNumericVec[float32](vec, t)
 	case TYPE_DOUBLE:
 		initNumericVec[float64](vec, t)
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP,
+		TYPE_TIMESTAMP_S,
+		TYPE_TIMESTAMP_MS,
+		TYPE_TIMESTAMP_NS,
+		TYPE_TIMESTAMP_TZ:
 		vec.initTimestamp(t)
 	case TYPE_DATE:
 		vec.initDate()
@@ -208,7 +219,11 @@ func (vec *vector) init(typeInfo TypeInfo, colIdx int) error {
 	case TYPE_SQLNULL:
 		vec.initSQLNull()
 	default:
-		return fmt.Errorf("column index %d: unknown type %s", colIdx, t.String())
+		return fmt.Errorf(
+			"column index %d: unknown type %s",
+			colIdx,
+			t.String(),
+		)
 	}
 
 	return nil
@@ -222,14 +237,21 @@ type numericType interface {
 }
 
 // getPrimitive gets a primitive value from the vector at the given index.
-func getPrimitive[T any](vec *vector, rowIdx int) T {
+func getPrimitive[T any](
+	vec *vector,
+	rowIdx int,
+) T {
 	slice := vec.dataSlice.([]T)
 
 	return slice[rowIdx]
 }
 
 // setPrimitive sets a primitive value in the vector at the given index.
-func setPrimitive[T any](vec *vector, rowIdx int, val T) {
+func setPrimitive[T any](
+	vec *vector,
+	rowIdx int,
+	val T,
+) {
 	slice := vec.dataSlice.([]T)
 	slice[rowIdx] = val
 }
@@ -257,7 +279,11 @@ func initBoolVec(vec *vector) {
 }
 
 // setBool sets a boolean value with type coercion.
-func setBool(vec *vector, rowIdx int, val any) error {
+func setBool(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	switch v := val.(type) {
 	case bool:
 		vec.setValid(rowIdx)
@@ -270,7 +296,10 @@ func setBool(vec *vector, rowIdx int, val any) error {
 }
 
 // initNumericVec initializes a numeric vector of type T.
-func initNumericVec[T numericType](vec *vector, t Type) {
+func initNumericVec[T numericType](
+	vec *vector,
+	t Type,
+) {
 	vec.dataSlice = make([]T, vec.capacity)
 	vec.getFn = func(vec *vector, rowIdx int) any {
 		if vec.getNull(rowIdx) {
@@ -292,7 +321,11 @@ func initNumericVec[T numericType](vec *vector, t Type) {
 }
 
 // setNumeric sets a numeric value with type coercion.
-func setNumeric[T numericType](vec *vector, rowIdx int, val any) error {
+func setNumeric[T numericType](
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var result T
 	var err error
 
@@ -356,7 +389,10 @@ func (vec *vector) initTimestamp(t Type) {
 	vec.Type = t
 }
 
-func (vec *vector) getTimestamp(t Type, rowIdx int) time.Time {
+func (vec *vector) getTimestamp(
+	t Type,
+	rowIdx int,
+) time.Time {
 	micros := getPrimitive[int64](vec, rowIdx)
 	switch t {
 	case TYPE_TIMESTAMP_S:
@@ -370,10 +406,18 @@ func (vec *vector) getTimestamp(t Type, rowIdx int) time.Time {
 	}
 }
 
-func setTimestamp(vec *vector, t Type, rowIdx int, val any) error {
+func setTimestamp(
+	vec *vector,
+	t Type,
+	rowIdx int,
+	val any,
+) error {
 	ti, ok := val.(time.Time)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to time.Time", val)
+		return fmt.Errorf(
+			"cannot convert %T to time.Time",
+			val,
+		)
 	}
 
 	var micros int64
@@ -419,13 +463,21 @@ func (vec *vector) initDate() {
 func (vec *vector) getDate(rowIdx int) time.Time {
 	days := getPrimitive[int32](vec, rowIdx)
 
-	return time.Unix(int64(days)*secondsPerDay, 0).UTC()
+	return time.Unix(int64(days)*secondsPerDay, 0).
+		UTC()
 }
 
-func setDate(vec *vector, rowIdx int, val any) error {
+func setDate(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	ti, ok := val.(time.Time)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to time.Time for DATE", val)
+		return fmt.Errorf(
+			"cannot convert %T to time.Time for DATE",
+			val,
+		)
 	}
 	days := int32(ti.Unix() / secondsPerDay)
 	vec.setValid(rowIdx)
@@ -462,13 +514,29 @@ func (vec *vector) getTime(rowIdx int) time.Time {
 	return time.UnixMicro(micros).UTC()
 }
 
-func setTime(vec *vector, rowIdx int, val any) error {
+func setTime(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	ti, ok := val.(time.Time)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to time.Time for TIME", val)
+		return fmt.Errorf(
+			"cannot convert %T to time.Time for TIME",
+			val,
+		)
 	}
 	// Store as microseconds since midnight.
-	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), time.UTC)
+	base := time.Date(
+		1970,
+		time.January,
+		1,
+		ti.Hour(),
+		ti.Minute(),
+		ti.Second(),
+		ti.Nanosecond(),
+		time.UTC,
+	)
 	micros := base.UnixMicro()
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, micros)
@@ -498,10 +566,17 @@ func (vec *vector) initInterval() {
 	vec.Type = TYPE_INTERVAL
 }
 
-func setInterval(vec *vector, rowIdx int, val any) error {
+func setInterval(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	interval, ok := val.(Interval)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to Interval", val)
+		return fmt.Errorf(
+			"cannot convert %T to Interval",
+			val,
+		)
 	}
 	vec.setValid(rowIdx)
 	setPrimitive(vec, rowIdx, interval)
@@ -532,7 +607,11 @@ func (vec *vector) initHugeint() {
 	vec.Type = TYPE_HUGEINT
 }
 
-func setHugeint(vec *vector, rowIdx int, val any) error {
+func setHugeint(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var b *big.Int
 	switch v := val.(type) {
 	case *big.Int:
@@ -577,7 +656,11 @@ func (vec *vector) initUhugeint() {
 	vec.Type = TYPE_UHUGEINT
 }
 
-func setUhugeint(vec *vector, rowIdx int, val any) error {
+func setUhugeint(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var u Uhugeint
 	var err error
 
@@ -635,7 +718,11 @@ func (vec *vector) initBit() {
 	vec.Type = TYPE_BIT
 }
 
-func setBit(vec *vector, rowIdx int, val any) error {
+func setBit(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var b Bit
 	var err error
 
@@ -688,7 +775,11 @@ func (vec *vector) initVarchar() {
 	vec.Type = TYPE_VARCHAR
 }
 
-func setVarchar(vec *vector, rowIdx int, val any) error {
+func setVarchar(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	switch v := val.(type) {
 	case string:
 		vec.setValid(rowIdx)
@@ -727,7 +818,11 @@ func (vec *vector) initBlob() {
 	vec.Type = TYPE_BLOB
 }
 
-func setBlob(vec *vector, rowIdx int, val any) error {
+func setBlob(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	switch v := val.(type) {
 	case []byte:
 		vec.setValid(rowIdx)
@@ -778,7 +873,11 @@ var (
 	_ = setJSON
 )
 
-func setJSON(vec *vector, rowIdx int, val any) error {
+func setJSON(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var s string
 	switch v := val.(type) {
 	case string:
@@ -800,10 +899,16 @@ func setJSON(vec *vector, rowIdx int, val any) error {
 }
 
 // DECIMAL type initialization.
-func (vec *vector) initDecimal(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initDecimal(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*DecimalDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected DecimalDetails for DECIMAL type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected DecimalDetails for DECIMAL type",
+			colIdx,
+		)
 	}
 
 	vec.decimalWidth = details.Width
@@ -813,16 +918,28 @@ func (vec *vector) initDecimal(typeInfo TypeInfo, colIdx int) error {
 	switch {
 	case details.Width <= 4:
 		vec.internalType = TYPE_SMALLINT
-		vec.dataSlice = make([]int16, vec.capacity)
+		vec.dataSlice = make(
+			[]int16,
+			vec.capacity,
+		)
 	case details.Width <= 9:
 		vec.internalType = TYPE_INTEGER
-		vec.dataSlice = make([]int32, vec.capacity)
+		vec.dataSlice = make(
+			[]int32,
+			vec.capacity,
+		)
 	case details.Width <= 18:
 		vec.internalType = TYPE_BIGINT
-		vec.dataSlice = make([]int64, vec.capacity)
+		vec.dataSlice = make(
+			[]int64,
+			vec.capacity,
+		)
 	default:
 		vec.internalType = TYPE_HUGEINT
-		vec.dataSlice = make([]hugeInt, vec.capacity)
+		vec.dataSlice = make(
+			[]hugeInt,
+			vec.capacity,
+		)
 	}
 
 	vec.getFn = func(vec *vector, rowIdx int) any {
@@ -846,7 +963,9 @@ func (vec *vector) initDecimal(typeInfo TypeInfo, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) getDecimal(rowIdx int) Decimal {
+func (vec *vector) getDecimal(
+	rowIdx int,
+) Decimal {
 	var value *big.Int
 	switch vec.internalType {
 	case TYPE_SMALLINT:
@@ -870,10 +989,17 @@ func (vec *vector) getDecimal(rowIdx int) Decimal {
 	}
 }
 
-func setDecimal(vec *vector, rowIdx int, val any) error {
+func setDecimal(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	d, ok := val.(Decimal)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to Decimal", val)
+		return fmt.Errorf(
+			"cannot convert %T to Decimal",
+			val,
+		)
 	}
 
 	vec.setValid(rowIdx)
@@ -900,20 +1026,32 @@ func setDecimal(vec *vector, rowIdx int, val any) error {
 }
 
 // ENUM type initialization.
-func (vec *vector) initEnum(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initEnum(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*EnumDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected EnumDetails for ENUM type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected EnumDetails for ENUM type",
+			colIdx,
+		)
 	}
 
 	// Build name dictionary.
-	vec.namesDict = make(map[string]uint32, len(details.Values))
+	vec.namesDict = make(
+		map[string]uint32,
+		len(details.Values),
+	)
 	for i, name := range details.Values {
 		vec.namesDict[name] = uint32(i)
 	}
 
 	// Build reverse dictionary.
-	vec.tagDict = make(map[uint32]string, len(details.Values))
+	vec.tagDict = make(
+		map[uint32]string,
+		len(details.Values),
+	)
 	for i, name := range details.Values {
 		vec.tagDict[uint32(i)] = name
 	}
@@ -923,16 +1061,28 @@ func (vec *vector) initEnum(typeInfo TypeInfo, colIdx int) error {
 	switch {
 	case dictSize <= 256:
 		vec.internalType = TYPE_UTINYINT
-		vec.dataSlice = make([]uint8, vec.capacity)
+		vec.dataSlice = make(
+			[]uint8,
+			vec.capacity,
+		)
 	case dictSize <= 65536:
 		vec.internalType = TYPE_USMALLINT
-		vec.dataSlice = make([]uint16, vec.capacity)
+		vec.dataSlice = make(
+			[]uint16,
+			vec.capacity,
+		)
 	case dictSize <= math.MaxUint32:
 		vec.internalType = TYPE_UINTEGER
-		vec.dataSlice = make([]uint32, vec.capacity)
+		vec.dataSlice = make(
+			[]uint32,
+			vec.capacity,
+		)
 	default:
 		vec.internalType = TYPE_UBIGINT
-		vec.dataSlice = make([]uint64, vec.capacity)
+		vec.dataSlice = make(
+			[]uint64,
+			vec.capacity,
+		)
 	}
 
 	vec.getFn = func(vec *vector, rowIdx int) any {
@@ -960,27 +1110,43 @@ func (vec *vector) getEnum(rowIdx int) string {
 	var idx uint32
 	switch vec.internalType {
 	case TYPE_UTINYINT:
-		idx = uint32(getPrimitive[uint8](vec, rowIdx))
+		idx = uint32(
+			getPrimitive[uint8](vec, rowIdx),
+		)
 	case TYPE_USMALLINT:
-		idx = uint32(getPrimitive[uint16](vec, rowIdx))
+		idx = uint32(
+			getPrimitive[uint16](vec, rowIdx),
+		)
 	case TYPE_UINTEGER:
 		idx = getPrimitive[uint32](vec, rowIdx)
 	case TYPE_UBIGINT:
-		idx = uint32(getPrimitive[uint64](vec, rowIdx))
+		idx = uint32(
+			getPrimitive[uint64](vec, rowIdx),
+		)
 	}
 
 	return vec.tagDict[idx]
 }
 
-func setEnum(vec *vector, rowIdx int, val any) error {
+func setEnum(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	name, ok := val.(string)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to string for ENUM", val)
+		return fmt.Errorf(
+			"cannot convert %T to string for ENUM",
+			val,
+		)
 	}
 
 	idx, found := vec.namesDict[name]
 	if !found {
-		return fmt.Errorf("invalid enum value: %q", name)
+		return fmt.Errorf(
+			"invalid enum value: %q",
+			name,
+		)
 	}
 
 	vec.setValid(rowIdx)
@@ -1003,22 +1169,33 @@ func setEnum(vec *vector, rowIdx int, val any) error {
 }
 
 // LIST type initialization.
-func (vec *vector) initList(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initList(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*ListDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected ListDetails for LIST type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected ListDetails for LIST type",
+			colIdx,
+		)
 	}
 
 	// Initialize child vector.
 	vec.childVectors = make([]vector, 1)
-	childVec := newVector(vec.capacity * 4) // Allow for some growth.
+	childVec := newVector(
+		vec.capacity * 4,
+	) // Allow for some growth.
 	vec.childVectors[0] = *childVec
 	if err := vec.childVectors[0].init(details.Child, colIdx); err != nil {
 		return err
 	}
 
 	// Initialize list offsets.
-	vec.listOffsets = make([]uint64, vec.capacity+1)
+	vec.listOffsets = make(
+		[]uint64,
+		vec.capacity+1,
+	)
 
 	vec.getFn = func(vec *vector, rowIdx int) any {
 		if vec.getNull(rowIdx) {
@@ -1048,16 +1225,26 @@ func (vec *vector) getList(rowIdx int) []any {
 	result := make([]any, end-start)
 	child := &vec.childVectors[0]
 	for i := start; i < end; i++ {
-		result[i-start] = child.getFn(child, int(i))
+		result[i-start] = child.getFn(
+			child,
+			int(i),
+		)
 	}
 
 	return result
 }
 
-func setList(vec *vector, rowIdx int, val any) error {
+func setList(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	slice, ok := val.([]any)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to []any for LIST", val)
+		return fmt.Errorf(
+			"cannot convert %T to []any for LIST",
+			val,
+		)
 	}
 
 	child := &vec.childVectors[0]
@@ -1070,20 +1257,31 @@ func setList(vec *vector, rowIdx int, val any) error {
 	}
 
 	vec.setValid(rowIdx)
-	vec.listOffsets[rowIdx+1] = start + uint64(len(slice))
+	vec.listOffsets[rowIdx+1] = start + uint64(
+		len(slice),
+	)
 
 	return nil
 }
 
 // STRUCT type initialization.
-func (vec *vector) initStruct(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initStruct(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*StructDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected StructDetails for STRUCT type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected StructDetails for STRUCT type",
+			colIdx,
+		)
 	}
 
 	vec.structEntries = details.Entries
-	vec.childVectors = make([]vector, len(details.Entries))
+	vec.childVectors = make(
+		[]vector,
+		len(details.Entries),
+	)
 
 	for i, entry := range details.Entries {
 		childVec := newVector(vec.capacity)
@@ -1114,20 +1312,35 @@ func (vec *vector) initStruct(typeInfo TypeInfo, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) getStruct(rowIdx int) map[string]any {
-	result := make(map[string]any, len(vec.structEntries))
+func (vec *vector) getStruct(
+	rowIdx int,
+) map[string]any {
+	result := make(
+		map[string]any,
+		len(vec.structEntries),
+	)
 	for i, entry := range vec.structEntries {
 		child := &vec.childVectors[i]
-		result[entry.Name()] = child.getFn(child, rowIdx)
+		result[entry.Name()] = child.getFn(
+			child,
+			rowIdx,
+		)
 	}
 
 	return result
 }
 
-func setStruct(vec *vector, rowIdx int, val any) error {
+func setStruct(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	m, ok := val.(map[string]any)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to map[string]any for STRUCT", val)
+		return fmt.Errorf(
+			"cannot convert %T to map[string]any for STRUCT",
+			val,
+		)
 	}
 
 	for i, entry := range vec.structEntries {
@@ -1144,24 +1357,47 @@ func setStruct(vec *vector, rowIdx int, val any) error {
 }
 
 // MAP type initialization.
-func (vec *vector) initMap(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initMap(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*MapDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected MapDetails for MAP type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected MapDetails for MAP type",
+			colIdx,
+		)
 	}
 
 	// Check for unsupported key types.
 	keyType := details.Key.InternalType()
 	switch keyType {
-	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
-		return fmt.Errorf("column index %d: unsupported map key type: %s", colIdx, keyType.String())
+	case TYPE_LIST,
+		TYPE_STRUCT,
+		TYPE_MAP,
+		TYPE_ARRAY,
+		TYPE_UNION:
+		return fmt.Errorf(
+			"column index %d: unsupported map key type: %s",
+			colIdx,
+			keyType.String(),
+		)
 	}
 
 	// A MAP is stored as a LIST of STRUCT{key, value}.
 	// Create a synthetic struct type for the entries.
-	keyEntry, _ := NewStructEntry(details.Key, "key")
-	valueEntry, _ := NewStructEntry(details.Value, "value")
-	entryInfo, _ := NewStructInfo(keyEntry, valueEntry)
+	keyEntry, _ := NewStructEntry(
+		details.Key,
+		"key",
+	)
+	valueEntry, _ := NewStructEntry(
+		details.Value,
+		"value",
+	)
+	entryInfo, _ := NewStructInfo(
+		keyEntry,
+		valueEntry,
+	)
 	listInfo, _ := NewListInfo(entryInfo)
 
 	// Initialize as LIST.
@@ -1205,32 +1441,50 @@ func (vec *vector) getMap(rowIdx int) Map {
 	return result
 }
 
-func setMap(vec *vector, rowIdx int, val any) error {
+func setMap(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	m, ok := val.(Map)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to Map", val)
+		return fmt.Errorf(
+			"cannot convert %T to Map",
+			val,
+		)
 	}
 
 	entries := make([]any, 0, len(m))
 	for k, v := range m {
-		entries = append(entries, map[string]any{"key": k, "value": v})
+		entries = append(
+			entries,
+			map[string]any{"key": k, "value": v},
+		)
 	}
 
 	return setList(vec, rowIdx, entries)
 }
 
 // ARRAY type initialization (fixed-size).
-func (vec *vector) initArray(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initArray(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*ArrayDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected ArrayDetails for ARRAY type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected ArrayDetails for ARRAY type",
+			colIdx,
+		)
 	}
 
 	vec.arrayLength = int(details.Size)
 
 	// Initialize child vector.
 	vec.childVectors = make([]vector, 1)
-	childVec := newVector(vec.capacity * vec.arrayLength)
+	childVec := newVector(
+		vec.capacity * vec.arrayLength,
+	)
 	vec.childVectors[0] = *childVec
 	if err := vec.childVectors[0].init(details.Child, colIdx); err != nil {
 		return err
@@ -1268,14 +1522,25 @@ func (vec *vector) getArray(rowIdx int) []any {
 	return result
 }
 
-func setArray(vec *vector, rowIdx int, val any) error {
+func setArray(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	slice, ok := val.([]any)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to []any for ARRAY", val)
+		return fmt.Errorf(
+			"cannot convert %T to []any for ARRAY",
+			val,
+		)
 	}
 
 	if len(slice) != vec.arrayLength {
-		return fmt.Errorf("array size mismatch: expected %d, got %d", vec.arrayLength, len(slice))
+		return fmt.Errorf(
+			"array size mismatch: expected %d, got %d",
+			vec.arrayLength,
+			len(slice),
+		)
 	}
 
 	child := &vec.childVectors[0]
@@ -1292,16 +1557,25 @@ func setArray(vec *vector, rowIdx int, val any) error {
 }
 
 // UNION type initialization.
-func (vec *vector) initUnion(typeInfo TypeInfo, colIdx int) error {
+func (vec *vector) initUnion(
+	typeInfo TypeInfo,
+	colIdx int,
+) error {
 	details, ok := typeInfo.Details().(*UnionDetails)
 	if !ok {
-		return fmt.Errorf("column index %d: expected UnionDetails for UNION type", colIdx)
+		return fmt.Errorf(
+			"column index %d: expected UnionDetails for UNION type",
+			colIdx,
+		)
 	}
 
 	memberCount := len(details.Members)
 
 	// Child 0 is the tag vector (uint8).
-	vec.childVectors = make([]vector, memberCount+1)
+	vec.childVectors = make(
+		[]vector,
+		memberCount+1,
+	)
 
 	// Initialize tag vector.
 	tagVec := newVector(vec.capacity)
@@ -1309,8 +1583,14 @@ func (vec *vector) initUnion(typeInfo TypeInfo, colIdx int) error {
 	vec.childVectors[0] = *tagVec
 
 	// Initialize member vectors.
-	vec.namesDict = make(map[string]uint32, memberCount)
-	vec.tagDict = make(map[uint32]string, memberCount)
+	vec.namesDict = make(
+		map[string]uint32,
+		memberCount,
+	)
+	vec.tagDict = make(
+		map[uint32]string,
+		memberCount,
+	)
 	for i, member := range details.Members {
 		vec.namesDict[member.Name] = uint32(i)
 		vec.tagDict[uint32(i)] = member.Name
@@ -1354,15 +1634,25 @@ func (vec *vector) getUnion(rowIdx int) Union {
 	return Union{Tag: tagName, Value: value}
 }
 
-func setUnion(vec *vector, rowIdx int, val any) error {
+func setUnion(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	u, ok := val.(Union)
 	if !ok {
-		return fmt.Errorf("cannot convert %T to Union", val)
+		return fmt.Errorf(
+			"cannot convert %T to Union",
+			val,
+		)
 	}
 
 	tagIdx, found := vec.namesDict[u.Tag]
 	if !found {
-		return fmt.Errorf("invalid union tag: %q", u.Tag)
+		return fmt.Errorf(
+			"invalid union tag: %q",
+			u.Tag,
+		)
 	}
 
 	// Set tag.
@@ -1433,10 +1723,17 @@ func uuidToHugeInt(u *UUID) hugeInt {
 		lower |= uint64(u[8+i]) << (56 - i*8)
 	}
 
-	return hugeInt{lower: lower, upper: int64(upper)}
+	return hugeInt{
+		lower: lower,
+		upper: int64(upper),
+	}
 }
 
-func setUUID(vec *vector, rowIdx int, val any) error {
+func setUUID(
+	vec *vector,
+	rowIdx int,
+	val any,
+) error {
 	var u *UUID
 	switch v := val.(type) {
 	case UUID:
@@ -1476,7 +1773,9 @@ func (vec *vector) initSQLNull() {
 		return nil
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
-		return errors.New("cannot set value for SQLNULL type")
+		return errors.New(
+			"cannot set value for SQLNULL type",
+		)
 	}
 	vec.Type = TYPE_SQLNULL
 }
@@ -1599,7 +1898,11 @@ func (vec *vector) Close() {
 }
 
 // setVectorVal is a helper for type-safe value setting.
-func setVectorVal[T any](vec *vector, rowIdx int, val T) error {
+func setVectorVal[T any](
+	vec *vector,
+	rowIdx int,
+	val T,
+) error {
 	return vec.setFn(vec, rowIdx, any(val))
 }
 
@@ -1607,6 +1910,9 @@ func setVectorVal[T any](vec *vector, rowIdx int, val T) error {
 // Suppress unused warning.
 var _ = ptrAdd
 
-func ptrAdd(ptr unsafe.Pointer, offset uintptr) unsafe.Pointer {
+func ptrAdd(
+	ptr unsafe.Pointer,
+	offset uintptr,
+) unsafe.Pointer {
 	return unsafe.Add(ptr, offset)
 }

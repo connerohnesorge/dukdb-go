@@ -60,7 +60,8 @@ func (op *PhysicalLimitOperator) Next() (*storage.DataChunk, error) {
 
 		// Skip rows for OFFSET
 		startIdx := 0
-		if op.offset > 0 && op.skipped < op.offset {
+		if op.offset > 0 &&
+			op.skipped < op.offset {
 			rowsToSkip := op.offset - op.skipped
 			chunkSize := int64(inputChunk.Count())
 
@@ -106,9 +107,15 @@ func (op *PhysicalLimitOperator) Next() (*storage.DataChunk, error) {
 
 		for i := range rowsToEmit {
 			rowIdx := startIdx + i
-			values := make([]any, inputChunk.ColumnCount())
+			values := make(
+				[]any,
+				inputChunk.ColumnCount(),
+			)
 			for colIdx := 0; colIdx < inputChunk.ColumnCount(); colIdx++ {
-				values[colIdx] = inputChunk.GetValue(rowIdx, colIdx)
+				values[colIdx] = inputChunk.GetValue(
+					rowIdx,
+					colIdx,
+				)
 			}
 			outputChunk.AppendRow(values)
 		}

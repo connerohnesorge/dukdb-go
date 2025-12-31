@@ -14,7 +14,9 @@ import (
 const RowGroupMagicBytes = "ROWG"
 
 // ExportRowGroup serializes a row group to bytes
-func (t *Table) ExportRowGroup(rg *RowGroup) ([]byte, error) {
+func (t *Table) ExportRowGroup(
+	rg *RowGroup,
+) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Write magic (4 bytes)
@@ -41,7 +43,11 @@ func (t *Table) ExportRowGroup(rg *RowGroup) ([]byte, error) {
 	// Write each column vector
 	for i, vec := range rg.columns {
 		if err := writeVector(buf, vec, t.columnTypes[i]); err != nil {
-			return nil, fmt.Errorf("failed to write column %d: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to write column %d: %w",
+				i,
+				err,
+			)
 		}
 	}
 
@@ -49,7 +55,9 @@ func (t *Table) ExportRowGroup(rg *RowGroup) ([]byte, error) {
 }
 
 // ImportRowGroup deserializes a row group from bytes
-func (t *Table) ImportRowGroup(data []byte) (*RowGroup, error) {
+func (t *Table) ImportRowGroup(
+	data []byte,
+) (*RowGroup, error) {
 	r := bytes.NewReader(data)
 
 	// Read and verify magic
@@ -58,7 +66,10 @@ func (t *Table) ImportRowGroup(data []byte) (*RowGroup, error) {
 		return nil, err
 	}
 	if string(magic) != RowGroupMagicBytes {
-		return nil, fmt.Errorf("invalid row group magic: %s", string(magic))
+		return nil, fmt.Errorf(
+			"invalid row group magic: %s",
+			string(magic),
+		)
 	}
 
 	// Read row count
@@ -80,14 +91,25 @@ func (t *Table) ImportRowGroup(data []byte) (*RowGroup, error) {
 	}
 
 	// Create new row group
-	rg := NewRowGroup(t.columnTypes, int(rowCount))
+	rg := NewRowGroup(
+		t.columnTypes,
+		int(rowCount),
+	)
 	rg.count = int(rowCount)
 
 	// Read each column vector
 	for i := range colCount {
-		vec, err := readVector(r, t.columnTypes[i], int(rowCount))
+		vec, err := readVector(
+			r,
+			t.columnTypes[i],
+			int(rowCount),
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read column %d: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read column %d: %w",
+				i,
+				err,
+			)
 		}
 		rg.columns[i] = vec
 	}
@@ -96,7 +118,11 @@ func (t *Table) ImportRowGroup(data []byte) (*RowGroup, error) {
 }
 
 // writeVector writes a vector to a byte buffer
-func writeVector(buf *bytes.Buffer, vec *Vector, colType dukdb.Type) error {
+func writeVector(
+	buf *bytes.Buffer,
+	vec *Vector,
+	colType dukdb.Type,
+) error {
 	// Write type (1 byte)
 	if err := buf.WriteByte(byte(colType)); err != nil {
 		return err
@@ -110,48 +136,124 @@ func writeVector(buf *bytes.Buffer, vec *Vector, colType dukdb.Type) error {
 	// Write data based on type
 	switch colType {
 	case dukdb.TYPE_BOOLEAN:
-		return writeBoolArray(buf, vec.data.([]bool), vec.count)
+		return writeBoolArray(
+			buf,
+			vec.data.([]bool),
+			vec.count,
+		)
 	case dukdb.TYPE_TINYINT:
-		return writeInt8Array(buf, vec.data.([]int8), vec.count)
+		return writeInt8Array(
+			buf,
+			vec.data.([]int8),
+			vec.count,
+		)
 	case dukdb.TYPE_SMALLINT:
-		return writeInt16Array(buf, vec.data.([]int16), vec.count)
+		return writeInt16Array(
+			buf,
+			vec.data.([]int16),
+			vec.count,
+		)
 	case dukdb.TYPE_INTEGER:
-		return writeInt32Array(buf, vec.data.([]int32), vec.count)
+		return writeInt32Array(
+			buf,
+			vec.data.([]int32),
+			vec.count,
+		)
 	case dukdb.TYPE_BIGINT:
-		return writeInt64Array(buf, vec.data.([]int64), vec.count)
+		return writeInt64Array(
+			buf,
+			vec.data.([]int64),
+			vec.count,
+		)
 	case dukdb.TYPE_UTINYINT:
-		return writeUint8Array(buf, vec.data.([]uint8), vec.count)
+		return writeUint8Array(
+			buf,
+			vec.data.([]uint8),
+			vec.count,
+		)
 	case dukdb.TYPE_USMALLINT:
-		return writeUint16Array(buf, vec.data.([]uint16), vec.count)
+		return writeUint16Array(
+			buf,
+			vec.data.([]uint16),
+			vec.count,
+		)
 	case dukdb.TYPE_UINTEGER:
-		return writeUint32Array(buf, vec.data.([]uint32), vec.count)
+		return writeUint32Array(
+			buf,
+			vec.data.([]uint32),
+			vec.count,
+		)
 	case dukdb.TYPE_UBIGINT:
-		return writeUint64Array(buf, vec.data.([]uint64), vec.count)
+		return writeUint64Array(
+			buf,
+			vec.data.([]uint64),
+			vec.count,
+		)
 	case dukdb.TYPE_FLOAT:
-		return writeFloat32Array(buf, vec.data.([]float32), vec.count)
+		return writeFloat32Array(
+			buf,
+			vec.data.([]float32),
+			vec.count,
+		)
 	case dukdb.TYPE_DOUBLE:
-		return writeFloat64Array(buf, vec.data.([]float64), vec.count)
+		return writeFloat64Array(
+			buf,
+			vec.data.([]float64),
+			vec.count,
+		)
 	case dukdb.TYPE_VARCHAR:
-		return writeStringArray(buf, vec.data.([]string), vec.count)
+		return writeStringArray(
+			buf,
+			vec.data.([]string),
+			vec.count,
+		)
 	case dukdb.TYPE_BLOB:
-		return writeBlobArray(buf, vec.data.([][]byte), vec.count)
+		return writeBlobArray(
+			buf,
+			vec.data.([][]byte),
+			vec.count,
+		)
 	case dukdb.TYPE_DATE:
 		// Date stored as days since epoch (int32)
-		return writeInt32Array(buf, vec.data.([]int32), vec.count)
+		return writeInt32Array(
+			buf,
+			vec.data.([]int32),
+			vec.count,
+		)
 	case dukdb.TYPE_TIME:
 		// Time stored as microseconds since midnight (int64)
-		return writeInt64Array(buf, vec.data.([]int64), vec.count)
-	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_TZ:
+		return writeInt64Array(
+			buf,
+			vec.data.([]int64),
+			vec.count,
+		)
+	case dukdb.TYPE_TIMESTAMP,
+		dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_TIMESTAMP_TZ:
 		// Timestamps stored as int64
-		return writeInt64Array(buf, vec.data.([]int64), vec.count)
+		return writeInt64Array(
+			buf,
+			vec.data.([]int64),
+			vec.count,
+		)
 	default:
 		// For other types, use generic any slice handling
-		return writeAnyArray(buf, vec.data.([]any), vec.count)
+		return writeAnyArray(
+			buf,
+			vec.data.([]any),
+			vec.count,
+		)
 	}
 }
 
 // readVector reads a vector from a byte reader
-func readVector(r io.Reader, colType dukdb.Type, count int) (*Vector, error) {
+func readVector(
+	r io.Reader,
+	colType dukdb.Type,
+	count int,
+) (*Vector, error) {
 	// Read type (1 byte)
 	typeByte := make([]byte, 1)
 	if _, err := io.ReadFull(r, typeByte); err != nil {
@@ -261,7 +363,11 @@ func readVector(r io.Reader, colType dukdb.Type, count int) (*Vector, error) {
 			return nil, err
 		}
 		vec.data = data
-	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_TZ:
+	case dukdb.TYPE_TIMESTAMP,
+		dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_TIMESTAMP_TZ:
 		data, err := readInt64Array(r, count)
 		if err != nil {
 			return nil, err
@@ -280,7 +386,10 @@ func readVector(r io.Reader, colType dukdb.Type, count int) (*Vector, error) {
 }
 
 // writeValidityMask writes a validity mask to a byte buffer
-func writeValidityMask(buf *bytes.Buffer, v *ValidityMask) error {
+func writeValidityMask(
+	buf *bytes.Buffer,
+	v *ValidityMask,
+) error {
 	// Write count
 	if err := binary.Write(buf, binary.LittleEndian, uint32(v.count)); err != nil {
 		return err
@@ -297,7 +406,10 @@ func writeValidityMask(buf *bytes.Buffer, v *ValidityMask) error {
 }
 
 // readValidityMask reads a validity mask from a byte reader
-func readValidityMask(r io.Reader, count int) (*ValidityMask, error) {
+func readValidityMask(
+	r io.Reader,
+	count int,
+) (*ValidityMask, error) {
 	// Read count
 	var maskCount uint32
 	if err := binary.Read(r, binary.LittleEndian, &maskCount); err != nil {
@@ -322,7 +434,11 @@ func readValidityMask(r io.Reader, count int) (*ValidityMask, error) {
 }
 
 // Boolean array serialization
-func writeBoolArray(buf *bytes.Buffer, data []bool, count int) error {
+func writeBoolArray(
+	buf *bytes.Buffer,
+	data []bool,
+	count int,
+) error {
 	for i := range count {
 		b := byte(0)
 		if data[i] {
@@ -336,7 +452,10 @@ func writeBoolArray(buf *bytes.Buffer, data []bool, count int) error {
 	return nil
 }
 
-func readBoolArray(r io.Reader, count int) ([]bool, error) {
+func readBoolArray(
+	r io.Reader,
+	count int,
+) ([]bool, error) {
 	data := make([]bool, count)
 	for i := range count {
 		b := make([]byte, 1)
@@ -350,7 +469,11 @@ func readBoolArray(r io.Reader, count int) ([]bool, error) {
 }
 
 // Int8 array serialization
-func writeInt8Array(buf *bytes.Buffer, data []int8, count int) error {
+func writeInt8Array(
+	buf *bytes.Buffer,
+	data []int8,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -360,7 +483,10 @@ func writeInt8Array(buf *bytes.Buffer, data []int8, count int) error {
 	return nil
 }
 
-func readInt8Array(r io.Reader, count int) ([]int8, error) {
+func readInt8Array(
+	r io.Reader,
+	count int,
+) ([]int8, error) {
 	data := make([]int8, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -372,7 +498,11 @@ func readInt8Array(r io.Reader, count int) ([]int8, error) {
 }
 
 // Int16 array serialization
-func writeInt16Array(buf *bytes.Buffer, data []int16, count int) error {
+func writeInt16Array(
+	buf *bytes.Buffer,
+	data []int16,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -382,7 +512,10 @@ func writeInt16Array(buf *bytes.Buffer, data []int16, count int) error {
 	return nil
 }
 
-func readInt16Array(r io.Reader, count int) ([]int16, error) {
+func readInt16Array(
+	r io.Reader,
+	count int,
+) ([]int16, error) {
 	data := make([]int16, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -394,7 +527,11 @@ func readInt16Array(r io.Reader, count int) ([]int16, error) {
 }
 
 // Int32 array serialization
-func writeInt32Array(buf *bytes.Buffer, data []int32, count int) error {
+func writeInt32Array(
+	buf *bytes.Buffer,
+	data []int32,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -404,7 +541,10 @@ func writeInt32Array(buf *bytes.Buffer, data []int32, count int) error {
 	return nil
 }
 
-func readInt32Array(r io.Reader, count int) ([]int32, error) {
+func readInt32Array(
+	r io.Reader,
+	count int,
+) ([]int32, error) {
 	data := make([]int32, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -416,7 +556,11 @@ func readInt32Array(r io.Reader, count int) ([]int32, error) {
 }
 
 // Int64 array serialization
-func writeInt64Array(buf *bytes.Buffer, data []int64, count int) error {
+func writeInt64Array(
+	buf *bytes.Buffer,
+	data []int64,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -426,7 +570,10 @@ func writeInt64Array(buf *bytes.Buffer, data []int64, count int) error {
 	return nil
 }
 
-func readInt64Array(r io.Reader, count int) ([]int64, error) {
+func readInt64Array(
+	r io.Reader,
+	count int,
+) ([]int64, error) {
 	data := make([]int64, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -438,7 +585,11 @@ func readInt64Array(r io.Reader, count int) ([]int64, error) {
 }
 
 // Uint8 array serialization
-func writeUint8Array(buf *bytes.Buffer, data []uint8, count int) error {
+func writeUint8Array(
+	buf *bytes.Buffer,
+	data []uint8,
+	count int,
+) error {
 	for i := range count {
 		if err := buf.WriteByte(data[i]); err != nil {
 			return err
@@ -448,7 +599,10 @@ func writeUint8Array(buf *bytes.Buffer, data []uint8, count int) error {
 	return nil
 }
 
-func readUint8Array(r io.Reader, count int) ([]uint8, error) {
+func readUint8Array(
+	r io.Reader,
+	count int,
+) ([]uint8, error) {
 	data := make([]uint8, count)
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, err
@@ -458,7 +612,11 @@ func readUint8Array(r io.Reader, count int) ([]uint8, error) {
 }
 
 // Uint16 array serialization
-func writeUint16Array(buf *bytes.Buffer, data []uint16, count int) error {
+func writeUint16Array(
+	buf *bytes.Buffer,
+	data []uint16,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -468,7 +626,10 @@ func writeUint16Array(buf *bytes.Buffer, data []uint16, count int) error {
 	return nil
 }
 
-func readUint16Array(r io.Reader, count int) ([]uint16, error) {
+func readUint16Array(
+	r io.Reader,
+	count int,
+) ([]uint16, error) {
 	data := make([]uint16, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -480,7 +641,11 @@ func readUint16Array(r io.Reader, count int) ([]uint16, error) {
 }
 
 // Uint32 array serialization
-func writeUint32Array(buf *bytes.Buffer, data []uint32, count int) error {
+func writeUint32Array(
+	buf *bytes.Buffer,
+	data []uint32,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -490,7 +655,10 @@ func writeUint32Array(buf *bytes.Buffer, data []uint32, count int) error {
 	return nil
 }
 
-func readUint32Array(r io.Reader, count int) ([]uint32, error) {
+func readUint32Array(
+	r io.Reader,
+	count int,
+) ([]uint32, error) {
 	data := make([]uint32, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -502,7 +670,11 @@ func readUint32Array(r io.Reader, count int) ([]uint32, error) {
 }
 
 // Uint64 array serialization
-func writeUint64Array(buf *bytes.Buffer, data []uint64, count int) error {
+func writeUint64Array(
+	buf *bytes.Buffer,
+	data []uint64,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -512,7 +684,10 @@ func writeUint64Array(buf *bytes.Buffer, data []uint64, count int) error {
 	return nil
 }
 
-func readUint64Array(r io.Reader, count int) ([]uint64, error) {
+func readUint64Array(
+	r io.Reader,
+	count int,
+) ([]uint64, error) {
 	data := make([]uint64, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -524,7 +699,11 @@ func readUint64Array(r io.Reader, count int) ([]uint64, error) {
 }
 
 // Float32 array serialization
-func writeFloat32Array(buf *bytes.Buffer, data []float32, count int) error {
+func writeFloat32Array(
+	buf *bytes.Buffer,
+	data []float32,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -534,7 +713,10 @@ func writeFloat32Array(buf *bytes.Buffer, data []float32, count int) error {
 	return nil
 }
 
-func readFloat32Array(r io.Reader, count int) ([]float32, error) {
+func readFloat32Array(
+	r io.Reader,
+	count int,
+) ([]float32, error) {
 	data := make([]float32, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -546,7 +728,11 @@ func readFloat32Array(r io.Reader, count int) ([]float32, error) {
 }
 
 // Float64 array serialization
-func writeFloat64Array(buf *bytes.Buffer, data []float64, count int) error {
+func writeFloat64Array(
+	buf *bytes.Buffer,
+	data []float64,
+	count int,
+) error {
 	for i := range count {
 		if err := binary.Write(buf, binary.LittleEndian, data[i]); err != nil {
 			return err
@@ -556,7 +742,10 @@ func writeFloat64Array(buf *bytes.Buffer, data []float64, count int) error {
 	return nil
 }
 
-func readFloat64Array(r io.Reader, count int) ([]float64, error) {
+func readFloat64Array(
+	r io.Reader,
+	count int,
+) ([]float64, error) {
 	data := make([]float64, count)
 	for i := range count {
 		if err := binary.Read(r, binary.LittleEndian, &data[i]); err != nil {
@@ -568,7 +757,11 @@ func readFloat64Array(r io.Reader, count int) ([]float64, error) {
 }
 
 // String array serialization
-func writeStringArray(buf *bytes.Buffer, data []string, count int) error {
+func writeStringArray(
+	buf *bytes.Buffer,
+	data []string,
+	count int,
+) error {
 	for i := range count {
 		strBytes := []byte(data[i])
 		// Write length as varint
@@ -584,7 +777,10 @@ func writeStringArray(buf *bytes.Buffer, data []string, count int) error {
 	return nil
 }
 
-func readStringArray(r io.Reader, count int) ([]string, error) {
+func readStringArray(
+	r io.Reader,
+	count int,
+) ([]string, error) {
 	data := make([]string, count)
 	for i := range count {
 		// Read length as varint
@@ -604,7 +800,11 @@ func readStringArray(r io.Reader, count int) ([]string, error) {
 }
 
 // Blob array serialization
-func writeBlobArray(buf *bytes.Buffer, data [][]byte, count int) error {
+func writeBlobArray(
+	buf *bytes.Buffer,
+	data [][]byte,
+	count int,
+) error {
 	for i := range count {
 		// Write length as varint
 		if err := writeVarint(buf, uint64(len(data[i]))); err != nil {
@@ -619,7 +819,10 @@ func writeBlobArray(buf *bytes.Buffer, data [][]byte, count int) error {
 	return nil
 }
 
-func readBlobArray(r io.Reader, count int) ([][]byte, error) {
+func readBlobArray(
+	r io.Reader,
+	count int,
+) ([][]byte, error) {
 	data := make([][]byte, count)
 	for i := range count {
 		// Read length as varint
@@ -638,7 +841,11 @@ func readBlobArray(r io.Reader, count int) ([][]byte, error) {
 }
 
 // Generic any array serialization (fallback for complex types)
-func writeAnyArray(buf *bytes.Buffer, data []any, count int) error {
+func writeAnyArray(
+	buf *bytes.Buffer,
+	data []any,
+	count int,
+) error {
 	for i := range count {
 		// Write value as string representation
 		var strVal string
@@ -659,7 +866,10 @@ func writeAnyArray(buf *bytes.Buffer, data []any, count int) error {
 	return nil
 }
 
-func readAnyArray(r io.Reader, count int) ([]any, error) {
+func readAnyArray(
+	r io.Reader,
+	count int,
+) ([]any, error) {
 	data := make([]any, count)
 	for i := range count {
 		// Read length as varint
@@ -702,7 +912,9 @@ func readVarint(r io.Reader) (uint64, error) {
 		}
 		shift += 7
 		if shift >= 64 {
-			return 0, fmt.Errorf("varint overflow")
+			return 0, fmt.Errorf(
+				"varint overflow",
+			)
 		}
 	}
 

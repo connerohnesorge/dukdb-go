@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPhysicalSort_SingleColumnAsc(t *testing.T) {
+func TestPhysicalSort_SingleColumnAsc(
+	t *testing.T,
+) {
 	// Test sorting a single integer column in ascending order
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -24,7 +26,9 @@ func TestPhysicalSort_SingleColumnAsc(t *testing.T) {
 	chunk.AppendRow([]any{int32(3)})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -66,7 +70,10 @@ func TestPhysicalSort_SingleColumnAsc(t *testing.T) {
 			break
 		}
 		for i := 0; i < resultChunk.Count(); i++ {
-			allValues = append(allValues, resultChunk.GetValue(i, 0).(int32))
+			allValues = append(
+				allValues,
+				resultChunk.GetValue(i, 0).(int32),
+			)
 		}
 	}
 
@@ -75,7 +82,9 @@ func TestPhysicalSort_SingleColumnAsc(t *testing.T) {
 	assert.Equal(t, expected, allValues)
 }
 
-func TestPhysicalSort_SingleColumnDesc(t *testing.T) {
+func TestPhysicalSort_SingleColumnDesc(
+	t *testing.T,
+) {
 	// Test sorting a single integer column in descending order
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -87,7 +96,9 @@ func TestPhysicalSort_SingleColumnDesc(t *testing.T) {
 	chunk.AppendRow([]any{int32(3)})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -129,7 +140,10 @@ func TestPhysicalSort_SingleColumnDesc(t *testing.T) {
 			break
 		}
 		for i := 0; i < resultChunk.Count(); i++ {
-			allValues = append(allValues, resultChunk.GetValue(i, 0).(int32))
+			allValues = append(
+				allValues,
+				resultChunk.GetValue(i, 0).(int32),
+			)
 		}
 	}
 
@@ -138,9 +152,14 @@ func TestPhysicalSort_SingleColumnDesc(t *testing.T) {
 	assert.Equal(t, expected, allValues)
 }
 
-func TestPhysicalSort_MultipleColumns(t *testing.T) {
+func TestPhysicalSort_MultipleColumns(
+	t *testing.T,
+) {
 	// Test sorting by multiple columns: ORDER BY a DESC, b ASC
-	types := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
+	types := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
 	chunk := storage.NewDataChunk(types)
 	// Add rows: (a, b)
 	chunk.AppendRow([]any{int32(2), "beta"})
@@ -150,8 +169,12 @@ func TestPhysicalSort_MultipleColumns(t *testing.T) {
 	chunk.AppendRow([]any{int32(1), "alpha"})
 
 	typeInfos := make([]dukdb.TypeInfo, 2)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
-	typeInfos[1] = &basicTypeInfo{typ: dukdb.TYPE_VARCHAR}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
+	typeInfos[1] = &basicTypeInfo{
+		typ: dukdb.TYPE_VARCHAR,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -235,7 +258,9 @@ func TestPhysicalSort_WithNulls(t *testing.T) {
 	chunk.AppendRow([]any{int32(1)})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -277,7 +302,10 @@ func TestPhysicalSort_WithNulls(t *testing.T) {
 			break
 		}
 		for i := 0; i < resultChunk.Count(); i++ {
-			allValues = append(allValues, resultChunk.GetValue(i, 0))
+			allValues = append(
+				allValues,
+				resultChunk.GetValue(i, 0),
+			)
 		}
 	}
 
@@ -298,7 +326,9 @@ func TestPhysicalSort_EmptyInput(t *testing.T) {
 	// No rows added
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -337,7 +367,9 @@ func TestPhysicalSort_EmptyInput(t *testing.T) {
 	assert.Nil(t, resultChunk)
 }
 
-func TestPhysicalSort_StringComparison(t *testing.T) {
+func TestPhysicalSort_StringComparison(
+	t *testing.T,
+) {
 	// Test sorting strings
 	types := []dukdb.Type{dukdb.TYPE_VARCHAR}
 	chunk := storage.NewDataChunk(types)
@@ -347,7 +379,9 @@ func TestPhysicalSort_StringComparison(t *testing.T) {
 	chunk.AppendRow([]any{"banana"})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_VARCHAR}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_VARCHAR,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -389,11 +423,19 @@ func TestPhysicalSort_StringComparison(t *testing.T) {
 			break
 		}
 		for i := 0; i < resultChunk.Count(); i++ {
-			allValues = append(allValues, resultChunk.GetValue(i, 0).(string))
+			allValues = append(
+				allValues,
+				resultChunk.GetValue(i, 0).(string),
+			)
 		}
 	}
 
 	// Should be sorted alphabetically: apple, banana, mango, zebra
-	expected := []string{"apple", "banana", "mango", "zebra"}
+	expected := []string{
+		"apple",
+		"banana",
+		"mango",
+		"zebra",
+	}
 	assert.Equal(t, expected, allValues)
 }

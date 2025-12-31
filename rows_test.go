@@ -260,7 +260,10 @@ func TestRowsColumnTypeScanType(t *testing.T) {
 					nil,
 				)
 				t.Cleanup(func() {
-					assert.NoError(t, rows.Close())
+					assert.NoError(
+						t,
+						rows.Close(),
+					)
 				})
 
 				result := rows.ColumnTypeScanType(

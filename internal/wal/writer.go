@@ -25,10 +25,20 @@ type Writer struct {
 }
 
 // NewWriter creates a new WAL writer.
-func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+func NewWriter(
+	path string,
+	clock quartz.Clock,
+) (*Writer, error) {
+	file, err := os.OpenFile(
+		path,
+		os.O_CREATE|os.O_RDWR|os.O_APPEND,
+		0644,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open WAL file: %w", err)
+		return nil, fmt.Errorf(
+			"failed to open WAL file: %w",
+			err,
+		)
 	}
 
 	w := &Writer{
@@ -43,7 +53,10 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 	if err != nil {
 		_ = file.Close()
 
-		return nil, fmt.Errorf("failed to stat WAL file: %w", err)
+		return nil, fmt.Errorf(
+			"failed to stat WAL file: %w",
+			err,
+		)
 	}
 
 	if stat.Size() == 0 {
@@ -56,7 +69,10 @@ func NewWriter(path string, clock quartz.Clock) (*Writer, error) {
 		if err := header.Serialize(w.buffer); err != nil {
 			_ = file.Close()
 
-			return nil, fmt.Errorf("failed to write WAL header: %w", err)
+			return nil, fmt.Errorf(
+				"failed to write WAL header: %w",
+				err,
+			)
 		}
 		w.bytesWritten = HeaderSize
 	} else {
@@ -94,32 +110,53 @@ func (w *Writer) WriteEntry(entry Entry) error {
 	// Serialize entry payload to buffer
 	var buf bytes.Buffer
 	if err := entry.Serialize(&buf); err != nil {
-		return fmt.Errorf("failed to serialize entry: %w", err)
+		return fmt.Errorf(
+			"failed to serialize entry: %w",
+			err,
+		)
 	}
 	data := buf.Bytes()
 	size := uint64(len(data))
 
 	// Calculate checksum over Size + Type + Data
 	checksum := crc64.New(w.checksum)
-	_ = binary.Write(checksum, binary.LittleEndian, size)
-	_, _ = checksum.Write([]byte{byte(entry.Type())})
+	_ = binary.Write(
+		checksum,
+		binary.LittleEndian,
+		size,
+	)
+	_, _ = checksum.Write(
+		[]byte{byte(entry.Type())},
+	)
 	_, _ = checksum.Write(data)
 	checksumValue := checksum.Sum64()
 
 	// Write entry header
 	if err := binary.Write(w.buffer, binary.LittleEndian, size); err != nil {
-		return fmt.Errorf("failed to write entry size: %w", err)
+		return fmt.Errorf(
+			"failed to write entry size: %w",
+			err,
+		)
 	}
 	if err := binary.Write(w.buffer, binary.LittleEndian, checksumValue); err != nil {
-		return fmt.Errorf("failed to write entry checksum: %w", err)
+		return fmt.Errorf(
+			"failed to write entry checksum: %w",
+			err,
+		)
 	}
 	if err := binary.Write(w.buffer, binary.LittleEndian, entry.Type()); err != nil {
-		return fmt.Errorf("failed to write entry type: %w", err)
+		return fmt.Errorf(
+			"failed to write entry type: %w",
+			err,
+		)
 	}
 
 	// Write entry data
 	if _, err := w.buffer.Write(data); err != nil {
-		return fmt.Errorf("failed to write entry data: %w", err)
+		return fmt.Errorf(
+			"failed to write entry data: %w",
+			err,
+		)
 	}
 
 	w.bytesWritten += EntryHeaderSize + size
@@ -133,10 +170,16 @@ func (w *Writer) Sync() error {
 	defer w.mu.Unlock()
 
 	if err := w.buffer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush WAL buffer: %w", err)
+		return fmt.Errorf(
+			"failed to flush WAL buffer: %w",
+			err,
+		)
 	}
 	if err := w.file.Sync(); err != nil {
-		return fmt.Errorf("failed to sync WAL file: %w", err)
+		return fmt.Errorf(
+			"failed to sync WAL file: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -148,7 +191,10 @@ func (w *Writer) Close() error {
 	defer w.mu.Unlock()
 
 	if err := w.buffer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush WAL buffer: %w", err)
+		return fmt.Errorf(
+			"failed to flush WAL buffer: %w",
+			err,
+		)
 	}
 
 	return w.file.Close()
@@ -189,12 +235,18 @@ func (w *Writer) Reset() error {
 
 	// Truncate file
 	if err := w.file.Truncate(0); err != nil {
-		return fmt.Errorf("failed to truncate WAL file: %w", err)
+		return fmt.Errorf(
+			"failed to truncate WAL file: %w",
+			err,
+		)
 	}
 
 	// Seek to beginning
 	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to WAL start: %w", err)
+		return fmt.Errorf(
+			"failed to seek to WAL start: %w",
+			err,
+		)
 	}
 
 	// Reset buffer
@@ -208,14 +260,20 @@ func (w *Writer) Reset() error {
 		Iteration: w.iteration,
 	}
 	if err := header.Serialize(w.buffer); err != nil {
-		return fmt.Errorf("failed to write WAL header: %w", err)
+		return fmt.Errorf(
+			"failed to write WAL header: %w",
+			err,
+		)
 	}
 
 	w.bytesWritten = HeaderSize
 
 	// Flush header
 	if err := w.buffer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush WAL header: %w", err)
+		return fmt.Errorf(
+			"failed to flush WAL header: %w",
+			err,
+		)
 	}
 
 	return nil

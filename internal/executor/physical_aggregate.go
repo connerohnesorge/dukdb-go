@@ -36,7 +36,10 @@ func NewPhysicalAggregateOperator(
 	// Build output types: GROUP BY columns followed by aggregate columns
 	numGroupBy := len(groupBy)
 	numAgg := len(aggregates)
-	types := make([]dukdb.TypeInfo, numGroupBy+numAgg)
+	types := make(
+		[]dukdb.TypeInfo,
+		numGroupBy+numAgg,
+	)
 
 	// Group by column types
 	for i, expr := range groupBy {
@@ -54,7 +57,9 @@ func NewPhysicalAggregateOperator(
 		typ := expr.ResultType()
 		info, err := dukdb.NewTypeInfo(typ)
 		if err != nil {
-			types[numGroupBy+i] = &basicTypeInfo{typ: typ}
+			types[numGroupBy+i] = &basicTypeInfo{
+				typ: typ,
+			}
 		} else {
 			types[numGroupBy+i] = info
 		}
@@ -85,7 +90,10 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 	// Hash table: groupKey -> list of rows belonging to that group
 	type groupKey string
 	groups := make(map[groupKey][]map[string]any)
-	groupOrder := make([]groupKey, 0) // Preserve insertion order
+	groupOrder := make(
+		[]groupKey,
+		0,
+	) // Preserve insertion order
 
 	// Consume all input from child operator
 	for {
@@ -106,7 +114,10 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 			if len(op.childColumns) > 0 {
 				// Use column bindings if available
 				for colIdx := 0; colIdx < inputChunk.ColumnCount() && colIdx < len(op.childColumns); colIdx++ {
-					value := inputChunk.GetValue(rowIdx, colIdx)
+					value := inputChunk.GetValue(
+						rowIdx,
+						colIdx,
+					)
 					col := op.childColumns[colIdx]
 
 					// Add column by simple name
@@ -115,7 +126,8 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 					}
 
 					// Add column by table-qualified name
-					if col.Table != "" && col.Column != "" {
+					if col.Table != "" &&
+						col.Column != "" {
 						qualifiedName := col.Table + "." + col.Column
 						rowMap[qualifiedName] = value
 					}
@@ -131,15 +143,24 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 			// Compute group key from GROUP BY expressions
 			var key groupKey
 			if len(op.groupBy) > 0 {
-				keyParts := make([]any, len(op.groupBy))
+				keyParts := make(
+					[]any,
+					len(op.groupBy),
+				)
 				for i, expr := range op.groupBy {
-					val, err := op.executor.evaluateExpr(op.ctx, expr, rowMap)
+					val, err := op.executor.evaluateExpr(
+						op.ctx,
+						expr,
+						rowMap,
+					)
 					if err != nil {
 						return nil, err
 					}
 					keyParts[i] = val
 				}
-				key = groupKey(formatGroupKey(keyParts))
+				key = groupKey(
+					formatGroupKey(keyParts),
+				)
 			} else {
 				// No GROUP BY - single group for all rows
 				key = ""
@@ -147,10 +168,19 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 
 			// Add row to group
 			if _, exists := groups[key]; !exists {
-				groupOrder = append(groupOrder, key)
-				groups[key] = make([]map[string]any, 0)
+				groupOrder = append(
+					groupOrder,
+					key,
+				)
+				groups[key] = make(
+					[]map[string]any,
+					0,
+				)
 			}
-			groups[key] = append(groups[key], rowMap)
+			groups[key] = append(
+				groups[key],
+				rowMap,
+			)
 		}
 	}
 
@@ -164,7 +194,10 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 	// Build output chunk
 	numGroupBy := len(op.groupBy)
 	numAgg := len(op.aggregates)
-	outputTypes := make([]dukdb.Type, numGroupBy+numAgg)
+	outputTypes := make(
+		[]dukdb.Type,
+		numGroupBy+numAgg,
+	)
 
 	for i, expr := range op.groupBy {
 		outputTypes[i] = expr.ResultType()
@@ -173,17 +206,28 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 		outputTypes[numGroupBy+i] = expr.ResultType()
 	}
 
-	outputChunk := storage.NewDataChunkWithCapacity(outputTypes, len(groupOrder))
+	outputChunk := storage.NewDataChunkWithCapacity(
+		outputTypes,
+		len(groupOrder),
+	)
 
 	// Compute aggregates for each group and add to output
 	for _, key := range groupOrder {
 		groupRows := groups[key]
-		rowValues := make([]any, numGroupBy+numAgg)
+		rowValues := make(
+			[]any,
+			numGroupBy+numAgg,
+		)
 
 		// Add GROUP BY column values
-		if len(groupRows) > 0 && len(op.groupBy) > 0 {
+		if len(groupRows) > 0 &&
+			len(op.groupBy) > 0 {
 			for i, expr := range op.groupBy {
-				val, _ := op.executor.evaluateExpr(op.ctx, expr, groupRows[0])
+				val, _ := op.executor.evaluateExpr(
+					op.ctx,
+					expr,
+					groupRows[0],
+				)
 				rowValues[i] = val
 			}
 		} else if len(op.groupBy) > 0 {
@@ -195,7 +239,10 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 
 		// Compute aggregate values
 		for i, expr := range op.aggregates {
-			val, err := op.computeAggregate(expr, groupRows)
+			val, err := op.computeAggregate(
+				expr,
+				groupRows,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -239,7 +286,11 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		seen := make(map[string]bool)
 		for _, row := range rows {
 			if len(fn.Args) > 0 {
-				val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+				val, err := op.executor.evaluateExpr(
+					op.ctx,
+					fn.Args[0],
+					row,
+				)
 				if err != nil {
 					return nil, err
 				}
@@ -266,7 +317,11 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		var sum float64
 		hasValue := false
 		for _, row := range rows {
-			val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+			val, err := op.executor.evaluateExpr(
+				op.ctx,
+				fn.Args[0],
+				row,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -288,7 +343,11 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		var sum float64
 		count := 0
 		for _, row := range rows {
-			val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+			val, err := op.executor.evaluateExpr(
+				op.ctx,
+				fn.Args[0],
+				row,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -309,12 +368,20 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		var minVal any
 		for _, row := range rows {
-			val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+			val, err := op.executor.evaluateExpr(
+				op.ctx,
+				fn.Args[0],
+				row,
+			)
 			if err != nil {
 				return nil, err
 			}
 			if val != nil {
-				if minVal == nil || compareValues(val, minVal) < 0 {
+				if minVal == nil ||
+					compareValues(
+						val,
+						minVal,
+					) < 0 {
 					minVal = val
 				}
 			}
@@ -328,12 +395,20 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		var maxVal any
 		for _, row := range rows {
-			val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+			val, err := op.executor.evaluateExpr(
+				op.ctx,
+				fn.Args[0],
+				row,
+			)
 			if err != nil {
 				return nil, err
 			}
 			if val != nil {
-				if maxVal == nil || compareValues(val, maxVal) > 0 {
+				if maxVal == nil ||
+					compareValues(
+						val,
+						maxVal,
+					) > 0 {
 					maxVal = val
 				}
 			}
@@ -344,7 +419,10 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("unknown aggregate function: %s", fn.Name),
+			Msg: fmt.Sprintf(
+				"unknown aggregate function: %s",
+				fn.Name,
+			),
 		}
 	}
 }

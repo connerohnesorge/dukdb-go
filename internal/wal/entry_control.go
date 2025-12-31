@@ -13,7 +13,10 @@ type TxnBeginEntry struct {
 }
 
 // NewTxnBeginEntry creates a new TxnBeginEntry.
-func NewTxnBeginEntry(txnID uint64, timestamp time.Time) *TxnBeginEntry {
+func NewTxnBeginEntry(
+	txnID uint64,
+	timestamp time.Time,
+) *TxnBeginEntry {
 	return &TxnBeginEntry{
 		txnID:     txnID,
 		Timestamp: timestamp.UnixNano(),
@@ -31,21 +34,33 @@ func (e *TxnBeginEntry) TxnID() uint64 {
 }
 
 // Serialize writes the entry to the writer.
-func (e *TxnBeginEntry) Serialize(w io.Writer) error {
+func (e *TxnBeginEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
 
-	return binary.Write(w, binary.LittleEndian, e.Timestamp)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		e.Timestamp,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *TxnBeginEntry) Deserialize(r io.Reader) error {
+func (e *TxnBeginEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
 
-	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&e.Timestamp,
+	)
 }
 
 // TxnCommitEntry represents a transaction commit WAL entry.
@@ -55,7 +70,10 @@ type TxnCommitEntry struct {
 }
 
 // NewTxnCommitEntry creates a new TxnCommitEntry.
-func NewTxnCommitEntry(txnID uint64, timestamp time.Time) *TxnCommitEntry {
+func NewTxnCommitEntry(
+	txnID uint64,
+	timestamp time.Time,
+) *TxnCommitEntry {
 	return &TxnCommitEntry{
 		txnID:     txnID,
 		Timestamp: timestamp.UnixNano(),
@@ -73,21 +91,33 @@ func (e *TxnCommitEntry) TxnID() uint64 {
 }
 
 // Serialize writes the entry to the writer.
-func (e *TxnCommitEntry) Serialize(w io.Writer) error {
+func (e *TxnCommitEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
 
-	return binary.Write(w, binary.LittleEndian, e.Timestamp)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		e.Timestamp,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *TxnCommitEntry) Deserialize(r io.Reader) error {
+func (e *TxnCommitEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
 
-	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&e.Timestamp,
+	)
 }
 
 // CheckpointEntry represents a checkpoint marker WAL entry.
@@ -97,7 +127,10 @@ type CheckpointEntry struct {
 }
 
 // NewCheckpointEntry creates a new CheckpointEntry.
-func NewCheckpointEntry(iteration uint64, timestamp time.Time) *CheckpointEntry {
+func NewCheckpointEntry(
+	iteration uint64,
+	timestamp time.Time,
+) *CheckpointEntry {
 	return &CheckpointEntry{
 		Iteration: iteration,
 		Timestamp: timestamp.UnixNano(),
@@ -110,21 +143,33 @@ func (e *CheckpointEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *CheckpointEntry) Serialize(w io.Writer) error {
+func (e *CheckpointEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.Iteration); err != nil {
 		return err
 	}
 
-	return binary.Write(w, binary.LittleEndian, e.Timestamp)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		e.Timestamp,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *CheckpointEntry) Deserialize(r io.Reader) error {
+func (e *CheckpointEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.Iteration); err != nil {
 		return err
 	}
 
-	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&e.Timestamp,
+	)
 }
 
 // FlushEntry represents a WAL flush marker entry.
@@ -133,7 +178,9 @@ type FlushEntry struct {
 }
 
 // NewFlushEntry creates a new FlushEntry.
-func NewFlushEntry(timestamp time.Time) *FlushEntry {
+func NewFlushEntry(
+	timestamp time.Time,
+) *FlushEntry {
 	return &FlushEntry{
 		Timestamp: timestamp.UnixNano(),
 	}
@@ -145,13 +192,25 @@ func (e *FlushEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *FlushEntry) Serialize(w io.Writer) error {
-	return binary.Write(w, binary.LittleEndian, e.Timestamp)
+func (e *FlushEntry) Serialize(
+	w io.Writer,
+) error {
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		e.Timestamp,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *FlushEntry) Deserialize(r io.Reader) error {
-	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
+func (e *FlushEntry) Deserialize(
+	r io.Reader,
+) error {
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&e.Timestamp,
+	)
 }
 
 // VersionEntry represents a WAL version/header entry.
@@ -162,7 +221,11 @@ type VersionEntry struct {
 }
 
 // NewVersionEntry creates a new VersionEntry.
-func NewVersionEntry(version uint8, iteration uint64, timestamp time.Time) *VersionEntry {
+func NewVersionEntry(
+	version uint8,
+	iteration uint64,
+	timestamp time.Time,
+) *VersionEntry {
 	return &VersionEntry{
 		Version:   version,
 		Iteration: iteration,
@@ -176,7 +239,9 @@ func (e *VersionEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *VersionEntry) Serialize(w io.Writer) error {
+func (e *VersionEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.Version); err != nil {
 		return err
 	}
@@ -184,11 +249,17 @@ func (e *VersionEntry) Serialize(w io.Writer) error {
 		return err
 	}
 
-	return binary.Write(w, binary.LittleEndian, e.Timestamp)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		e.Timestamp,
+	)
 }
 
 // Deserialize reads the entry from the reader.
-func (e *VersionEntry) Deserialize(r io.Reader) error {
+func (e *VersionEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.Version); err != nil {
 		return err
 	}
@@ -196,5 +267,9 @@ func (e *VersionEntry) Deserialize(r io.Reader) error {
 		return err
 	}
 
-	return binary.Read(r, binary.LittleEndian, &e.Timestamp)
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&e.Timestamp,
+	)
 }

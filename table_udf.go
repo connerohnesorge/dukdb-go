@@ -118,7 +118,10 @@ type ParallelChunkTableSource interface {
 	// FillChunk takes a DataChunk and fills it with values.
 	// The localState parameter is passed first (thread-local state from NewLocalState).
 	// Set the chunk size to 0 to end the function.
-	FillChunk(localState any, chunk *DataChunk) error
+	FillChunk(
+		localState any,
+		chunk *DataChunk,
+	) error
 }
 
 // tableFunction is the generic table function type.
@@ -171,7 +174,10 @@ func (w parallelRowTSWrapper) NewLocalState() any {
 	return struct{}{}
 }
 
-func (w parallelRowTSWrapper) FillRow(localState any, row Row) (bool, error) {
+func (w parallelRowTSWrapper) FillRow(
+	localState any,
+	row Row,
+) (bool, error) {
 	return w.s.FillRow(row)
 }
 
@@ -198,35 +204,49 @@ func (w parallelChunkTSWrapper) NewLocalState() any {
 	return struct{}{}
 }
 
-func (w parallelChunkTSWrapper) FillChunk(localState any, chunk *DataChunk) error {
+func (w parallelChunkTSWrapper) FillChunk(
+	localState any,
+	chunk *DataChunk,
+) error {
 	return w.s.FillChunk(chunk)
 }
 
 // wrapRowTF wraps a RowTableFunction to a ParallelRowTableFunction.
-func wrapRowTF(f RowTableFunction) ParallelRowTableFunction {
+func wrapRowTF(
+	f RowTableFunction,
+) ParallelRowTableFunction {
 	tf := ParallelRowTableFunction{
 		Config: f.Config,
 	}
 
 	if f.BindArguments != nil {
 		tf.BindArguments = func(named map[string]any, args ...any) (ParallelRowTableSource, error) {
-			rts, err := f.BindArguments(named, args...)
+			rts, err := f.BindArguments(
+				named,
+				args...)
 			if err != nil {
 				return nil, err
 			}
 
-			return parallelRowTSWrapper{s: rts}, nil
+			return parallelRowTSWrapper{
+				s: rts,
+			}, nil
 		}
 	}
 
 	if f.BindArgumentsContext != nil {
 		tf.BindArgumentsContext = func(ctx context.Context, named map[string]any, args ...any) (ParallelRowTableSource, error) {
-			rts, err := f.BindArgumentsContext(ctx, named, args...)
+			rts, err := f.BindArgumentsContext(
+				ctx,
+				named,
+				args...)
 			if err != nil {
 				return nil, err
 			}
 
-			return parallelRowTSWrapper{s: rts}, nil
+			return parallelRowTSWrapper{
+				s: rts,
+			}, nil
 		}
 	}
 
@@ -234,30 +254,41 @@ func wrapRowTF(f RowTableFunction) ParallelRowTableFunction {
 }
 
 // wrapChunkTF wraps a ChunkTableFunction to a ParallelChunkTableFunction.
-func wrapChunkTF(f ChunkTableFunction) ParallelChunkTableFunction {
+func wrapChunkTF(
+	f ChunkTableFunction,
+) ParallelChunkTableFunction {
 	tf := ParallelChunkTableFunction{
 		Config: f.Config,
 	}
 
 	if f.BindArguments != nil {
 		tf.BindArguments = func(named map[string]any, args ...any) (ParallelChunkTableSource, error) {
-			rts, err := f.BindArguments(named, args...)
+			rts, err := f.BindArguments(
+				named,
+				args...)
 			if err != nil {
 				return nil, err
 			}
 
-			return parallelChunkTSWrapper{s: rts}, nil
+			return parallelChunkTSWrapper{
+				s: rts,
+			}, nil
 		}
 	}
 
 	if f.BindArgumentsContext != nil {
 		tf.BindArgumentsContext = func(ctx context.Context, named map[string]any, args ...any) (ParallelChunkTableSource, error) {
-			rts, err := f.BindArgumentsContext(ctx, named, args...)
+			rts, err := f.BindArgumentsContext(
+				ctx,
+				named,
+				args...)
 			if err != nil {
 				return nil, err
 			}
 
-			return parallelChunkTSWrapper{s: rts}, nil
+			return parallelChunkTSWrapper{
+				s: rts,
+			}, nil
 		}
 	}
 
@@ -266,10 +297,18 @@ func wrapChunkTF(f ChunkTableFunction) ParallelChunkTableFunction {
 
 // Error variables for table UDF operations.
 var (
-	errTableUDFNoName          = errors.New("table UDF name cannot be empty")
-	errTableUDFMissingBindArgs = errors.New("table UDF requires BindArguments or BindArgumentsContext")
-	errTableUDFArgumentIsNil   = errors.New("table UDF argument type cannot be nil")
-	errTableUDFColumnTypeIsNil = errors.New("table UDF column type cannot be nil")
+	errTableUDFNoName = errors.New(
+		"table UDF name cannot be empty",
+	)
+	errTableUDFMissingBindArgs = errors.New(
+		"table UDF requires BindArguments or BindArgumentsContext",
+	)
+	errTableUDFArgumentIsNil = errors.New(
+		"table UDF argument type cannot be nil",
+	)
+	errTableUDFColumnTypeIsNil = errors.New(
+		"table UDF column type cannot be nil",
+	)
 )
 
 // TableFunctionContext provides context and clock for table function execution.
@@ -281,7 +320,10 @@ type TableFunctionContext struct {
 
 // NewTableFunctionContext creates a TableFunctionContext with the given context and clock.
 // If clock is nil, the real system clock is used.
-func NewTableFunctionContext(ctx context.Context, clock quartz.Clock) *TableFunctionContext {
+func NewTableFunctionContext(
+	ctx context.Context,
+	clock quartz.Clock,
+) *TableFunctionContext {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
@@ -293,7 +335,9 @@ func NewTableFunctionContext(ctx context.Context, clock quartz.Clock) *TableFunc
 }
 
 // WithClock returns a new TableFunctionContext with the given clock.
-func (c *TableFunctionContext) WithClock(clock quartz.Clock) *TableFunctionContext {
+func (c *TableFunctionContext) WithClock(
+	clock quartz.Clock,
+) *TableFunctionContext {
 	return &TableFunctionContext{
 		ctx:   c.ctx,
 		clock: clock,
@@ -322,11 +366,17 @@ func newTableFunctionRegistry() *tableFunctionRegistry {
 	}
 }
 
-func (r *tableFunctionRegistry) register(name string, f any) error {
+func (r *tableFunctionRegistry) register(
+	name string,
+	f any,
+) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.functions[name]; exists {
-		return fmt.Errorf("table function %q already registered", name)
+		return fmt.Errorf(
+			"table function %q already registered",
+			name,
+		)
 	}
 	r.functions[name] = f
 
@@ -336,7 +386,9 @@ func (r *tableFunctionRegistry) register(name string, f any) error {
 // Get looks up a registered table function by name.
 // Returns the function and true if found, nil and false otherwise.
 // Used by query executor to resolve table function calls.
-func (r *tableFunctionRegistry) Get(name string) (any, bool) {
+func (r *tableFunctionRegistry) Get(
+	name string,
+) (any, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	f, ok := r.functions[name]
@@ -346,7 +398,11 @@ func (r *tableFunctionRegistry) Get(name string) (any, bool) {
 
 // RegisterTableUDF registers a user-defined table function.
 // Projection pushdown is enabled by default.
-func RegisterTableUDF[TFT TableFunction](conn *sql.Conn, name string, f TFT) error {
+func RegisterTableUDF[TFT TableFunction](
+	conn *sql.Conn,
+	name string,
+	f TFT,
+) error {
 	if name == "" {
 		return errTableUDFNoName
 	}
@@ -368,9 +424,14 @@ func RegisterTableUDF[TFT TableFunction](conn *sql.Conn, name string, f TFT) err
 }
 
 // registerParallelTableUDF registers a parallel table function.
-func registerParallelTableUDF[T tableSource](conn *sql.Conn, name string, f tableFunction[T]) error {
+func registerParallelTableUDF[T tableSource](
+	conn *sql.Conn,
+	name string,
+	f tableFunction[T],
+) error {
 	// Validate that either BindArguments or BindArgumentsContext is set.
-	if f.BindArguments == nil && f.BindArgumentsContext == nil {
+	if f.BindArguments == nil &&
+		f.BindArgumentsContext == nil {
 		return errTableUDFMissingBindArgs
 	}
 
@@ -391,7 +452,9 @@ func registerParallelTableUDF[T tableSource](conn *sql.Conn, name string, f tabl
 	return conn.Raw(func(driverConn any) error {
 		c, ok := driverConn.(*Conn)
 		if !ok {
-			return errors.New("invalid driver connection type")
+			return errors.New(
+				"invalid driver connection type",
+			)
 		}
 
 		// Initialize registry if needed.
@@ -419,21 +482,27 @@ func NewTableSourceExecutor() *TableSourceExecutor {
 
 // WithProjection sets the column projection for the executor.
 // Columns not in the projection list will not be populated.
-func (e *TableSourceExecutor) WithProjection(projection []int) *TableSourceExecutor {
+func (e *TableSourceExecutor) WithProjection(
+	projection []int,
+) *TableSourceExecutor {
 	e.projection = projection
 
 	return e
 }
 
 // WithClock sets the clock for the executor to enable deterministic testing.
-func (e *TableSourceExecutor) WithClock(clock quartz.Clock) *TableSourceExecutor {
+func (e *TableSourceExecutor) WithClock(
+	clock quartz.Clock,
+) *TableSourceExecutor {
 	e.clock = clock
 
 	return e
 }
 
 // ExecuteRowSource executes a RowTableSource and collects all rows into DataChunks.
-func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataChunk, error) {
+func (e *TableSourceExecutor) ExecuteRowSource(
+	source RowTableSource,
+) ([]*DataChunk, error) {
 	// Get column types
 	colInfos := source.ColumnInfos()
 	types := make([]TypeInfo, len(colInfos))
@@ -454,7 +523,10 @@ func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataCh
 
 	// Create initial chunk
 	if e.projection != nil {
-		currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+		currentChunk, err = NewDataChunkWithProjection(
+			types,
+			e.projection,
+		)
 	} else {
 		currentChunk, err = NewDataChunk(types)
 	}
@@ -476,7 +548,10 @@ func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataCh
 				if err := currentChunk.SetSize(rowIdx); err != nil {
 					return nil, err
 				}
-				chunks = append(chunks, currentChunk)
+				chunks = append(
+					chunks,
+					currentChunk,
+				)
 			}
 
 			break
@@ -492,7 +567,10 @@ func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataCh
 
 			// Create new chunk
 			if e.projection != nil {
-				currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+				currentChunk, err = NewDataChunkWithProjection(
+					types,
+					e.projection,
+				)
 			} else {
 				currentChunk, err = NewDataChunk(types)
 			}
@@ -507,7 +585,9 @@ func (e *TableSourceExecutor) ExecuteRowSource(source RowTableSource) ([]*DataCh
 }
 
 // ExecuteChunkSource executes a ChunkTableSource and collects all chunks.
-func (e *TableSourceExecutor) ExecuteChunkSource(source ChunkTableSource) ([]*DataChunk, error) {
+func (e *TableSourceExecutor) ExecuteChunkSource(
+	source ChunkTableSource,
+) ([]*DataChunk, error) {
 	// Get column types
 	colInfos := source.ColumnInfos()
 	types := make([]TypeInfo, len(colInfos))
@@ -529,7 +609,10 @@ func (e *TableSourceExecutor) ExecuteChunkSource(source ChunkTableSource) ([]*Da
 		var err error
 
 		if e.projection != nil {
-			chunk, err = NewDataChunkWithProjection(types, e.projection)
+			chunk, err = NewDataChunkWithProjection(
+				types,
+				e.projection,
+			)
 		} else {
 			chunk, err = NewDataChunk(types)
 		}
@@ -559,7 +642,9 @@ func (e *TableSourceExecutor) ExecuteChunkSource(source ChunkTableSource) ([]*Da
 }
 
 // ExecuteParallelRowSource executes a ParallelRowTableSource with parallel workers.
-func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSource) ([]*DataChunk, error) {
+func (e *TableSourceExecutor) ExecuteParallelRowSource(
+	source ParallelRowTableSource,
+) ([]*DataChunk, error) {
 	// Get column types
 	colInfos := source.ColumnInfos()
 	types := make([]TypeInfo, len(colInfos))
@@ -588,7 +673,10 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 		var err error
 
 		if e.projection != nil {
-			currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+			currentChunk, err = NewDataChunkWithProjection(
+				types,
+				e.projection,
+			)
 		} else {
 			currentChunk, err = NewDataChunk(types)
 		}
@@ -599,7 +687,10 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 		rowIdx := 0
 		for {
 			row := NewRow(currentChunk, rowIdx)
-			hasMore, fillErr := source.FillRow(localState, row)
+			hasMore, fillErr := source.FillRow(
+				localState,
+				row,
+			)
 			if fillErr != nil {
 				return nil, fillErr
 			}
@@ -609,7 +700,10 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 					if err := currentChunk.SetSize(rowIdx); err != nil {
 						return nil, err
 					}
-					chunks = append(chunks, currentChunk)
+					chunks = append(
+						chunks,
+						currentChunk,
+					)
 				}
 
 				break
@@ -620,10 +714,16 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 				if err := currentChunk.SetSize(rowIdx); err != nil {
 					return nil, err
 				}
-				chunks = append(chunks, currentChunk)
+				chunks = append(
+					chunks,
+					currentChunk,
+				)
 
 				if e.projection != nil {
-					currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+					currentChunk, err = NewDataChunkWithProjection(
+						types,
+						e.projection,
+					)
 				} else {
 					currentChunk, err = NewDataChunk(types)
 				}
@@ -638,7 +738,11 @@ func (e *TableSourceExecutor) ExecuteParallelRowSource(source ParallelRowTableSo
 	}
 
 	// Multi-threaded execution with goroutine pool
-	return e.executeParallelRowSourceMultiThreaded(source, types, maxThreads)
+	return e.executeParallelRowSourceMultiThreaded(
+		source,
+		types,
+		maxThreads,
+	)
 }
 
 // executeParallelRowSourceMultiThreaded executes a ParallelRowTableSource with multiple workers.
@@ -666,8 +770,12 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 
 				continue
 			}
-			if result.chunk != nil && result.chunk.GetSize() > 0 {
-				chunks = append(chunks, result.chunk)
+			if result.chunk != nil &&
+				result.chunk.GetSize() > 0 {
+				chunks = append(
+					chunks,
+					result.chunk,
+				)
 			}
 		}
 		close(done)
@@ -679,7 +787,10 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 		var err error
 
 		if e.projection != nil {
-			currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+			currentChunk, err = NewDataChunkWithProjection(
+				types,
+				e.projection,
+			)
 		} else {
 			currentChunk, err = NewDataChunk(types)
 		}
@@ -692,7 +803,10 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 		rowIdx := 0
 		for {
 			row := NewRow(currentChunk, rowIdx)
-			hasMore, fillErr := source.FillRow(localState, row)
+			hasMore, fillErr := source.FillRow(
+				localState,
+				row,
+			)
 			if fillErr != nil {
 				results <- workerResult{err: fillErr}
 
@@ -722,7 +836,10 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 				results <- workerResult{chunk: currentChunk}
 
 				if e.projection != nil {
-					currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+					currentChunk, err = NewDataChunkWithProjection(
+						types,
+						e.projection,
+					)
 				} else {
 					currentChunk, err = NewDataChunk(types)
 				}
@@ -760,7 +877,9 @@ func (e *TableSourceExecutor) executeParallelRowSourceMultiThreaded(
 }
 
 // ExecuteParallelChunkSource executes a ParallelChunkTableSource with parallel workers.
-func (e *TableSourceExecutor) ExecuteParallelChunkSource(source ParallelChunkTableSource) ([]*DataChunk, error) {
+func (e *TableSourceExecutor) ExecuteParallelChunkSource(
+	source ParallelChunkTableSource,
+) ([]*DataChunk, error) {
 	// Get column types
 	colInfos := source.ColumnInfos()
 	types := make([]TypeInfo, len(colInfos))
@@ -788,7 +907,10 @@ func (e *TableSourceExecutor) ExecuteParallelChunkSource(source ParallelChunkTab
 			var err error
 
 			if e.projection != nil {
-				chunk, err = NewDataChunkWithProjection(types, e.projection)
+				chunk, err = NewDataChunkWithProjection(
+					types,
+					e.projection,
+				)
 			} else {
 				chunk, err = NewDataChunk(types)
 			}
@@ -815,7 +937,11 @@ func (e *TableSourceExecutor) ExecuteParallelChunkSource(source ParallelChunkTab
 	}
 
 	// Multi-threaded execution
-	return e.executeParallelChunkSourceMultiThreaded(source, types, maxThreads)
+	return e.executeParallelChunkSourceMultiThreaded(
+		source,
+		types,
+		maxThreads,
+	)
 }
 
 // executeParallelChunkSourceMultiThreaded executes a ParallelChunkTableSource with multiple workers.
@@ -841,8 +967,12 @@ func (e *TableSourceExecutor) executeParallelChunkSourceMultiThreaded(
 
 				continue
 			}
-			if result.chunk != nil && result.chunk.GetSize() > 0 {
-				chunks = append(chunks, result.chunk)
+			if result.chunk != nil &&
+				result.chunk.GetSize() > 0 {
+				chunks = append(
+					chunks,
+					result.chunk,
+				)
 			}
 		}
 		close(done)
@@ -854,7 +984,10 @@ func (e *TableSourceExecutor) executeParallelChunkSourceMultiThreaded(
 			var err error
 
 			if e.projection != nil {
-				chunk, err = NewDataChunkWithProjection(types, e.projection)
+				chunk, err = NewDataChunkWithProjection(
+					types,
+					e.projection,
+				)
 			} else {
 				chunk, err = NewDataChunk(types)
 			}
@@ -969,11 +1102,20 @@ func (e *TableSourceExecutor) ExecuteParallelRowSourceWithContext(
 
 	// Single-threaded execution
 	if maxThreads == 1 {
-		return e.executeSequentialRowWithContext(tfCtx, source, types)
+		return e.executeSequentialRowWithContext(
+			tfCtx,
+			source,
+			types,
+		)
 	}
 
 	// Multi-threaded execution
-	return e.executeParallelRowWithContext(tfCtx, source, types, maxThreads)
+	return e.executeParallelRowWithContext(
+		tfCtx,
+		source,
+		types,
+		maxThreads,
+	)
 }
 
 // executeSequentialRowWithContext executes a parallel row source sequentially with context.
@@ -989,7 +1131,10 @@ func (e *TableSourceExecutor) executeSequentialRowWithContext(
 	var err error
 
 	if e.projection != nil {
-		currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+		currentChunk, err = NewDataChunkWithProjection(
+			types,
+			e.projection,
+		)
 	} else {
 		currentChunk, err = NewDataChunk(types)
 	}
@@ -1014,7 +1159,10 @@ func (e *TableSourceExecutor) executeSequentialRowWithContext(
 		}
 
 		row := NewRow(currentChunk, rowIdx)
-		hasMore, fillErr := source.FillRow(localState, row)
+		hasMore, fillErr := source.FillRow(
+			localState,
+			row,
+		)
 		if fillErr != nil {
 			return nil, fillErr
 		}
@@ -1024,7 +1172,10 @@ func (e *TableSourceExecutor) executeSequentialRowWithContext(
 				if err := currentChunk.SetSize(rowIdx); err != nil {
 					return nil, err
 				}
-				chunks = append(chunks, currentChunk)
+				chunks = append(
+					chunks,
+					currentChunk,
+				)
 			}
 
 			break
@@ -1038,7 +1189,10 @@ func (e *TableSourceExecutor) executeSequentialRowWithContext(
 			chunks = append(chunks, currentChunk)
 
 			if e.projection != nil {
-				currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+				currentChunk, err = NewDataChunkWithProjection(
+					types,
+					e.projection,
+				)
 			} else {
 				currentChunk, err = NewDataChunk(types)
 			}
@@ -1078,8 +1232,12 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 
 				continue
 			}
-			if result.chunk != nil && result.chunk.GetSize() > 0 {
-				chunks = append(chunks, result.chunk)
+			if result.chunk != nil &&
+				result.chunk.GetSize() > 0 {
+				chunks = append(
+					chunks,
+					result.chunk,
+				)
 			}
 		}
 		close(done)
@@ -1091,7 +1249,10 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 		var err error
 
 		if e.projection != nil {
-			currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+			currentChunk, err = NewDataChunkWithProjection(
+				types,
+				e.projection,
+			)
 		} else {
 			currentChunk, err = NewDataChunk(types)
 		}
@@ -1115,7 +1276,10 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 			}
 
 			row := NewRow(currentChunk, rowIdx)
-			hasMore, fillErr := source.FillRow(localState, row)
+			hasMore, fillErr := source.FillRow(
+				localState,
+				row,
+			)
 			if fillErr != nil {
 				results <- workerResult{err: fillErr}
 
@@ -1145,7 +1309,10 @@ func (e *TableSourceExecutor) executeParallelRowWithContext(
 				results <- workerResult{chunk: currentChunk}
 
 				if e.projection != nil {
-					currentChunk, err = NewDataChunkWithProjection(types, e.projection)
+					currentChunk, err = NewDataChunkWithProjection(
+						types,
+						e.projection,
+					)
 				} else {
 					currentChunk, err = NewDataChunk(types)
 				}
@@ -1232,11 +1399,20 @@ func (e *TableSourceExecutor) ExecuteParallelChunkSourceWithContext(
 
 	// Single-threaded execution
 	if maxThreads == 1 {
-		return e.executeSequentialChunkWithContext(tfCtx, source, types)
+		return e.executeSequentialChunkWithContext(
+			tfCtx,
+			source,
+			types,
+		)
 	}
 
 	// Multi-threaded execution
-	return e.executeParallelChunkWithContext(tfCtx, source, types, maxThreads)
+	return e.executeParallelChunkWithContext(
+		tfCtx,
+		source,
+		types,
+		maxThreads,
+	)
 }
 
 // executeSequentialChunkWithContext executes a parallel chunk source sequentially with context.
@@ -1267,7 +1443,10 @@ func (e *TableSourceExecutor) executeSequentialChunkWithContext(
 		var err error
 
 		if e.projection != nil {
-			chunk, err = NewDataChunkWithProjection(types, e.projection)
+			chunk, err = NewDataChunkWithProjection(
+				types,
+				e.projection,
+			)
 		} else {
 			chunk, err = NewDataChunk(types)
 		}
@@ -1318,8 +1497,12 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 
 				continue
 			}
-			if result.chunk != nil && result.chunk.GetSize() > 0 {
-				chunks = append(chunks, result.chunk)
+			if result.chunk != nil &&
+				result.chunk.GetSize() > 0 {
+				chunks = append(
+					chunks,
+					result.chunk,
+				)
 			}
 		}
 		close(done)
@@ -1342,7 +1525,10 @@ func (e *TableSourceExecutor) executeParallelChunkWithContext(
 			var err error
 
 			if e.projection != nil {
-				chunk, err = NewDataChunkWithProjection(types, e.projection)
+				chunk, err = NewDataChunkWithProjection(
+					types,
+					e.projection,
+				)
 			} else {
 				chunk, err = NewDataChunk(types)
 			}

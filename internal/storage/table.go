@@ -154,7 +154,10 @@ func (t *Table) Scan() *TableScanner {
 	defer t.mu.RUnlock()
 
 	// Snapshot row groups to avoid deadlocks during concurrent access
-	rowGroups := make([]*RowGroup, len(t.rowGroups))
+	rowGroups := make(
+		[]*RowGroup,
+		len(t.rowGroups),
+	)
 	copy(rowGroups, t.rowGroups)
 
 	return &TableScanner{

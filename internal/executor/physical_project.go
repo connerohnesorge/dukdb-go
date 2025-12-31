@@ -28,13 +28,18 @@ func NewPhysicalProjectOperator(
 	ctx *ExecutionContext,
 ) (*PhysicalProjectOperator, error) {
 	// Get TypeInfo for each projection expression
-	types := make([]dukdb.TypeInfo, len(expressions))
+	types := make(
+		[]dukdb.TypeInfo,
+		len(expressions),
+	)
 	for i, expr := range expressions {
 		resultType := expr.ResultType()
 		info, err := dukdb.NewTypeInfo(resultType)
 		if err != nil {
 			// Fallback: use basic wrapper if TypeInfo creation fails
-			types[i] = &basicTypeInfo{typ: resultType}
+			types[i] = &basicTypeInfo{
+				typ: resultType,
+			}
 		} else {
 			types[i] = info
 		}
@@ -65,7 +70,10 @@ func (op *PhysicalProjectOperator) Next() (*storage.DataChunk, error) {
 	}
 
 	// Create output chunk with projection expression types
-	outputTypes := make([]dukdb.Type, len(op.expressions))
+	outputTypes := make(
+		[]dukdb.Type,
+		len(op.expressions),
+	)
 	for i, expr := range op.expressions {
 		outputTypes[i] = expr.ResultType()
 	}
@@ -79,12 +87,22 @@ func (op *PhysicalProjectOperator) Next() (*storage.DataChunk, error) {
 	for rowIdx := 0; rowIdx < inputChunk.Count(); rowIdx++ {
 		// Create a row map for expression evaluation
 		// Build the row context with column names from the child operator
-		rowMap := op.buildRowMap(inputChunk, rowIdx)
+		rowMap := op.buildRowMap(
+			inputChunk,
+			rowIdx,
+		)
 
 		// Evaluate each projection expression
-		projectedValues := make([]any, len(op.expressions))
+		projectedValues := make(
+			[]any,
+			len(op.expressions),
+		)
 		for colIdx, expr := range op.expressions {
-			val, err := op.executor.evaluateExpr(op.ctx, expr, rowMap)
+			val, err := op.executor.evaluateExpr(
+				op.ctx,
+				expr,
+				rowMap,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -100,7 +118,10 @@ func (op *PhysicalProjectOperator) Next() (*storage.DataChunk, error) {
 
 // buildRowMap creates a map of column names to values for expression evaluation.
 // This maps both simple column names and table-qualified names from the child operator.
-func (op *PhysicalProjectOperator) buildRowMap(chunk *storage.DataChunk, rowIdx int) map[string]any {
+func (op *PhysicalProjectOperator) buildRowMap(
+	chunk *storage.DataChunk,
+	rowIdx int,
+) map[string]any {
 	rowMap := make(map[string]any)
 
 	// Map columns using the child's column bindings

@@ -27,10 +27,14 @@ type Arrow struct {
 
 // NewArrowFromConn creates an Arrow interface from a driver connection.
 // The driverConn must be a *dukdb.Conn obtained from sql.Conn.Raw().
-func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
+func NewArrowFromConn(
+	driverConn driver.Conn,
+) (*Arrow, error) {
 	conn, ok := driverConn.(*Conn)
 	if !ok {
-		return nil, errors.New("driverConn must be a *dukdb.Conn")
+		return nil, errors.New(
+			"driverConn must be a *dukdb.Conn",
+		)
 	}
 
 	return &Arrow{
@@ -41,7 +45,9 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 }
 
 // WithClock returns a new Arrow instance with the given clock for deterministic testing.
-func (a *Arrow) WithClock(clock quartz.Clock) *Arrow {
+func (a *Arrow) WithClock(
+	clock quartz.Clock,
+) *Arrow {
 	return &Arrow{
 		conn:  a.conn,
 		clock: clock,
@@ -50,7 +56,9 @@ func (a *Arrow) WithClock(clock quartz.Clock) *Arrow {
 }
 
 // WithAllocator returns a new Arrow instance with the given memory allocator.
-func (a *Arrow) WithAllocator(alloc memory.Allocator) *Arrow {
+func (a *Arrow) WithAllocator(
+	alloc memory.Allocator,
+) *Arrow {
 	return &Arrow{
 		conn:  a.conn,
 		clock: a.clock,
@@ -65,7 +73,11 @@ func (a *Arrow) Clock() quartz.Clock {
 
 // QueryContext executes a query and returns an Arrow RecordReader for streaming results.
 // The caller is responsible for calling Release() on the returned RecordReader.
-func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
+func (a *Arrow) QueryContext(
+	ctx context.Context,
+	query string,
+	args ...any,
+) (array.RecordReader, error) {
 	// Check context deadline using clock
 	if deadline, ok := ctx.Deadline(); ok {
 		if a.clock.Until(deadline) <= 0 {
@@ -74,7 +86,10 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	// Convert args to driver.NamedValue
-	namedArgs := make([]driver.NamedValue, len(args))
+	namedArgs := make(
+		[]driver.NamedValue,
+		len(args),
+	)
 	for i, arg := range args {
 		namedArgs[i] = driver.NamedValue{
 			Ordinal: i + 1,
@@ -83,15 +98,24 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	// Execute query
-	rows, err := a.conn.QueryContext(ctx, query, namedArgs)
+	rows, err := a.conn.QueryContext(
+		ctx,
+		query,
+		namedArgs,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("arrow query failed: %w", err)
+		return nil, fmt.Errorf(
+			"arrow query failed: %w",
+			err,
+		)
 	}
 
 	// Get column types
 	driverRows, ok := rows.(*Rows)
 	if !ok {
-		return nil, errors.New("unexpected rows type")
+		return nil, errors.New(
+			"unexpected rows type",
+		)
 	}
 
 	// Build Arrow schema from column info
@@ -99,27 +123,48 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if err != nil {
 		_ = driverRows.Close()
 
-		return nil, fmt.Errorf("failed to build Arrow schema: %w", err)
+		return nil, fmt.Errorf(
+			"failed to build Arrow schema: %w",
+			err,
+		)
 	}
 
-	return newArrowRecordReader(a, driverRows, schema), nil
+	return newArrowRecordReader(
+		a,
+		driverRows,
+		schema,
+	), nil
 }
 
 // Query is a convenience method that calls QueryContext with context.Background().
-func (a *Arrow) Query(query string, args ...any) (array.RecordReader, error) {
-	return a.QueryContext(context.Background(), query, args...)
+func (a *Arrow) Query(
+	query string,
+	args ...any,
+) (array.RecordReader, error) {
+	return a.QueryContext(
+		context.Background(),
+		query,
+		args...)
 }
 
 // buildSchema builds an Arrow schema from DuckDB row information.
-func (a *Arrow) buildSchema(rows *Rows) (*arrow.Schema, error) {
+func (a *Arrow) buildSchema(
+	rows *Rows,
+) (*arrow.Schema, error) {
 	colNames := rows.Columns()
 	colTypes := rows.columnTypes()
 
 	fields := make([]arrow.Field, len(colNames))
 	for i, name := range colNames {
-		arrowType, err := duckdbTypeToArrow(colTypes[i])
+		arrowType, err := duckdbTypeToArrow(
+			colTypes[i],
+		)
 		if err != nil {
-			return nil, fmt.Errorf("column %s: %w", name, err)
+			return nil, fmt.Errorf(
+				"column %s: %w",
+				name,
+				err,
+			)
 		}
 		fields[i] = arrow.Field{
 			Name:     name,
@@ -147,7 +192,11 @@ type arrowRecordReader struct {
 }
 
 // newArrowRecordReader creates a new record reader.
-func newArrowRecordReader(a *Arrow, rows *Rows, schema *arrow.Schema) *arrowRecordReader {
+func newArrowRecordReader(
+	a *Arrow,
+	rows *Rows,
+	schema *arrow.Schema,
+) *arrowRecordReader {
 	return &arrowRecordReader{
 		arrow:     a,
 		rows:      rows,
@@ -266,9 +315,15 @@ func (r *arrowRecordReader) close() {
 func (r *arrowRecordReader) buildNextBatch() (arrow.RecordBatch, error) {
 	// Initialize builders if needed
 	if r.colBuilders == nil {
-		r.colBuilders = make([]array.Builder, len(r.schema.Fields()))
+		r.colBuilders = make(
+			[]array.Builder,
+			len(r.schema.Fields()),
+		)
 		for i, field := range r.schema.Fields() {
-			r.colBuilders[i] = array.NewBuilder(r.arrow.alloc, field.Type)
+			r.colBuilders[i] = array.NewBuilder(
+				r.arrow.alloc,
+				field.Type,
+			)
 		}
 	}
 
@@ -279,7 +334,10 @@ func (r *arrowRecordReader) buildNextBatch() (arrow.RecordBatch, error) {
 
 	// Read rows into builders
 	rowCount := 0
-	dest := make([]driver.Value, len(r.schema.Fields()))
+	dest := make(
+		[]driver.Value,
+		len(r.schema.Fields()),
+	)
 
 	for rowCount < r.chunkSize {
 		err := r.rows.Next(dest)
@@ -295,7 +353,11 @@ func (r *arrowRecordReader) buildNextBatch() (arrow.RecordBatch, error) {
 		// Append values to builders
 		for i, val := range dest {
 			if err := appendToBuilder(r.colBuilders[i], val, r.colTypes[i], r.arrow.clock); err != nil {
-				return nil, fmt.Errorf("column %d: %w", i, err)
+				return nil, fmt.Errorf(
+					"column %d: %w",
+					i,
+					err,
+				)
 			}
 		}
 		rowCount++
@@ -306,17 +368,26 @@ func (r *arrowRecordReader) buildNextBatch() (arrow.RecordBatch, error) {
 	}
 
 	// Build arrays from builders
-	arrays := make([]arrow.Array, len(r.colBuilders))
+	arrays := make(
+		[]arrow.Array,
+		len(r.colBuilders),
+	)
 	for i, builder := range r.colBuilders {
 		arrays[i] = builder.NewArray()
 	}
 
 	// Create record batch
-	return array.NewRecordBatch(r.schema, arrays, int64(rowCount)), nil
+	return array.NewRecordBatch(
+		r.schema,
+		arrays,
+		int64(rowCount),
+	), nil
 }
 
 // duckdbTypeToArrow converts a DuckDB TypeInfo to an Arrow DataType.
-func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
+func duckdbTypeToArrow(
+	typeInfo TypeInfo,
+) (arrow.DataType, error) {
 	t := typeInfo.InternalType()
 
 	switch t {
@@ -351,79 +422,148 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 	case TYPE_TIME, TYPE_TIME_TZ:
 		return arrow.FixedWidthTypes.Time64us, nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		return &arrow.TimestampType{Unit: arrow.Microsecond, TimeZone: "UTC"}, nil
+		return &arrow.TimestampType{
+			Unit:     arrow.Microsecond,
+			TimeZone: "UTC",
+		}, nil
 	case TYPE_TIMESTAMP_S:
-		return &arrow.TimestampType{Unit: arrow.Second, TimeZone: "UTC"}, nil
+		return &arrow.TimestampType{
+			Unit:     arrow.Second,
+			TimeZone: "UTC",
+		}, nil
 	case TYPE_TIMESTAMP_MS:
-		return &arrow.TimestampType{Unit: arrow.Millisecond, TimeZone: "UTC"}, nil
+		return &arrow.TimestampType{
+			Unit:     arrow.Millisecond,
+			TimeZone: "UTC",
+		}, nil
 	case TYPE_TIMESTAMP_NS:
-		return &arrow.TimestampType{Unit: arrow.Nanosecond, TimeZone: "UTC"}, nil
+		return &arrow.TimestampType{
+			Unit:     arrow.Nanosecond,
+			TimeZone: "UTC",
+		}, nil
 	case TYPE_INTERVAL:
 		return arrow.FixedWidthTypes.MonthDayNanoInterval, nil
 	case TYPE_UUID:
-		return &arrow.FixedSizeBinaryType{ByteWidth: 16}, nil
+		return &arrow.FixedSizeBinaryType{
+			ByteWidth: 16,
+		}, nil
 	case TYPE_HUGEINT, TYPE_UHUGEINT:
 		// 128-bit integers represented as Decimal128 with scale 0
-		return &arrow.Decimal128Type{Precision: 38, Scale: 0}, nil
+		return &arrow.Decimal128Type{
+			Precision: 38,
+			Scale:     0,
+		}, nil
 	case TYPE_DECIMAL:
 		details, ok := typeInfo.Details().(*DecimalDetails)
 		if !ok {
-			return nil, errors.New("expected DecimalDetails for DECIMAL type")
+			return nil, errors.New(
+				"expected DecimalDetails for DECIMAL type",
+			)
 		}
 
-		return &arrow.Decimal128Type{Precision: int32(details.Width), Scale: int32(details.Scale)}, nil
+		return &arrow.Decimal128Type{
+			Precision: int32(details.Width),
+			Scale:     int32(details.Scale),
+		}, nil
 	case TYPE_LIST:
 		details, ok := typeInfo.Details().(*ListDetails)
 		if !ok {
-			return nil, errors.New("expected ListDetails for LIST type")
+			return nil, errors.New(
+				"expected ListDetails for LIST type",
+			)
 		}
-		childType, err := duckdbTypeToArrow(details.Child)
+		childType, err := duckdbTypeToArrow(
+			details.Child,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("list child: %w", err)
+			return nil, fmt.Errorf(
+				"list child: %w",
+				err,
+			)
 		}
 
 		return arrow.ListOf(childType), nil
 	case TYPE_ARRAY:
 		details, ok := typeInfo.Details().(*ArrayDetails)
 		if !ok {
-			return nil, errors.New("expected ArrayDetails for ARRAY type")
+			return nil, errors.New(
+				"expected ArrayDetails for ARRAY type",
+			)
 		}
-		childType, err := duckdbTypeToArrow(details.Child)
+		childType, err := duckdbTypeToArrow(
+			details.Child,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("array child: %w", err)
+			return nil, fmt.Errorf(
+				"array child: %w",
+				err,
+			)
 		}
 
-		return arrow.FixedSizeListOf(int32(details.Size), childType), nil
+		return arrow.FixedSizeListOf(
+			int32(details.Size),
+			childType,
+		), nil
 	case TYPE_STRUCT:
 		details, ok := typeInfo.Details().(*StructDetails)
 		if !ok {
-			return nil, errors.New("expected StructDetails for STRUCT type")
+			return nil, errors.New(
+				"expected StructDetails for STRUCT type",
+			)
 		}
-		fields := make([]arrow.Field, len(details.Entries))
+		fields := make(
+			[]arrow.Field,
+			len(details.Entries),
+		)
 		for i, entry := range details.Entries {
-			childType, err := duckdbTypeToArrow(entry.Info())
+			childType, err := duckdbTypeToArrow(
+				entry.Info(),
+			)
 			if err != nil {
-				return nil, fmt.Errorf("struct field %s: %w", entry.Name(), err)
+				return nil, fmt.Errorf(
+					"struct field %s: %w",
+					entry.Name(),
+					err,
+				)
 			}
-			fields[i] = arrow.Field{Name: entry.Name(), Type: childType, Nullable: true}
+			fields[i] = arrow.Field{
+				Name:     entry.Name(),
+				Type:     childType,
+				Nullable: true,
+			}
 		}
 
 		return arrow.StructOf(fields...), nil
 	case TYPE_MAP:
 		details, ok := typeInfo.Details().(*MapDetails)
 		if !ok {
-			return nil, errors.New("expected MapDetails for MAP type")
+			return nil, errors.New(
+				"expected MapDetails for MAP type",
+			)
 		}
-		keyType, err := duckdbTypeToArrow(details.Key)
+		keyType, err := duckdbTypeToArrow(
+			details.Key,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("map key: %w", err)
+			return nil, fmt.Errorf(
+				"map key: %w",
+				err,
+			)
 		}
-		valueType, err := duckdbTypeToArrow(details.Value)
+		valueType, err := duckdbTypeToArrow(
+			details.Value,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("map value: %w", err)
+			return nil, fmt.Errorf(
+				"map value: %w",
+				err,
+			)
 		}
 
-		return arrow.MapOf(keyType, valueType), nil
+		return arrow.MapOf(
+			keyType,
+			valueType,
+		), nil
 	case TYPE_ENUM:
 		// ENUM represented as dictionary-encoded string
 		return &arrow.DictionaryType{
@@ -435,30 +575,56 @@ func duckdbTypeToArrow(typeInfo TypeInfo) (arrow.DataType, error) {
 	case TYPE_UNION:
 		details, ok := typeInfo.Details().(*UnionDetails)
 		if !ok {
-			return nil, errors.New("expected UnionDetails for UNION type")
+			return nil, errors.New(
+				"expected UnionDetails for UNION type",
+			)
 		}
-		fields := make([]arrow.Field, len(details.Members))
-		typeCodes := make([]arrow.UnionTypeCode, len(details.Members))
+		fields := make(
+			[]arrow.Field,
+			len(details.Members),
+		)
+		typeCodes := make(
+			[]arrow.UnionTypeCode,
+			len(details.Members),
+		)
 		for i, member := range details.Members {
-			memberType, err := duckdbTypeToArrow(member.Type)
+			memberType, err := duckdbTypeToArrow(
+				member.Type,
+			)
 			if err != nil {
-				return nil, fmt.Errorf("union member %s: %w", member.Name, err)
+				return nil, fmt.Errorf(
+					"union member %s: %w",
+					member.Name,
+					err,
+				)
 			}
-			fields[i] = arrow.Field{Name: member.Name, Type: memberType, Nullable: true}
+			fields[i] = arrow.Field{
+				Name:     member.Name,
+				Type:     memberType,
+				Nullable: true,
+			}
 			typeCodes[i] = arrow.UnionTypeCode(i)
 		}
 
-		return arrow.DenseUnionOf(fields, typeCodes), nil
+		return arrow.DenseUnionOf(
+			fields,
+			typeCodes,
+		), nil
 	case TYPE_SQLNULL:
 		return arrow.Null, nil
 	default:
-		return nil, fmt.Errorf("unsupported type: %s", t.String())
+		return nil, fmt.Errorf(
+			"unsupported type: %s",
+			t.String(),
+		)
 	}
 }
 
 // arrowTypeToDuckDB converts an Arrow DataType to a DuckDB TypeInfo.
 // This is the reverse of duckdbTypeToArrow.
-func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
+func arrowTypeToDuckDB(
+	dt arrow.DataType,
+) (TypeInfo, error) {
 	switch dt.ID() {
 	case arrow.BOOL:
 		return NewTypeInfo(TYPE_BOOLEAN)
@@ -504,7 +670,9 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		}
 
 		return NewTypeInfo(TYPE_TIMESTAMP)
-	case arrow.INTERVAL_MONTHS, arrow.INTERVAL_DAY_TIME, arrow.INTERVAL_MONTH_DAY_NANO:
+	case arrow.INTERVAL_MONTHS,
+		arrow.INTERVAL_DAY_TIME,
+		arrow.INTERVAL_MONTH_DAY_NANO:
 		return NewTypeInfo(TYPE_INTERVAL)
 	case arrow.FIXED_SIZE_BINARY:
 		fsb := dt.(*arrow.FixedSizeBinaryType)
@@ -516,7 +684,10 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 	case arrow.DECIMAL128:
 		dec := dt.(*arrow.Decimal128Type)
 
-		return NewDecimalInfo(uint8(dec.Precision), uint8(dec.Scale))
+		return NewDecimalInfo(
+			uint8(dec.Precision),
+			uint8(dec.Scale),
+		)
 	case arrow.LIST, arrow.LARGE_LIST:
 		var elemType arrow.DataType
 		switch lt := dt.(type) {
@@ -525,48 +696,87 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		case *arrow.LargeListType:
 			elemType = lt.Elem()
 		}
-		childInfo, err := arrowTypeToDuckDB(elemType)
+		childInfo, err := arrowTypeToDuckDB(
+			elemType,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("list element: %w", err)
+			return nil, fmt.Errorf(
+				"list element: %w",
+				err,
+			)
 		}
 
 		return NewListInfo(childInfo)
 	case arrow.FIXED_SIZE_LIST:
 		fsl := dt.(*arrow.FixedSizeListType)
-		childInfo, err := arrowTypeToDuckDB(fsl.Elem())
+		childInfo, err := arrowTypeToDuckDB(
+			fsl.Elem(),
+		)
 		if err != nil {
-			return nil, fmt.Errorf("array element: %w", err)
+			return nil, fmt.Errorf(
+				"array element: %w",
+				err,
+			)
 		}
 
-		return NewArrayInfo(childInfo, uint64(fsl.Len()))
+		return NewArrayInfo(
+			childInfo,
+			uint64(fsl.Len()),
+		)
 	case arrow.STRUCT:
 		st := dt.(*arrow.StructType)
 		if len(st.Fields()) == 0 {
-			return nil, errors.New("empty struct type not supported")
+			return nil, errors.New(
+				"empty struct type not supported",
+			)
 		}
-		entries := make([]StructEntry, len(st.Fields()))
+		entries := make(
+			[]StructEntry,
+			len(st.Fields()),
+		)
 		for i, field := range st.Fields() {
-			fieldInfo, err := arrowTypeToDuckDB(field.Type)
+			fieldInfo, err := arrowTypeToDuckDB(
+				field.Type,
+			)
 			if err != nil {
-				return nil, fmt.Errorf("struct field %s: %w", field.Name, err)
+				return nil, fmt.Errorf(
+					"struct field %s: %w",
+					field.Name,
+					err,
+				)
 			}
-			entry, err := NewStructEntry(fieldInfo, field.Name)
+			entry, err := NewStructEntry(
+				fieldInfo,
+				field.Name,
+			)
 			if err != nil {
 				return nil, err
 			}
 			entries[i] = entry
 		}
 
-		return NewStructInfo(entries[0], entries[1:]...)
+		return NewStructInfo(
+			entries[0],
+			entries[1:]...)
 	case arrow.MAP:
 		mt := dt.(*arrow.MapType)
-		keyInfo, err := arrowTypeToDuckDB(mt.KeyType())
+		keyInfo, err := arrowTypeToDuckDB(
+			mt.KeyType(),
+		)
 		if err != nil {
-			return nil, fmt.Errorf("map key: %w", err)
+			return nil, fmt.Errorf(
+				"map key: %w",
+				err,
+			)
 		}
-		valueInfo, err := arrowTypeToDuckDB(mt.ItemType())
+		valueInfo, err := arrowTypeToDuckDB(
+			mt.ItemType(),
+		)
 		if err != nil {
-			return nil, fmt.Errorf("map value: %w", err)
+			return nil, fmt.Errorf(
+				"map value: %w",
+				err,
+			)
 		}
 
 		return NewMapInfo(keyInfo, valueInfo)
@@ -578,12 +788,20 @@ func arrowTypeToDuckDB(dt arrow.DataType) (TypeInfo, error) {
 		// NULL type doesn't have a direct NewTypeInfo, use VARCHAR as fallback
 		return NewTypeInfo(TYPE_VARCHAR)
 	default:
-		return nil, fmt.Errorf("unsupported Arrow type: %s", dt.Name())
+		return nil, fmt.Errorf(
+			"unsupported Arrow type: %s",
+			dt.Name(),
+		)
 	}
 }
 
 // appendToBuilder appends a value to an Arrow array builder.
-func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock quartz.Clock) error {
+func appendToBuilder(
+	builder array.Builder,
+	val any,
+	typeInfo TypeInfo,
+	clock quartz.Clock,
+) error {
 	if val == nil {
 		builder.AppendNull()
 
@@ -760,7 +978,10 @@ func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock qu
 			}
 		}
 		if typeCode < 0 {
-			return fmt.Errorf("unknown union tag: %s", u.Tag)
+			return fmt.Errorf(
+				"unknown union tag: %s",
+				u.Tag,
+			)
 		}
 		b.Append(typeCode)
 		childBuilder := b.Child(int(typeCode))
@@ -770,21 +991,35 @@ func appendToBuilder(builder array.Builder, val any, typeInfo TypeInfo, clock qu
 	case TYPE_SQLNULL:
 		builder.AppendNull()
 	default:
-		return fmt.Errorf("unsupported type for Arrow conversion: %s", t.String())
+		return fmt.Errorf(
+			"unsupported type for Arrow conversion: %s",
+			t.String(),
+		)
 	}
 
 	return nil
 }
 
 // arrowSchemaToColumns converts an Arrow schema to a slice of VirtualColumnDef.
-func arrowSchemaToColumns(schema *arrow.Schema) ([]VirtualColumnDef, error) {
+func arrowSchemaToColumns(
+	schema *arrow.Schema,
+) ([]VirtualColumnDef, error) {
 	fields := schema.Fields()
-	columns := make([]VirtualColumnDef, len(fields))
+	columns := make(
+		[]VirtualColumnDef,
+		len(fields),
+	)
 
 	for i, field := range fields {
-		typeInfo, err := arrowTypeToDuckDB(field.Type)
+		typeInfo, err := arrowTypeToDuckDB(
+			field.Type,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("column %s: %w", field.Name, err)
+			return nil, fmt.Errorf(
+				"column %s: %w",
+				field.Name,
+				err,
+			)
 		}
 
 		columns[i] = VirtualColumnDef{
@@ -901,14 +1136,24 @@ func (it *arrowRowIterator) extractRowValues() []any {
 			continue
 		}
 
-		values[col] = extractArrowValue(arr, int(it.rowIdx), it.columns[col].TypeInfo, it.clock)
+		values[col] = extractArrowValue(
+			arr,
+			int(it.rowIdx),
+			it.columns[col].TypeInfo,
+			it.clock,
+		)
 	}
 
 	return values
 }
 
 // extractArrowValue extracts a value from an Arrow array at the given index.
-func extractArrowValue(arr arrow.Array, idx int, typeInfo TypeInfo, clock quartz.Clock) any {
+func extractArrowValue(
+	arr arrow.Array,
+	idx int,
+	typeInfo TypeInfo,
+	clock quartz.Clock,
+) any {
 	if arr.IsNull(idx) {
 		return nil
 	}
@@ -1078,15 +1323,25 @@ func (it *arrowRowIterator) Close() error {
 // RegisterView registers an Arrow RecordReader as a queryable view.
 // The view can be queried with SQL until the returned release function is called.
 // The caller must call the release function when done to free Arrow resources.
-func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release func(), err error) {
+func (a *Arrow) RegisterView(
+	reader array.RecordReader,
+	name string,
+) (release func(), err error) {
 	if name == "" {
-		return nil, errors.New("view name cannot be empty")
+		return nil, errors.New(
+			"view name cannot be empty",
+		)
 	}
 
 	// Convert Arrow schema to DuckDB columns
-	columns, err := arrowSchemaToColumns(reader.Schema())
+	columns, err := arrowSchemaToColumns(
+		reader.Schema(),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert Arrow schema: %w", err)
+		return nil, fmt.Errorf(
+			"failed to convert Arrow schema: %w",
+			err,
+		)
 	}
 
 	// Create virtual table
@@ -1101,7 +1356,9 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 	// Get virtual table registry from connection
 	registry := a.conn.getVirtualTableRegistry()
 	if registry == nil {
-		return nil, errors.New("connection does not support virtual tables")
+		return nil, errors.New(
+			"connection does not support virtual tables",
+		)
 	}
 
 	// Register in catalog
@@ -1119,6 +1376,14 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 }
 
 // Compile-time assertions
-var _ array.RecordReader = (*arrowRecordReader)(nil)
-var _ VirtualTable = (*arrowVirtualTable)(nil)
-var _ RowIterator = (*arrowRowIterator)(nil)
+var (
+	_ array.RecordReader = (*arrowRecordReader)(
+		nil,
+	)
+	_ VirtualTable = (*arrowVirtualTable)(
+		nil,
+	)
+	_ RowIterator = (*arrowRowIterator)(
+		nil,
+	)
+)

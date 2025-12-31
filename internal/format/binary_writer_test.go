@@ -31,7 +31,10 @@ func TestWritePropertyUint32(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WriteProperty(100, uint32(0x12345678))
+	err := w.WriteProperty(
+		100,
+		uint32(0x12345678),
+	)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(w.properties))
 
@@ -44,12 +47,24 @@ func TestWritePropertyUint64(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WriteProperty(100, uint64(0x123456789ABCDEF0))
+	err := w.WriteProperty(
+		100,
+		uint64(0x123456789ABCDEF0),
+	)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(w.properties))
 
 	// Verify little-endian encoding
-	expected := []byte{0xF0, 0xDE, 0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12}
+	expected := []byte{
+		0xF0,
+		0xDE,
+		0xBC,
+		0x9A,
+		0x78,
+		0x56,
+		0x34,
+		0x12,
+	}
 	assert.Equal(t, expected, w.properties[100])
 }
 
@@ -104,7 +119,11 @@ func TestWritePropertyStringSlice(t *testing.T) {
 
 	for _, expected := range items {
 		var length uint64
-		err = binary.Read(reader, ByteOrder, &length)
+		err = binary.Read(
+			reader,
+			ByteOrder,
+			&length,
+		)
 		require.NoError(t, err)
 
 		data := make([]byte, length)
@@ -114,35 +133,62 @@ func TestWritePropertyStringSlice(t *testing.T) {
 	}
 }
 
-func TestWritePropertyUnsupportedType(t *testing.T) {
+func TestWritePropertyUnsupportedType(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WriteProperty(100, 3.14) // float64 not supported
+	err := w.WriteProperty(
+		100,
+		3.14,
+	) // float64 not supported
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported value type")
+	assert.Contains(
+		t,
+		err.Error(),
+		"unsupported value type",
+	)
 }
 
-func TestWritePropertyWithDefaultSkipsDefault(t *testing.T) {
+func TestWritePropertyWithDefaultSkipsDefault(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WritePropertyWithDefault(100, uint32(0), uint32(0))
+	err := w.WritePropertyWithDefault(
+		100,
+		uint32(0),
+		uint32(0),
+	)
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(w.properties)) // Property should not be written
+	assert.Equal(
+		t,
+		0,
+		len(w.properties),
+	) // Property should not be written
 }
 
-func TestWritePropertyWithDefaultWritesNonDefault(t *testing.T) {
+func TestWritePropertyWithDefaultWritesNonDefault(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WritePropertyWithDefault(100, uint32(42), uint32(0))
+	err := w.WritePropertyWithDefault(
+		100,
+		uint32(42),
+		uint32(0),
+	)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(w.properties))
 	assert.NotNil(t, w.properties[100])
 }
 
-func TestWritePropertyWithDefaultStringSkipsEmpty(t *testing.T) {
+func TestWritePropertyWithDefaultStringSkipsEmpty(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
@@ -151,11 +197,17 @@ func TestWritePropertyWithDefaultStringSkipsEmpty(t *testing.T) {
 	assert.Equal(t, 0, len(w.properties))
 }
 
-func TestWritePropertyWithDefaultStringWritesNonEmpty(t *testing.T) {
+func TestWritePropertyWithDefaultStringWritesNonEmpty(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
-	err := w.WritePropertyWithDefault(100, "hello", "")
+	err := w.WritePropertyWithDefault(
+		100,
+		"hello",
+		"",
+	)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(w.properties))
 }
@@ -179,7 +231,11 @@ func TestWriteList(t *testing.T) {
 
 	for _, expected := range items {
 		var length uint64
-		err = binary.Read(reader, ByteOrder, &length)
+		err = binary.Read(
+			reader,
+			ByteOrder,
+			&length,
+		)
 		require.NoError(t, err)
 
 		data := make([]byte, length)
@@ -213,7 +269,11 @@ func TestFlushEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should write count of 0
-	assert.Equal(t, 4, buf.Len()) // uint32 = 4 bytes
+	assert.Equal(
+		t,
+		4,
+		buf.Len(),
+	) // uint32 = 4 bytes
 	var count uint32
 	err = binary.Read(buf, ByteOrder, &count)
 	require.NoError(t, err)
@@ -258,7 +318,9 @@ func TestFlushSingleProperty(t *testing.T) {
 	assert.Equal(t, []byte{42}, data)
 }
 
-func TestFlushMultiplePropertiesSorted(t *testing.T) {
+func TestFlushMultiplePropertiesSorted(
+	t *testing.T,
+) {
 	buf := &bytes.Buffer{}
 	w := NewBinaryWriter(buf)
 
@@ -288,17 +350,37 @@ func TestFlushMultiplePropertiesSorted(t *testing.T) {
 		var id uint32
 		err = binary.Read(reader, ByteOrder, &id)
 		require.NoError(t, err)
-		assert.Equal(t, expectedIDs[i], id, "Property %d ID mismatch", i)
+		assert.Equal(
+			t,
+			expectedIDs[i],
+			id,
+			"Property %d ID mismatch",
+			i,
+		)
 
 		var length uint64
-		err = binary.Read(reader, ByteOrder, &length)
+		err = binary.Read(
+			reader,
+			ByteOrder,
+			&length,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(1), length)
 
 		var value uint8
-		err = binary.Read(reader, ByteOrder, &value)
+		err = binary.Read(
+			reader,
+			ByteOrder,
+			&value,
+		)
 		require.NoError(t, err)
-		assert.Equal(t, expectedValues[i], value, "Property %d value mismatch", i)
+		assert.Equal(
+			t,
+			expectedValues[i],
+			value,
+			"Property %d value mismatch",
+			i,
+		)
 	}
 }
 
@@ -307,7 +389,10 @@ func TestFlushComplexProperties(t *testing.T) {
 	w := NewBinaryWriter(buf)
 
 	// Write various property types
-	err := w.WriteProperty(100, uint32(ExtraTypeInfoType_DECIMAL))
+	err := w.WriteProperty(
+		100,
+		uint32(ExtraTypeInfoType_DECIMAL),
+	)
 	require.NoError(t, err)
 	err = w.WriteProperty(200, uint8(18)) // width
 	require.NoError(t, err)
@@ -339,7 +424,11 @@ func TestFlushComplexProperties(t *testing.T) {
 	var val100 uint32
 	err = binary.Read(reader, ByteOrder, &val100)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(ExtraTypeInfoType_DECIMAL), val100)
+	assert.Equal(
+		t,
+		uint32(ExtraTypeInfoType_DECIMAL),
+		val100,
+	)
 
 	// Property 200 (uint8)
 	var id200 uint32
@@ -379,7 +468,10 @@ func TestFlushLittleEndian(t *testing.T) {
 	w := NewBinaryWriter(buf)
 
 	// Write a value with known byte pattern
-	err := w.WriteProperty(100, uint32(0x01020304))
+	err := w.WriteProperty(
+		100,
+		uint32(0x01020304),
+	)
 	require.NoError(t, err)
 
 	err = w.Flush()
@@ -393,5 +485,9 @@ func TestFlushLittleEndian(t *testing.T) {
 	value := bytes[offset : offset+4]
 
 	// Little-endian: least significant byte first
-	assert.Equal(t, []byte{0x04, 0x03, 0x02, 0x01}, value)
+	assert.Equal(
+		t,
+		[]byte{0x04, 0x03, 0x02, 0x01},
+		value,
+	)
 }

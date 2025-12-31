@@ -50,10 +50,17 @@ func NewBinaryWriter(w io.Writer) *BinaryWriter {
 //   - []string: Written using WriteList format (count + items)
 //
 // Returns an error if the value type is not supported.
-func (w *BinaryWriter) WriteProperty(id uint32, value interface{}) error {
+func (w *BinaryWriter) WriteProperty(
+	id uint32,
+	value interface{},
+) error {
 	serialized, err := w.serializeValue(value)
 	if err != nil {
-		return fmt.Errorf("failed to serialize property %d: %w", id, err)
+		return fmt.Errorf(
+			"failed to serialize property %d: %w",
+			id,
+			err,
+		)
 	}
 	w.properties[id] = serialized
 
@@ -70,7 +77,10 @@ func (w *BinaryWriter) WriteProperty(id uint32, value interface{}) error {
 // accumulated in memory and will be written in sorted ID order when Flush() is called.
 //
 // Returns an error if the value type is not supported.
-func (w *BinaryWriter) WritePropertyWithDefault(id uint32, value, defaultValue interface{}) error {
+func (w *BinaryWriter) WritePropertyWithDefault(
+	id uint32,
+	value, defaultValue interface{},
+) error {
 	if reflect.DeepEqual(value, defaultValue) {
 		return nil // Skip writing property
 	}
@@ -88,23 +98,37 @@ func (w *BinaryWriter) WritePropertyWithDefault(id uint32, value, defaultValue i
 //
 // This format is used for ENUM values, STRUCT field names, and other list types
 // in the DuckDB binary format.
-func (w *BinaryWriter) WriteList(id uint32, items []string) error {
+func (w *BinaryWriter) WriteList(
+	id uint32,
+	items []string,
+) error {
 	buf := new(bytes.Buffer)
 
 	// Write item count
 	if err := binary.Write(buf, ByteOrder, uint64(len(items))); err != nil {
-		return fmt.Errorf("failed to write list count: %w", err)
+		return fmt.Errorf(
+			"failed to write list count: %w",
+			err,
+		)
 	}
 
 	// Write each item
 	for i, item := range items {
 		// Write string length
 		if err := binary.Write(buf, ByteOrder, uint64(len(item))); err != nil {
-			return fmt.Errorf("failed to write list item %d length: %w", i, err)
+			return fmt.Errorf(
+				"failed to write list item %d length: %w",
+				i,
+				err,
+			)
 		}
 		// Write string data
 		if _, err := buf.WriteString(item); err != nil {
-			return fmt.Errorf("failed to write list item %d data: %w", i, err)
+			return fmt.Errorf(
+				"failed to write list item %d data: %w",
+				i,
+				err,
+			)
 		}
 	}
 
@@ -129,7 +153,10 @@ func (w *BinaryWriter) WriteList(id uint32, items []string) error {
 func (w *BinaryWriter) Flush() error {
 	// Write property count
 	if err := binary.Write(w.w, ByteOrder, uint32(len(w.properties))); err != nil {
-		return fmt.Errorf("failed to write property count: %w", err)
+		return fmt.Errorf(
+			"failed to write property count: %w",
+			err,
+		)
 	}
 
 	// Get sorted property IDs
@@ -137,24 +164,39 @@ func (w *BinaryWriter) Flush() error {
 	for id := range w.properties {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	sort.Slice(
+		ids,
+		func(i, j int) bool { return ids[i] < ids[j] },
+	)
 
 	// Write properties in sorted ID order
 	for _, id := range ids {
 		// Write property ID
 		if err := binary.Write(w.w, ByteOrder, id); err != nil {
-			return fmt.Errorf("failed to write property %d ID: %w", id, err)
+			return fmt.Errorf(
+				"failed to write property %d ID: %w",
+				id,
+				err,
+			)
 		}
 
 		// Write property data length
 		data := w.properties[id]
 		if err := binary.Write(w.w, ByteOrder, uint64(len(data))); err != nil {
-			return fmt.Errorf("failed to write property %d length: %w", id, err)
+			return fmt.Errorf(
+				"failed to write property %d length: %w",
+				id,
+				err,
+			)
 		}
 
 		// Write property data
 		if _, err := w.w.Write(data); err != nil {
-			return fmt.Errorf("failed to write property %d data: %w", id, err)
+			return fmt.Errorf(
+				"failed to write property %d data: %w",
+				id,
+				err,
+			)
 		}
 	}
 
@@ -172,7 +214,9 @@ func (w *BinaryWriter) Flush() error {
 //   - []string: count (uint64) + serialized strings
 //
 // Returns an error if the value type is not supported.
-func (w *BinaryWriter) serializeValue(value interface{}) ([]byte, error) {
+func (w *BinaryWriter) serializeValue(
+	value interface{},
+) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	switch v := value.(type) {

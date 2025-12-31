@@ -21,13 +21,21 @@ func TestWriteHeader(t *testing.T) {
 	var magic uint32
 	err = binary.Read(buf, ByteOrder, &magic)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(DuckDBMagicNumber), magic)
+	assert.Equal(
+		t,
+		uint32(DuckDBMagicNumber),
+		magic,
+	)
 
 	// Verify version (8 bytes)
 	var version uint64
 	err = binary.Read(buf, ByteOrder, &version)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(DuckDBFormatVersion), version)
+	assert.Equal(
+		t,
+		uint64(DuckDBFormatVersion),
+		version,
+	)
 
 	// Ensure buffer is fully consumed
 	assert.Equal(t, 0, buf.Len())
@@ -38,9 +46,17 @@ func TestValidateHeader_Success(t *testing.T) {
 	buf := new(bytes.Buffer)
 
 	// Write valid header
-	err := binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
+	err := binary.Write(
+		buf,
+		ByteOrder,
+		uint32(DuckDBMagicNumber),
+	)
 	require.NoError(t, err)
-	err = binary.Write(buf, ByteOrder, uint64(DuckDBFormatVersion))
+	err = binary.Write(
+		buf,
+		ByteOrder,
+		uint64(DuckDBFormatVersion),
+	)
 	require.NoError(t, err)
 
 	// Validate
@@ -49,13 +65,23 @@ func TestValidateHeader_Success(t *testing.T) {
 }
 
 // TestValidateHeader_InvalidMagicNumber tests detection of invalid magic number.
-func TestValidateHeader_InvalidMagicNumber(t *testing.T) {
+func TestValidateHeader_InvalidMagicNumber(
+	t *testing.T,
+) {
 	buf := new(bytes.Buffer)
 
 	// Write invalid magic number
-	err := binary.Write(buf, ByteOrder, uint32(0x12345678))
+	err := binary.Write(
+		buf,
+		ByteOrder,
+		uint32(0x12345678),
+	)
 	require.NoError(t, err)
-	err = binary.Write(buf, ByteOrder, uint64(DuckDBFormatVersion))
+	err = binary.Write(
+		buf,
+		ByteOrder,
+		uint64(DuckDBFormatVersion),
+	)
 	require.NoError(t, err)
 
 	// Validate should fail
@@ -65,13 +91,23 @@ func TestValidateHeader_InvalidMagicNumber(t *testing.T) {
 }
 
 // TestValidateHeader_UnsupportedVersion tests detection of unsupported version.
-func TestValidateHeader_UnsupportedVersion(t *testing.T) {
+func TestValidateHeader_UnsupportedVersion(
+	t *testing.T,
+) {
 	buf := new(bytes.Buffer)
 
 	// Write valid magic but wrong version
-	err := binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
+	err := binary.Write(
+		buf,
+		ByteOrder,
+		uint32(DuckDBMagicNumber),
+	)
 	require.NoError(t, err)
-	err = binary.Write(buf, ByteOrder, uint64(999))
+	err = binary.Write(
+		buf,
+		ByteOrder,
+		uint64(999),
+	)
 	require.NoError(t, err)
 
 	// Validate should fail
@@ -81,20 +117,34 @@ func TestValidateHeader_UnsupportedVersion(t *testing.T) {
 }
 
 // TestValidateHeader_TruncatedMagic tests handling of truncated magic number.
-func TestValidateHeader_TruncatedMagic(t *testing.T) {
-	buf := bytes.NewBuffer([]byte{0x44, 0x55}) // Only 2 bytes instead of 4
+func TestValidateHeader_TruncatedMagic(
+	t *testing.T,
+) {
+	buf := bytes.NewBuffer(
+		[]byte{0x44, 0x55},
+	) // Only 2 bytes instead of 4
 
 	err := ValidateHeader(buf)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read magic number")
+	assert.Contains(
+		t,
+		err.Error(),
+		"failed to read magic number",
+	)
 }
 
 // TestValidateHeader_TruncatedVersion tests handling of truncated version.
-func TestValidateHeader_TruncatedVersion(t *testing.T) {
+func TestValidateHeader_TruncatedVersion(
+	t *testing.T,
+) {
 	buf := new(bytes.Buffer)
 
 	// Write valid magic number
-	err := binary.Write(buf, ByteOrder, uint32(DuckDBMagicNumber))
+	err := binary.Write(
+		buf,
+		ByteOrder,
+		uint32(DuckDBMagicNumber),
+	)
 	require.NoError(t, err)
 
 	// Write only partial version (4 bytes instead of 8)
@@ -102,12 +152,19 @@ func TestValidateHeader_TruncatedVersion(t *testing.T) {
 
 	err = ValidateHeader(buf)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read format version")
+	assert.Contains(
+		t,
+		err.Error(),
+		"failed to read format version",
+	)
 }
 
 // TestSerializeColumn tests basic column serialization.
 func TestSerializeColumn(t *testing.T) {
-	col := catalog.NewColumnDef("test_col", dukdb.TYPE_INTEGER)
+	col := catalog.NewColumnDef(
+		"test_col",
+		dukdb.TYPE_INTEGER,
+	)
 	col.Nullable = true
 
 	buf := new(bytes.Buffer)
@@ -136,14 +193,27 @@ func TestSerializeColumn(t *testing.T) {
 
 	// Property 102: Nullable flag should not be present (default value)
 	var nullableFlag uint8
-	err = reader.ReadPropertyWithDefault(102, &nullableFlag, uint8(1))
+	err = reader.ReadPropertyWithDefault(
+		102,
+		&nullableFlag,
+		uint8(1),
+	)
 	require.NoError(t, err)
-	assert.Equal(t, uint8(1), nullableFlag) // Default value used
+	assert.Equal(
+		t,
+		uint8(1),
+		nullableFlag,
+	) // Default value used
 }
 
 // TestSerializeColumn_NotNullable tests column serialization with NOT NULL constraint.
-func TestSerializeColumn_NotNullable(t *testing.T) {
-	col := catalog.NewColumnDef("id", dukdb.TYPE_BIGINT)
+func TestSerializeColumn_NotNullable(
+	t *testing.T,
+) {
+	col := catalog.NewColumnDef(
+		"id",
+		dukdb.TYPE_BIGINT,
+	)
 	col.Nullable = false // NOT NULL
 
 	buf := new(bytes.Buffer)
@@ -163,9 +233,13 @@ func TestSerializeColumn_NotNullable(t *testing.T) {
 }
 
 // TestSerializeColumn_ComplexType tests column with complex TypeInfo.
-func TestSerializeColumn_ComplexType(t *testing.T) {
+func TestSerializeColumn_ComplexType(
+	t *testing.T,
+) {
 	// Create a LIST<INTEGER> type
-	intInfo, err := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	intInfo, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 	require.NoError(t, err)
 
 	listInfo, err := dukdb.NewListInfo(intInfo)
@@ -196,8 +270,14 @@ func TestSerializeColumn_Nil(t *testing.T) {
 func TestSerializeTableEntry(t *testing.T) {
 	// Create a simple table
 	columns := []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef(
+			"id",
+			dukdb.TYPE_INTEGER,
+		),
+		catalog.NewColumnDef(
+			"name",
+			dukdb.TYPE_VARCHAR,
+		),
 	}
 	table := catalog.NewTableDef("users", columns)
 	table.Schema = "main"
@@ -216,7 +296,11 @@ func TestSerializeTableEntry(t *testing.T) {
 	var entryType uint32
 	err = reader.ReadProperty(100, &entryType)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(CatalogEntryType_TABLE), entryType)
+	assert.Equal(
+		t,
+		uint32(CatalogEntryType_TABLE),
+		entryType,
+	)
 
 	// Property 101: Table name
 	var tableName string
@@ -238,8 +322,13 @@ func TestSerializeTableEntry(t *testing.T) {
 }
 
 // TestSerializeTableEntry_EmptyTable tests serialization of table with no columns.
-func TestSerializeTableEntry_EmptyTable(t *testing.T) {
-	table := catalog.NewTableDef("empty", []*catalog.ColumnDef{})
+func TestSerializeTableEntry_EmptyTable(
+	t *testing.T,
+) {
+	table := catalog.NewTableDef(
+		"empty",
+		[]*catalog.ColumnDef{},
+	)
 	table.Schema = "main"
 
 	buf := new(bytes.Buffer)
@@ -270,16 +359,31 @@ func TestSerializeSchema(t *testing.T) {
 	schema := catalog.NewSchema("test_schema")
 
 	// Add some tables
-	table1 := catalog.NewTableDef("table1", []*catalog.ColumnDef{
-		catalog.NewColumnDef("col1", dukdb.TYPE_INTEGER),
-	})
+	table1 := catalog.NewTableDef(
+		"table1",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"col1",
+				dukdb.TYPE_INTEGER,
+			),
+		},
+	)
 	err := schema.CreateTable(table1)
 	require.NoError(t, err)
 
-	table2 := catalog.NewTableDef("table2", []*catalog.ColumnDef{
-		catalog.NewColumnDef("col1", dukdb.TYPE_VARCHAR),
-		catalog.NewColumnDef("col2", dukdb.TYPE_BOOLEAN),
-	})
+	table2 := catalog.NewTableDef(
+		"table2",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"col1",
+				dukdb.TYPE_VARCHAR,
+			),
+			catalog.NewColumnDef(
+				"col2",
+				dukdb.TYPE_BOOLEAN,
+			),
+		},
+	)
 	err = schema.CreateTable(table2)
 	require.NoError(t, err)
 
@@ -297,7 +401,11 @@ func TestSerializeSchema(t *testing.T) {
 	var entryType uint32
 	err = reader.ReadProperty(100, &entryType)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(CatalogEntryType_SCHEMA), entryType)
+	assert.Equal(
+		t,
+		uint32(CatalogEntryType_SCHEMA),
+		entryType,
+	)
 
 	// Property 101: Schema name
 	var schemaName string
@@ -344,10 +452,19 @@ func TestSerializeCatalog(t *testing.T) {
 	cat := catalog.NewCatalog()
 
 	// Add a table to the main schema
-	table := catalog.NewTableDef("test_table", []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
-	})
+	table := catalog.NewTableDef(
+		"test_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"id",
+				dukdb.TYPE_INTEGER,
+			),
+			catalog.NewColumnDef(
+				"name",
+				dukdb.TYPE_VARCHAR,
+			),
+		},
+	)
 	err := cat.CreateTable(table)
 	require.NoError(t, err)
 
@@ -358,9 +475,17 @@ func TestSerializeCatalog(t *testing.T) {
 
 	// Read schema count
 	var schemaCount uint64
-	err = binary.Read(buf, ByteOrder, &schemaCount)
+	err = binary.Read(
+		buf,
+		ByteOrder,
+		&schemaCount,
+	)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1), schemaCount) // Should have "main" schema
+	assert.Equal(
+		t,
+		uint64(1),
+		schemaCount,
+	) // Should have "main" schema
 }
 
 // TestSerializeCatalog_Empty tests serialization of empty catalog.
@@ -373,9 +498,17 @@ func TestSerializeCatalog_Empty(t *testing.T) {
 
 	// Read schema count
 	var schemaCount uint64
-	err = binary.Read(buf, ByteOrder, &schemaCount)
+	err = binary.Read(
+		buf,
+		ByteOrder,
+		&schemaCount,
+	)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1), schemaCount) // "main" schema always exists
+	assert.Equal(
+		t,
+		uint64(1),
+		schemaCount,
+	) // "main" schema always exists
 }
 
 // TestSerializeCatalog_Nil tests error handling for nil catalog.
@@ -400,19 +533,30 @@ func TestRoundTrip_HeaderOnly(t *testing.T) {
 }
 
 // TestSerializeCatalogWithComplexTypes tests catalog with complex column types.
-func TestSerializeCatalogWithComplexTypes(t *testing.T) {
+func TestSerializeCatalogWithComplexTypes(
+	t *testing.T,
+) {
 	cat := catalog.NewCatalog()
 
 	// Create DECIMAL column
-	decimalInfo, err := dukdb.NewDecimalInfo(18, 4)
+	decimalInfo, err := dukdb.NewDecimalInfo(
+		18,
+		4,
+	)
 	require.NoError(t, err)
 
 	// Create ENUM column
-	enumInfo, err := dukdb.NewEnumInfo("RED", "GREEN", "BLUE")
+	enumInfo, err := dukdb.NewEnumInfo(
+		"RED",
+		"GREEN",
+		"BLUE",
+	)
 	require.NoError(t, err)
 
 	// Create LIST column
-	intInfo2, err := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	intInfo2, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 	require.NoError(t, err)
 
 	listInfo, err := dukdb.NewListInfo(intInfo2)

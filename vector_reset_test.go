@@ -15,16 +15,31 @@ func TestVectorReset(t *testing.T) {
 		{
 			name: "reset integer vector",
 			setupFunc: func(v *vector) {
-				initNumericVec[int32](v, TYPE_INTEGER)
+				initNumericVec[int32](
+					v,
+					TYPE_INTEGER,
+				)
 				setPrimitive(v, 0, int32(42))
 				setPrimitive(v, 1, int32(100))
 				v.setNull(2)
 			},
 			checkFunc: func(t *testing.T, v *vector) {
 				// After reset, all values should be zero
-				assert.Equal(t, int32(0), getPrimitive[int32](v, 0))
-				assert.Equal(t, int32(0), getPrimitive[int32](v, 1))
-				assert.Equal(t, int32(0), getPrimitive[int32](v, 2))
+				assert.Equal(
+					t,
+					int32(0),
+					getPrimitive[int32](v, 0),
+				)
+				assert.Equal(
+					t,
+					int32(0),
+					getPrimitive[int32](v, 1),
+				)
+				assert.Equal(
+					t,
+					int32(0),
+					getPrimitive[int32](v, 2),
+				)
 				// All entries should be valid
 				assert.False(t, v.isNull(0))
 				assert.False(t, v.isNull(1))
@@ -41,9 +56,21 @@ func TestVectorReset(t *testing.T) {
 			},
 			checkFunc: func(t *testing.T, v *vector) {
 				// After reset, all values should be empty strings
-				assert.Equal(t, "", getPrimitive[string](v, 0))
-				assert.Equal(t, "", getPrimitive[string](v, 1))
-				assert.Equal(t, "", getPrimitive[string](v, 2))
+				assert.Equal(
+					t,
+					"",
+					getPrimitive[string](v, 0),
+				)
+				assert.Equal(
+					t,
+					"",
+					getPrimitive[string](v, 1),
+				)
+				assert.Equal(
+					t,
+					"",
+					getPrimitive[string](v, 2),
+				)
 				// All entries should be valid
 				assert.False(t, v.isNull(0))
 				assert.False(t, v.isNull(1))
@@ -60,9 +87,21 @@ func TestVectorReset(t *testing.T) {
 			},
 			checkFunc: func(t *testing.T, v *vector) {
 				// After reset, all values should be false
-				assert.Equal(t, false, getPrimitive[bool](v, 0))
-				assert.Equal(t, false, getPrimitive[bool](v, 1))
-				assert.Equal(t, false, getPrimitive[bool](v, 2))
+				assert.Equal(
+					t,
+					false,
+					getPrimitive[bool](v, 0),
+				)
+				assert.Equal(
+					t,
+					false,
+					getPrimitive[bool](v, 1),
+				)
+				assert.Equal(
+					t,
+					false,
+					getPrimitive[bool](v, 2),
+				)
 				// All entries should be valid
 				assert.False(t, v.isNull(0))
 				assert.False(t, v.isNull(1))
@@ -89,7 +128,10 @@ func TestVectorClose(t *testing.T) {
 		{
 			name: "close integer vector",
 			setupFunc: func(v *vector) {
-				initNumericVec[int32](v, TYPE_INTEGER)
+				initNumericVec[int32](
+					v,
+					TYPE_INTEGER,
+				)
 				setPrimitive(v, 0, int32(42))
 			},
 		},
@@ -104,9 +146,16 @@ func TestVectorClose(t *testing.T) {
 			name: "close nested struct vector",
 			setupFunc: func(v *vector) {
 				// Create a simple struct type with one field
-				intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-				entry, _ := NewStructEntry(intInfo, "field1")
-				structInfo, _ := NewStructInfo(entry)
+				intInfo, _ := NewTypeInfo(
+					TYPE_INTEGER,
+				)
+				entry, _ := NewStructEntry(
+					intInfo,
+					"field1",
+				)
+				structInfo, _ := NewStructInfo(
+					entry,
+				)
 				_ = v.initStruct(structInfo, 0)
 			},
 		},
@@ -130,33 +179,60 @@ func TestVectorClose(t *testing.T) {
 	}
 }
 
-func TestVectorResetWithNestedTypes(t *testing.T) {
-	t.Run("reset list vector", func(t *testing.T) {
-		v := newVector(10)
-		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-		listInfo, _ := NewListInfo(intInfo)
-		err := v.initList(listInfo, 0)
-		assert.NoError(t, err)
+func TestVectorResetWithNestedTypes(
+	t *testing.T,
+) {
+	t.Run(
+		"reset list vector",
+		func(t *testing.T) {
+			v := newVector(10)
+			intInfo, _ := NewTypeInfo(
+				TYPE_INTEGER,
+			)
+			listInfo, _ := NewListInfo(intInfo)
+			err := v.initList(listInfo, 0)
+			assert.NoError(t, err)
 
-		// Set some values
-		v.listOffsets[0] = 0
-		v.listOffsets[1] = 2
-		child := &v.childVectors[0]
-		setPrimitive[int32](child, 0, int32(10))
-		setPrimitive[int32](child, 1, int32(20))
+			// Set some values
+			v.listOffsets[0] = 0
+			v.listOffsets[1] = 2
+			child := &v.childVectors[0]
+			setPrimitive[int32](
+				child,
+				0,
+				int32(10),
+			)
+			setPrimitive[int32](
+				child,
+				1,
+				int32(20),
+			)
 
-		// Reset
-		v.Reset()
+			// Reset
+			v.Reset()
 
-		// Check that list offsets are zeroed
-		for i := range v.listOffsets {
-			assert.Equal(t, uint64(0), v.listOffsets[i])
-		}
+			// Check that list offsets are zeroed
+			for i := range v.listOffsets {
+				assert.Equal(
+					t,
+					uint64(0),
+					v.listOffsets[i],
+				)
+			}
 
-		// Check that child vector is also reset
-		assert.Equal(t, int32(0), getPrimitive[int32](child, 0))
-		assert.Equal(t, int32(0), getPrimitive[int32](child, 1))
-		assert.False(t, child.isNull(0))
-		assert.False(t, child.isNull(1))
-	})
+			// Check that child vector is also reset
+			assert.Equal(
+				t,
+				int32(0),
+				getPrimitive[int32](child, 0),
+			)
+			assert.Equal(
+				t,
+				int32(0),
+				getPrimitive[int32](child, 1),
+			)
+			assert.False(t, child.isNull(0))
+			assert.False(t, child.isNull(1))
+		},
+	)
 }

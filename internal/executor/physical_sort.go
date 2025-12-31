@@ -98,11 +98,20 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 
 		// Extract rows from chunk
 		for rowIdx := 0; rowIdx < inputChunk.Count(); rowIdx++ {
-			rowData := make([]any, inputChunk.ColumnCount())
+			rowData := make(
+				[]any,
+				inputChunk.ColumnCount(),
+			)
 			for colIdx := 0; colIdx < inputChunk.ColumnCount(); colIdx++ {
-				rowData[colIdx] = inputChunk.GetValue(rowIdx, colIdx)
+				rowData[colIdx] = inputChunk.GetValue(
+					rowIdx,
+					colIdx,
+				)
 			}
-			allRows = append(allRows, rowWithData{data: rowData})
+			allRows = append(
+				allRows,
+				rowWithData{data: rowData},
+			)
 		}
 	}
 
@@ -115,7 +124,10 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 
 	// Sort the rows using Go's sort.Slice
 	sort.Slice(allRows, func(i, j int) bool {
-		cmp, err := op.compareRowData(allRows[i].data, allRows[j].data)
+		cmp, err := op.compareRowData(
+			allRows[i].data,
+			allRows[j].data,
+		)
 		if err != nil {
 			// In case of error, maintain original order
 			return false
@@ -128,7 +140,11 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 	// Use standard chunk size (e.g., 2048 rows per chunk)
 	const chunkSize = 2048
 	numChunks := (len(allRows) + chunkSize - 1) / chunkSize
-	op.sorted = make([]*storage.DataChunk, 0, numChunks)
+	op.sorted = make(
+		[]*storage.DataChunk,
+		0,
+		numChunks,
+	)
 
 	for i := 0; i < len(allRows); i += chunkSize {
 		end := i + chunkSize
@@ -136,7 +152,10 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 			end = len(allRows)
 		}
 
-		chunk := storage.NewDataChunkWithCapacity(columnTypes, end-i)
+		chunk := storage.NewDataChunkWithCapacity(
+			columnTypes,
+			end-i,
+		)
 		for j := i; j < end; j++ {
 			chunk.AppendRow(allRows[j].data)
 		}
@@ -148,17 +167,27 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 
 // compareRowData compares two rows using ORDER BY expressions.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
-func (op *PhysicalSortOperator) compareRowData(a, b []any) (int, error) {
+func (op *PhysicalSortOperator) compareRowData(
+	a, b []any,
+) (int, error) {
 	// Build row maps for expression evaluation
 	rowA := op.buildRowMap(a)
 	rowB := op.buildRowMap(b)
 
 	for _, order := range op.orderBy {
-		valA, err := op.executor.evaluateExpr(op.ctx, order.Expr, rowA)
+		valA, err := op.executor.evaluateExpr(
+			op.ctx,
+			order.Expr,
+			rowA,
+		)
 		if err != nil {
 			return 0, err
 		}
-		valB, err := op.executor.evaluateExpr(op.ctx, order.Expr, rowB)
+		valB, err := op.executor.evaluateExpr(
+			op.ctx,
+			order.Expr,
+			rowB,
+		)
 		if err != nil {
 			return 0, err
 		}
@@ -177,7 +206,9 @@ func (op *PhysicalSortOperator) compareRowData(a, b []any) (int, error) {
 }
 
 // buildRowMap builds a map from column indices for expression evaluation.
-func (op *PhysicalSortOperator) buildRowMap(data []any) map[string]any {
+func (op *PhysicalSortOperator) buildRowMap(
+	data []any,
+) map[string]any {
 	rowMap := make(map[string]any)
 
 	if len(op.childColumns) > 0 {
@@ -192,7 +223,8 @@ func (op *PhysicalSortOperator) buildRowMap(data []any) map[string]any {
 			}
 
 			// Add column by table-qualified name
-			if col.Table != "" && col.Column != "" {
+			if col.Table != "" &&
+				col.Column != "" {
 				qualifiedName := col.Table + "." + col.Column
 				rowMap[qualifiedName] = value
 			}

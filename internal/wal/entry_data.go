@@ -16,7 +16,11 @@ type InsertEntry struct {
 }
 
 // NewInsertEntry creates a new InsertEntry.
-func NewInsertEntry(txnID uint64, schema, table string, values [][]any) *InsertEntry {
+func NewInsertEntry(
+	txnID uint64,
+	schema, table string,
+	values [][]any,
+) *InsertEntry {
 	return &InsertEntry{
 		txnID:  txnID,
 		Schema: schema,
@@ -36,7 +40,9 @@ func (e *InsertEntry) TxnID() uint64 {
 }
 
 // Serialize writes the entry to the writer.
-func (e *InsertEntry) Serialize(w io.Writer) error {
+func (e *InsertEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
@@ -58,7 +64,9 @@ func (e *InsertEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *InsertEntry) Deserialize(r io.Reader) error {
+func (e *InsertEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
@@ -88,7 +96,11 @@ type DeleteEntry struct {
 }
 
 // NewDeleteEntry creates a new DeleteEntry.
-func NewDeleteEntry(txnID uint64, schema, table string, rowIDs []uint64) *DeleteEntry {
+func NewDeleteEntry(
+	txnID uint64,
+	schema, table string,
+	rowIDs []uint64,
+) *DeleteEntry {
 	return &DeleteEntry{
 		txnID:  txnID,
 		Schema: schema,
@@ -108,7 +120,9 @@ func (e *DeleteEntry) TxnID() uint64 {
 }
 
 // Serialize writes the entry to the writer.
-func (e *DeleteEntry) Serialize(w io.Writer) error {
+func (e *DeleteEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
@@ -131,7 +145,9 @@ func (e *DeleteEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *DeleteEntry) Deserialize(r io.Reader) error {
+func (e *DeleteEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
@@ -167,7 +183,13 @@ type UpdateEntry struct {
 }
 
 // NewUpdateEntry creates a new UpdateEntry.
-func NewUpdateEntry(txnID uint64, schema, table string, rowIDs []uint64, columnIdxs []int, newValues [][]any) *UpdateEntry {
+func NewUpdateEntry(
+	txnID uint64,
+	schema, table string,
+	rowIDs []uint64,
+	columnIdxs []int,
+	newValues [][]any,
+) *UpdateEntry {
 	return &UpdateEntry{
 		txnID:      txnID,
 		Schema:     schema,
@@ -189,7 +211,9 @@ func (e *UpdateEntry) TxnID() uint64 {
 }
 
 // Serialize writes the entry to the writer.
-func (e *UpdateEntry) Serialize(w io.Writer) error {
+func (e *UpdateEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := binary.Write(w, binary.LittleEndian, e.txnID); err != nil {
 		return err
 	}
@@ -231,7 +255,9 @@ func (e *UpdateEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *UpdateEntry) Deserialize(r io.Reader) error {
+func (e *UpdateEntry) Deserialize(
+	r io.Reader,
+) error {
 	if err := binary.Read(r, binary.LittleEndian, &e.txnID); err != nil {
 		return err
 	}
@@ -292,7 +318,9 @@ func (e *UseTableEntry) Type() EntryType {
 }
 
 // Serialize writes the entry to the writer.
-func (e *UseTableEntry) Serialize(w io.Writer) error {
+func (e *UseTableEntry) Serialize(
+	w io.Writer,
+) error {
 	if err := writeString(w, e.Schema); err != nil {
 		return err
 	}
@@ -301,7 +329,9 @@ func (e *UseTableEntry) Serialize(w io.Writer) error {
 }
 
 // Deserialize reads the entry from the reader.
-func (e *UseTableEntry) Deserialize(r io.Reader) error {
+func (e *UseTableEntry) Deserialize(
+	r io.Reader,
+) error {
 	var err error
 	if e.Schema, err = readString(r); err != nil {
 		return err

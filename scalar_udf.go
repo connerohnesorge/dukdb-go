@@ -80,7 +80,10 @@ type ScalarFuncContext struct {
 }
 
 // NewScalarFuncContext creates a new ScalarFuncContext with the given context and clock.
-func NewScalarFuncContext(ctx context.Context, clock quartz.Clock) *ScalarFuncContext {
+func NewScalarFuncContext(
+	ctx context.Context,
+	clock quartz.Clock,
+) *ScalarFuncContext {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
@@ -92,7 +95,9 @@ func NewScalarFuncContext(ctx context.Context, clock quartz.Clock) *ScalarFuncCo
 }
 
 // WithClock returns a new ScalarFuncContext with the given clock.
-func (c *ScalarFuncContext) WithClock(clock quartz.Clock) *ScalarFuncContext {
+func (c *ScalarFuncContext) WithClock(
+	clock quartz.Clock,
+) *ScalarFuncContext {
 	return &ScalarFuncContext{
 		ctx:   c.ctx,
 		clock: clock,
@@ -137,39 +142,58 @@ type scalarFuncRegistry struct {
 // newScalarFuncRegistry creates a new scalar function registry.
 func newScalarFuncRegistry() *scalarFuncRegistry {
 	return &scalarFuncRegistry{
-		functions: make(map[string][]registeredScalarFunc),
+		functions: make(
+			map[string][]registeredScalarFunc,
+		),
 	}
 }
 
 // register adds a scalar function to the registry.
-func (r *scalarFuncRegistry) register(name string, f ScalarFunc) error {
+func (r *scalarFuncRegistry) register(
+	name string,
+	f ScalarFunc,
+) error {
 	if name == "" {
-		return fmt.Errorf("scalar UDF name cannot be empty")
+		return fmt.Errorf(
+			"scalar UDF name cannot be empty",
+		)
 	}
 	if f == nil {
-		return fmt.Errorf("scalar UDF cannot be nil")
+		return fmt.Errorf(
+			"scalar UDF cannot be nil",
+		)
 	}
 
 	config := f.Config()
 	executor := f.Executor()
 
 	// Validate executor.
-	if executor.RowExecutor == nil && executor.RowContextExecutor == nil {
-		return fmt.Errorf("scalar UDF must have either RowExecutor or RowContextExecutor")
+	if executor.RowExecutor == nil &&
+		executor.RowContextExecutor == nil {
+		return fmt.Errorf(
+			"scalar UDF must have either RowExecutor or RowContextExecutor",
+		)
 	}
 
 	// Validate result type.
 	if config.ResultTypeInfo == nil {
-		return fmt.Errorf("scalar UDF result type cannot be nil")
+		return fmt.Errorf(
+			"scalar UDF result type cannot be nil",
+		)
 	}
 	if config.ResultTypeInfo.InternalType() == TYPE_ANY {
-		return fmt.Errorf("scalar UDF result type cannot be TYPE_ANY")
+		return fmt.Errorf(
+			"scalar UDF result type cannot be TYPE_ANY",
+		)
 	}
 
 	// Validate input types.
 	for i, info := range config.InputTypeInfos {
 		if info == nil {
-			return fmt.Errorf("scalar UDF input type at index %d cannot be nil", i)
+			return fmt.Errorf(
+				"scalar UDF input type at index %d cannot be nil",
+				i,
+			)
 		}
 	}
 
@@ -183,13 +207,19 @@ func (r *scalarFuncRegistry) register(name string, f ScalarFunc) error {
 		bindCtx:  context.Background(),
 	}
 
-	r.functions[name] = append(r.functions[name], registered)
+	r.functions[name] = append(
+		r.functions[name],
+		registered,
+	)
 
 	return nil
 }
 
 // lookup finds a scalar function by name and argument types.
-func (r *scalarFuncRegistry) lookup(name string, argTypes []Type) *registeredScalarFunc {
+func (r *scalarFuncRegistry) lookup(
+	name string,
+	argTypes []Type,
+) *registeredScalarFunc {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -209,7 +239,10 @@ func (r *scalarFuncRegistry) lookup(name string, argTypes []Type) *registeredSca
 
 // LookupScalarUDF implements binder.ScalarUDFResolver interface.
 // It looks up a scalar UDF by name and argument types.
-func (r *scalarFuncRegistry) LookupScalarUDF(name string, argTypes []Type) (udfInfo any, resultType Type, found bool) {
+func (r *scalarFuncRegistry) LookupScalarUDF(
+	name string,
+	argTypes []Type,
+) (udfInfo any, resultType Type, found bool) {
 	udf := r.lookup(name, argTypes)
 	if udf == nil {
 		return nil, TYPE_INVALID, false
@@ -221,10 +254,15 @@ func (r *scalarFuncRegistry) LookupScalarUDF(name string, argTypes []Type) (udfI
 // BindScalarUDF implements binder.ScalarUDFResolver interface.
 // It calls the ScalarBinder callback if present and returns the bind context.
 // For volatile functions, this does not cache results to ensure each call is fresh.
-func (r *scalarFuncRegistry) BindScalarUDF(udfInfo any, args []ScalarUDFArg) (bindCtx any, err error) {
+func (r *scalarFuncRegistry) BindScalarUDF(
+	udfInfo any,
+	args []ScalarUDFArg,
+) (bindCtx any, err error) {
 	udf, ok := udfInfo.(*registeredScalarFunc)
 	if !ok {
-		return nil, fmt.Errorf("invalid UDF info type")
+		return nil, fmt.Errorf(
+			"invalid UDF info type",
+		)
 	}
 
 	// Volatile functions should not have their results cached during constant folding.
@@ -239,7 +277,10 @@ func (r *scalarFuncRegistry) BindScalarUDF(udfInfo any, args []ScalarUDFArg) (bi
 	}
 
 	// Call the ScalarBinder callback
-	ctx, err := udf.executor.ScalarBinder(context.Background(), args)
+	ctx, err := udf.executor.ScalarBinder(
+		context.Background(),
+		args,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +293,9 @@ func (r *scalarFuncRegistry) BindScalarUDF(udfInfo any, args []ScalarUDFArg) (bi
 
 // IsVolatile implements binder.ScalarUDFResolver interface.
 // It returns true if the UDF is marked as volatile.
-func (r *scalarFuncRegistry) IsVolatile(udfInfo any) bool {
+func (r *scalarFuncRegistry) IsVolatile(
+	udfInfo any,
+) bool {
 	udf, ok := udfInfo.(*registeredScalarFunc)
 	if !ok {
 		return false
@@ -262,7 +305,9 @@ func (r *scalarFuncRegistry) IsVolatile(udfInfo any) bool {
 }
 
 // matchesTypes checks if the function matches the given argument types.
-func (f *registeredScalarFunc) matchesTypes(argTypes []Type) bool {
+func (f *registeredScalarFunc) matchesTypes(
+	argTypes []Type,
+) bool {
 	config := f.config
 
 	// Check non-variadic parameters.
@@ -270,20 +315,31 @@ func (f *registeredScalarFunc) matchesTypes(argTypes []Type) bool {
 		if i >= len(argTypes) {
 			return false
 		}
-		if !typesCompatible(expected.InternalType(), argTypes[i]) {
+		if !typesCompatible(
+			expected.InternalType(),
+			argTypes[i],
+		) {
 			return false
 		}
 	}
 
 	// Check if we have exactly the right number of args (non-variadic case).
 	if config.VariadicTypeInfo == nil {
-		return len(argTypes) == len(config.InputTypeInfos)
+		return len(
+			argTypes,
+		) == len(
+			config.InputTypeInfos,
+		)
 	}
 
 	// Check variadic parameters.
 	variadicType := config.VariadicTypeInfo.InternalType()
 	for i := len(config.InputTypeInfos); i < len(argTypes); i++ {
-		if variadicType != TYPE_ANY && !typesCompatible(variadicType, argTypes[i]) {
+		if variadicType != TYPE_ANY &&
+			!typesCompatible(
+				variadicType,
+				argTypes[i],
+			) {
 			return false
 		}
 	}
@@ -333,23 +389,42 @@ func executeScalarUDF(
 		// Check timeout periodically.
 		if ctx != nil {
 			if err := ctx.checkTimeout(); err != nil {
-				return fmt.Errorf("scalar UDF '%s' timeout at row %d: %w", udf.name, rowIdx, err)
+				return fmt.Errorf(
+					"scalar UDF '%s' timeout at row %d: %w",
+					udf.name,
+					rowIdx,
+					err,
+				)
 			}
 		}
 
 		// Gather input values.
 		nullRow := false
 		for colIdx := range numCols {
-			val, err := input.GetValue(colIdx, rowIdx)
+			val, err := input.GetValue(
+				colIdx,
+				rowIdx,
+			)
 			if err != nil {
-				return fmt.Errorf("scalar UDF '%s' failed to get input at row %d, col %d: %w", udf.name, rowIdx, colIdx, err)
+				return fmt.Errorf(
+					"scalar UDF '%s' failed to get input at row %d, col %d: %w",
+					udf.name,
+					rowIdx,
+					colIdx,
+					err,
+				)
 			}
 			values[colIdx] = val
 
 			// NULL handling.
 			if nullInNullOut && val == nil {
 				if err := output.setFn(output, rowIdx, nil); err != nil {
-					return fmt.Errorf("scalar UDF '%s' failed to set NULL output at row %d: %w", udf.name, rowIdx, err)
+					return fmt.Errorf(
+						"scalar UDF '%s' failed to set NULL output at row %d: %w",
+						udf.name,
+						rowIdx,
+						err,
+					)
 				}
 				nullRow = true
 
@@ -364,12 +439,22 @@ func executeScalarUDF(
 		// Execute the user function with panic recovery.
 		result, err := safeExecute(execFn, values)
 		if err != nil {
-			return fmt.Errorf("scalar UDF '%s' execution error at row %d: %w", udf.name, rowIdx, err)
+			return fmt.Errorf(
+				"scalar UDF '%s' execution error at row %d: %w",
+				udf.name,
+				rowIdx,
+				err,
+			)
 		}
 
 		// Write result to output.
 		if err := output.setFn(output, rowIdx, result); err != nil {
-			return fmt.Errorf("scalar UDF '%s' failed to set output at row %d: %w", udf.name, rowIdx, err)
+			return fmt.Errorf(
+				"scalar UDF '%s' failed to set output at row %d: %w",
+				udf.name,
+				rowIdx,
+				err,
+			)
 		}
 	}
 
@@ -377,10 +462,16 @@ func executeScalarUDF(
 }
 
 // safeExecute wraps user function execution with panic recovery.
-func safeExecute(fn func([]driver.Value) (any, error), values []driver.Value) (result any, err error) {
+func safeExecute(
+	fn func([]driver.Value) (any, error),
+	values []driver.Value,
+) (result any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic in scalar UDF: %v", r)
+			err = fmt.Errorf(
+				"panic in scalar UDF: %v",
+				r,
+			)
 		}
 	}()
 
@@ -390,11 +481,18 @@ func safeExecute(fn func([]driver.Value) (any, error), values []driver.Value) (r
 // RegisterScalarUDF registers a user-defined scalar function.
 // c is the SQL connection on which to register the scalar function.
 // name is the function name, and f is the scalar function's interface ScalarFunc.
-func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
+func RegisterScalarUDF(
+	c *sql.Conn,
+	name string,
+	f ScalarFunc,
+) error {
 	return c.Raw(func(driverConn any) error {
 		conn, ok := driverConn.(*Conn)
 		if !ok {
-			return fmt.Errorf("invalid connection type: expected *Conn, got %T", driverConn)
+			return fmt.Errorf(
+				"invalid connection type: expected *Conn, got %T",
+				driverConn,
+			)
 		}
 
 		if conn.scalarFuncs == nil {
@@ -410,11 +508,18 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 // c is the SQL connection on which to register the scalar function set.
 // name is the function name of each function in the set.
 // functions contains all ScalarFunc functions of the scalar function set.
-func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
+func RegisterScalarUDFSet(
+	c *sql.Conn,
+	name string,
+	functions ...ScalarFunc,
+) error {
 	return c.Raw(func(driverConn any) error {
 		conn, ok := driverConn.(*Conn)
 		if !ok {
-			return fmt.Errorf("invalid connection type: expected *Conn, got %T", driverConn)
+			return fmt.Errorf(
+				"invalid connection type: expected *Conn, got %T",
+				driverConn,
+			)
 		}
 
 		if conn.scalarFuncs == nil {
@@ -423,7 +528,12 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 		for i, f := range functions {
 			if err := conn.scalarFuncs.register(name, f); err != nil {
-				return fmt.Errorf("failed to register function %d in set '%s': %w", i, name, err)
+				return fmt.Errorf(
+					"failed to register function %d in set '%s': %w",
+					i,
+					name,
+					err,
+				)
 			}
 		}
 

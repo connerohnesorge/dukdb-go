@@ -31,11 +31,17 @@ func TestAllCompatibility(t *testing.T) {
 	})
 
 	t.Run("Errors", func(t *testing.T) {
-		runner.RunTests(t, ErrorCompatibilityTests)
+		runner.RunTests(
+			t,
+			ErrorCompatibilityTests,
+		)
 	})
 
 	t.Run("Features", func(t *testing.T) {
-		runner.RunTests(t, FeatureCompatibilityTests)
+		runner.RunTests(
+			t,
+			FeatureCompatibilityTests,
+		)
 	})
 }
 
@@ -76,24 +82,64 @@ func TestQuickCompatibility(t *testing.T) {
 
 	// Quick SQL tests
 	quickSQLTests := []CompatibilityTest{
-		{Name: "QuickCreateTable", Category: "sql", Test: testCreateTable},
-		{Name: "QuickInsertValues", Category: "sql", Test: testInsertValues},
-		{Name: "QuickSelectStar", Category: "sql", Test: testSelectStar},
-		{Name: "QuickSelectWhere", Category: "sql", Test: testSelectWhere},
+		{
+			Name:     "QuickCreateTable",
+			Category: "sql",
+			Test:     testCreateTable,
+		},
+		{
+			Name:     "QuickInsertValues",
+			Category: "sql",
+			Test:     testInsertValues,
+		},
+		{
+			Name:     "QuickSelectStar",
+			Category: "sql",
+			Test:     testSelectStar,
+		},
+		{
+			Name:     "QuickSelectWhere",
+			Category: "sql",
+			Test:     testSelectWhere,
+		},
 	}
 
 	// Quick type tests
 	quickTypeTests := []CompatibilityTest{
-		{Name: "QuickInteger", Category: "type", Test: testTypeInteger},
-		{Name: "QuickVarchar", Category: "type", Test: testTypeVarchar},
-		{Name: "QuickBoolean", Category: "type", Test: testTypeBoolean},
+		{
+			Name:     "QuickInteger",
+			Category: "type",
+			Test:     testTypeInteger,
+		},
+		{
+			Name:     "QuickVarchar",
+			Category: "type",
+			Test:     testTypeVarchar,
+		},
+		{
+			Name:     "QuickBoolean",
+			Category: "type",
+			Test:     testTypeBoolean,
+		},
 	}
 
 	// Quick API tests
 	quickAPITests := []CompatibilityTest{
-		{Name: "QuickOpenClose", Category: "api", Test: testOpenClose},
-		{Name: "QuickPing", Category: "api", Test: testPing},
-		{Name: "QuickBeginCommit", Category: "api", Test: testBeginCommit},
+		{
+			Name:     "QuickOpenClose",
+			Category: "api",
+			Test:     testOpenClose,
+		},
+		{
+			Name:     "QuickPing",
+			Category: "api",
+			Test:     testPing,
+		},
+		{
+			Name:     "QuickBeginCommit",
+			Category: "api",
+			Test:     testBeginCommit,
+		},
 	}
 
 	t.Run("QuickSQL", func(t *testing.T) {
@@ -130,11 +176,13 @@ type CategoryReport struct {
 // GetTestCounts returns the total number of tests in each category.
 func GetTestCounts() map[string]int {
 	return map[string]int{
-		"SQL":      len(SQLCompatibilityTests),
-		"Types":    len(TypeCompatibilityTests),
-		"API":      len(APICompatibilityTests),
-		"Errors":   len(ErrorCompatibilityTests),
-		"Features": len(FeatureCompatibilityTests),
+		"SQL":    len(SQLCompatibilityTests),
+		"Types":  len(TypeCompatibilityTests),
+		"API":    len(APICompatibilityTests),
+		"Errors": len(ErrorCompatibilityTests),
+		"Features": len(
+			FeatureCompatibilityTests,
+		),
 	}
 }
 

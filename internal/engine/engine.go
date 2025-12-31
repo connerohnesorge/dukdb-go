@@ -85,7 +85,10 @@ func (e *Engine) Open(
 		// Check if file exists and load it
 		if _, err := os.Stat(path); err == nil {
 			if err := e.loadFromFile(path); err != nil {
-				return nil, fmt.Errorf("failed to load database: %w", err)
+				return nil, fmt.Errorf(
+					"failed to load database: %w",
+					err,
+				)
 			}
 		}
 	}
@@ -110,9 +113,13 @@ func (e *Engine) Close() error {
 	}
 
 	// Save to file if persistent
-	if e.persistent && e.path != "" && e.path != ":memory:" {
+	if e.persistent && e.path != "" &&
+		e.path != ":memory:" {
 		if err := e.saveToFile(e.path); err != nil {
-			return fmt.Errorf("failed to save database: %w", err)
+			return fmt.Errorf(
+				"failed to save database: %w",
+				err,
+			)
 		}
 	}
 
@@ -240,43 +247,76 @@ func (e *Engine) loadFromFile(path string) error {
 	// Load catalog
 	catalogData, err := fm.ReadCatalog()
 	if err != nil {
-		return fmt.Errorf("failed to read catalog: %w", err)
+		return fmt.Errorf(
+			"failed to read catalog: %w",
+			err,
+		)
 	}
 
-	catalogJSON, err := persistence.UnmarshalCatalog(catalogData)
+	catalogJSON, err := persistence.UnmarshalCatalog(
+		catalogData,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal catalog: %w", err)
+		return fmt.Errorf(
+			"failed to unmarshal catalog: %w",
+			err,
+		)
 	}
 
 	if err := e.catalog.Import(catalogJSON); err != nil {
-		return fmt.Errorf("failed to import catalog: %w", err)
+		return fmt.Errorf(
+			"failed to import catalog: %w",
+			err,
+		)
 	}
 
 	// Load table data from blocks
 	for _, blockInfo := range fm.DataBlocks() {
 		data, err := fm.ReadBlock(blockInfo)
 		if err != nil {
-			return fmt.Errorf("failed to read block for table %s: %w", blockInfo.TableName, err)
+			return fmt.Errorf(
+				"failed to read block for table %s: %w",
+				blockInfo.TableName,
+				err,
+			)
 		}
 
 		// Get or create table in storage
-		table, ok := e.storage.GetTable(blockInfo.TableName)
+		table, ok := e.storage.GetTable(
+			blockInfo.TableName,
+		)
 		if !ok {
 			// Need to get column types from catalog
-			tableDef, ok := e.catalog.GetTable(blockInfo.TableName)
+			tableDef, ok := e.catalog.GetTable(
+				blockInfo.TableName,
+			)
 			if !ok {
-				return fmt.Errorf("table %s not found in catalog", blockInfo.TableName)
+				return fmt.Errorf(
+					"table %s not found in catalog",
+					blockInfo.TableName,
+				)
 			}
-			table, err = e.storage.CreateTable(blockInfo.TableName, tableDef.ColumnTypes())
+			table, err = e.storage.CreateTable(
+				blockInfo.TableName,
+				tableDef.ColumnTypes(),
+			)
 			if err != nil {
-				return fmt.Errorf("failed to create table %s: %w", blockInfo.TableName, err)
+				return fmt.Errorf(
+					"failed to create table %s: %w",
+					blockInfo.TableName,
+					err,
+				)
 			}
 		}
 
 		// Import row group
 		rg, err := table.ImportRowGroup(data)
 		if err != nil {
-			return fmt.Errorf("failed to import row group for table %s: %w", blockInfo.TableName, err)
+			return fmt.Errorf(
+				"failed to import row group for table %s: %w",
+				blockInfo.TableName,
+				err,
+			)
 		}
 		table.AddRowGroup(rg)
 	}
@@ -296,12 +336,17 @@ func (e *Engine) saveToFile(path string) error {
 
 	// Export and write catalog
 	catalogJSON := e.catalog.Export()
-	catalogData, err := persistence.MarshalCatalog(catalogJSON)
+	catalogData, err := persistence.MarshalCatalog(
+		catalogJSON,
+	)
 	if err != nil {
 		fm.Close()
 		os.Remove(tmpPath)
 
-		return fmt.Errorf("failed to marshal catalog: %w", err)
+		return fmt.Errorf(
+			"failed to marshal catalog: %w",
+			err,
+		)
 	}
 
 	// Write table data blocks first
@@ -312,13 +357,22 @@ func (e *Engine) saveToFile(path string) error {
 				fm.Close()
 				os.Remove(tmpPath)
 
-				return fmt.Errorf("failed to export row group %d for table %s: %w", i, tableName, err)
+				return fmt.Errorf(
+					"failed to export row group %d for table %s: %w",
+					i,
+					tableName,
+					err,
+				)
 			}
 			if err := fm.WriteBlock(tableName, i, data); err != nil {
 				fm.Close()
 				os.Remove(tmpPath)
 
-				return fmt.Errorf("failed to write block for table %s: %w", tableName, err)
+				return fmt.Errorf(
+					"failed to write block for table %s: %w",
+					tableName,
+					err,
+				)
 			}
 		}
 	}
@@ -328,7 +382,10 @@ func (e *Engine) saveToFile(path string) error {
 		fm.Close()
 		os.Remove(tmpPath)
 
-		return fmt.Errorf("failed to write catalog: %w", err)
+		return fmt.Errorf(
+			"failed to write catalog: %w",
+			err,
+		)
 	}
 
 	// Finalize with block index and footer
@@ -336,7 +393,10 @@ func (e *Engine) saveToFile(path string) error {
 		fm.Close()
 		os.Remove(tmpPath)
 
-		return fmt.Errorf("failed to finalize file: %w", err)
+		return fmt.Errorf(
+			"failed to finalize file: %w",
+			err,
+		)
 	}
 	fm.Close()
 
@@ -344,7 +404,10 @@ func (e *Engine) saveToFile(path string) error {
 	if err := persistence.VerifyFile(tmpPath); err != nil {
 		os.Remove(tmpPath)
 
-		return fmt.Errorf("save verification failed: %w", err)
+		return fmt.Errorf(
+			"save verification failed: %w",
+			err,
+		)
 	}
 
 	// Atomic rename (preserves original on failure)

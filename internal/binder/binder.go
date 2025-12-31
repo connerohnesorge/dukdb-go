@@ -27,11 +27,17 @@ type BoundExpr interface {
 type ScalarUDFResolver interface {
 	// LookupScalarUDF looks up a scalar UDF by name and argument types.
 	// Returns the UDF info (opaque), result type, and whether it was found.
-	LookupScalarUDF(name string, argTypes []dukdb.Type) (udfInfo any, resultType dukdb.Type, found bool)
+	LookupScalarUDF(
+		name string,
+		argTypes []dukdb.Type,
+	) (udfInfo any, resultType dukdb.Type, found bool)
 	// BindScalarUDF calls the ScalarBinder callback if present.
 	// Returns the bind context to be used during execution.
 	// For volatile functions, this returns nil to prevent caching.
-	BindScalarUDF(udfInfo any, args []dukdb.ScalarUDFArg) (bindCtx any, err error)
+	BindScalarUDF(
+		udfInfo any,
+		args []dukdb.ScalarUDFArg,
+	) (bindCtx any, err error)
 	// IsVolatile returns true if the UDF is marked as volatile.
 	// Volatile functions produce different results each invocation and cannot be cached.
 	IsVolatile(udfInfo any) bool
@@ -81,7 +87,9 @@ func NewBinder(cat *catalog.Catalog) *Binder {
 }
 
 // WithUDFResolver sets the scalar UDF resolver and returns the binder.
-func (b *Binder) WithUDFResolver(resolver ScalarUDFResolver) *Binder {
+func (b *Binder) WithUDFResolver(
+	resolver ScalarUDFResolver,
+) *Binder {
 	b.udfResolver = resolver
 
 	return b
@@ -529,7 +537,10 @@ func (b *Binder) bindSelect(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
+		where, err := b.bindExpr(
+			s.Where,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -550,7 +561,10 @@ func (b *Binder) bindSelect(
 
 	// Bind HAVING
 	if s.Having != nil {
-		having, err := b.bindExpr(s.Having, dukdb.TYPE_BOOLEAN)
+		having, err := b.bindExpr(
+			s.Having,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -559,7 +573,10 @@ func (b *Binder) bindSelect(
 
 	// Bind ORDER BY
 	for _, o := range s.OrderBy {
-		expr, err := b.bindExpr(o.Expr, dukdb.TYPE_ANY)
+		expr, err := b.bindExpr(
+			o.Expr,
+			dukdb.TYPE_ANY,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -574,7 +591,10 @@ func (b *Binder) bindSelect(
 
 	// Bind LIMIT
 	if s.Limit != nil {
-		limit, err := b.bindExpr(s.Limit, dukdb.TYPE_BIGINT)
+		limit, err := b.bindExpr(
+			s.Limit,
+			dukdb.TYPE_BIGINT,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -583,7 +603,10 @@ func (b *Binder) bindSelect(
 
 	// Bind OFFSET
 	if s.Offset != nil {
-		offset, err := b.bindExpr(s.Offset, dukdb.TYPE_BIGINT)
+		offset, err := b.bindExpr(
+			s.Offset,
+			dukdb.TYPE_BIGINT,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -730,7 +753,10 @@ func (b *Binder) bindJoin(
 
 	var cond BoundExpr
 	if join.Condition != nil {
-		cond, err = b.bindExpr(join.Condition, dukdb.TYPE_BOOLEAN)
+		cond, err = b.bindExpr(
+			join.Condition,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -878,7 +904,10 @@ func (b *Binder) bindBinaryExpr(
 	e *parser.BinaryExpr,
 ) (*BoundBinaryExpr, error) {
 	// Bind left first without expectation
-	left, err := b.bindExpr(e.Left, dukdb.TYPE_ANY)
+	left, err := b.bindExpr(
+		e.Left,
+		dukdb.TYPE_ANY,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -886,24 +915,40 @@ func (b *Binder) bindBinaryExpr(
 	// For comparison and LIKE operators, use left's type as expected for right
 	var rightExpected dukdb.Type
 	switch e.Op {
-	case parser.OpEq, parser.OpNe, parser.OpLt, parser.OpLe, parser.OpGt, parser.OpGe:
+	case parser.OpEq,
+		parser.OpNe,
+		parser.OpLt,
+		parser.OpLe,
+		parser.OpGt,
+		parser.OpGe:
 		rightExpected = left.ResultType()
-	case parser.OpLike, parser.OpILike, parser.OpNotLike, parser.OpNotILike:
+	case parser.OpLike,
+		parser.OpILike,
+		parser.OpNotLike,
+		parser.OpNotILike:
 		rightExpected = dukdb.TYPE_VARCHAR
-	case parser.OpAdd, parser.OpSub, parser.OpMul, parser.OpDiv, parser.OpMod:
+	case parser.OpAdd,
+		parser.OpSub,
+		parser.OpMul,
+		parser.OpDiv,
+		parser.OpMod:
 		rightExpected = dukdb.TYPE_DOUBLE // arithmetic context
 	default:
 		rightExpected = dukdb.TYPE_ANY
 	}
 
-	right, err := b.bindExpr(e.Right, rightExpected)
+	right, err := b.bindExpr(
+		e.Right,
+		rightExpected,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	// If left was parameter with TYPE_ANY and right has concrete type, update left
 	if leftParam, ok := left.(*BoundParameter); ok {
-		if leftParam.ParamType == dukdb.TYPE_ANY && right.ResultType() != dukdb.TYPE_ANY {
+		if leftParam.ParamType == dukdb.TYPE_ANY &&
+			right.ResultType() != dukdb.TYPE_ANY {
 			leftParam.ParamType = right.ResultType()
 			b.scope.params[leftParam.Position] = right.ResultType()
 		}
@@ -977,7 +1022,10 @@ func (b *Binder) bindFunctionCall(
 	f *parser.FunctionCall,
 ) (BoundExpr, error) {
 	// Get expected argument types from function signature if available
-	argTypes := getFunctionArgTypes(f.Name, len(f.Args))
+	argTypes := getFunctionArgTypes(
+		f.Name,
+		len(f.Args),
+	)
 
 	var args []BoundExpr
 	for i, arg := range f.Args {
@@ -985,7 +1033,10 @@ func (b *Binder) bindFunctionCall(
 		if i < len(argTypes) {
 			expectedType = argTypes[i]
 		}
-		bound, err := b.bindExpr(arg, expectedType)
+		bound, err := b.bindExpr(
+			arg,
+			expectedType,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1002,8 +1053,13 @@ func (b *Binder) bindFunctionCall(
 		if udfInfo, resType, found := b.udfResolver.LookupScalarUDF(f.Name, argTypes); found {
 			// Build argument info for constant folding.
 			// For volatile functions, skip foldability detection to prevent caching.
-			argInfo := make([]dukdb.ScalarUDFArg, len(args))
-			isVolatile := b.udfResolver.IsVolatile(udfInfo)
+			argInfo := make(
+				[]dukdb.ScalarUDFArg,
+				len(args),
+			)
+			isVolatile := b.udfResolver.IsVolatile(
+				udfInfo,
+			)
 			if !isVolatile {
 				for i, arg := range args {
 					if lit, ok := arg.(*BoundLiteral); ok {
@@ -1016,9 +1072,16 @@ func (b *Binder) bindFunctionCall(
 			}
 
 			// Call ScalarBinder callback if present (skipped for volatile functions)
-			bindCtx, err := b.udfResolver.BindScalarUDF(udfInfo, argInfo)
+			bindCtx, err := b.udfResolver.BindScalarUDF(
+				udfInfo,
+				argInfo,
+			)
 			if err != nil {
-				return nil, fmt.Errorf("scalar UDF '%s' bind error: %w", f.Name, err)
+				return nil, fmt.Errorf(
+					"scalar UDF '%s' bind error: %w",
+					f.Name,
+					err,
+				)
 			}
 
 			return &BoundScalarUDF{
@@ -1054,7 +1117,10 @@ func (b *Binder) bindCaseExpr(
 	bound := &BoundCaseExpr{}
 
 	if e.Operand != nil {
-		operand, err := b.bindExpr(e.Operand, dukdb.TYPE_ANY)
+		operand, err := b.bindExpr(
+			e.Operand,
+			dukdb.TYPE_ANY,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1062,11 +1128,17 @@ func (b *Binder) bindCaseExpr(
 	}
 
 	for _, w := range e.Whens {
-		cond, err := b.bindExpr(w.Condition, dukdb.TYPE_BOOLEAN)
+		cond, err := b.bindExpr(
+			w.Condition,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
-		result, err := b.bindExpr(w.Result, expectedType)
+		result, err := b.bindExpr(
+			w.Result,
+			expectedType,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1080,7 +1152,10 @@ func (b *Binder) bindCaseExpr(
 	}
 
 	if e.Else != nil {
-		elseExpr, err := b.bindExpr(e.Else, expectedType)
+		elseExpr, err := b.bindExpr(
+			e.Else,
+			expectedType,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1103,7 +1178,10 @@ func (b *Binder) bindBetweenExpr(
 	e *parser.BetweenExpr,
 ) (*BoundBetweenExpr, error) {
 	// Bind expr first to get its type
-	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
+	expr, err := b.bindExpr(
+		e.Expr,
+		dukdb.TYPE_ANY,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1133,7 +1211,10 @@ func (b *Binder) bindInListExpr(
 	e *parser.InListExpr,
 ) (*BoundInListExpr, error) {
 	// Bind expr first to get its type
-	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
+	expr, err := b.bindExpr(
+		e.Expr,
+		dukdb.TYPE_ANY,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1160,7 +1241,10 @@ func (b *Binder) bindInListExpr(
 func (b *Binder) bindInSubqueryExpr(
 	e *parser.InSubqueryExpr,
 ) (*BoundInSubqueryExpr, error) {
-	expr, err := b.bindExpr(e.Expr, dukdb.TYPE_ANY)
+	expr, err := b.bindExpr(
+		e.Expr,
+		dukdb.TYPE_ANY,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1376,7 +1460,10 @@ func (b *Binder) bindUpdate(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
+		where, err := b.bindExpr(
+			s.Where,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1433,7 +1520,10 @@ func (b *Binder) bindDelete(
 
 	// Bind WHERE
 	if s.Where != nil {
-		where, err := b.bindExpr(s.Where, dukdb.TYPE_BOOLEAN)
+		where, err := b.bindExpr(
+			s.Where,
+			dukdb.TYPE_BOOLEAN,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1658,7 +1748,10 @@ func inferFunctionResultType(
 
 // getFunctionArgTypes returns expected argument types for known functions.
 // This is used for parameter type inference in function calls.
-func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
+func getFunctionArgTypes(
+	name string,
+	argCount int,
+) []dukdb.Type {
 	name = strings.ToUpper(name)
 	switch name {
 	case "ABS", "SUM", "AVG", "MIN", "MAX":
@@ -1666,10 +1759,19 @@ func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_DOUBLE}
 		}
-	case "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH":
+	case "UPPER",
+		"LOWER",
+		"TRIM",
+		"LTRIM",
+		"RTRIM",
+		"LENGTH",
+		"CHAR_LENGTH",
+		"CHARACTER_LENGTH":
 		// String functions
 		if argCount >= 1 {
-			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+			return []dukdb.Type{
+				dukdb.TYPE_VARCHAR,
+			}
 		}
 	case "SUBSTR", "SUBSTRING":
 		// SUBSTR(string, start, [length])
@@ -1688,7 +1790,11 @@ func getFunctionArgTypes(name string, argCount int) []dukdb.Type {
 	case "REPLACE":
 		// REPLACE(string, from, to)
 		if argCount >= 3 {
-			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+			return []dukdb.Type{
+				dukdb.TYPE_VARCHAR,
+				dukdb.TYPE_VARCHAR,
+				dukdb.TYPE_VARCHAR,
+			}
 		}
 	case "CONCAT":
 		// CONCAT accepts varargs of VARCHAR

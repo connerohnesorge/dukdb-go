@@ -31,14 +31,20 @@ type ParameterInfo struct {
 }
 
 // CollectParameters collects all parameter placeholders from a statement.
-func CollectParameters(stmt Statement) []ParameterInfo {
+func CollectParameters(
+	stmt Statement,
+) []ParameterInfo {
 	collector := &paramCollector{
 		params: make(map[int]ParameterInfo),
 	}
 	collector.collectStmt(stmt)
 
 	// Convert map to slice ordered by position
-	result := make([]ParameterInfo, 0, len(collector.params))
+	result := make(
+		[]ParameterInfo,
+		0,
+		len(collector.params),
+	)
 	for i := 1; i <= len(collector.params); i++ {
 		if p, ok := collector.params[i]; ok {
 			result = append(result, p)
@@ -53,7 +59,9 @@ type paramCollector struct {
 	position int // For positional parameters
 }
 
-func (c *paramCollector) collectStmt(stmt Statement) {
+func (c *paramCollector) collectStmt(
+	stmt Statement,
+) {
 	switch s := stmt.(type) {
 	case *SelectStmt:
 		for _, col := range s.Columns {
@@ -511,7 +519,8 @@ func isLetter(ch byte) bool {
 
 func isOperatorChar(ch byte) bool {
 	return ch == '+' || ch == '-' || ch == '/' || ch == '%' ||
-		ch == '<' || ch == '>' || ch == '=' ||
+		ch == '<' || ch == '>' ||
+		ch == '=' ||
 		ch == '!' ||
 		ch == '|' ||
 		ch == ':'
@@ -1804,9 +1813,15 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 				tok := p.advance()
 				numStr := tok.value
 				// Parse as negative number
-				if strings.Contains(numStr, ".") ||
+				if strings.Contains(
+					numStr,
+					".",
+				) ||
 					strings.ContainsAny(numStr, "eE") {
-					f, err := strconv.ParseFloat(numStr, 64)
+					f, err := strconv.ParseFloat(
+						numStr,
+						64,
+					)
 					if err != nil {
 						return nil, p.errorf(
 							"invalid number: %s",
@@ -1819,7 +1834,11 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 						Type:  dukdb.TYPE_DOUBLE,
 					}, nil
 				}
-				i, err := strconv.ParseInt(numStr, 10, 64)
+				i, err := strconv.ParseInt(
+					numStr,
+					10,
+					64,
+				)
 				if err != nil {
 					return nil, p.errorf(
 						"invalid number: %s",

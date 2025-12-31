@@ -114,7 +114,10 @@ func NewAppenderWithThreshold(
 	}
 
 	// Try to get TypeInfo for DataChunk-based buffering
-	typeInfos, _, typeInfoErr := conn.backendConn.GetTableTypeInfos(schema, table)
+	typeInfos, _, typeInfoErr := conn.backendConn.GetTableTypeInfos(
+		schema,
+		table,
+	)
 
 	// Create the appender
 	appender := &Appender{
@@ -220,7 +223,8 @@ func NewQueryAppenderWithThreshold(
 	}
 
 	// Validate colNames length if provided
-	if len(colNames) != 0 && len(colNames) != len(colTypes) {
+	if len(colNames) != 0 &&
+		len(colNames) != len(colTypes) {
 		return nil, &Error{
 			Type: ErrorTypeInvalid,
 			Msg: fmt.Sprintf(
@@ -246,13 +250,17 @@ func NewQueryAppenderWithThreshold(
 	}
 
 	return &Appender{
-		conn:            conn,
-		catalog:         "memory",
-		schema:          "main",
-		table:           table, // Used as temp table name
-		columns:         columns,
-		colTypes:        nil, // Not used for query appender
-		buffer:          make([][]any, 0, threshold),
+		conn:     conn,
+		catalog:  "memory",
+		schema:   "main",
+		table:    table, // Used as temp table name
+		columns:  columns,
+		colTypes: nil, // Not used for query appender
+		buffer: make(
+			[][]any,
+			0,
+			threshold,
+		),
 		threshold:       threshold,
 		closed:          false,
 		isQueryAppender: true,
@@ -431,7 +439,9 @@ func (a *Appender) createTempTable() error {
 
 	var sb strings.Builder
 	sb.WriteString("CREATE TEMP TABLE ")
-	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(
+		quoteIdentifier(a.tempTableName),
+	)
 	sb.WriteString(" (")
 	for i, colName := range a.queryColNames {
 		if i > 0 {
@@ -439,7 +449,9 @@ func (a *Appender) createTempTable() error {
 		}
 		sb.WriteString(quoteIdentifier(colName))
 		sb.WriteString(" ")
-		sb.WriteString(a.queryColTypes[i].SQLType())
+		sb.WriteString(
+			a.queryColTypes[i].SQLType(),
+		)
 	}
 	sb.WriteString(")")
 
@@ -463,7 +475,9 @@ func (a *Appender) truncateTempTable() error {
 		return nil
 	}
 
-	query := "DELETE FROM " + quoteIdentifier(a.tempTableName)
+	query := "DELETE FROM " + quoteIdentifier(
+		a.tempTableName,
+	)
 	_, err := a.conn.ExecContext(
 		context.Background(),
 		query,
@@ -479,7 +493,9 @@ func (a *Appender) dropTempTable() error {
 		return nil
 	}
 
-	query := "DROP TABLE IF EXISTS " + quoteIdentifier(a.tempTableName)
+	query := "DROP TABLE IF EXISTS " + quoteIdentifier(
+		a.tempTableName,
+	)
 	_, err := a.conn.ExecContext(
 		context.Background(),
 		query,
@@ -521,7 +537,8 @@ func (a *Appender) AppendRow(
 	}
 
 	// Use DataChunk-based buffering for table appenders
-	if a.currentChunk != nil && !a.isQueryAppender {
+	if a.currentChunk != nil &&
+		!a.isQueryAppender {
 		return a.appendRowToChunk(values)
 	}
 
@@ -530,7 +547,9 @@ func (a *Appender) AppendRow(
 }
 
 // appendRowToChunk appends a row to the DataChunk (for table appenders).
-func (a *Appender) appendRowToChunk(values []any) error {
+func (a *Appender) appendRowToChunk(
+	values []any,
+) error {
 	// Calculate effective threshold (minimum of user threshold and VectorSize)
 	effectiveThreshold := a.threshold
 	if VectorSize < effectiveThreshold {
@@ -556,7 +575,9 @@ func (a *Appender) appendRowToChunk(values []any) error {
 }
 
 // appendRowToBuffer appends a row to the row-based buffer (for query appenders).
-func (a *Appender) appendRowToBuffer(values []any) error {
+func (a *Appender) appendRowToBuffer(
+	values []any,
+) error {
 	// Auto-flush at threshold
 	if len(a.buffer) >= a.threshold {
 		if err := a.flushLocked(); err != nil {
@@ -723,7 +744,9 @@ func (a *Appender) buildTempTableInsert() (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("INSERT INTO ")
-	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(
+		quoteIdentifier(a.tempTableName),
+	)
 	sb.WriteString(" (")
 	for i, col := range a.queryColNames {
 		if i > 0 {
@@ -853,7 +876,10 @@ type AppenderContext struct {
 
 // NewAppenderContext creates an AppenderContext with the given context and clock.
 // If clock is nil, the real system clock is used.
-func NewAppenderContext(ctx context.Context, clock quartz.Clock) AppenderContext {
+func NewAppenderContext(
+	ctx context.Context,
+	clock quartz.Clock,
+) AppenderContext {
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
@@ -869,7 +895,9 @@ func NewAppenderContext(ctx context.Context, clock quartz.Clock) AppenderContext
 // On error, the buffer is preserved for retry.
 // Returns context.DeadlineExceeded if the deadline has passed.
 // Returns ErrorTypeClosed if the appender is closed.
-func (a *Appender) FlushWithContext(appCtx AppenderContext) error {
+func (a *Appender) FlushWithContext(
+	appCtx AppenderContext,
+) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -891,13 +919,17 @@ func (a *Appender) FlushWithContext(appCtx AppenderContext) error {
 }
 
 // flushLockedWithContext performs the actual flush with context. Caller must hold the mutex.
-func (a *Appender) flushLockedWithContext(ctx context.Context) error {
+func (a *Appender) flushLockedWithContext(
+	ctx context.Context,
+) error {
 	if a.isQueryAppender {
 		if len(a.buffer) == 0 {
 			return nil // Nothing to flush
 		}
 
-		return a.flushQueryAppenderWithContext(ctx)
+		return a.flushQueryAppenderWithContext(
+			ctx,
+		)
 	}
 
 	// Table appenders: use DataChunk-based flush if available
@@ -906,7 +938,9 @@ func (a *Appender) flushLockedWithContext(ctx context.Context) error {
 			return nil // Nothing to flush
 		}
 
-		return a.flushTableAppenderDataChunkWithContext(ctx)
+		return a.flushTableAppenderDataChunkWithContext(
+			ctx,
+		)
 	}
 
 	// Fallback to row-based flush
@@ -919,7 +953,9 @@ func (a *Appender) flushLockedWithContext(ctx context.Context) error {
 
 // flushTableAppenderWithContext performs a direct INSERT flush with context.
 // This is the fallback path when DataChunk-based buffering is not available.
-func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
+func (a *Appender) flushTableAppenderWithContext(
+	ctx context.Context,
+) error {
 	insert, err := a.buildInsert()
 	if err != nil {
 		return err
@@ -937,7 +973,9 @@ func (a *Appender) flushTableAppenderWithContext(ctx context.Context) error {
 
 // flushTableAppenderDataChunkWithContext performs a direct DataChunk flush with context.
 // This is the optimized path that bypasses SQL parsing.
-func (a *Appender) flushTableAppenderDataChunkWithContext(ctx context.Context) error {
+func (a *Appender) flushTableAppenderDataChunkWithContext(
+	ctx context.Context,
+) error {
 	if a.currentSize == 0 {
 		return nil
 	}
@@ -967,7 +1005,9 @@ func (a *Appender) flushTableAppenderDataChunkWithContext(ctx context.Context) e
 }
 
 // flushQueryAppenderWithContext performs a three-phase flush with context.
-func (a *Appender) flushQueryAppenderWithContext(ctx context.Context) error {
+func (a *Appender) flushQueryAppenderWithContext(
+	ctx context.Context,
+) error {
 	// Phase 1: Create temp table if it doesn't exist
 	if err := a.createTempTableWithContext(ctx); err != nil {
 		return err
@@ -1001,14 +1041,18 @@ func (a *Appender) flushQueryAppenderWithContext(ctx context.Context) error {
 }
 
 // createTempTableWithContext creates the temp table with context.
-func (a *Appender) createTempTableWithContext(ctx context.Context) error {
+func (a *Appender) createTempTableWithContext(
+	ctx context.Context,
+) error {
 	if a.tempTableExists {
 		return nil
 	}
 
 	var sb strings.Builder
 	sb.WriteString("CREATE TEMP TABLE ")
-	sb.WriteString(quoteIdentifier(a.tempTableName))
+	sb.WriteString(
+		quoteIdentifier(a.tempTableName),
+	)
 	sb.WriteString(" (")
 	for i, colName := range a.queryColNames {
 		if i > 0 {
@@ -1016,11 +1060,17 @@ func (a *Appender) createTempTableWithContext(ctx context.Context) error {
 		}
 		sb.WriteString(quoteIdentifier(colName))
 		sb.WriteString(" ")
-		sb.WriteString(a.queryColTypes[i].SQLType())
+		sb.WriteString(
+			a.queryColTypes[i].SQLType(),
+		)
 	}
 	sb.WriteString(")")
 
-	_, err := a.conn.ExecContext(ctx, sb.String(), nil)
+	_, err := a.conn.ExecContext(
+		ctx,
+		sb.String(),
+		nil,
+	)
 	if err != nil {
 		return err
 	}
@@ -1031,12 +1081,16 @@ func (a *Appender) createTempTableWithContext(ctx context.Context) error {
 }
 
 // truncateTempTableWithContext clears temp table data with context.
-func (a *Appender) truncateTempTableWithContext(ctx context.Context) error {
+func (a *Appender) truncateTempTableWithContext(
+	ctx context.Context,
+) error {
 	if !a.tempTableExists {
 		return nil
 	}
 
-	query := "DELETE FROM " + quoteIdentifier(a.tempTableName)
+	query := "DELETE FROM " + quoteIdentifier(
+		a.tempTableName,
+	)
 	_, err := a.conn.ExecContext(ctx, query, nil)
 
 	return err
@@ -1058,7 +1112,8 @@ func (a *Appender) BufferSize() int {
 	defer a.mu.Unlock()
 
 	// DataChunk-based buffering for table appenders
-	if a.currentChunk != nil && !a.isQueryAppender {
+	if a.currentChunk != nil &&
+		!a.isQueryAppender {
 		return a.currentSize
 	}
 

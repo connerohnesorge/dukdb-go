@@ -39,7 +39,9 @@ func (s *simpleRowSource) Init() {
 	s.current = 0
 }
 
-func (s *simpleRowSource) FillRow(row Row) (bool, error) {
+func (s *simpleRowSource) FillRow(
+	row Row,
+) (bool, error) {
 	if s.current >= s.rowCount {
 		return false, nil
 	}
@@ -73,7 +75,9 @@ func (s *simpleChunkSource) Init() {
 	s.filled = 0
 }
 
-func (s *simpleChunkSource) FillChunk(chunk *DataChunk) error {
+func (s *simpleChunkSource) FillChunk(
+	chunk *DataChunk,
+) error {
 	remaining := s.rowCount - s.filled
 	if remaining <= 0 {
 		return chunk.SetSize(0)
@@ -118,14 +122,19 @@ func (s *parallelRowSource) Cardinality() *CardinalityInfo {
 func (s *parallelRowSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.current, 0)
 
-	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
+	return ParallelTableSourceInfo{
+		MaxThreads: s.maxThreads,
+	}
 }
 
 func (s *parallelRowSource) NewLocalState() any {
 	return &parallelRowLocalState{}
 }
 
-func (s *parallelRowSource) FillRow(localState any, row Row) (bool, error) {
+func (s *parallelRowSource) FillRow(
+	localState any,
+	row Row,
+) (bool, error) {
 	current := atomic.AddInt64(&s.current, 1) - 1
 	if current >= s.rowCount {
 		return false, nil
@@ -137,7 +146,9 @@ func (s *parallelRowSource) FillRow(localState any, row Row) (bool, error) {
 	return true, nil
 }
 
-func TestRegisterTableUDF_EmptyName(t *testing.T) {
+func TestRegisterTableUDF_EmptyName(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -156,7 +167,9 @@ func TestRegisterTableUDF_EmptyName(t *testing.T) {
 		Config: TableFunctionConfig{},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 0,
 			}, nil
 		},
@@ -166,7 +179,9 @@ func TestRegisterTableUDF_EmptyName(t *testing.T) {
 	assert.ErrorIs(t, err, errTableUDFNoName)
 }
 
-func TestRegisterTableUDF_MissingBindArgs(t *testing.T) {
+func TestRegisterTableUDF_MissingBindArgs(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -186,10 +201,16 @@ func TestRegisterTableUDF_MissingBindArgs(t *testing.T) {
 	}
 
 	err = RegisterTableUDF(conn, "test_func", f)
-	assert.ErrorIs(t, err, errTableUDFMissingBindArgs)
+	assert.ErrorIs(
+		t,
+		err,
+		errTableUDFMissingBindArgs,
+	)
 }
 
-func TestRegisterTableUDF_NilArgument(t *testing.T) {
+func TestRegisterTableUDF_NilArgument(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -206,21 +227,31 @@ func TestRegisterTableUDF_NilArgument(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{nil}, // nil argument type
+			Arguments: []TypeInfo{
+				nil,
+			}, // nil argument type
 		},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 0,
 			}, nil
 		},
 	}
 
 	err = RegisterTableUDF(conn, "test_func", f)
-	assert.ErrorIs(t, err, errTableUDFArgumentIsNil)
+	assert.ErrorIs(
+		t,
+		err,
+		errTableUDFArgumentIsNil,
+	)
 }
 
-func TestRegisterTableUDF_NilNamedArgument(t *testing.T) {
+func TestRegisterTableUDF_NilNamedArgument(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -237,21 +268,31 @@ func TestRegisterTableUDF_NilNamedArgument(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	f := RowTableFunction{
 		Config: TableFunctionConfig{
-			NamedArguments: map[string]TypeInfo{"count": nil}, // nil named argument type
+			NamedArguments: map[string]TypeInfo{
+				"count": nil,
+			}, // nil named argument type
 		},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 0,
 			}, nil
 		},
 	}
 
 	err = RegisterTableUDF(conn, "test_func", f)
-	assert.ErrorIs(t, err, errTableUDFArgumentIsNil)
+	assert.ErrorIs(
+		t,
+		err,
+		errTableUDFArgumentIsNil,
+	)
 }
 
-func TestRegisterTableUDF_RowTableFunction(t *testing.T) {
+func TestRegisterTableUDF_RowTableFunction(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -270,17 +311,25 @@ func TestRegisterTableUDF_RowTableFunction(t *testing.T) {
 		Config: TableFunctionConfig{},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 10,
 			}, nil
 		},
 	}
 
-	err = RegisterTableUDF(conn, "row_test_func", f)
+	err = RegisterTableUDF(
+		conn,
+		"row_test_func",
+		f,
+	)
 	assert.NoError(t, err)
 }
 
-func TestRegisterTableUDF_ChunkTableFunction(t *testing.T) {
+func TestRegisterTableUDF_ChunkTableFunction(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -299,17 +348,25 @@ func TestRegisterTableUDF_ChunkTableFunction(t *testing.T) {
 		Config: TableFunctionConfig{},
 		BindArguments: func(named map[string]any, args ...any) (ChunkTableSource, error) {
 			return &simpleChunkSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 10,
 			}, nil
 		},
 	}
 
-	err = RegisterTableUDF(conn, "chunk_test_func", f)
+	err = RegisterTableUDF(
+		conn,
+		"chunk_test_func",
+		f,
+	)
 	assert.NoError(t, err)
 }
 
-func TestRegisterTableUDF_ParallelRowTableFunction(t *testing.T) {
+func TestRegisterTableUDF_ParallelRowTableFunction(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -328,18 +385,26 @@ func TestRegisterTableUDF_ParallelRowTableFunction(t *testing.T) {
 		Config: TableFunctionConfig{},
 		BindArguments: func(named map[string]any, args ...any) (ParallelRowTableSource, error) {
 			return &parallelRowSource{
-				cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				maxThreads: 4,
 				rowCount:   100,
 			}, nil
 		},
 	}
 
-	err = RegisterTableUDF(conn, "parallel_row_test_func", f)
+	err = RegisterTableUDF(
+		conn,
+		"parallel_row_test_func",
+		f,
+	)
 	assert.NoError(t, err)
 }
 
-func TestRegisterTableUDF_WithContext(t *testing.T) {
+func TestRegisterTableUDF_WithContext(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -365,17 +430,25 @@ func TestRegisterTableUDF_WithContext(t *testing.T) {
 			}
 
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 5,
 			}, nil
 		},
 	}
 
-	err = RegisterTableUDF(conn, "context_test_func", f)
+	err = RegisterTableUDF(
+		conn,
+		"context_test_func",
+		f,
+	)
 	assert.NoError(t, err)
 }
 
-func TestRegisterTableUDF_DuplicateName(t *testing.T) {
+func TestRegisterTableUDF_DuplicateName(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -394,7 +467,9 @@ func TestRegisterTableUDF_DuplicateName(t *testing.T) {
 		Config: TableFunctionConfig{},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: 10,
 			}, nil
 		},
@@ -406,10 +481,16 @@ func TestRegisterTableUDF_DuplicateName(t *testing.T) {
 	// Register again with same name
 	err = RegisterTableUDF(conn, "dup_func", f)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "already registered")
+	assert.Contains(
+		t,
+		err.Error(),
+		"already registered",
+	)
 }
 
-func TestRegisterTableUDF_WithArguments(t *testing.T) {
+func TestRegisterTableUDF_WithArguments(
+	t *testing.T,
+) {
 	setupTableUDFTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
@@ -428,8 +509,13 @@ func TestRegisterTableUDF_WithArguments(t *testing.T) {
 
 	f := RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments:      []TypeInfo{intInfo, varcharInfo},
-			NamedArguments: map[string]TypeInfo{"limit": intInfo},
+			Arguments: []TypeInfo{
+				intInfo,
+				varcharInfo,
+			},
+			NamedArguments: map[string]TypeInfo{
+				"limit": intInfo,
+			},
 		},
 		BindArguments: func(named map[string]any, args ...any) (RowTableSource, error) {
 			count := 10
@@ -439,19 +525,26 @@ func TestRegisterTableUDF_WithArguments(t *testing.T) {
 				}
 			}
 			if limit, ok := named["limit"]; ok {
-				if l, ok := limit.(int); ok && l < count {
+				if l, ok := limit.(int); ok &&
+					l < count {
 					count = l
 				}
 			}
 
 			return &simpleRowSource{
-				cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+				cols: []ColumnInfo{
+					{Name: "id", T: intInfo},
+				},
 				rowCount: count,
 			}, nil
 		},
 	}
 
-	err = RegisterTableUDF(conn, "args_test_func", f)
+	err = RegisterTableUDF(
+		conn,
+		"args_test_func",
+		f,
+	)
 	assert.NoError(t, err)
 }
 
@@ -459,8 +552,13 @@ func TestRegisterTableUDF_WithArguments(t *testing.T) {
 func TestParallelRowTSWrapper(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleRowSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
-		card:     &CardinalityInfo{Cardinality: 10, Exact: true},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
+		card: &CardinalityInfo{
+			Cardinality: 10,
+			Exact:       true,
+		},
 		rowCount: 10,
 	}
 
@@ -490,8 +588,13 @@ func TestParallelRowTSWrapper(t *testing.T) {
 func TestParallelChunkTSWrapper(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleChunkSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
-		card:     &CardinalityInfo{Cardinality: 100, Exact: false},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
+		card: &CardinalityInfo{
+			Cardinality: 100,
+			Exact:       false,
+		},
 		rowCount: 100,
 	}
 
@@ -523,12 +626,16 @@ func TestParallelChunkTSWrapper(t *testing.T) {
 func TestExecuteRowSource(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleRowSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: 10,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteRowSource(source)
+	chunks, err := executor.ExecuteRowSource(
+		source,
+	)
 	require.NoError(t, err)
 
 	// Should have called Init
@@ -545,17 +652,23 @@ func TestExecuteRowSource(t *testing.T) {
 	assert.Equal(t, 10, totalRows)
 }
 
-func TestExecuteRowSource_LargeDataset(t *testing.T) {
+func TestExecuteRowSource_LargeDataset(
+	t *testing.T,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	// Create a source with more rows than chunk capacity
 	rowCount := GetDataChunkCapacity()*2 + 100
 	source := &simpleRowSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: rowCount,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteRowSource(source)
+	chunks, err := executor.ExecuteRowSource(
+		source,
+	)
 	require.NoError(t, err)
 
 	// Should have multiple chunks
@@ -572,12 +685,16 @@ func TestExecuteRowSource_LargeDataset(t *testing.T) {
 func TestExecuteChunkSource(t *testing.T) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleChunkSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: 100,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteChunkSource(source)
+	chunks, err := executor.ExecuteChunkSource(
+		source,
+	)
 	require.NoError(t, err)
 
 	// Should have called Init
@@ -594,16 +711,22 @@ func TestExecuteChunkSource(t *testing.T) {
 	assert.Equal(t, 100, totalRows)
 }
 
-func TestExecuteParallelRowSource_SingleThread(t *testing.T) {
+func TestExecuteParallelRowSource_SingleThread(
+	t *testing.T,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &parallelRowSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 1,
 		rowCount:   50,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteParallelRowSource(source)
+	chunks, err := executor.ExecuteParallelRowSource(
+		source,
+	)
 	require.NoError(t, err)
 
 	// Count total rows
@@ -614,7 +737,9 @@ func TestExecuteParallelRowSource_SingleThread(t *testing.T) {
 	assert.Equal(t, 50, totalRows)
 }
 
-func TestExecuteRowSource_WithProjection(t *testing.T) {
+func TestExecuteRowSource_WithProjection(
+	t *testing.T,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
 
@@ -629,7 +754,9 @@ func TestExecuteRowSource_WithProjection(t *testing.T) {
 
 	// Only project the first column
 	executor := NewTableSourceExecutor().WithProjection([]int{0})
-	chunks, err := executor.ExecuteRowSource(source)
+	chunks, err := executor.ExecuteRowSource(
+		source,
+	)
 	require.NoError(t, err)
 
 	// Should have rows
@@ -653,14 +780,19 @@ func (s *twoColumnRowSource) ColumnInfos() []ColumnInfo {
 }
 
 func (s *twoColumnRowSource) Cardinality() *CardinalityInfo {
-	return &CardinalityInfo{Cardinality: uint(s.rowCount), Exact: true}
+	return &CardinalityInfo{
+		Cardinality: uint(s.rowCount),
+		Exact:       true,
+	}
 }
 
 func (s *twoColumnRowSource) Init() {
 	s.current = 0
 }
 
-func (s *twoColumnRowSource) FillRow(row Row) (bool, error) {
+func (s *twoColumnRowSource) FillRow(
+	row Row,
+) (bool, error) {
 	if s.current >= s.rowCount {
 		return false, nil
 	}
@@ -681,7 +813,9 @@ func (s *twoColumnRowSource) FillRow(row Row) (bool, error) {
 
 // Tests for TableFunctionContext and deterministic testing
 
-func TestTableFunctionContext_NewWithNilClock(t *testing.T) {
+func TestTableFunctionContext_NewWithNilClock(
+	t *testing.T,
+) {
 	ctx := context.Background()
 	tfCtx := NewTableFunctionContext(ctx, nil)
 
@@ -690,7 +824,9 @@ func TestTableFunctionContext_NewWithNilClock(t *testing.T) {
 	assert.Equal(t, ctx, tfCtx.Context())
 }
 
-func TestTableFunctionContext_WithClock(t *testing.T) {
+func TestTableFunctionContext_WithClock(
+	t *testing.T,
+) {
 	ctx := context.Background()
 	tfCtx := NewTableFunctionContext(ctx, nil)
 
@@ -703,7 +839,9 @@ func TestTableFunctionContext_WithClock(t *testing.T) {
 	assert.Equal(t, ctx, tfCtx2.Context())
 }
 
-func TestTableSourceExecutor_WithClock(t *testing.T) {
+func TestTableSourceExecutor_WithClock(
+	t *testing.T,
+) {
 	executor := NewTableSourceExecutor()
 	assert.NotNil(t, executor.clock)
 
@@ -712,48 +850,72 @@ func TestTableSourceExecutor_WithClock(t *testing.T) {
 	assert.Equal(t, mClock, executor2.clock)
 }
 
-func TestExecuteRowSourceWithContext_DeadlineExceeded(t *testing.T) {
+func TestExecuteRowSourceWithContext_DeadlineExceeded(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 	// Set the mock time to a fixed point
 	startTime := mClock.Now()
 
 	// Create a context with a deadline in the past (relative to mock clock)
 	deadline := startTime.Add(-1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleRowSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: 10,
 	}
 
 	executor := NewTableSourceExecutor()
-	_, err := executor.ExecuteRowSourceWithContext(tfCtx, source)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := executor.ExecuteRowSourceWithContext(
+		tfCtx,
+		source,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
-func TestExecuteRowSourceWithContext_Success(t *testing.T) {
+func TestExecuteRowSourceWithContext_Success(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 	startTime := mClock.Now()
 
 	// Create a context with a deadline in the future
 	deadline := startTime.Add(1 * time.Hour)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleRowSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: 5,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteRowSourceWithContext(tfCtx, source)
+	chunks, err := executor.ExecuteRowSourceWithContext(
+		tfCtx,
+		source,
+	)
 	require.NoError(t, err)
 
 	totalRows := 0
@@ -763,70 +925,107 @@ func TestExecuteRowSourceWithContext_Success(t *testing.T) {
 	assert.Equal(t, 5, totalRows)
 }
 
-func TestExecuteChunkSourceWithContext_DeadlineExceeded(t *testing.T) {
+func TestExecuteChunkSourceWithContext_DeadlineExceeded(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 	startTime := mClock.Now()
 
 	// Create a context with a deadline in the past
 	deadline := startTime.Add(-1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &simpleChunkSource{
-		cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		rowCount: 10,
 	}
 
 	executor := NewTableSourceExecutor()
-	_, err := executor.ExecuteChunkSourceWithContext(tfCtx, source)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := executor.ExecuteChunkSourceWithContext(
+		tfCtx,
+		source,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
-func TestExecuteParallelRowSourceWithContext_DeadlineExceeded(t *testing.T) {
+func TestExecuteParallelRowSourceWithContext_DeadlineExceeded(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 	startTime := mClock.Now()
 
 	// Create a context with a deadline in the past
 	deadline := startTime.Add(-1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &parallelRowSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 2,
 		rowCount:   100,
 	}
 
 	executor := NewTableSourceExecutor()
-	_, err := executor.ExecuteParallelRowSourceWithContext(tfCtx, source)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := executor.ExecuteParallelRowSourceWithContext(
+		tfCtx,
+		source,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
-func TestExecuteParallelRowSourceWithContext_ContextCancelled(t *testing.T) {
+func TestExecuteParallelRowSourceWithContext_ContextCancelled(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	// Create a cancellable context
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(
+		context.Background(),
+	)
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	// Source that produces many rows - but we'll cancel before it finishes
 	source := &slowParallelRowSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 2,
 		rowCount:   1000000, // Very large to ensure we cancel before completion
 		cancel:     cancel,  // Cancel after a few rows
 	}
 
 	executor := NewTableSourceExecutor()
-	_, err := executor.ExecuteParallelRowSourceWithContext(tfCtx, source)
+	_, err := executor.ExecuteParallelRowSourceWithContext(
+		tfCtx,
+		source,
+	)
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -850,14 +1049,19 @@ func (s *slowParallelRowSource) Cardinality() *CardinalityInfo {
 func (s *slowParallelRowSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.current, 0)
 
-	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
+	return ParallelTableSourceInfo{
+		MaxThreads: s.maxThreads,
+	}
 }
 
 func (s *slowParallelRowSource) NewLocalState() any {
 	return &struct{}{}
 }
 
-func (s *slowParallelRowSource) FillRow(localState any, row Row) (bool, error) {
+func (s *slowParallelRowSource) FillRow(
+	localState any,
+	row Row,
+) (bool, error) {
 	current := atomic.AddInt64(&s.current, 1) - 1
 
 	// Cancel after 10 rows
@@ -875,27 +1079,41 @@ func (s *slowParallelRowSource) FillRow(localState any, row Row) (bool, error) {
 	return true, nil
 }
 
-func TestExecuteParallelChunkSourceWithContext_DeadlineExceeded(t *testing.T) {
+func TestExecuteParallelChunkSourceWithContext_DeadlineExceeded(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 	startTime := mClock.Now()
 
 	// Create a context with a deadline in the past
 	deadline := startTime.Add(-1 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		deadline,
+	)
 	defer cancel()
 
 	tfCtx := NewTableFunctionContext(ctx, mClock)
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &parallelChunkSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 2,
 		rowCount:   100,
 	}
 
 	executor := NewTableSourceExecutor()
-	_, err := executor.ExecuteParallelChunkSourceWithContext(tfCtx, source)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	_, err := executor.ExecuteParallelChunkSourceWithContext(
+		tfCtx,
+		source,
+	)
+	assert.ErrorIs(
+		t,
+		err,
+		context.DeadlineExceeded,
+	)
 }
 
 // parallelChunkSource is a test implementation of ParallelChunkTableSource
@@ -911,21 +1129,31 @@ func (s *parallelChunkSource) ColumnInfos() []ColumnInfo {
 }
 
 func (s *parallelChunkSource) Cardinality() *CardinalityInfo {
-	return &CardinalityInfo{Cardinality: uint(s.rowCount), Exact: true}
+	return &CardinalityInfo{
+		Cardinality: uint(s.rowCount),
+		Exact:       true,
+	}
 }
 
 func (s *parallelChunkSource) Init() ParallelTableSourceInfo {
 	atomic.StoreInt64(&s.filled, 0)
 
-	return ParallelTableSourceInfo{MaxThreads: s.maxThreads}
+	return ParallelTableSourceInfo{
+		MaxThreads: s.maxThreads,
+	}
 }
 
 func (s *parallelChunkSource) NewLocalState() any {
 	return &struct{}{}
 }
 
-func (s *parallelChunkSource) FillChunk(localState any, chunk *DataChunk) error {
-	remaining := s.rowCount - atomic.LoadInt64(&s.filled)
+func (s *parallelChunkSource) FillChunk(
+	localState any,
+	chunk *DataChunk,
+) error {
+	remaining := s.rowCount - atomic.LoadInt64(
+		&s.filled,
+	)
 	if remaining <= 0 {
 		return chunk.SetSize(0)
 	}
@@ -935,7 +1163,10 @@ func (s *parallelChunkSource) FillChunk(localState any, chunk *DataChunk) error 
 		toFill = remaining
 	}
 
-	start := atomic.AddInt64(&s.filled, toFill) - toFill
+	start := atomic.AddInt64(
+		&s.filled,
+		toFill,
+	) - toFill
 	if start >= s.rowCount {
 		return chunk.SetSize(0)
 	}
@@ -950,7 +1181,9 @@ func (s *parallelChunkSource) FillChunk(localState any, chunk *DataChunk) error 
 	return chunk.SetSize(actualFill)
 }
 
-func TestExecuteParallelRowSourceWithContext_Success(t *testing.T) {
+func TestExecuteParallelRowSourceWithContext_Success(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	// Use context without deadline for success test
@@ -959,13 +1192,18 @@ func TestExecuteParallelRowSourceWithContext_Success(t *testing.T) {
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &parallelRowSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 1, // Single-threaded for determinism
 		rowCount:   20,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteParallelRowSourceWithContext(tfCtx, source)
+	chunks, err := executor.ExecuteParallelRowSourceWithContext(
+		tfCtx,
+		source,
+	)
 	require.NoError(t, err)
 
 	totalRows := 0
@@ -975,7 +1213,9 @@ func TestExecuteParallelRowSourceWithContext_Success(t *testing.T) {
 	assert.Equal(t, 20, totalRows)
 }
 
-func TestExecuteParallelChunkSourceWithContext_Success(t *testing.T) {
+func TestExecuteParallelChunkSourceWithContext_Success(
+	t *testing.T,
+) {
 	mClock := quartz.NewMock(t)
 
 	// Use context without deadline for success test
@@ -984,13 +1224,18 @@ func TestExecuteParallelChunkSourceWithContext_Success(t *testing.T) {
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	source := &parallelChunkSource{
-		cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+		cols: []ColumnInfo{
+			{Name: "id", T: intInfo},
+		},
 		maxThreads: 1,
 		rowCount:   50,
 	}
 
 	executor := NewTableSourceExecutor()
-	chunks, err := executor.ExecuteParallelChunkSourceWithContext(tfCtx, source)
+	chunks, err := executor.ExecuteParallelChunkSourceWithContext(
+		tfCtx,
+		source,
+	)
 	require.NoError(t, err)
 
 	totalRows := 0
@@ -1010,11 +1255,19 @@ type benchmarkRowSource struct {
 }
 
 func (s *benchmarkRowSource) ColumnInfos() []ColumnInfo { return s.cols }
+
 func (s *benchmarkRowSource) Cardinality() *CardinalityInfo {
-	return &CardinalityInfo{Cardinality: uint(s.rowCount), Exact: true}
+	return &CardinalityInfo{
+		Cardinality: uint(s.rowCount),
+		Exact:       true,
+	}
 }
+
 func (s *benchmarkRowSource) Init() { s.current = 0 }
-func (s *benchmarkRowSource) FillRow(row Row) (bool, error) {
+
+func (s *benchmarkRowSource) FillRow(
+	row Row,
+) (bool, error) {
 	if s.current >= s.rowCount {
 		return false, nil
 	}
@@ -1034,11 +1287,19 @@ type benchmarkChunkSource struct {
 }
 
 func (s *benchmarkChunkSource) ColumnInfos() []ColumnInfo { return s.cols }
+
 func (s *benchmarkChunkSource) Cardinality() *CardinalityInfo {
-	return &CardinalityInfo{Cardinality: uint(s.rowCount), Exact: true}
+	return &CardinalityInfo{
+		Cardinality: uint(s.rowCount),
+		Exact:       true,
+	}
 }
+
 func (s *benchmarkChunkSource) Init() { s.filled = 0 }
-func (s *benchmarkChunkSource) FillChunk(chunk *DataChunk) error {
+
+func (s *benchmarkChunkSource) FillChunk(
+	chunk *DataChunk,
+) error {
 	remaining := s.rowCount - s.filled
 	if remaining <= 0 {
 		return chunk.SetSize(0)
@@ -1057,88 +1318,116 @@ func (s *benchmarkChunkSource) FillChunk(chunk *DataChunk) error {
 	return chunk.SetSize(toFill)
 }
 
-func BenchmarkExecuteRowSource_Small(b *testing.B) {
+func BenchmarkExecuteRowSource_Small(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &benchmarkRowSource{
-			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			rowCount: 100,
 		}
 		_, _ = executor.ExecuteRowSource(source)
 	}
 }
 
-func BenchmarkExecuteRowSource_Large(b *testing.B) {
+func BenchmarkExecuteRowSource_Large(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &benchmarkRowSource{
-			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			rowCount: 10000,
 		}
 		_, _ = executor.ExecuteRowSource(source)
 	}
 }
 
-func BenchmarkExecuteChunkSource_Small(b *testing.B) {
+func BenchmarkExecuteChunkSource_Small(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &benchmarkChunkSource{
-			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			rowCount: 100,
 		}
 		_, _ = executor.ExecuteChunkSource(source)
 	}
 }
 
-func BenchmarkExecuteChunkSource_Large(b *testing.B) {
+func BenchmarkExecuteChunkSource_Large(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &benchmarkChunkSource{
-			cols:     []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			rowCount: 10000,
 		}
 		_, _ = executor.ExecuteChunkSource(source)
 	}
 }
 
-func BenchmarkExecuteParallelRowSource_SingleThread(b *testing.B) {
+func BenchmarkExecuteParallelRowSource_SingleThread(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &parallelRowSource{
-			cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			maxThreads: 1,
 			rowCount:   1000,
 		}
-		_, _ = executor.ExecuteParallelRowSource(source)
+		_, _ = executor.ExecuteParallelRowSource(
+			source,
+		)
 	}
 }
 
-func BenchmarkExecuteParallelRowSource_MultiThread(b *testing.B) {
+func BenchmarkExecuteParallelRowSource_MultiThread(
+	b *testing.B,
+) {
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	executor := NewTableSourceExecutor()
 
 	b.ResetTimer()
 	for range b.N {
 		source := &parallelRowSource{
-			cols:       []ColumnInfo{{Name: "id", T: intInfo}},
+			cols: []ColumnInfo{
+				{Name: "id", T: intInfo},
+			},
 			maxThreads: 4,
 			rowCount:   1000,
 		}
-		_, _ = executor.ExecuteParallelRowSource(source)
+		_, _ = executor.ExecuteParallelRowSource(
+			source,
+		)
 	}
 }

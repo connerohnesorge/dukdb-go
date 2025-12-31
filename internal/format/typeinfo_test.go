@@ -29,13 +29,19 @@ func TestDecimalRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
-			original, err := dukdb.NewDecimalInfo(tt.width, tt.scale)
+			original, err := dukdb.NewDecimalInfo(
+				tt.width,
+				tt.scale,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -44,15 +50,29 @@ func TestDecimalRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_DECIMAL, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_DECIMAL,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.DecimalDetails)
 			require.True(t, ok)
-			assert.Equal(t, tt.width, details.Width)
-			assert.Equal(t, tt.scale, details.Scale)
+			assert.Equal(
+				t,
+				tt.width,
+				details.Width,
+			)
+			assert.Equal(
+				t,
+				tt.scale,
+				details.Scale,
+			)
 		})
 	}
 }
@@ -64,9 +84,29 @@ func TestEnumRoundTrip(t *testing.T) {
 		values []string
 	}{
 		{"ENUM single value", []string{"RED"}},
-		{"ENUM three values", []string{"RED", "GREEN", "BLUE"}},
-		{"ENUM ten values", []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}},
-		{"ENUM with Unicode", []string{"😀", "😁", "😂"}},
+		{
+			"ENUM three values",
+			[]string{"RED", "GREEN", "BLUE"},
+		},
+		{
+			"ENUM ten values",
+			[]string{
+				"A",
+				"B",
+				"C",
+				"D",
+				"E",
+				"F",
+				"G",
+				"H",
+				"I",
+				"J",
+			},
+		},
+		{
+			"ENUM with Unicode",
+			[]string{"😀", "😁", "😂"},
+		},
 		{"ENUM 100 values", func() []string {
 			vals := make([]string, 100)
 			for i := range 100 {
@@ -80,13 +120,18 @@ func TestEnumRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
-			original, err := dukdb.NewEnumInfo(tt.values[0], tt.values[1:]...)
+			original, err := dukdb.NewEnumInfo(
+				tt.values[0],
+				tt.values[1:]...)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -95,14 +140,24 @@ func TestEnumRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_ENUM, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_ENUM,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.EnumDetails)
 			require.True(t, ok)
-			assert.Equal(t, tt.values, details.Values)
+			assert.Equal(
+				t,
+				tt.values,
+				details.Values,
+			)
 		})
 	}
 }
@@ -116,7 +171,9 @@ func TestListRoundTrip(t *testing.T) {
 		{
 			"LIST<INTEGER>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -124,7 +181,9 @@ func TestListRoundTrip(t *testing.T) {
 		{
 			"LIST<VARCHAR>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -132,7 +191,10 @@ func TestListRoundTrip(t *testing.T) {
 		{
 			"LIST<DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -140,8 +202,12 @@ func TestListRoundTrip(t *testing.T) {
 		{
 			"LIST<LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
 
 				return listType
 			},
@@ -149,9 +215,15 @@ func TestListRoundTrip(t *testing.T) {
 		{
 			"LIST<LIST<LIST<VARCHAR>>>",
 			func() dukdb.TypeInfo {
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				list1, _ := dukdb.NewListInfo(varcharType)
-				list2, _ := dukdb.NewListInfo(list1)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				list1, _ := dukdb.NewListInfo(
+					varcharType,
+				)
+				list2, _ := dukdb.NewListInfo(
+					list1,
+				)
 
 				return list2
 			},
@@ -162,13 +234,18 @@ func TestListRoundTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			childInfo := tt.child()
-			original, err := dukdb.NewListInfo(childInfo)
+			original, err := dukdb.NewListInfo(
+				childInfo,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -177,12 +254,22 @@ func TestListRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_LIST, reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			require.Equal(
+				t,
+				dukdb.TYPE_LIST,
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -197,7 +284,9 @@ func TestArrayRoundTrip(t *testing.T) {
 		{
 			"INTEGER[10]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -206,7 +295,9 @@ func TestArrayRoundTrip(t *testing.T) {
 		{
 			"VARCHAR[100]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -215,7 +306,10 @@ func TestArrayRoundTrip(t *testing.T) {
 		{
 			"DECIMAL(18,4)[5]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -224,7 +318,9 @@ func TestArrayRoundTrip(t *testing.T) {
 		{
 			"INTEGER[1]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -233,7 +329,9 @@ func TestArrayRoundTrip(t *testing.T) {
 		{
 			"INTEGER[1000]",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -245,13 +343,19 @@ func TestArrayRoundTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			childInfo := tt.child()
-			original, err := dukdb.NewArrayInfo(childInfo, tt.size)
+			original, err := dukdb.NewArrayInfo(
+				childInfo,
+				tt.size,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -260,15 +364,25 @@ func TestArrayRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_ARRAY, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_ARRAY,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.ArrayDetails)
 			require.True(t, ok)
 			assert.Equal(t, tt.size, details.Size)
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -282,8 +396,13 @@ func TestStructRoundTrip(t *testing.T) {
 		{
 			"STRUCT(x INTEGER)",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				entry, _ := dukdb.NewStructEntry(intType, "x")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -291,21 +410,42 @@ func TestStructRoundTrip(t *testing.T) {
 		{
 			"STRUCT(x INTEGER, y VARCHAR)",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"y",
+				)
 
-				return []dukdb.StructEntry{entry1, entry2}
+				return []dukdb.StructEntry{
+					entry1,
+					entry2,
+				}
 			},
 		},
 		{
 			"STRUCT with 10 fields",
 			func() []dukdb.StructEntry {
-				entries := make([]dukdb.StructEntry, 10)
+				entries := make(
+					[]dukdb.StructEntry,
+					10,
+				)
 				for i := range 10 {
-					intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-					entry, _ := dukdb.NewStructEntry(intType, string(rune('a'+i)))
+					intType, _ := dukdb.NewTypeInfo(
+						dukdb.TYPE_INTEGER,
+					)
+					entry, _ := dukdb.NewStructEntry(
+						intType,
+						string(rune('a'+i)),
+					)
 					entries[i] = entry
 				}
 
@@ -315,12 +455,28 @@ func TestStructRoundTrip(t *testing.T) {
 		{
 			"STRUCT(x STRUCT(a INTEGER, b VARCHAR))",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				innerEntry1, _ := dukdb.NewStructEntry(intType, "a")
-				innerEntry2, _ := dukdb.NewStructEntry(varcharType, "b")
-				innerStruct, _ := dukdb.NewStructInfo(innerEntry1, innerEntry2)
-				entry, _ := dukdb.NewStructEntry(innerStruct, "x")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				innerEntry1, _ := dukdb.NewStructEntry(
+					intType,
+					"a",
+				)
+				innerEntry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"b",
+				)
+				innerStruct, _ := dukdb.NewStructInfo(
+					innerEntry1,
+					innerEntry2,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					innerStruct,
+					"x",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -328,9 +484,16 @@ func TestStructRoundTrip(t *testing.T) {
 		{
 			"STRUCT with LIST field",
 			func() []dukdb.StructEntry {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
-				entry, _ := dukdb.NewStructEntry(listType, "items")
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
+				entry, _ := dukdb.NewStructEntry(
+					listType,
+					"items",
+				)
 
 				return []dukdb.StructEntry{entry}
 			},
@@ -341,13 +504,18 @@ func TestStructRoundTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create TypeInfo
 			entries := tt.entries()
-			original, err := dukdb.NewStructInfo(entries[0], entries[1:]...)
+			original, err := dukdb.NewStructInfo(
+				entries[0],
+				entries[1:]...)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -356,18 +524,36 @@ func TestStructRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_STRUCT, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_STRUCT,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.StructDetails)
 			require.True(t, ok)
-			assert.Equal(t, len(entries), len(details.Entries))
+			assert.Equal(
+				t,
+				len(entries),
+				len(details.Entries),
+			)
 			for i := range entries {
-				assert.Equal(t, entries[i].Name(), details.Entries[i].Name())
+				assert.Equal(
+					t,
+					entries[i].Name(),
+					details.Entries[i].Name(),
+				)
 			}
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -382,12 +568,16 @@ func TestMapRoundTrip(t *testing.T) {
 		{
 			"MAP<VARCHAR, INTEGER>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
@@ -395,12 +585,16 @@ func TestMapRoundTrip(t *testing.T) {
 		{
 			"MAP<INTEGER, VARCHAR>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
@@ -408,12 +602,17 @@ func TestMapRoundTrip(t *testing.T) {
 		{
 			"MAP<VARCHAR, DECIMAL(18,4)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewDecimalInfo(18, 4)
+				ti, _ := dukdb.NewDecimalInfo(
+					18,
+					4,
+				)
 
 				return ti
 			},
@@ -421,13 +620,19 @@ func TestMapRoundTrip(t *testing.T) {
 		{
 			"MAP<VARCHAR, LIST<INTEGER>>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				listType, _ := dukdb.NewListInfo(intType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				listType, _ := dukdb.NewListInfo(
+					intType,
+				)
 
 				return listType
 			},
@@ -435,16 +640,31 @@ func TestMapRoundTrip(t *testing.T) {
 		{
 			"MAP<VARCHAR, STRUCT(x INTEGER, y VARCHAR)>",
 			func() dukdb.TypeInfo {
-				ti, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+				ti, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
 
 				return ti
 			},
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(varcharType, "y")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					varcharType,
+					"y",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
 
 				return structType
 			},
@@ -456,13 +676,19 @@ func TestMapRoundTrip(t *testing.T) {
 			// Create TypeInfo
 			keyInfo := tt.key()
 			valueInfo := tt.value()
-			original, err := dukdb.NewMapInfo(keyInfo, valueInfo)
+			original, err := dukdb.NewMapInfo(
+				keyInfo,
+				valueInfo,
+			)
 			require.NoError(t, err)
 
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err = SerializeTypeInfo(writer, original)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -471,19 +697,37 @@ func TestMapRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			require.Equal(t, dukdb.TYPE_MAP, reconstructed.InternalType())
+			require.Equal(
+				t,
+				dukdb.TYPE_MAP,
+				reconstructed.InternalType(),
+			)
 			details, ok := reconstructed.Details().(*dukdb.MapDetails)
 			require.True(t, ok)
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 
 			// Verify key and value types match
 			origDetails := original.Details().(*dukdb.MapDetails)
-			assert.Equal(t, origDetails.Key.SQLType(), details.Key.SQLType())
-			assert.Equal(t, origDetails.Value.SQLType(), details.Value.SQLType())
+			assert.Equal(
+				t,
+				origDetails.Key.SQLType(),
+				details.Key.SQLType(),
+			)
+			assert.Equal(
+				t,
+				origDetails.Value.SQLType(),
+				details.Value.SQLType(),
+			)
 		})
 	}
 }
@@ -497,10 +741,18 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 		{
 			"LIST<LIST<LIST<INTEGER>>>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				list1, _ := dukdb.NewListInfo(intType)
-				list2, _ := dukdb.NewListInfo(list1)
-				list3, _ := dukdb.NewListInfo(list2)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				list1, _ := dukdb.NewListInfo(
+					intType,
+				)
+				list2, _ := dukdb.NewListInfo(
+					list1,
+				)
+				list3, _ := dukdb.NewListInfo(
+					list2,
+				)
 
 				return list3
 			},
@@ -508,13 +760,30 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 		{
 			"STRUCT(x STRUCT(y STRUCT(z INTEGER)))",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				entry1, _ := dukdb.NewStructEntry(intType, "z")
-				struct1, _ := dukdb.NewStructInfo(entry1)
-				entry2, _ := dukdb.NewStructEntry(struct1, "y")
-				struct2, _ := dukdb.NewStructInfo(entry2)
-				entry3, _ := dukdb.NewStructEntry(struct2, "x")
-				struct3, _ := dukdb.NewStructInfo(entry3)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"z",
+				)
+				struct1, _ := dukdb.NewStructInfo(
+					entry1,
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					struct1,
+					"y",
+				)
+				struct2, _ := dukdb.NewStructInfo(
+					entry2,
+				)
+				entry3, _ := dukdb.NewStructEntry(
+					struct2,
+					"x",
+				)
+				struct3, _ := dukdb.NewStructInfo(
+					entry3,
+				)
 
 				return struct3
 			},
@@ -522,13 +791,30 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 		{
 			"LIST<STRUCT(x INTEGER, y LIST<VARCHAR>)>",
 			func() dukdb.TypeInfo {
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				listType, _ := dukdb.NewListInfo(varcharType)
-				entry1, _ := dukdb.NewStructEntry(intType, "x")
-				entry2, _ := dukdb.NewStructEntry(listType, "y")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
-				listStruct, _ := dukdb.NewListInfo(structType)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				listType, _ := dukdb.NewListInfo(
+					varcharType,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					intType,
+					"x",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					listType,
+					"y",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
+				listStruct, _ := dukdb.NewListInfo(
+					structType,
+				)
 
 				return listStruct
 			},
@@ -536,14 +822,35 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 		{
 			"STRUCT(a MAP<VARCHAR, INTEGER>, b LIST<DECIMAL(10,2)>)",
 			func() dukdb.TypeInfo {
-				varcharType, _ := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
-				intType, _ := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-				mapType, _ := dukdb.NewMapInfo(varcharType, intType)
-				decimalType, _ := dukdb.NewDecimalInfo(10, 2)
-				listType, _ := dukdb.NewListInfo(decimalType)
-				entry1, _ := dukdb.NewStructEntry(mapType, "a")
-				entry2, _ := dukdb.NewStructEntry(listType, "b")
-				structType, _ := dukdb.NewStructInfo(entry1, entry2)
+				varcharType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_VARCHAR,
+				)
+				intType, _ := dukdb.NewTypeInfo(
+					dukdb.TYPE_INTEGER,
+				)
+				mapType, _ := dukdb.NewMapInfo(
+					varcharType,
+					intType,
+				)
+				decimalType, _ := dukdb.NewDecimalInfo(
+					10,
+					2,
+				)
+				listType, _ := dukdb.NewListInfo(
+					decimalType,
+				)
+				entry1, _ := dukdb.NewStructEntry(
+					mapType,
+					"a",
+				)
+				entry2, _ := dukdb.NewStructEntry(
+					listType,
+					"b",
+				)
+				structType, _ := dukdb.NewStructInfo(
+					entry1,
+					entry2,
+				)
 
 				return structType
 			},
@@ -558,7 +865,10 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 			// Serialize
 			buf := new(bytes.Buffer)
 			writer := NewBinaryWriter(buf)
-			err := SerializeTypeInfo(writer, original)
+			err := SerializeTypeInfo(
+				writer,
+				original,
+			)
 			require.NoError(t, err)
 			err = writer.Flush()
 			require.NoError(t, err)
@@ -567,12 +877,22 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 			reader := NewBinaryReader(buf)
 			err = reader.Load()
 			require.NoError(t, err)
-			reconstructed, err := DeserializeTypeInfo(reader)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
 			require.NoError(t, err)
 
 			// Verify
-			assert.Equal(t, original.InternalType(), reconstructed.InternalType())
-			assert.Equal(t, original.SQLType(), reconstructed.SQLType())
+			assert.Equal(
+				t,
+				original.InternalType(),
+				reconstructed.InternalType(),
+			)
+			assert.Equal(
+				t,
+				original.SQLType(),
+				reconstructed.SQLType(),
+			)
 		})
 	}
 }
@@ -580,9 +900,13 @@ func TestNestedTypesRoundTrip(t *testing.T) {
 // TestUnionNotSerializable tests that UNION returns ErrUnsupportedTypeForSerialization.
 func TestUnionNotSerializable(t *testing.T) {
 	// Create UNION(x INTEGER, y VARCHAR)
-	intType, err := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
+	intType, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_INTEGER,
+	)
 	require.NoError(t, err)
-	varcharType, err := dukdb.NewTypeInfo(dukdb.TYPE_VARCHAR)
+	varcharType, err := dukdb.NewTypeInfo(
+		dukdb.TYPE_VARCHAR,
+	)
 	require.NoError(t, err)
 
 	unionType, err := dukdb.NewUnionInfo(
@@ -597,13 +921,20 @@ func TestUnionNotSerializable(t *testing.T) {
 	err = SerializeTypeInfo(writer, unionType)
 
 	// Verify it returns ErrUnsupportedTypeForSerialization
-	assert.ErrorIs(t, err, ErrUnsupportedTypeForSerialization)
+	assert.ErrorIs(
+		t,
+		err,
+		ErrUnsupportedTypeForSerialization,
+	)
 }
 
 // TestEdgeCases tests edge cases for various types.
 func TestEdgeCases(t *testing.T) {
 	t.Run("DECIMAL(1,0)", func(t *testing.T) {
-		original, err := dukdb.NewDecimalInfo(1, 0)
+		original, err := dukdb.NewDecimalInfo(
+			1,
+			0,
+		)
 		require.NoError(t, err)
 
 		buf := new(bytes.Buffer)
@@ -616,7 +947,9 @@ func TestEdgeCases(t *testing.T) {
 		reader := NewBinaryReader(buf)
 		err = reader.Load()
 		require.NoError(t, err)
-		reconstructed, err := DeserializeTypeInfo(reader)
+		reconstructed, err := DeserializeTypeInfo(
+			reader,
+		)
 		require.NoError(t, err)
 
 		details := reconstructed.Details().(*dukdb.DecimalDetails)
@@ -625,7 +958,10 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("DECIMAL(38,38)", func(t *testing.T) {
-		original, err := dukdb.NewDecimalInfo(38, 38)
+		original, err := dukdb.NewDecimalInfo(
+			38,
+			38,
+		)
 		require.NoError(t, err)
 
 		buf := new(bytes.Buffer)
@@ -638,7 +974,9 @@ func TestEdgeCases(t *testing.T) {
 		reader := NewBinaryReader(buf)
 		err = reader.Load()
 		require.NoError(t, err)
-		reconstructed, err := DeserializeTypeInfo(reader)
+		reconstructed, err := DeserializeTypeInfo(
+			reader,
+		)
 		require.NoError(t, err)
 
 		details := reconstructed.Details().(*dukdb.DecimalDetails)
@@ -646,47 +984,78 @@ func TestEdgeCases(t *testing.T) {
 		assert.Equal(t, uint8(38), details.Scale)
 	})
 
-	t.Run("ENUM with single value", func(t *testing.T) {
-		original, err := dukdb.NewEnumInfo("ONLY")
-		require.NoError(t, err)
+	t.Run(
+		"ENUM with single value",
+		func(t *testing.T) {
+			original, err := dukdb.NewEnumInfo(
+				"ONLY",
+			)
+			require.NoError(t, err)
 
-		buf := new(bytes.Buffer)
-		writer := NewBinaryWriter(buf)
-		err = SerializeTypeInfo(writer, original)
-		require.NoError(t, err)
-		err = writer.Flush()
-		require.NoError(t, err)
+			buf := new(bytes.Buffer)
+			writer := NewBinaryWriter(buf)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
+			require.NoError(t, err)
+			err = writer.Flush()
+			require.NoError(t, err)
 
-		reader := NewBinaryReader(buf)
-		err = reader.Load()
-		require.NoError(t, err)
-		reconstructed, err := DeserializeTypeInfo(reader)
-		require.NoError(t, err)
+			reader := NewBinaryReader(buf)
+			err = reader.Load()
+			require.NoError(t, err)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
+			require.NoError(t, err)
 
-		details := reconstructed.Details().(*dukdb.EnumDetails)
-		assert.Equal(t, []string{"ONLY"}, details.Values)
-	})
+			details := reconstructed.Details().(*dukdb.EnumDetails)
+			assert.Equal(
+				t,
+				[]string{"ONLY"},
+				details.Values,
+			)
+		},
+	)
 
-	t.Run("ARRAY with size 1", func(t *testing.T) {
-		intType, err := dukdb.NewTypeInfo(dukdb.TYPE_INTEGER)
-		require.NoError(t, err)
-		original, err := dukdb.NewArrayInfo(intType, 1)
-		require.NoError(t, err)
+	t.Run(
+		"ARRAY with size 1",
+		func(t *testing.T) {
+			intType, err := dukdb.NewTypeInfo(
+				dukdb.TYPE_INTEGER,
+			)
+			require.NoError(t, err)
+			original, err := dukdb.NewArrayInfo(
+				intType,
+				1,
+			)
+			require.NoError(t, err)
 
-		buf := new(bytes.Buffer)
-		writer := NewBinaryWriter(buf)
-		err = SerializeTypeInfo(writer, original)
-		require.NoError(t, err)
-		err = writer.Flush()
-		require.NoError(t, err)
+			buf := new(bytes.Buffer)
+			writer := NewBinaryWriter(buf)
+			err = SerializeTypeInfo(
+				writer,
+				original,
+			)
+			require.NoError(t, err)
+			err = writer.Flush()
+			require.NoError(t, err)
 
-		reader := NewBinaryReader(buf)
-		err = reader.Load()
-		require.NoError(t, err)
-		reconstructed, err := DeserializeTypeInfo(reader)
-		require.NoError(t, err)
+			reader := NewBinaryReader(buf)
+			err = reader.Load()
+			require.NoError(t, err)
+			reconstructed, err := DeserializeTypeInfo(
+				reader,
+			)
+			require.NoError(t, err)
 
-		details := reconstructed.Details().(*dukdb.ArrayDetails)
-		assert.Equal(t, uint64(1), details.Size)
-	})
+			details := reconstructed.Details().(*dukdb.ArrayDetails)
+			assert.Equal(
+				t,
+				uint64(1),
+				details.Size,
+			)
+		},
+	)
 }

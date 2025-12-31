@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPhysicalAggregate_SumNoGroupBy(t *testing.T) {
+func TestPhysicalAggregate_SumNoGroupBy(
+	t *testing.T,
+) {
 	// SELECT SUM(x) FROM table with x = [1, 2, 3, 4, 5]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -21,7 +23,9 @@ func TestPhysicalAggregate_SumNoGroupBy(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -72,7 +76,9 @@ func TestPhysicalAggregate_SumNoGroupBy(t *testing.T) {
 	assert.Nil(t, nextChunk)
 }
 
-func TestPhysicalAggregate_CountStar(t *testing.T) {
+func TestPhysicalAggregate_CountStar(
+	t *testing.T,
+) {
 	// SELECT COUNT(*) FROM table with 10 rows
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -81,7 +87,9 @@ func TestPhysicalAggregate_CountStar(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -121,7 +129,9 @@ func TestPhysicalAggregate_CountStar(t *testing.T) {
 	assert.Equal(t, int64(10), count)
 }
 
-func TestPhysicalAggregate_CountWithNulls(t *testing.T) {
+func TestPhysicalAggregate_CountWithNulls(
+	t *testing.T,
+) {
 	// SELECT COUNT(x) FROM table with x = [1, NULL, 3, NULL, 5]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -132,7 +142,9 @@ func TestPhysicalAggregate_CountWithNulls(t *testing.T) {
 	chunk.AppendRow([]any{int32(5)})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -177,7 +189,9 @@ func TestPhysicalAggregate_CountWithNulls(t *testing.T) {
 	assert.Equal(t, int64(3), count)
 }
 
-func TestPhysicalAggregate_AvgMinMax(t *testing.T) {
+func TestPhysicalAggregate_AvgMinMax(
+	t *testing.T,
+) {
 	// SELECT AVG(x), MIN(x), MAX(x) FROM table with x = [10, 20, 30, 40, 50]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -186,7 +200,9 @@ func TestPhysicalAggregate_AvgMinMax(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -224,7 +240,11 @@ func TestPhysicalAggregate_AvgMinMax(t *testing.T) {
 		mockChild,
 		nil,
 		[]binder.BoundExpr{},
-		[]binder.BoundExpr{avgExpr, minExpr, maxExpr},
+		[]binder.BoundExpr{
+			avgExpr,
+			minExpr,
+			maxExpr,
+		},
 		exec,
 		ctx,
 	)
@@ -250,14 +270,18 @@ func TestPhysicalAggregate_AvgMinMax(t *testing.T) {
 	assert.Equal(t, int32(50), max)
 }
 
-func TestPhysicalAggregate_EmptyInput(t *testing.T) {
+func TestPhysicalAggregate_EmptyInput(
+	t *testing.T,
+) {
 	// SELECT COUNT(*) FROM empty table
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
 	// No rows appended
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -296,10 +320,15 @@ func TestPhysicalAggregate_EmptyInput(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 }
 
-func TestPhysicalAggregate_GroupBySingleColumn(t *testing.T) {
+func TestPhysicalAggregate_GroupBySingleColumn(
+	t *testing.T,
+) {
 	// SELECT category, COUNT(*) FROM table GROUP BY category
 	// Input: [(A, 1), (B, 2), (A, 3), (B, 4), (A, 5)]
-	types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER}
+	types := []dukdb.Type{
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_INTEGER,
+	}
 	chunk := storage.NewDataChunk(types)
 	chunk.AppendRow([]any{"A", int32(1)})
 	chunk.AppendRow([]any{"B", int32(2)})
@@ -308,8 +337,12 @@ func TestPhysicalAggregate_GroupBySingleColumn(t *testing.T) {
 	chunk.AppendRow([]any{"A", int32(5)})
 
 	typeInfos := make([]dukdb.TypeInfo, 2)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_VARCHAR}
-	typeInfos[1] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_VARCHAR,
+	}
+	typeInfos[1] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -366,20 +399,43 @@ func TestPhysicalAggregate_GroupBySingleColumn(t *testing.T) {
 		}
 	}
 
-	require.NotEqual(t, -1, groupA, "Group A not found")
-	require.NotEqual(t, -1, groupB, "Group B not found")
+	require.NotEqual(
+		t,
+		-1,
+		groupA,
+		"Group A not found",
+	)
+	require.NotEqual(
+		t,
+		-1,
+		groupB,
+		"Group B not found",
+	)
 
 	// Group A should have count 3
-	assert.Equal(t, int64(3), resultChunk.GetValue(groupA, 1))
+	assert.Equal(
+		t,
+		int64(3),
+		resultChunk.GetValue(groupA, 1),
+	)
 
 	// Group B should have count 2
-	assert.Equal(t, int64(2), resultChunk.GetValue(groupB, 1))
+	assert.Equal(
+		t,
+		int64(2),
+		resultChunk.GetValue(groupB, 1),
+	)
 }
 
-func TestPhysicalAggregate_GroupByWithSum(t *testing.T) {
+func TestPhysicalAggregate_GroupByWithSum(
+	t *testing.T,
+) {
 	// SELECT category, SUM(value) FROM table GROUP BY category
 	// Input: [(A, 10), (B, 20), (A, 30), (B, 40)]
-	types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER}
+	types := []dukdb.Type{
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_INTEGER,
+	}
 	chunk := storage.NewDataChunk(types)
 	chunk.AppendRow([]any{"A", int32(10)})
 	chunk.AppendRow([]any{"B", int32(20)})
@@ -387,8 +443,12 @@ func TestPhysicalAggregate_GroupByWithSum(t *testing.T) {
 	chunk.AppendRow([]any{"B", int32(40)})
 
 	typeInfos := make([]dukdb.TypeInfo, 2)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_VARCHAR}
-	typeInfos[1] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_VARCHAR,
+	}
+	typeInfos[1] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -453,13 +513,23 @@ func TestPhysicalAggregate_GroupByWithSum(t *testing.T) {
 	require.NotEqual(t, -1, groupB)
 
 	// Group A SUM = 40.0
-	assert.Equal(t, float64(40), resultChunk.GetValue(groupA, 1))
+	assert.Equal(
+		t,
+		float64(40),
+		resultChunk.GetValue(groupA, 1),
+	)
 
 	// Group B SUM = 60.0
-	assert.Equal(t, float64(60), resultChunk.GetValue(groupB, 1))
+	assert.Equal(
+		t,
+		float64(60),
+		resultChunk.GetValue(groupB, 1),
+	)
 }
 
-func TestPhysicalAggregate_MultipleChunks(t *testing.T) {
+func TestPhysicalAggregate_MultipleChunks(
+	t *testing.T,
+) {
 	// Test aggregation across multiple input chunks
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 
@@ -474,10 +544,15 @@ func TestPhysicalAggregate_MultipleChunks(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
-		types:  typeInfos,
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
+		types: typeInfos,
 	}
 
 	// SUM(x)
@@ -519,13 +594,17 @@ func TestPhysicalAggregate_MultipleChunks(t *testing.T) {
 	assert.Equal(t, float64(55), sum)
 }
 
-func TestPhysicalAggregate_GetTypes(t *testing.T) {
+func TestPhysicalAggregate_GetTypes(
+	t *testing.T,
+) {
 	// Test that GetTypes returns correct types
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -562,6 +641,14 @@ func TestPhysicalAggregate_GetTypes(t *testing.T) {
 
 	resultTypes := aggOp.GetTypes()
 	require.Len(t, resultTypes, 2)
-	assert.Equal(t, dukdb.TYPE_INTEGER, resultTypes[0].InternalType())
-	assert.Equal(t, dukdb.TYPE_BIGINT, resultTypes[1].InternalType())
+	assert.Equal(
+		t,
+		dukdb.TYPE_INTEGER,
+		resultTypes[0].InternalType(),
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_BIGINT,
+		resultTypes[1].InternalType(),
+	)
 }

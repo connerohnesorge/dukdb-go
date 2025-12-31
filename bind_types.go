@@ -55,7 +55,8 @@ func (v StructValue[T]) Value() (driver.Value, error) {
 			name = tag
 		}
 		// Store with lowercase key for case-insensitive matching
-		result[strings.ToLower(name)] = rv.Field(i).Interface()
+		result[strings.ToLower(name)] = rv.Field(i).
+			Interface()
 	}
 
 	return result, nil
@@ -85,7 +86,9 @@ func (v MapValue[K, V]) Value() (driver.Value, error) {
 }
 
 // NewMapValue creates a MapValue from a map.
-func NewMapValue[K comparable, V any](m map[K]V) MapValue[K, V] {
+func NewMapValue[K comparable, V any](
+	m map[K]V,
+) MapValue[K, V] {
 	return MapValue[K, V](m)
 }
 
@@ -100,7 +103,9 @@ func (v ArrayValue[T]) Value() (driver.Value, error) {
 }
 
 // NewArrayValue creates an ArrayValue from a slice.
-func NewArrayValue[T any](slice []T) ArrayValue[T] {
+func NewArrayValue[T any](
+	slice []T,
+) ArrayValue[T] {
 	return ArrayValue[T](slice)
 }
 

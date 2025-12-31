@@ -20,7 +20,9 @@ func TestCreateAndOpenFile(t *testing.T) {
 	require.NotNil(t, fm)
 
 	// Write some catalog data
-	catalogData := []byte(`{"version":1,"schemas":{}}`)
+	catalogData := []byte(
+		`{"version":1,"schemas":{}}`,
+	)
 	err = fm.WriteCatalog(catalogData)
 	require.NoError(t, err)
 
@@ -54,7 +56,10 @@ func TestCreateAndOpenFile(t *testing.T) {
 func TestWriteAndReadBlocks(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test_blocks.dukdb")
+	dbPath := filepath.Join(
+		tmpDir,
+		"test_blocks.dukdb",
+	)
 
 	// Create file
 	fm, err := CreateFile(dbPath)
@@ -62,7 +67,9 @@ func TestWriteAndReadBlocks(t *testing.T) {
 
 	// Write blocks
 	block1 := []byte("block1 data here")
-	block2 := []byte("block2 data here with more content")
+	block2 := []byte(
+		"block2 data here with more content",
+	)
 
 	err = fm.WriteBlock("table1", 0, block1)
 	require.NoError(t, err)
@@ -107,12 +114,21 @@ func TestWriteAndReadBlocks(t *testing.T) {
 func TestInvalidMagicNumber(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "invalid.dukdb")
+	dbPath := filepath.Join(
+		tmpDir,
+		"invalid.dukdb",
+	)
 
 	// Write file with wrong magic but correct size header
 	// First 8 bytes are wrong magic, rest is padding to meet HeaderSize
-	invalidData := make([]byte, HeaderSize+FooterSize+100) // Need enough data
-	copy(invalidData[:8], "WRONGMAG")                      // Invalid magic number
+	invalidData := make(
+		[]byte,
+		HeaderSize+FooterSize+100,
+	) // Need enough data
+	copy(
+		invalidData[:8],
+		"WRONGMAG",
+	) // Invalid magic number
 	err := os.WriteFile(dbPath, invalidData, 0644)
 	require.NoError(t, err)
 
@@ -124,7 +140,10 @@ func TestInvalidMagicNumber(t *testing.T) {
 func TestChecksumVerification(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test_checksum.dukdb")
+	dbPath := filepath.Join(
+		tmpDir,
+		"test_checksum.dukdb",
+	)
 
 	// Create valid file
 	fm, err := CreateFile(dbPath)
@@ -153,7 +172,11 @@ func TestChecksumVerification(t *testing.T) {
 
 		// Verify should fail
 		err = VerifyFile(dbPath)
-		assert.ErrorIs(t, err, ErrChecksumMismatch)
+		assert.ErrorIs(
+			t,
+			err,
+			ErrChecksumMismatch,
+		)
 	}
 }
 
@@ -170,8 +193,16 @@ func TestCatalogJSONSerialization(t *testing.T) {
 						Name:   "users",
 						Schema: "main",
 						Columns: []ColumnJSON{
-							{Name: "id", Type: 4, Nullable: false},
-							{Name: "name", Type: 18, Nullable: true},
+							{
+								Name:     "id",
+								Type:     4,
+								Nullable: false,
+							},
+							{
+								Name:     "name",
+								Type:     18,
+								Nullable: true,
+							},
 						},
 						PrimaryKey: []int{0},
 					},
@@ -190,7 +221,11 @@ func TestCatalogJSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, catalog2)
 
-	assert.Equal(t, catalog.Version, catalog2.Version)
+	assert.Equal(
+		t,
+		catalog.Version,
+		catalog2.Version,
+	)
 	assert.Len(t, catalog2.Schemas, 1)
 
 	mainSchema := catalog2.Schemas["main"]
@@ -201,7 +236,11 @@ func TestCatalogJSONSerialization(t *testing.T) {
 	require.NotNil(t, usersTable)
 	assert.Equal(t, "users", usersTable.Name)
 	assert.Len(t, usersTable.Columns, 2)
-	assert.Equal(t, []int{0}, usersTable.PrimaryKey)
+	assert.Equal(
+		t,
+		[]int{0},
+		usersTable.PrimaryKey,
+	)
 }
 
 func TestEmptyDatabase(t *testing.T) {
@@ -213,7 +252,11 @@ func TestEmptyDatabase(t *testing.T) {
 	fm, err := CreateFile(dbPath)
 	require.NoError(t, err)
 
-	err = fm.WriteCatalog([]byte(`{"version":1,"schemas":{"main":{"name":"main","tables":{}}}}`))
+	err = fm.WriteCatalog(
+		[]byte(
+			`{"version":1,"schemas":{"main":{"name":"main","tables":{}}}}`,
+		),
+	)
 	require.NoError(t, err)
 
 	err = fm.Finalize()
@@ -247,7 +290,11 @@ func TestLargeBlock(t *testing.T) {
 		largeBlock[i] = byte(i % 256)
 	}
 
-	err = fm.WriteBlock("large_table", 0, largeBlock)
+	err = fm.WriteBlock(
+		"large_table",
+		0,
+		largeBlock,
+	)
 	require.NoError(t, err)
 
 	err = fm.WriteCatalog([]byte(`{"version":1}`))

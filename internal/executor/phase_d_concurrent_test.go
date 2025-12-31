@@ -12,20 +12,42 @@ import (
 
 // TestPhaseD_Concurrent_SelectsSameTable tests 10 concurrent SELECTs on the same table.
 // Verifies thread-safety with no race conditions or deadlocks.
-func TestPhaseD_Concurrent_SelectsSameTable(t *testing.T) {
+func TestPhaseD_Concurrent_SelectsSameTable(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create and populate a table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE users (id INTEGER, name VARCHAR, age INTEGER)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE users (id INTEGER, name VARCHAR, age INTEGER)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 25)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 25)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO users (id, name, age) VALUES (2, 'Bob', 30)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO users (id, name, age) VALUES (2, 'Bob', 30)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO users (id, name, age) VALUES (3, 'Charlie', 35)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO users (id, name, age) VALUES (3, 'Charlie', 35)",
+	)
 	require.NoError(t, err)
 
 	// Run 10 concurrent SELECTs
@@ -41,7 +63,12 @@ func TestPhaseD_Concurrent_SelectsSameTable(t *testing.T) {
 			defer wg.Done()
 
 			// Each goroutine runs a SELECT
-			result, err := executeQuery(t, exec, cat, "SELECT * FROM users")
+			result, err := executeQuery(
+				t,
+				exec,
+				cat,
+				"SELECT * FROM users",
+			)
 			if err != nil {
 				errors <- fmt.Errorf("goroutine %d: %w", id, err)
 
@@ -69,29 +96,50 @@ func TestPhaseD_Concurrent_SelectsSameTable(t *testing.T) {
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "concurrent SELECTs should not error")
+	require.Empty(
+		t,
+		errs,
+		"concurrent SELECTs should not error",
+	)
 
 	// Verify all results
 	count := 0
 	for range results {
 		count++
 	}
-	assert.Equal(t, numGoroutines, count, "all goroutines should complete")
+	assert.Equal(
+		t,
+		numGoroutines,
+		count,
+		"all goroutines should complete",
+	)
 }
 
 // TestPhaseD_Concurrent_SelectAndInsert tests concurrent SELECT and INSERT operations.
 // This test ensures that SELECTs and INSERTs can run concurrently without deadlocks.
 // To avoid data races, we use a phased approach where operations overlap but don't
 // access the exact same row group simultaneously.
-func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
+func TestPhaseD_Concurrent_SelectAndInsert(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE products (id INTEGER, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE products (id INTEGER, name VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	// Insert initial data
-	_, err = executeQuery(t, exec, cat, "INSERT INTO products (id, name) VALUES (1, 'Product1')")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO products (id, name) VALUES (1, 'Product1')",
+	)
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -107,7 +155,12 @@ func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 
-				result, err := executeQuery(t, exec, cat, "SELECT * FROM products")
+				result, err := executeQuery(
+					t,
+					exec,
+					cat,
+					"SELECT * FROM products",
+				)
 				if err != nil {
 					errors <- fmt.Errorf("SELECT %d: %w", id, err)
 
@@ -147,13 +200,27 @@ func TestPhaseD_Concurrent_SelectAndInsert(t *testing.T) {
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "concurrent SELECT+INSERT should not error")
+	require.Empty(
+		t,
+		errs,
+		"concurrent SELECT+INSERT should not error",
+	)
 
 	// Verify we can still query the table
-	result, err := executeQuery(t, exec, cat, "SELECT * FROM products")
+	result, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"SELECT * FROM products",
+	)
 	require.NoError(t, err)
 	// Should have at least the initial row plus some inserts
-	assert.Greater(t, len(result.Rows), 1, "should have multiple rows after concurrent operations")
+	assert.Greater(
+		t,
+		len(result.Rows),
+		1,
+		"should have multiple rows after concurrent operations",
+	)
 }
 
 // TestPhaseD_Concurrent_Inserts tests concurrent INSERT operations.
@@ -161,7 +228,12 @@ func TestPhaseD_Concurrent_Inserts(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create a table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE logs (id INTEGER, message VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE logs (id INTEGER, message VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	const numGoroutines = 10
@@ -179,8 +251,17 @@ func TestPhaseD_Concurrent_Inserts(t *testing.T) {
 
 			for j := range insertsPerGoroutine {
 				insertID := goroutineID*100 + j
-				sql := fmt.Sprintf("INSERT INTO logs (id, message) VALUES (%d, 'Log%d')", insertID, insertID)
-				_, err := executeQuery(t, exec, cat, sql)
+				sql := fmt.Sprintf(
+					"INSERT INTO logs (id, message) VALUES (%d, 'Log%d')",
+					insertID,
+					insertID,
+				)
+				_, err := executeQuery(
+					t,
+					exec,
+					cat,
+					sql,
+				)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d iteration %d: %w", goroutineID, j, err)
 
@@ -199,26 +280,52 @@ func TestPhaseD_Concurrent_Inserts(t *testing.T) {
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "concurrent INSERTs should not error")
+	require.Empty(
+		t,
+		errs,
+		"concurrent INSERTs should not error",
+	)
 
 	// Verify all rows were inserted
-	result, err := executeQuery(t, exec, cat, "SELECT * FROM logs")
+	result, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"SELECT * FROM logs",
+	)
 	require.NoError(t, err)
 	expectedRows := numGoroutines * insertsPerGoroutine
-	assert.Equal(t, expectedRows, len(result.Rows), "all inserts should succeed")
+	assert.Equal(
+		t,
+		expectedRows,
+		len(result.Rows),
+		"all inserts should succeed",
+	)
 }
 
 // TestPhaseD_Concurrent_NoRaceConditions verifies no race conditions with -race flag.
 // This test is designed to be run with: go test -race
-func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
+func TestPhaseD_Concurrent_NoRaceConditions(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE counter (id INTEGER, value INTEGER)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE counter (id INTEGER, value INTEGER)",
+	)
 	require.NoError(t, err)
 
 	// Insert initial row
-	_, err = executeQuery(t, exec, cat, "INSERT INTO counter (id, value) VALUES (1, 0)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO counter (id, value) VALUES (1, 0)",
+	)
 	require.NoError(t, err)
 
 	const numGoroutines = 20
@@ -235,7 +342,12 @@ func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
 				defer wg.Done()
 
 				for range 10 {
-					_, err := executeQuery(t, exec, cat, "SELECT * FROM counter")
+					_, err := executeQuery(
+						t,
+						exec,
+						cat,
+						"SELECT * FROM counter",
+					)
 					if err != nil {
 						errors <- fmt.Errorf("reader %d: %w", id, err)
 
@@ -271,7 +383,11 @@ func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "no race conditions should occur")
+	require.Empty(
+		t,
+		errs,
+		"no race conditions should occur",
+	)
 
 	// If we got here without panics or deadlocks, the test passes
 	t.Log("No race conditions detected")
@@ -280,11 +396,18 @@ func TestPhaseD_Concurrent_NoRaceConditions(t *testing.T) {
 // TestPhaseD_Concurrent_NoPanics ensures no panics occur during concurrent operations.
 // This test focuses on write-heavy operations to avoid data races while still testing
 // for panics and proper error handling.
-func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
+func TestPhaseD_Concurrent_NoPanics(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create table
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE stress (id INTEGER, data VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE stress (id INTEGER, data VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	const numGoroutines = 15
@@ -292,7 +415,10 @@ func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// Recover from panics
-	panicChan := make(chan interface{}, numGoroutines)
+	panicChan := make(
+		chan interface{},
+		numGoroutines,
+	)
 	errors := make(chan error, numGoroutines)
 
 	for i := range numGoroutines {
@@ -306,8 +432,17 @@ func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
 
 			// Only INSERT operations to avoid data races with concurrent reads/writes
 			for j := range 10 {
-				sql := fmt.Sprintf("INSERT INTO stress (id, data) VALUES (%d, 'data%d')", id*100+j, id*100+j)
-				_, err := executeQuery(t, exec, cat, sql)
+				sql := fmt.Sprintf(
+					"INSERT INTO stress (id, data) VALUES (%d, 'data%d')",
+					id*100+j,
+					id*100+j,
+				)
+				_, err := executeQuery(
+					t,
+					exec,
+					cat,
+					sql,
+				)
 				if err != nil {
 					errors <- err
 
@@ -327,33 +462,66 @@ func TestPhaseD_Concurrent_NoPanics(t *testing.T) {
 	for p := range panicChan {
 		panics = append(panics, p)
 	}
-	require.Empty(t, panics, "no panics should occur during concurrent operations")
+	require.Empty(
+		t,
+		panics,
+		"no panics should occur during concurrent operations",
+	)
 
 	// Check for errors
 	var errs []error
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "no errors should occur during concurrent inserts")
+	require.Empty(
+		t,
+		errs,
+		"no errors should occur during concurrent inserts",
+	)
 
 	// Now verify we can read the data
-	result, err := executeQuery(t, exec, cat, "SELECT * FROM stress")
+	result, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"SELECT * FROM stress",
+	)
 	require.NoError(t, err)
 	expectedRows := numGoroutines * 10
-	assert.Equal(t, expectedRows, len(result.Rows), "all rows should be inserted")
+	assert.Equal(
+		t,
+		expectedRows,
+		len(result.Rows),
+		"all rows should be inserted",
+	)
 
-	t.Logf("Completed with %d goroutines, no panics", numGoroutines)
+	t.Logf(
+		"Completed with %d goroutines, no panics",
+		numGoroutines,
+	)
 }
 
 // TestPhaseD_Concurrent_NoDeadlocks ensures operations don't deadlock.
-func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
+func TestPhaseD_Concurrent_NoDeadlocks(
+	t *testing.T,
+) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create two tables for potential deadlock scenarios
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE table_a (id INTEGER, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE table_a (id INTEGER, name VARCHAR)",
+	)
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "CREATE TABLE table_b (id INTEGER, value INTEGER)")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE table_b (id INTEGER, value INTEGER)",
+	)
 	require.NoError(t, err)
 
 	const numGoroutines = 10
@@ -363,7 +531,10 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 	errors := make(chan error, numGoroutines)
 
 	// Create a timeout context to detect deadlocks
-	ctx, cancel := context.WithTimeout(context.Background(), 10*1000000000) // 10 seconds
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*1000000000,
+	) // 10 seconds
 	defer cancel()
 
 	done := make(chan bool)
@@ -376,13 +547,23 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 				// Access both tables in different orders to test for deadlocks
 				if id%2 == 0 {
 					// Access A then B
-					_, err := executeQuery(t, exec, cat, "SELECT * FROM table_a")
+					_, err := executeQuery(
+						t,
+						exec,
+						cat,
+						"SELECT * FROM table_a",
+					)
 					if err != nil {
 						errors <- err
 
 						return
 					}
-					_, err = executeQuery(t, exec, cat, "SELECT * FROM table_b")
+					_, err = executeQuery(
+						t,
+						exec,
+						cat,
+						"SELECT * FROM table_b",
+					)
 					if err != nil {
 						errors <- err
 
@@ -413,9 +594,13 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 	// Wait for completion or timeout
 	select {
 	case <-done:
-		t.Log("All operations completed without deadlock")
+		t.Log(
+			"All operations completed without deadlock",
+		)
 	case <-ctx.Done():
-		t.Fatal("Deadlock detected: operations timed out")
+		t.Fatal(
+			"Deadlock detected: operations timed out",
+		)
 	}
 
 	close(errors)
@@ -425,5 +610,9 @@ func TestPhaseD_Concurrent_NoDeadlocks(t *testing.T) {
 	for err := range errors {
 		errs = append(errs, err)
 	}
-	require.Empty(t, errs, "operations should complete without errors")
+	require.Empty(
+		t,
+		errs,
+		"operations should complete without errors",
+	)
 }

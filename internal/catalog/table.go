@@ -88,7 +88,10 @@ func (t *TableDef) ColumnTypes() []dukdb.Type {
 
 // ColumnTypeInfos returns the TypeInfo for all columns.
 func (t *TableDef) ColumnTypeInfos() []dukdb.TypeInfo {
-	infos := make([]dukdb.TypeInfo, len(t.Columns))
+	infos := make(
+		[]dukdb.TypeInfo,
+		len(t.Columns),
+	)
 	for i, col := range t.Columns {
 		infos[i] = col.GetTypeInfo()
 	}

@@ -33,7 +33,10 @@ func (entry *structEntry) Name() string {
 
 // NewStructEntry returns a STRUCT entry.
 // info contains information about the entry's type, and name holds the entry's name.
-func NewStructEntry(info TypeInfo, name string) (StructEntry, error) {
+func NewStructEntry(
+	info TypeInfo,
+	name string,
+) (StructEntry, error) {
 	if name == "" {
 		return nil, getError(errAPI, errEmptyName)
 	}
@@ -179,14 +182,20 @@ func (info *typeInfo) Details() TypeDetails {
 			Value: info.types[1],
 		}
 	case TYPE_STRUCT:
-		entries := make([]StructEntry, len(info.structEntries))
+		entries := make(
+			[]StructEntry,
+			len(info.structEntries),
+		)
 		copy(entries, info.structEntries)
 
 		return &StructDetails{
 			Entries: entries,
 		}
 	case TYPE_UNION:
-		members := make([]UnionMember, len(info.types))
+		members := make(
+			[]UnionMember,
+			len(info.types),
+		)
 		for i := range info.types {
 			members[i] = UnionMember{
 				Name: info.names[i],
@@ -263,7 +272,11 @@ func (info *typeInfo) SQLType() string {
 
 	// Parameterized types
 	case TYPE_DECIMAL:
-		return fmt.Sprintf("DECIMAL(%d,%d)", info.decimalWidth, info.decimalScale)
+		return fmt.Sprintf(
+			"DECIMAL(%d,%d)",
+			info.decimalWidth,
+			info.decimalScale,
+		)
 
 	case TYPE_ENUM:
 		// ENUM('value1', 'value2', ...)
@@ -274,7 +287,13 @@ func (info *typeInfo) SQLType() string {
 				sb.WriteString(", ")
 			}
 			sb.WriteString("'")
-			sb.WriteString(strings.ReplaceAll(name, "'", "''"))
+			sb.WriteString(
+				strings.ReplaceAll(
+					name,
+					"'",
+					"''",
+				),
+			)
 			sb.WriteString("'")
 		}
 		sb.WriteString(")")
@@ -283,22 +302,37 @@ func (info *typeInfo) SQLType() string {
 
 	// Nested types
 	case TYPE_LIST:
-		if len(info.types) > 0 && info.types[0] != nil {
+		if len(info.types) > 0 &&
+			info.types[0] != nil {
 			return info.types[0].SQLType() + "[]"
 		}
 
 		return "VARCHAR[]" // fallback
 
 	case TYPE_ARRAY:
-		if len(info.types) > 0 && info.types[0] != nil {
-			return fmt.Sprintf("%s[%d]", info.types[0].SQLType(), info.arrayLength)
+		if len(info.types) > 0 &&
+			info.types[0] != nil {
+			return fmt.Sprintf(
+				"%s[%d]",
+				info.types[0].SQLType(),
+				info.arrayLength,
+			)
 		}
 
-		return fmt.Sprintf("VARCHAR[%d]", info.arrayLength) // fallback
+		return fmt.Sprintf(
+			"VARCHAR[%d]",
+			info.arrayLength,
+		) // fallback
 
 	case TYPE_MAP:
-		if len(info.types) >= 2 && info.types[0] != nil && info.types[1] != nil {
-			return fmt.Sprintf("MAP(%s, %s)", info.types[0].SQLType(), info.types[1].SQLType())
+		if len(info.types) >= 2 &&
+			info.types[0] != nil &&
+			info.types[1] != nil {
+			return fmt.Sprintf(
+				"MAP(%s, %s)",
+				info.types[0].SQLType(),
+				info.types[1].SQLType(),
+			)
 		}
 
 		return "MAP(VARCHAR, VARCHAR)" // fallback
@@ -310,10 +344,14 @@ func (info *typeInfo) SQLType() string {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(quoteIdentifier(entry.Name()))
+			sb.WriteString(
+				quoteIdentifier(entry.Name()),
+			)
 			sb.WriteString(" ")
 			if entry.Info() != nil {
-				sb.WriteString(entry.Info().SQLType())
+				sb.WriteString(
+					entry.Info().SQLType(),
+				)
 			} else {
 				sb.WriteString("VARCHAR")
 			}
@@ -329,10 +367,14 @@ func (info *typeInfo) SQLType() string {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(quoteIdentifier(info.names[i]))
+			sb.WriteString(
+				quoteIdentifier(info.names[i]),
+			)
 			sb.WriteString(" ")
 			if info.types[i] != nil {
-				sb.WriteString(info.types[i].SQLType())
+				sb.WriteString(
+					info.types[i].SQLType(),
+				)
 			} else {
 				sb.WriteString("VARCHAR")
 			}
@@ -362,26 +404,69 @@ func (info *typeInfo) SQLType() string {
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap && t != TYPE_ANY {
-		return nil, getError(errAPI, unsupportedTypeError(name))
+		return nil, getError(
+			errAPI,
+			unsupportedTypeError(name),
+		)
 	}
 
 	switch t {
 	case TYPE_DECIMAL:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewDecimalInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewDecimalInfo),
+			),
+		)
 	case TYPE_ENUM:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewEnumInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewEnumInfo),
+			),
+		)
 	case TYPE_LIST:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewListInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewListInfo),
+			),
+		)
 	case TYPE_STRUCT:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewStructInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewStructInfo),
+			),
+		)
 	case TYPE_MAP:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewMapInfo),
+			),
+		)
 	case TYPE_ARRAY:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewArrayInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewArrayInfo),
+			),
+		)
 	case TYPE_UNION:
-		return nil, getError(errAPI, tryOtherFuncError(funcName(NewUnionInfo)))
+		return nil, getError(
+			errAPI,
+			tryOtherFuncError(
+				funcName(NewUnionInfo),
+			),
+		)
 	case TYPE_SQLNULL:
-		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
+		return nil, getError(
+			errAPI,
+			unsupportedTypeError(
+				typeToStringMap[t],
+			),
+		)
 	}
 
 	// Use cache for primitive types to reduce allocations
@@ -390,17 +475,26 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 
 // funcName returns the function name for error messages.
 func funcName(i any) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).
+		Name()
 }
 
 // NewDecimalInfo returns DECIMAL type information.
 // Its input parameters are the width and scale of the DECIMAL type.
-func NewDecimalInfo(width, scale uint8) (TypeInfo, error) {
+func NewDecimalInfo(
+	width, scale uint8,
+) (TypeInfo, error) {
 	if width < 1 || width > maxDecimalWidth {
-		return nil, getError(errAPI, errInvalidDecimalWidth)
+		return nil, getError(
+			errAPI,
+			errInvalidDecimalWidth,
+		)
 	}
 	if scale > width {
-		return nil, getError(errAPI, errInvalidDecimalScale)
+		return nil, getError(
+			errAPI,
+			errInvalidDecimalScale,
+		)
 	}
 
 	return &typeInfo{
@@ -412,14 +506,20 @@ func NewDecimalInfo(width, scale uint8) (TypeInfo, error) {
 
 // NewEnumInfo returns ENUM type information.
 // Its input parameters are the dictionary values.
-func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
+func NewEnumInfo(
+	first string,
+	others ...string,
+) (TypeInfo, error) {
 	// Check for duplicate names.
 	m := map[string]bool{}
 	m[first] = true
 	for _, name := range others {
 		_, inMap := m[name]
 		if inMap {
-			return nil, getError(errAPI, duplicateNameError(name))
+			return nil, getError(
+				errAPI,
+				duplicateNameError(name),
+			)
 		}
 		m[name] = true
 	}
@@ -436,9 +536,14 @@ func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
 
 // NewListInfo returns LIST type information.
 // childInfo contains the type information of the LIST's elements.
-func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
+func NewListInfo(
+	childInfo TypeInfo,
+) (TypeInfo, error) {
 	if childInfo == nil {
-		return nil, getError(errAPI, interfaceIsNilError("childInfo"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError("childInfo"),
+		)
 	}
 
 	return &typeInfo{
@@ -449,19 +554,44 @@ func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 
 // NewStructInfo returns STRUCT type information.
 // Its input parameters are the STRUCT entries.
-func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, error) {
+func NewStructInfo(
+	firstEntry StructEntry,
+	others ...StructEntry,
+) (TypeInfo, error) {
 	if firstEntry == nil {
-		return nil, getError(errAPI, interfaceIsNilError("firstEntry"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError("firstEntry"),
+		)
 	}
 	if firstEntry.Info() == nil {
-		return nil, getError(errAPI, interfaceIsNilError("firstEntry.Info()"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError(
+				"firstEntry.Info()",
+			),
+		)
 	}
 	for i, entry := range others {
 		if entry == nil {
-			return nil, getError(errAPI, addIndexToError(interfaceIsNilError("entry"), i))
+			return nil, getError(
+				errAPI,
+				addIndexToError(
+					interfaceIsNilError("entry"),
+					i,
+				),
+			)
 		}
 		if entry.Info() == nil {
-			return nil, getError(errAPI, addIndexToError(interfaceIsNilError("entry.Info()"), i))
+			return nil, getError(
+				errAPI,
+				addIndexToError(
+					interfaceIsNilError(
+						"entry.Info()",
+					),
+					i,
+				),
+			)
 		}
 	}
 
@@ -472,17 +602,29 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 		name := entry.Name()
 		_, inMap := m[name]
 		if inMap {
-			return nil, getError(errAPI, duplicateNameError(name))
+			return nil, getError(
+				errAPI,
+				duplicateNameError(name),
+			)
 		}
 		m[name] = true
 	}
 
 	info := &typeInfo{
-		typ:           TYPE_STRUCT,
-		structEntries: make([]StructEntry, 0, 1+len(others)),
+		typ: TYPE_STRUCT,
+		structEntries: make(
+			[]StructEntry,
+			0,
+			1+len(others),
+		),
 	}
-	info.structEntries = append(info.structEntries, firstEntry)
-	info.structEntries = append(info.structEntries, others...)
+	info.structEntries = append(
+		info.structEntries,
+		firstEntry,
+	)
+	info.structEntries = append(
+		info.structEntries,
+		others...)
 
 	return info, nil
 }
@@ -490,12 +632,20 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 // NewMapInfo returns MAP type information.
 // keyInfo contains the type information of the MAP keys.
 // valueInfo contains the type information of the MAP values.
-func NewMapInfo(keyInfo, valueInfo TypeInfo) (TypeInfo, error) {
+func NewMapInfo(
+	keyInfo, valueInfo TypeInfo,
+) (TypeInfo, error) {
 	if keyInfo == nil {
-		return nil, getError(errAPI, interfaceIsNilError("keyInfo"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError("keyInfo"),
+		)
 	}
 	if valueInfo == nil {
-		return nil, getError(errAPI, interfaceIsNilError("valueInfo"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError("valueInfo"),
+		)
 	}
 
 	return &typeInfo{
@@ -507,12 +657,21 @@ func NewMapInfo(keyInfo, valueInfo TypeInfo) (TypeInfo, error) {
 // NewArrayInfo returns ARRAY type information.
 // childInfo contains the type information of the ARRAY's elements.
 // size is the ARRAY's fixed size.
-func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
+func NewArrayInfo(
+	childInfo TypeInfo,
+	size uint64,
+) (TypeInfo, error) {
 	if childInfo == nil {
-		return nil, getError(errAPI, interfaceIsNilError("childInfo"))
+		return nil, getError(
+			errAPI,
+			interfaceIsNilError("childInfo"),
+		)
 	}
 	if size == 0 {
-		return nil, getError(errAPI, errInvalidArraySize)
+		return nil, getError(
+			errAPI,
+			errInvalidArraySize,
+		)
 	}
 
 	return &typeInfo{
@@ -525,17 +684,24 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 // NewUnionInfo returns UNION type information.
 // memberTypes contains the type information of the union members.
 // memberNames contains the names of the union members.
-func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error) {
+func NewUnionInfo(
+	memberTypes []TypeInfo,
+	memberNames []string,
+) (TypeInfo, error) {
 	if len(memberTypes) == 0 {
 		return nil, getError(
 			errAPI,
-			fmt.Errorf("UNION type must have at least one member"),
+			fmt.Errorf(
+				"UNION type must have at least one member",
+			),
 		)
 	}
 	if len(memberTypes) != len(memberNames) {
 		return nil, getError(
 			errAPI,
-			fmt.Errorf("member types and names must have the same length"),
+			fmt.Errorf(
+				"member types and names must have the same length",
+			),
 		)
 	}
 
@@ -543,10 +709,16 @@ func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error
 	m := map[string]bool{}
 	for _, name := range memberNames {
 		if name == "" {
-			return nil, getError(errAPI, errEmptyName)
+			return nil, getError(
+				errAPI,
+				errEmptyName,
+			)
 		}
 		if m[name] {
-			return nil, getError(errAPI, duplicateNameError(name))
+			return nil, getError(
+				errAPI,
+				duplicateNameError(name),
+			)
 		}
 		m[name] = true
 	}

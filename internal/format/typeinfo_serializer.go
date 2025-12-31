@@ -23,15 +23,23 @@ import (
 // For complex types, this delegates to type-specific serializers based on the Details type.
 //
 // Returns ErrUnsupportedTypeForSerialization for UNION types (not supported in v64 format).
-func SerializeTypeInfo(w *BinaryWriter, ti dukdb.TypeInfo) error {
+func SerializeTypeInfo(
+	w *BinaryWriter,
+	ti dukdb.TypeInfo,
+) error {
 	if ti == nil {
-		return errors.New("cannot serialize nil TypeInfo")
+		return errors.New(
+			"cannot serialize nil TypeInfo",
+		)
 	}
 
 	// Property 99: LogicalTypeId (the base type enum)
 	// This is the actual type (INTEGER, VARCHAR, DECIMAL, etc.)
 	if err := w.WriteProperty(99, uint8(ti.InternalType())); err != nil {
-		return fmt.Errorf("failed to write LogicalTypeId: %w", err)
+		return fmt.Errorf(
+			"failed to write LogicalTypeId: %w",
+			err,
+		)
 	}
 
 	// Get type-specific details
@@ -41,7 +49,10 @@ func SerializeTypeInfo(w *BinaryWriter, ti dukdb.TypeInfo) error {
 	if details == nil {
 		// Primitive types write GENERIC discriminator to indicate no ExtraTypeInfo
 		if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_GENERIC)); err != nil {
-			return fmt.Errorf("failed to write primitive type discriminator: %w", err)
+			return fmt.Errorf(
+				"failed to write primitive type discriminator: %w",
+				err,
+			)
 		}
 
 		return nil
@@ -77,20 +88,32 @@ func SerializeTypeInfo(w *BinaryWriter, ti dukdb.TypeInfo) error {
 //   - Property 201: uint8 (scale, digits after decimal point 0-width)
 //
 // Example: DECIMAL(18,4) -> width=18, scale=4
-func SerializeDecimal(w *BinaryWriter, d *dukdb.DecimalDetails) error {
+func SerializeDecimal(
+	w *BinaryWriter,
+	d *dukdb.DecimalDetails,
+) error {
 	// Property 100: Type discriminator (DECIMAL_TYPE_INFO)
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_DECIMAL)); err != nil {
-		return fmt.Errorf("failed to write DECIMAL type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write DECIMAL type discriminator: %w",
+			err,
+		)
 	}
 
 	// Property 200: Width (precision)
 	if err := w.WritePropertyWithDefault(PropertyDecimalWidth, d.Width, uint8(0)); err != nil {
-		return fmt.Errorf("failed to write DECIMAL width: %w", err)
+		return fmt.Errorf(
+			"failed to write DECIMAL width: %w",
+			err,
+		)
 	}
 
 	// Property 201: Scale
 	if err := w.WritePropertyWithDefault(PropertyDecimalScale, d.Scale, uint8(0)); err != nil {
-		return fmt.Errorf("failed to write DECIMAL scale: %w", err)
+		return fmt.Errorf(
+			"failed to write DECIMAL scale: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -109,20 +132,32 @@ func SerializeDecimal(w *BinaryWriter, d *dukdb.DecimalDetails) error {
 //   - Data: []byte
 //
 // Example: ENUM('RED','GREEN','BLUE') -> count=3, values=["RED","GREEN","BLUE"]
-func SerializeEnum(w *BinaryWriter, e *dukdb.EnumDetails) error {
+func SerializeEnum(
+	w *BinaryWriter,
+	e *dukdb.EnumDetails,
+) error {
 	// Property 100: Type discriminator (ENUM_TYPE_INFO)
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_ENUM)); err != nil {
-		return fmt.Errorf("failed to write ENUM type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write ENUM type discriminator: %w",
+			err,
+		)
 	}
 
 	// Property 200: Enum values count
 	if err := w.WriteProperty(PropertyEnumCount, uint64(len(e.Values))); err != nil {
-		return fmt.Errorf("failed to write ENUM count: %w", err)
+		return fmt.Errorf(
+			"failed to write ENUM count: %w",
+			err,
+		)
 	}
 
 	// Property 201: Enum values list
 	if err := w.WriteList(PropertyEnumValues, e.Values); err != nil {
-		return fmt.Errorf("failed to write ENUM values: %w", err)
+		return fmt.Errorf(
+			"failed to write ENUM values: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -137,25 +172,40 @@ func SerializeEnum(w *BinaryWriter, e *dukdb.EnumDetails) error {
 // This handles recursive serialization for nested types like LIST<LIST<INTEGER>>.
 //
 // Example: LIST<INTEGER> -> child=TypeInfo(TYPE_INTEGER)
-func SerializeList(w *BinaryWriter, l *dukdb.ListDetails) error {
+func SerializeList(
+	w *BinaryWriter,
+	l *dukdb.ListDetails,
+) error {
 	// Property 100: Type discriminator (LIST_TYPE_INFO)
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_LIST)); err != nil {
-		return fmt.Errorf("failed to write LIST type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write LIST type discriminator: %w",
+			err,
+		)
 	}
 
 	// Property 200: Child TypeInfo (recursive serialization)
 	childBuf := new(bytes.Buffer)
 	childWriter := NewBinaryWriter(childBuf)
 	if err := SerializeTypeInfo(childWriter, l.Child); err != nil {
-		return fmt.Errorf("failed to serialize LIST child type: %w", err)
+		return fmt.Errorf(
+			"failed to serialize LIST child type: %w",
+			err,
+		)
 	}
 	if err := childWriter.Flush(); err != nil {
-		return fmt.Errorf("failed to flush LIST child type: %w", err)
+		return fmt.Errorf(
+			"failed to flush LIST child type: %w",
+			err,
+		)
 	}
 
 	// Write the serialized child TypeInfo as a property
 	if err := w.WriteProperty(PropertyChildType, childBuf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write LIST child type property: %w", err)
+		return fmt.Errorf(
+			"failed to write LIST child type property: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -169,30 +219,48 @@ func SerializeList(w *BinaryWriter, l *dukdb.ListDetails) error {
 //   - Property 201: uint32 (fixed array size)
 //
 // Example: INTEGER[10] -> child=TypeInfo(TYPE_INTEGER), size=10
-func SerializeArray(w *BinaryWriter, a *dukdb.ArrayDetails) error {
+func SerializeArray(
+	w *BinaryWriter,
+	a *dukdb.ArrayDetails,
+) error {
 	// Property 100: Type discriminator (ARRAY_TYPE_INFO)
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_ARRAY)); err != nil {
-		return fmt.Errorf("failed to write ARRAY type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write ARRAY type discriminator: %w",
+			err,
+		)
 	}
 
 	// Property 200: Child TypeInfo (recursive serialization)
 	childBuf := new(bytes.Buffer)
 	childWriter := NewBinaryWriter(childBuf)
 	if err := SerializeTypeInfo(childWriter, a.Child); err != nil {
-		return fmt.Errorf("failed to serialize ARRAY child type: %w", err)
+		return fmt.Errorf(
+			"failed to serialize ARRAY child type: %w",
+			err,
+		)
 	}
 	if err := childWriter.Flush(); err != nil {
-		return fmt.Errorf("failed to flush ARRAY child type: %w", err)
+		return fmt.Errorf(
+			"failed to flush ARRAY child type: %w",
+			err,
+		)
 	}
 
 	// Write the serialized child TypeInfo as a property
 	if err := w.WriteProperty(PropertyChildType, childBuf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write ARRAY child type property: %w", err)
+		return fmt.Errorf(
+			"failed to write ARRAY child type property: %w",
+			err,
+		)
 	}
 
 	// Property 201: Array size (fixed size)
 	if err := w.WritePropertyWithDefault(PropertyArraySize, uint32(a.Size), uint32(0)); err != nil {
-		return fmt.Errorf("failed to write ARRAY size: %w", err)
+		return fmt.Errorf(
+			"failed to write ARRAY size: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -210,10 +278,16 @@ func SerializeArray(w *BinaryWriter, a *dukdb.ArrayDetails) error {
 //   - LogicalType: (recursive TypeInfo serialization)
 //
 // Example: STRUCT(x INTEGER, y VARCHAR) -> 2 fields with names and types
-func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
+func SerializeStruct(
+	w *BinaryWriter,
+	s *dukdb.StructDetails,
+) error {
 	// Property 100: Type discriminator (STRUCT_TYPE_INFO)
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_STRUCT)); err != nil {
-		return fmt.Errorf("failed to write STRUCT type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write STRUCT type discriminator: %w",
+			err,
+		)
 	}
 
 	// Property 200: Field list (child_list_t<LogicalType>)
@@ -222,7 +296,10 @@ func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
 
 	// Write field count
 	if err := binary.Write(fieldBuf, ByteOrder, uint64(len(s.Entries))); err != nil {
-		return fmt.Errorf("failed to write STRUCT field count: %w", err)
+		return fmt.Errorf(
+			"failed to write STRUCT field count: %w",
+			err,
+		)
 	}
 
 	// Write each field
@@ -230,27 +307,46 @@ func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
 		// Write field name length
 		name := entry.Name()
 		if err := binary.Write(fieldBuf, ByteOrder, uint64(len(name))); err != nil {
-			return fmt.Errorf("failed to write STRUCT field %d name length: %w", i, err)
+			return fmt.Errorf(
+				"failed to write STRUCT field %d name length: %w",
+				i,
+				err,
+			)
 		}
 
 		// Write field name data
 		if _, err := fieldBuf.WriteString(name); err != nil {
-			return fmt.Errorf("failed to write STRUCT field %d name: %w", i, err)
+			return fmt.Errorf(
+				"failed to write STRUCT field %d name: %w",
+				i,
+				err,
+			)
 		}
 
 		// Write field TypeInfo (recursive serialization)
 		fieldWriter := NewBinaryWriter(fieldBuf)
 		if err := SerializeTypeInfo(fieldWriter, entry.Info()); err != nil {
-			return fmt.Errorf("failed to serialize STRUCT field %d type: %w", i, err)
+			return fmt.Errorf(
+				"failed to serialize STRUCT field %d type: %w",
+				i,
+				err,
+			)
 		}
 		if err := fieldWriter.Flush(); err != nil {
-			return fmt.Errorf("failed to flush STRUCT field %d type: %w", i, err)
+			return fmt.Errorf(
+				"failed to flush STRUCT field %d type: %w",
+				i,
+				err,
+			)
 		}
 	}
 
 	// Write the serialized field list as a property
 	if err := w.WriteProperty(PropertyStructFields, fieldBuf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write STRUCT fields property: %w", err)
+		return fmt.Errorf(
+			"failed to write STRUCT fields property: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -271,26 +367,50 @@ func SerializeStruct(w *BinaryWriter, s *dukdb.StructDetails) error {
 // Example: MAP<VARCHAR, INTEGER>
 //
 //	-> LIST<STRUCT<key VARCHAR, value INTEGER>>
-func SerializeMap(w *BinaryWriter, m *dukdb.MapDetails) error {
+func SerializeMap(
+	w *BinaryWriter,
+	m *dukdb.MapDetails,
+) error {
 	// MAP uses LIST_TYPE_INFO (4) as discriminator, not a separate MAP type
 	if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_LIST)); err != nil {
-		return fmt.Errorf("failed to write MAP type discriminator: %w", err)
+		return fmt.Errorf(
+			"failed to write MAP type discriminator: %w",
+			err,
+		)
 	}
 
 	// Create STRUCT<key, value> as the child type
-	keyEntry, err := dukdb.NewStructEntry(m.Key, "key")
+	keyEntry, err := dukdb.NewStructEntry(
+		m.Key,
+		"key",
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create MAP key struct entry: %w", err)
+		return fmt.Errorf(
+			"failed to create MAP key struct entry: %w",
+			err,
+		)
 	}
 
-	valueEntry, err := dukdb.NewStructEntry(m.Value, "value")
+	valueEntry, err := dukdb.NewStructEntry(
+		m.Value,
+		"value",
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create MAP value struct entry: %w", err)
+		return fmt.Errorf(
+			"failed to create MAP value struct entry: %w",
+			err,
+		)
 	}
 
-	structInfo, err := dukdb.NewStructInfo(keyEntry, valueEntry)
+	structInfo, err := dukdb.NewStructInfo(
+		keyEntry,
+		valueEntry,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create MAP struct type: %w", err)
+		return fmt.Errorf(
+			"failed to create MAP struct type: %w",
+			err,
+		)
 	}
 
 	// Property 200: Child TypeInfo (STRUCT with key and value fields)
@@ -300,18 +420,29 @@ func SerializeMap(w *BinaryWriter, m *dukdb.MapDetails) error {
 	// Serialize the STRUCT TypeInfo
 	structDetails, ok := structInfo.Details().(*dukdb.StructDetails)
 	if !ok {
-		return errors.New("failed to get StructDetails from MAP struct TypeInfo")
+		return errors.New(
+			"failed to get StructDetails from MAP struct TypeInfo",
+		)
 	}
 	if err := SerializeStruct(childWriter, structDetails); err != nil {
-		return fmt.Errorf("failed to serialize MAP struct: %w", err)
+		return fmt.Errorf(
+			"failed to serialize MAP struct: %w",
+			err,
+		)
 	}
 	if err := childWriter.Flush(); err != nil {
-		return fmt.Errorf("failed to flush MAP struct: %w", err)
+		return fmt.Errorf(
+			"failed to flush MAP struct: %w",
+			err,
+		)
 	}
 
 	// Write the serialized STRUCT as property 200
 	if err := w.WriteProperty(PropertyChildType, childBuf.Bytes()); err != nil {
-		return fmt.Errorf("failed to write MAP child type property: %w", err)
+		return fmt.Errorf(
+			"failed to write MAP child type property: %w",
+			err,
+		)
 	}
 
 	return nil

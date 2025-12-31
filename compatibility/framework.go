@@ -39,7 +39,10 @@ type DriverAdapter interface {
 	// Open opens a database connection
 	Open(dsn string) (*sql.DB, error)
 	// OpenWithConfig opens with explicit configuration
-	OpenWithConfig(dsn string, config map[string]string) (*sql.DB, error)
+	OpenWithConfig(
+		dsn string,
+		config map[string]string,
+	) (*sql.DB, error)
 	// Name returns the driver name
 	Name() string
 	// SupportsArrow returns true if the driver supports Apache Arrow
@@ -67,12 +70,17 @@ func newDukdbAdapter() *dukdbAdapter {
 }
 
 // Open opens a database connection using dukdb-go
-func (a *dukdbAdapter) Open(dsn string) (*sql.DB, error) {
+func (a *dukdbAdapter) Open(
+	dsn string,
+) (*sql.DB, error) {
 	return sql.Open("dukdb", dsn)
 }
 
 // OpenWithConfig opens with explicit configuration
-func (a *dukdbAdapter) OpenWithConfig(dsn string, config map[string]string) (*sql.DB, error) {
+func (a *dukdbAdapter) OpenWithConfig(
+	dsn string,
+	config map[string]string,
+) (*sql.DB, error) {
 	// Build DSN with config parameters
 	fullDSN := dsn
 	if len(config) > 0 {
@@ -116,7 +124,9 @@ func (a *dukdbAdapter) SupportsAggregateUDF() bool {
 }
 
 // WithClock returns a new adapter with clock injection
-func (a *dukdbAdapter) WithClock(clock quartz.Clock) DriverAdapter {
+func (a *dukdbAdapter) WithClock(
+	clock quartz.Clock,
+) DriverAdapter {
 	return &dukdbAdapter{
 		clock: clock,
 	}
@@ -129,7 +139,9 @@ type TestRunner struct {
 }
 
 // NewTestRunner creates a new test runner with the given clock.
-func NewTestRunner(clock quartz.Clock) *TestRunner {
+func NewTestRunner(
+	clock quartz.Clock,
+) *TestRunner {
 	adapter := newDukdbAdapter()
 	if clock != nil {
 		adapter = adapter.WithClock(clock).(*dukdbAdapter)
@@ -147,26 +159,37 @@ func (r *TestRunner) OpenDB() (*sql.DB, error) {
 }
 
 // RunTests executes the given tests against the adapter.
-func (r *TestRunner) RunTests(t *testing.T, tests []CompatibilityTest) {
+func (r *TestRunner) RunTests(
+	t *testing.T,
+	tests []CompatibilityTest,
+) {
 	for _, test := range tests {
 		// capture range variable
 		t.Run(test.Name, func(t *testing.T) {
 			// Skip if needed
 			if test.SkipDukdb {
-				t.Skip("Test skipped for dukdb-go (not yet implemented)")
+				t.Skip(
+					"Test skipped for dukdb-go (not yet implemented)",
+				)
 			}
 
 			// Open fresh database for each test
 			db, err := r.OpenDB()
 			if err != nil {
-				t.Fatalf("Failed to open database: %v", err)
+				t.Fatalf(
+					"Failed to open database: %v",
+					err,
+				)
 			}
 			defer db.Close()
 
 			// Run setup if provided
 			if test.Setup != nil {
 				if err := test.Setup(db); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+					t.Fatalf(
+						"Setup failed: %v",
+						err,
+					)
 				}
 			}
 
@@ -176,7 +199,10 @@ func (r *TestRunner) RunTests(t *testing.T, tests []CompatibilityTest) {
 			// Run teardown if provided
 			if test.Teardown != nil {
 				if err := test.Teardown(db); err != nil {
-					t.Errorf("Teardown failed: %v", err)
+					t.Errorf(
+						"Teardown failed: %v",
+						err,
+					)
 				}
 			}
 		})
@@ -184,7 +210,10 @@ func (r *TestRunner) RunTests(t *testing.T, tests []CompatibilityTest) {
 }
 
 // RunTestsParallel executes the given tests in parallel.
-func (r *TestRunner) RunTestsParallel(t *testing.T, tests []CompatibilityTest) {
+func (r *TestRunner) RunTestsParallel(
+	t *testing.T,
+	tests []CompatibilityTest,
+) {
 	for _, test := range tests {
 		// capture range variable
 		t.Run(test.Name, func(t *testing.T) {
@@ -192,20 +221,28 @@ func (r *TestRunner) RunTestsParallel(t *testing.T, tests []CompatibilityTest) {
 
 			// Skip if needed
 			if test.SkipDukdb {
-				t.Skip("Test skipped for dukdb-go (not yet implemented)")
+				t.Skip(
+					"Test skipped for dukdb-go (not yet implemented)",
+				)
 			}
 
 			// Open fresh database for each test
 			db, err := r.OpenDB()
 			if err != nil {
-				t.Fatalf("Failed to open database: %v", err)
+				t.Fatalf(
+					"Failed to open database: %v",
+					err,
+				)
 			}
 			defer db.Close()
 
 			// Run setup if provided
 			if test.Setup != nil {
 				if err := test.Setup(db); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+					t.Fatalf(
+						"Setup failed: %v",
+						err,
+					)
 				}
 			}
 
@@ -215,7 +252,10 @@ func (r *TestRunner) RunTestsParallel(t *testing.T, tests []CompatibilityTest) {
 			// Run teardown if provided
 			if test.Teardown != nil {
 				if err := test.Teardown(db); err != nil {
-					t.Errorf("Teardown failed: %v", err)
+					t.Errorf(
+						"Teardown failed: %v",
+						err,
+					)
 				}
 			}
 		})

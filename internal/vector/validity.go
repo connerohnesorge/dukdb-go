@@ -15,7 +15,9 @@ type ValidityMask struct {
 
 // NewValidityMask creates a new ValidityMask with the specified capacity.
 // All entries are initialized as valid (not NULL) by default.
-func NewValidityMask(capacity uint64) *ValidityMask {
+func NewValidityMask(
+	capacity uint64,
+) *ValidityMask {
 	numWords := (capacity + BitsPerWord - 1) / BitsPerWord
 	mask := make([]uint64, numWords)
 	// Initialize all bits to 1 (valid) by default
@@ -30,7 +32,9 @@ func NewValidityMask(capacity uint64) *ValidityMask {
 }
 
 // NewValidityMaskEmpty creates a new ValidityMask with all entries marked as NULL.
-func NewValidityMaskEmpty(capacity uint64) *ValidityMask {
+func NewValidityMaskEmpty(
+	capacity uint64,
+) *ValidityMask {
 	numWords := (capacity + BitsPerWord - 1) / BitsPerWord
 
 	return &ValidityMask{
@@ -53,7 +57,10 @@ func (v *ValidityMask) IsValid(row uint64) bool {
 // If valid is true, marks the entry as valid (not NULL).
 // If valid is false, marks the entry as NULL.
 // Does not perform bounds checking for performance - caller must ensure row < capacity.
-func (v *ValidityMask) SetValid(row uint64, valid bool) {
+func (v *ValidityMask) SetValid(
+	row uint64,
+	valid bool,
+) {
 	wordIdx := row / BitsPerWord
 	bitIdx := row % BitsPerWord
 	if valid {
@@ -86,7 +93,8 @@ func (v *ValidityMask) SetAllValid(count uint64) {
 
 	// Remaining bits in the last partial word
 	remaining := count % BitsPerWord
-	if remaining > 0 && fullWords < uint64(len(v.bits)) {
+	if remaining > 0 &&
+		fullWords < uint64(len(v.bits)) {
 		// Set only the first 'remaining' bits in this word
 		v.bits[fullWords] = (uint64(1) << remaining) - 1
 	}
@@ -112,7 +120,9 @@ func (v *ValidityMask) CountValid() uint64 {
 
 	// Count bits in full words
 	for i := range fullWords {
-		count += uint64(bits.OnesCount64(v.bits[i]))
+		count += uint64(
+			bits.OnesCount64(v.bits[i]),
+		)
 	}
 
 	// Count bits in the partial last word (if any)
@@ -120,7 +130,11 @@ func (v *ValidityMask) CountValid() uint64 {
 	if remaining > 0 {
 		// Create a mask for only the bits we care about
 		mask := (uint64(1) << remaining) - 1
-		count += uint64(bits.OnesCount64(v.bits[fullWords] & mask))
+		count += uint64(
+			bits.OnesCount64(
+				v.bits[fullWords] & mask,
+			),
+		)
 	}
 
 	return count

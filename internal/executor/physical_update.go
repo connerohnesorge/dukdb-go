@@ -39,7 +39,10 @@ func (e *Executor) executeUpdate(
 		}
 
 		for i := 0; i < chunk.Count(); i++ {
-			row := make([]any, chunk.ColumnCount())
+			row := make(
+				[]any,
+				chunk.ColumnCount(),
+			)
 			for j := 0; j < chunk.ColumnCount(); j++ {
 				row[j] = chunk.GetValue(i, j)
 			}
@@ -65,7 +68,11 @@ func (e *Executor) executeUpdate(
 		if plan.Source != nil {
 			// Check if row matches the filter
 			if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
-				passes, err := e.evaluateExprAsBool(ctx, filter.Condition, rowMap)
+				passes, err := e.evaluateExprAsBool(
+					ctx,
+					filter.Condition,
+					rowMap,
+				)
 				if err != nil {
 					return nil, err
 				}
@@ -86,22 +93,34 @@ func (e *Executor) executeUpdate(
 
 			for _, setClause := range plan.Set {
 				// Evaluate the new value
-				newValue, err := e.evaluateExpr(ctx, setClause.Value, rowMap)
+				newValue, err := e.evaluateExpr(
+					ctx,
+					setClause.Value,
+					rowMap,
+				)
 				if err != nil {
 					return nil, err
 				}
 
 				// Update the column
-				if setClause.ColumnIdx >= 0 && setClause.ColumnIdx < len(updatedRow) {
+				if setClause.ColumnIdx >= 0 &&
+					setClause.ColumnIdx < len(
+						updatedRow,
+					) {
 					updatedRow[setClause.ColumnIdx] = newValue
 					// Also update rowMap for subsequent SET clauses that might reference this column
-					if setClause.ColumnIdx < len(plan.TableDef.Columns) {
+					if setClause.ColumnIdx < len(
+						plan.TableDef.Columns,
+					) {
 						rowMap[plan.TableDef.Columns[setClause.ColumnIdx].Name] = newValue
 					}
 				}
 			}
 
-			updatedRows = append(updatedRows, updatedRow)
+			updatedRows = append(
+				updatedRows,
+				updatedRow,
+			)
 			updatedCount++
 		} else {
 			// Keep the original row
@@ -114,7 +133,10 @@ func (e *Executor) executeUpdate(
 		return nil, err
 	}
 
-	newTable, err := e.storage.CreateTable(plan.Table, table.ColumnTypes())
+	newTable, err := e.storage.CreateTable(
+		plan.Table,
+		table.ColumnTypes(),
+	)
 	if err != nil {
 		return nil, err
 	}

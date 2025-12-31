@@ -13,17 +13,23 @@ func (c *Catalog) Export() *persistence.CatalogJSON {
 
 	data := &persistence.CatalogJSON{
 		Version: 1,
-		Schemas: make(map[string]*persistence.SchemaJSON),
+		Schemas: make(
+			map[string]*persistence.SchemaJSON,
+		),
 	}
 
 	for name, schema := range c.schemas {
 		schemaData := &persistence.SchemaJSON{
-			Name:   name,
-			Tables: make(map[string]*persistence.TableJSON),
+			Name: name,
+			Tables: make(
+				map[string]*persistence.TableJSON,
+			),
 		}
 		schema.mu.RLock()
 		for tableName, tableDef := range schema.tables {
-			schemaData.Tables[tableName] = exportTableDef(tableDef)
+			schemaData.Tables[tableName] = exportTableDef(
+				tableDef,
+			)
 		}
 		schema.mu.RUnlock()
 		data.Schemas[name] = schemaData
@@ -33,7 +39,9 @@ func (c *Catalog) Export() *persistence.CatalogJSON {
 }
 
 // Import imports the catalog from a serialized structure
-func (c *Catalog) Import(data *persistence.CatalogJSON) error {
+func (c *Catalog) Import(
+	data *persistence.CatalogJSON,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -56,12 +64,20 @@ func (c *Catalog) Import(data *persistence.CatalogJSON) error {
 }
 
 // exportTableDef converts a TableDef to a serializable TableJSON
-func exportTableDef(t *TableDef) *persistence.TableJSON {
+func exportTableDef(
+	t *TableDef,
+) *persistence.TableJSON {
 	data := &persistence.TableJSON{
-		Name:       t.Name,
-		Schema:     t.Schema,
-		Columns:    make([]persistence.ColumnJSON, len(t.Columns)),
-		PrimaryKey: make([]int, len(t.PrimaryKey)),
+		Name:   t.Name,
+		Schema: t.Schema,
+		Columns: make(
+			[]persistence.ColumnJSON,
+			len(t.Columns),
+		),
+		PrimaryKey: make(
+			[]int,
+			len(t.PrimaryKey),
+		),
 	}
 
 	copy(data.PrimaryKey, t.PrimaryKey)
@@ -74,22 +90,32 @@ func exportTableDef(t *TableDef) *persistence.TableJSON {
 }
 
 // importTableDef converts a TableJSON to a TableDef
-func importTableDef(data *persistence.TableJSON) *TableDef {
-	columns := make([]*ColumnDef, len(data.Columns))
+func importTableDef(
+	data *persistence.TableJSON,
+) *TableDef {
+	columns := make(
+		[]*ColumnDef,
+		len(data.Columns),
+	)
 	for i, colData := range data.Columns {
 		columns[i] = importColumnDef(&colData)
 	}
 
 	t := NewTableDef(data.Name, columns)
 	t.Schema = data.Schema
-	t.PrimaryKey = make([]int, len(data.PrimaryKey))
+	t.PrimaryKey = make(
+		[]int,
+		len(data.PrimaryKey),
+	)
 	copy(t.PrimaryKey, data.PrimaryKey)
 
 	return t
 }
 
 // exportColumnDef converts a ColumnDef to a serializable ColumnJSON
-func exportColumnDef(c *ColumnDef) persistence.ColumnJSON {
+func exportColumnDef(
+	c *ColumnDef,
+) persistence.ColumnJSON {
 	data := persistence.ColumnJSON{
 		Name:         c.Name,
 		Type:         int(c.Type),
@@ -107,7 +133,9 @@ func exportColumnDef(c *ColumnDef) persistence.ColumnJSON {
 }
 
 // importColumnDef converts a ColumnJSON to a ColumnDef
-func importColumnDef(data *persistence.ColumnJSON) *ColumnDef {
+func importColumnDef(
+	data *persistence.ColumnJSON,
+) *ColumnDef {
 	col := &ColumnDef{
 		Name:         data.Name,
 		Type:         dukdb.Type(data.Type),
@@ -118,14 +146,19 @@ func importColumnDef(data *persistence.ColumnJSON) *ColumnDef {
 
 	// Import type info for complex types
 	if data.TypeInfo != nil {
-		col.TypeInfo = importTypeInfo(dukdb.Type(data.Type), data.TypeInfo)
+		col.TypeInfo = importTypeInfo(
+			dukdb.Type(data.Type),
+			data.TypeInfo,
+		)
 	}
 
 	return col
 }
 
 // exportTypeInfo converts a TypeInfo to a serializable TypeJSON
-func exportTypeInfo(ti dukdb.TypeInfo) *persistence.TypeJSON {
+func exportTypeInfo(
+	ti dukdb.TypeInfo,
+) *persistence.TypeJSON {
 	if ti == nil {
 		return nil
 	}
@@ -202,7 +235,10 @@ func exportTypeInfo(ti dukdb.TypeInfo) *persistence.TypeJSON {
 }
 
 // importTypeInfo converts a TypeJSON to a TypeInfo
-func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
+func importTypeInfo(
+	typ dukdb.Type,
+	data *persistence.TypeJSON,
+) dukdb.TypeInfo {
 	if data == nil {
 		// For primitive types, create basic type info
 		info, _ := dukdb.NewTypeInfo(typ)
@@ -212,25 +248,39 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 
 	switch typ {
 	case dukdb.TYPE_DECIMAL:
-		info, _ := dukdb.NewDecimalInfo(uint8(data.Precision), uint8(data.Scale))
+		info, _ := dukdb.NewDecimalInfo(
+			uint8(data.Precision),
+			uint8(data.Scale),
+		)
 
 		return info
 
 	case dukdb.TYPE_ENUM:
 		if len(data.EnumValues) > 0 {
-			info, _ := dukdb.NewEnumInfo(data.EnumValues[0], data.EnumValues[1:]...)
+			info, _ := dukdb.NewEnumInfo(
+				data.EnumValues[0],
+				data.EnumValues[1:]...)
 
 			return info
 		}
 
 	case dukdb.TYPE_LIST:
 		if data.ElementType != nil {
-			childInfo := importTypeInfo(dukdb.Type(data.ElementType.Type), data.ElementType.TypeInfo)
+			childInfo := importTypeInfo(
+				dukdb.Type(data.ElementType.Type),
+				data.ElementType.TypeInfo,
+			)
 			if childInfo == nil {
-				childInfo, _ = dukdb.NewTypeInfo(dukdb.Type(data.ElementType.Type))
+				childInfo, _ = dukdb.NewTypeInfo(
+					dukdb.Type(
+						data.ElementType.Type,
+					),
+				)
 			}
 			if childInfo != nil {
-				info, _ := dukdb.NewListInfo(childInfo)
+				info, _ := dukdb.NewListInfo(
+					childInfo,
+				)
 
 				return info
 			}
@@ -238,29 +288,55 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 
 	case dukdb.TYPE_ARRAY:
 		if data.ElementType != nil {
-			childInfo := importTypeInfo(dukdb.Type(data.ElementType.Type), data.ElementType.TypeInfo)
+			childInfo := importTypeInfo(
+				dukdb.Type(data.ElementType.Type),
+				data.ElementType.TypeInfo,
+			)
 			if childInfo == nil {
-				childInfo, _ = dukdb.NewTypeInfo(dukdb.Type(data.ElementType.Type))
+				childInfo, _ = dukdb.NewTypeInfo(
+					dukdb.Type(
+						data.ElementType.Type,
+					),
+				)
 			}
 			if childInfo != nil {
-				info, _ := dukdb.NewArrayInfo(childInfo, uint64(data.ArraySize))
+				info, _ := dukdb.NewArrayInfo(
+					childInfo,
+					uint64(data.ArraySize),
+				)
 
 				return info
 			}
 		}
 
 	case dukdb.TYPE_MAP:
-		if data.KeyType != nil && data.ValueType != nil {
-			keyInfo := importTypeInfo(dukdb.Type(data.KeyType.Type), data.KeyType.TypeInfo)
+		if data.KeyType != nil &&
+			data.ValueType != nil {
+			keyInfo := importTypeInfo(
+				dukdb.Type(data.KeyType.Type),
+				data.KeyType.TypeInfo,
+			)
 			if keyInfo == nil {
-				keyInfo, _ = dukdb.NewTypeInfo(dukdb.Type(data.KeyType.Type))
+				keyInfo, _ = dukdb.NewTypeInfo(
+					dukdb.Type(data.KeyType.Type),
+				)
 			}
-			valInfo := importTypeInfo(dukdb.Type(data.ValueType.Type), data.ValueType.TypeInfo)
+			valInfo := importTypeInfo(
+				dukdb.Type(data.ValueType.Type),
+				data.ValueType.TypeInfo,
+			)
 			if valInfo == nil {
-				valInfo, _ = dukdb.NewTypeInfo(dukdb.Type(data.ValueType.Type))
+				valInfo, _ = dukdb.NewTypeInfo(
+					dukdb.Type(
+						data.ValueType.Type,
+					),
+				)
 			}
 			if keyInfo != nil && valInfo != nil {
-				info, _ := dukdb.NewMapInfo(keyInfo, valInfo)
+				info, _ := dukdb.NewMapInfo(
+					keyInfo,
+					valInfo,
+				)
 
 				return info
 			}
@@ -268,19 +344,33 @@ func importTypeInfo(typ dukdb.Type, data *persistence.TypeJSON) dukdb.TypeInfo {
 
 	case dukdb.TYPE_STRUCT:
 		if len(data.Fields) > 0 {
-			entries := make([]dukdb.StructEntry, len(data.Fields))
+			entries := make(
+				[]dukdb.StructEntry,
+				len(data.Fields),
+			)
 			for i, field := range data.Fields {
-				fieldInfo := importTypeInfo(dukdb.Type(field.Type), field.TypeInfo)
+				fieldInfo := importTypeInfo(
+					dukdb.Type(field.Type),
+					field.TypeInfo,
+				)
 				if fieldInfo == nil {
-					fieldInfo, _ = dukdb.NewTypeInfo(dukdb.Type(field.Type))
+					fieldInfo, _ = dukdb.NewTypeInfo(
+						dukdb.Type(field.Type),
+					)
 				}
 				if fieldInfo != nil {
-					entry, _ := dukdb.NewStructEntry(fieldInfo, field.Name)
+					entry, _ := dukdb.NewStructEntry(
+						fieldInfo,
+						field.Name,
+					)
 					entries[i] = entry
 				}
 			}
-			if len(entries) > 0 && entries[0] != nil {
-				info, _ := dukdb.NewStructInfo(entries[0], entries[1:]...)
+			if len(entries) > 0 &&
+				entries[0] != nil {
+				info, _ := dukdb.NewStructInfo(
+					entries[0],
+					entries[1:]...)
 
 				return info
 			}

@@ -17,8 +17,10 @@ type Catalog struct {
 // NewCatalog creates a new Catalog instance.
 func NewCatalog() *Catalog {
 	c := &Catalog{
-		schemas:       make(map[string]*Schema),
-		virtualTables: make(map[string]*VirtualTableDef),
+		schemas: make(map[string]*Schema),
+		virtualTables: make(
+			map[string]*VirtualTableDef,
+		),
 	}
 	// Create default schema
 	c.schemas["main"] = NewSchema("main")
@@ -188,7 +190,9 @@ func (c *Catalog) ListTablesInSchema(
 // RegisterVirtualTable registers a virtual table in the catalog.
 // Virtual tables appear as regular tables for query resolution but
 // read data from external sources.
-func (c *Catalog) RegisterVirtualTable(vt dukdb.VirtualTable) error {
+func (c *Catalog) RegisterVirtualTable(
+	vt dukdb.VirtualTable,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -224,7 +228,9 @@ func (c *Catalog) RegisterVirtualTable(vt dukdb.VirtualTable) error {
 }
 
 // UnregisterVirtualTable removes a virtual table from the catalog.
-func (c *Catalog) UnregisterVirtualTable(name string) error {
+func (c *Catalog) UnregisterVirtualTable(
+	name string,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -242,7 +248,9 @@ func (c *Catalog) UnregisterVirtualTable(name string) error {
 
 // GetVirtualTableDef returns a virtual table definition by name.
 // This is used internally for query binding.
-func (c *Catalog) GetVirtualTableDef(name string) (*VirtualTableDef, bool) {
+func (c *Catalog) GetVirtualTableDef(
+	name string,
+) (*VirtualTableDef, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -253,7 +261,9 @@ func (c *Catalog) GetVirtualTableDef(name string) (*VirtualTableDef, bool) {
 
 // GetVirtualTable returns a virtual table as the dukdb.VirtualTable interface.
 // This method satisfies the dukdb.VirtualTableRegistry interface.
-func (c *Catalog) GetVirtualTable(name string) (dukdb.VirtualTable, bool) {
+func (c *Catalog) GetVirtualTable(
+	name string,
+) (dukdb.VirtualTable, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -266,7 +276,9 @@ func (c *Catalog) GetVirtualTable(name string) (dukdb.VirtualTable, bool) {
 }
 
 // IsVirtualTable returns true if the given table name is a virtual table.
-func (c *Catalog) IsVirtualTable(name string) bool {
+func (c *Catalog) IsVirtualTable(
+	name string,
+) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

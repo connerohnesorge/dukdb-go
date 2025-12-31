@@ -233,21 +233,33 @@ const (
 // These errors are returned by format serialization and deserialization functions.
 var (
 	// ErrInvalidMagicNumber indicates the file does not start with the DuckDB magic number.
-	ErrInvalidMagicNumber = errors.New("invalid DuckDB magic number")
+	ErrInvalidMagicNumber = errors.New(
+		"invalid DuckDB magic number",
+	)
 
 	// ErrUnsupportedVersion indicates the file uses an unsupported format version.
-	ErrUnsupportedVersion = errors.New("unsupported DuckDB format version")
+	ErrUnsupportedVersion = errors.New(
+		"unsupported DuckDB format version",
+	)
 
 	// ErrChecksumMismatch indicates data corruption was detected via checksum verification.
-	ErrChecksumMismatch = errors.New("checksum verification failed")
+	ErrChecksumMismatch = errors.New(
+		"checksum verification failed",
+	)
 
 	// ErrRequiredProperty indicates a required property is missing from the binary data.
-	ErrRequiredProperty = errors.New("required property missing")
+	ErrRequiredProperty = errors.New(
+		"required property missing",
+	)
 
 	// ErrInvalidPropertyType indicates a property value has an incorrect type.
-	ErrInvalidPropertyType = errors.New("property type mismatch")
+	ErrInvalidPropertyType = errors.New(
+		"property type mismatch",
+	)
 
 	// ErrUnsupportedTypeForSerialization indicates the type cannot be serialized in this format version.
 	// This applies to UNION types and other types deferred to future format versions.
-	ErrUnsupportedTypeForSerialization = errors.New("type not supported for serialization in this format version")
+	ErrUnsupportedTypeForSerialization = errors.New(
+		"type not supported for serialization in this format version",
+	)
 )

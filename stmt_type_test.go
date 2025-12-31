@@ -21,11 +21,20 @@ func TestStmtTypeName(t *testing.T) {
 		{STATEMENT_TYPE_CREATE, "CREATE"},
 		{STATEMENT_TYPE_EXECUTE, "EXECUTE"},
 		{STATEMENT_TYPE_ALTER, "ALTER"},
-		{STATEMENT_TYPE_TRANSACTION, "TRANSACTION"},
+		{
+			STATEMENT_TYPE_TRANSACTION,
+			"TRANSACTION",
+		},
 		{STATEMENT_TYPE_COPY, "COPY"},
 		{STATEMENT_TYPE_ANALYZE, "ANALYZE"},
-		{STATEMENT_TYPE_VARIABLE_SET, "VARIABLE_SET"},
-		{STATEMENT_TYPE_CREATE_FUNC, "CREATE_FUNC"},
+		{
+			STATEMENT_TYPE_VARIABLE_SET,
+			"VARIABLE_SET",
+		},
+		{
+			STATEMENT_TYPE_CREATE_FUNC,
+			"CREATE_FUNC",
+		},
 		{STATEMENT_TYPE_DROP, "DROP"},
 		{STATEMENT_TYPE_EXPORT, "EXPORT"},
 		{STATEMENT_TYPE_PRAGMA, "PRAGMA"},
@@ -35,20 +44,40 @@ func TestStmtTypeName(t *testing.T) {
 		{STATEMENT_TYPE_LOAD, "LOAD"},
 		{STATEMENT_TYPE_RELATION, "RELATION"},
 		{STATEMENT_TYPE_EXTENSION, "EXTENSION"},
-		{STATEMENT_TYPE_LOGICAL_PLAN, "LOGICAL_PLAN"},
+		{
+			STATEMENT_TYPE_LOGICAL_PLAN,
+			"LOGICAL_PLAN",
+		},
 		{STATEMENT_TYPE_ATTACH, "ATTACH"},
 		{STATEMENT_TYPE_DETACH, "DETACH"},
 		{STATEMENT_TYPE_MULTI, "MULTI"},
 		{STATEMENT_TYPE_MERGE_INTO, "MERGE_INTO"},
-		{STATEMENT_TYPE_UPDATE_EXTENSIONS, "UPDATE_EXTENSIONS"},
-		{STATEMENT_TYPE_COPY_DATABASE, "COPY_DATABASE"},
-		{StmtType(999), "UNKNOWN"}, // Unknown type
+		{
+			STATEMENT_TYPE_UPDATE_EXTENSIONS,
+			"UPDATE_EXTENSIONS",
+		},
+		{
+			STATEMENT_TYPE_COPY_DATABASE,
+			"COPY_DATABASE",
+		},
+		{
+			StmtType(999),
+			"UNKNOWN",
+		}, // Unknown type
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.expected, func(t *testing.T) {
-			assert.Equal(t, tc.expected, StmtTypeName(tc.stmtType))
-			assert.Equal(t, tc.expected, tc.stmtType.String())
+			assert.Equal(
+				t,
+				tc.expected,
+				StmtTypeName(tc.stmtType),
+			)
+			assert.Equal(
+				t,
+				tc.expected,
+				tc.stmtType.String(),
+			)
 		})
 	}
 }
@@ -59,19 +88,52 @@ func TestStmtTypeReturnType(t *testing.T) {
 		expectedType StmtReturnType
 	}{
 		// Query result types
-		{STATEMENT_TYPE_SELECT, RETURN_QUERY_RESULT},
-		{STATEMENT_TYPE_EXPLAIN, RETURN_QUERY_RESULT},
-		{STATEMENT_TYPE_PRAGMA, RETURN_QUERY_RESULT},
-		{STATEMENT_TYPE_CALL, RETURN_QUERY_RESULT},
-		{STATEMENT_TYPE_RELATION, RETURN_QUERY_RESULT},
-		{STATEMENT_TYPE_LOGICAL_PLAN, RETURN_QUERY_RESULT},
+		{
+			STATEMENT_TYPE_SELECT,
+			RETURN_QUERY_RESULT,
+		},
+		{
+			STATEMENT_TYPE_EXPLAIN,
+			RETURN_QUERY_RESULT,
+		},
+		{
+			STATEMENT_TYPE_PRAGMA,
+			RETURN_QUERY_RESULT,
+		},
+		{
+			STATEMENT_TYPE_CALL,
+			RETURN_QUERY_RESULT,
+		},
+		{
+			STATEMENT_TYPE_RELATION,
+			RETURN_QUERY_RESULT,
+		},
+		{
+			STATEMENT_TYPE_LOGICAL_PLAN,
+			RETURN_QUERY_RESULT,
+		},
 
 		// Changed rows types
-		{STATEMENT_TYPE_INSERT, RETURN_CHANGED_ROWS},
-		{STATEMENT_TYPE_UPDATE, RETURN_CHANGED_ROWS},
-		{STATEMENT_TYPE_DELETE, RETURN_CHANGED_ROWS},
-		{STATEMENT_TYPE_MERGE_INTO, RETURN_CHANGED_ROWS},
-		{STATEMENT_TYPE_COPY, RETURN_CHANGED_ROWS},
+		{
+			STATEMENT_TYPE_INSERT,
+			RETURN_CHANGED_ROWS,
+		},
+		{
+			STATEMENT_TYPE_UPDATE,
+			RETURN_CHANGED_ROWS,
+		},
+		{
+			STATEMENT_TYPE_DELETE,
+			RETURN_CHANGED_ROWS,
+		},
+		{
+			STATEMENT_TYPE_MERGE_INTO,
+			RETURN_CHANGED_ROWS,
+		},
+		{
+			STATEMENT_TYPE_COPY,
+			RETURN_CHANGED_ROWS,
+		},
 
 		// Nothing types
 		{STATEMENT_TYPE_CREATE, RETURN_NOTHING},
@@ -79,26 +141,51 @@ func TestStmtTypeReturnType(t *testing.T) {
 		{STATEMENT_TYPE_ALTER, RETURN_NOTHING},
 		{STATEMENT_TYPE_PREPARE, RETURN_NOTHING},
 		{STATEMENT_TYPE_EXECUTE, RETURN_NOTHING},
-		{STATEMENT_TYPE_TRANSACTION, RETURN_NOTHING},
+		{
+			STATEMENT_TYPE_TRANSACTION,
+			RETURN_NOTHING,
+		},
 		{STATEMENT_TYPE_ANALYZE, RETURN_NOTHING},
-		{STATEMENT_TYPE_VARIABLE_SET, RETURN_NOTHING},
-		{STATEMENT_TYPE_CREATE_FUNC, RETURN_NOTHING},
+		{
+			STATEMENT_TYPE_VARIABLE_SET,
+			RETURN_NOTHING,
+		},
+		{
+			STATEMENT_TYPE_CREATE_FUNC,
+			RETURN_NOTHING,
+		},
 		{STATEMENT_TYPE_EXPORT, RETURN_NOTHING},
 		{STATEMENT_TYPE_VACUUM, RETURN_NOTHING},
 		{STATEMENT_TYPE_SET, RETURN_NOTHING},
 		{STATEMENT_TYPE_LOAD, RETURN_NOTHING},
-		{STATEMENT_TYPE_EXTENSION, RETURN_NOTHING},
+		{
+			STATEMENT_TYPE_EXTENSION,
+			RETURN_NOTHING,
+		},
 		{STATEMENT_TYPE_ATTACH, RETURN_NOTHING},
 		{STATEMENT_TYPE_DETACH, RETURN_NOTHING},
 		{STATEMENT_TYPE_MULTI, RETURN_NOTHING},
-		{STATEMENT_TYPE_UPDATE_EXTENSIONS, RETURN_NOTHING},
-		{STATEMENT_TYPE_COPY_DATABASE, RETURN_NOTHING},
+		{
+			STATEMENT_TYPE_UPDATE_EXTENSIONS,
+			RETURN_NOTHING,
+		},
+		{
+			STATEMENT_TYPE_COPY_DATABASE,
+			RETURN_NOTHING,
+		},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.stmtType.String(), func(t *testing.T) {
-			assert.Equal(t, tc.expectedType, tc.stmtType.ReturnType())
-		})
+		t.Run(
+			tc.stmtType.String(),
+			func(t *testing.T) {
+				assert.Equal(
+					t,
+					tc.expectedType,
+					tc.stmtType.ReturnType(),
+				)
+			},
+		)
 	}
 }
 
@@ -120,15 +207,21 @@ func TestStmtTypeIsDML(t *testing.T) {
 	}
 
 	for _, st := range dmlTypes {
-		t.Run(st.String()+"_is_DML", func(t *testing.T) {
-			assert.True(t, st.IsDML())
-		})
+		t.Run(
+			st.String()+"_is_DML",
+			func(t *testing.T) {
+				assert.True(t, st.IsDML())
+			},
+		)
 	}
 
 	for _, st := range nonDMLTypes {
-		t.Run(st.String()+"_is_not_DML", func(t *testing.T) {
-			assert.False(t, st.IsDML())
-		})
+		t.Run(
+			st.String()+"_is_not_DML",
+			func(t *testing.T) {
+				assert.False(t, st.IsDML())
+			},
+		)
 	}
 }
 
@@ -150,15 +243,21 @@ func TestStmtTypeIsDDL(t *testing.T) {
 	}
 
 	for _, st := range ddlTypes {
-		t.Run(st.String()+"_is_DDL", func(t *testing.T) {
-			assert.True(t, st.IsDDL())
-		})
+		t.Run(
+			st.String()+"_is_DDL",
+			func(t *testing.T) {
+				assert.True(t, st.IsDDL())
+			},
+		)
 	}
 
 	for _, st := range nonDDLTypes {
-		t.Run(st.String()+"_is_not_DDL", func(t *testing.T) {
-			assert.False(t, st.IsDDL())
-		})
+		t.Run(
+			st.String()+"_is_not_DDL",
+			func(t *testing.T) {
+				assert.False(t, st.IsDDL())
+			},
+		)
 	}
 }
 
@@ -181,15 +280,21 @@ func TestStmtTypeIsQuery(t *testing.T) {
 	}
 
 	for _, st := range queryTypes {
-		t.Run(st.String()+"_is_query", func(t *testing.T) {
-			assert.True(t, st.IsQuery())
-		})
+		t.Run(
+			st.String()+"_is_query",
+			func(t *testing.T) {
+				assert.True(t, st.IsQuery())
+			},
+		)
 	}
 
 	for _, st := range nonQueryTypes {
-		t.Run(st.String()+"_is_not_query", func(t *testing.T) {
-			assert.False(t, st.IsQuery())
-		})
+		t.Run(
+			st.String()+"_is_not_query",
+			func(t *testing.T) {
+				assert.False(t, st.IsQuery())
+			},
+		)
 	}
 }
 
@@ -212,22 +317,37 @@ func TestStmtTypeModifiesData(t *testing.T) {
 	}
 
 	for _, st := range modifyingTypes {
-		t.Run(st.String()+"_modifies_data", func(t *testing.T) {
-			assert.True(t, st.ModifiesData())
-		})
+		t.Run(
+			st.String()+"_modifies_data",
+			func(t *testing.T) {
+				assert.True(t, st.ModifiesData())
+			},
+		)
 	}
 
 	for _, st := range nonModifyingTypes {
-		t.Run(st.String()+"_does_not_modify_data", func(t *testing.T) {
-			assert.False(t, st.ModifiesData())
-		})
+		t.Run(
+			st.String()+"_does_not_modify_data",
+			func(t *testing.T) {
+				assert.False(t, st.ModifiesData())
+			},
+		)
 	}
 }
 
 func TestStmtTypeIsTransaction(t *testing.T) {
-	assert.True(t, STATEMENT_TYPE_TRANSACTION.IsTransaction())
-	assert.False(t, STATEMENT_TYPE_SELECT.IsTransaction())
-	assert.False(t, STATEMENT_TYPE_INSERT.IsTransaction())
+	assert.True(
+		t,
+		STATEMENT_TYPE_TRANSACTION.IsTransaction(),
+	)
+	assert.False(
+		t,
+		STATEMENT_TYPE_SELECT.IsTransaction(),
+	)
+	assert.False(
+		t,
+		STATEMENT_TYPE_INSERT.IsTransaction(),
+	)
 }
 
 func TestStmtReturnTypeString(t *testing.T) {
@@ -243,12 +363,18 @@ func TestStmtReturnTypeString(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.expected, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.returnType.String())
+			assert.Equal(
+				t,
+				tc.expected,
+				tc.returnType.String(),
+			)
 		})
 	}
 }
 
-func TestAllStatementTypeConstantsExist(t *testing.T) {
+func TestAllStatementTypeConstantsExist(
+	t *testing.T,
+) {
 	// Verify all 31 statement types (0-30) have defined constants
 	expectedTypes := map[StmtType]string{
 		STATEMENT_TYPE_INVALID:           "INVALID",
@@ -284,7 +410,12 @@ func TestAllStatementTypeConstantsExist(t *testing.T) {
 		STATEMENT_TYPE_COPY_DATABASE:     "COPY_DATABASE",
 	}
 
-	assert.Equal(t, 31, len(expectedTypes), "Should have 31 statement types (0-30)")
+	assert.Equal(
+		t,
+		31,
+		len(expectedTypes),
+		"Should have 31 statement types (0-30)",
+	)
 
 	for stmtType, expectedName := range expectedTypes {
 		assert.Equal(

@@ -27,23 +27,33 @@ import (
 // For complex types, this delegates to type-specific deserializers based on the discriminator.
 //
 // Returns ErrUnsupportedTypeForSerialization for UNION types (not supported in v64 format).
-func DeserializeTypeInfo(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeTypeInfo(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Read property 99: LogicalTypeId (base type)
 	var typeId uint8
 	if err := r.ReadProperty(99, &typeId); err != nil {
-		return nil, fmt.Errorf("failed to read LogicalTypeId: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read LogicalTypeId: %w",
+			err,
+		)
 	}
 
 	// Read property 100: type discriminator (ExtraTypeInfoType)
 	var discriminator uint32
 	if err := r.ReadProperty(PropertyTypeDiscriminator, &discriminator); err != nil {
-		return nil, fmt.Errorf("failed to read type discriminator: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read type discriminator: %w",
+			err,
+		)
 	}
 
 	// If discriminator is GENERIC, this is a primitive type
 	if discriminator == ExtraTypeInfoType_GENERIC {
 		// Create primitive TypeInfo using the LogicalTypeId
-		return dukdb.NewTypeInfo(dukdb.Type(typeId))
+		return dukdb.NewTypeInfo(
+			dukdb.Type(typeId),
+		)
 	}
 
 	// Dispatch to type-specific deserializers based on discriminator
@@ -65,7 +75,10 @@ func DeserializeTypeInfo(r *BinaryReader) (dukdb.TypeInfo, error) {
 	case ExtraTypeInfoType_ARRAY:
 		return DeserializeArray(r)
 	default:
-		return nil, fmt.Errorf("unsupported type discriminator: %d", discriminator)
+		return nil, fmt.Errorf(
+			"unsupported type discriminator: %d",
+			discriminator,
+		)
 	}
 }
 
@@ -77,17 +90,25 @@ func DeserializeTypeInfo(r *BinaryReader) (dukdb.TypeInfo, error) {
 //   - Property 201: uint8 (scale, digits after decimal point 0-width)
 //
 // Example: DECIMAL(18,4) -> width=18, scale=4
-func DeserializeDecimal(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeDecimal(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	var width, scale uint8
 
 	// Property 200: Width (precision)
 	if err := r.ReadPropertyWithDefault(PropertyDecimalWidth, &width, uint8(0)); err != nil {
-		return nil, fmt.Errorf("failed to read DECIMAL width: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read DECIMAL width: %w",
+			err,
+		)
 	}
 
 	// Property 201: Scale
 	if err := r.ReadPropertyWithDefault(PropertyDecimalScale, &scale, uint8(0)); err != nil {
-		return nil, fmt.Errorf("failed to read DECIMAL scale: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read DECIMAL scale: %w",
+			err,
+		)
 	}
 
 	return dukdb.NewDecimalInfo(width, scale)
@@ -106,30 +127,46 @@ func DeserializeDecimal(r *BinaryReader) (dukdb.TypeInfo, error) {
 //   - Data: []byte
 //
 // Example: ENUM('RED','GREEN','BLUE') -> count=3, values=["RED","GREEN","BLUE"]
-func DeserializeEnum(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeEnum(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Property 200: Enum values count
 	var count uint64
 	if err := r.ReadProperty(PropertyEnumCount, &count); err != nil {
-		return nil, fmt.Errorf("failed to read ENUM count: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read ENUM count: %w",
+			err,
+		)
 	}
 
 	// Property 201: Enum values list
 	values, err := r.ReadList(PropertyEnumValues)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read ENUM values: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read ENUM values: %w",
+			err,
+		)
 	}
 
 	// Validate count matches
 	if uint64(len(values)) != count {
-		return nil, fmt.Errorf("ENUM count mismatch: expected %d, got %d", count, len(values))
+		return nil, fmt.Errorf(
+			"ENUM count mismatch: expected %d, got %d",
+			count,
+			len(values),
+		)
 	}
 
 	// Need at least one value for NewEnumInfo
 	if len(values) == 0 {
-		return nil, fmt.Errorf("ENUM must have at least one value")
+		return nil, fmt.Errorf(
+			"ENUM must have at least one value",
+		)
 	}
 
-	return dukdb.NewEnumInfo(values[0], values[1:]...)
+	return dukdb.NewEnumInfo(
+		values[0],
+		values[1:]...)
 }
 
 // DeserializeList deserializes LIST type details from binary format.
@@ -141,23 +178,36 @@ func DeserializeEnum(r *BinaryReader) (dukdb.TypeInfo, error) {
 // This handles recursive deserialization for nested types like LIST<LIST<INTEGER>>.
 //
 // Example: LIST<INTEGER> -> child=TypeInfo(TYPE_INTEGER)
-func DeserializeList(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeList(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Property 200: Child TypeInfo (recursive deserialization)
 	var childBytes []byte
 	if err := r.ReadProperty(PropertyChildType, &childBytes); err != nil {
-		return nil, fmt.Errorf("failed to read LIST child type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read LIST child type: %w",
+			err,
+		)
 	}
 
 	// Deserialize the child TypeInfo
 	childBuf := bytes.NewReader(childBytes)
 	childReader := NewBinaryReader(childBuf)
 	if err := childReader.Load(); err != nil {
-		return nil, fmt.Errorf("failed to load LIST child type properties: %w", err)
+		return nil, fmt.Errorf(
+			"failed to load LIST child type properties: %w",
+			err,
+		)
 	}
 
-	childInfo, err := DeserializeTypeInfo(childReader)
+	childInfo, err := DeserializeTypeInfo(
+		childReader,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize LIST child type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to deserialize LIST child type: %w",
+			err,
+		)
 	}
 
 	return dukdb.NewListInfo(childInfo)
@@ -171,32 +221,51 @@ func DeserializeList(r *BinaryReader) (dukdb.TypeInfo, error) {
 //   - Property 201: uint32 (fixed array size)
 //
 // Example: INTEGER[10] -> child=TypeInfo(TYPE_INTEGER), size=10
-func DeserializeArray(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeArray(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Property 200: Child TypeInfo (recursive deserialization)
 	var childBytes []byte
 	if err := r.ReadProperty(PropertyChildType, &childBytes); err != nil {
-		return nil, fmt.Errorf("failed to read ARRAY child type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read ARRAY child type: %w",
+			err,
+		)
 	}
 
 	// Deserialize the child TypeInfo
 	childBuf := bytes.NewReader(childBytes)
 	childReader := NewBinaryReader(childBuf)
 	if err := childReader.Load(); err != nil {
-		return nil, fmt.Errorf("failed to load ARRAY child type properties: %w", err)
+		return nil, fmt.Errorf(
+			"failed to load ARRAY child type properties: %w",
+			err,
+		)
 	}
 
-	childInfo, err := DeserializeTypeInfo(childReader)
+	childInfo, err := DeserializeTypeInfo(
+		childReader,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize ARRAY child type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to deserialize ARRAY child type: %w",
+			err,
+		)
 	}
 
 	// Property 201: Array size (fixed size)
 	var size uint32
 	if err := r.ReadPropertyWithDefault(PropertyArraySize, &size, uint32(0)); err != nil {
-		return nil, fmt.Errorf("failed to read ARRAY size: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read ARRAY size: %w",
+			err,
+		)
 	}
 
-	return dukdb.NewArrayInfo(childInfo, uint64(size))
+	return dukdb.NewArrayInfo(
+		childInfo,
+		uint64(size),
+	)
 }
 
 // DeserializeStruct deserializes STRUCT type details from binary format.
@@ -211,11 +280,16 @@ func DeserializeArray(r *BinaryReader) (dukdb.TypeInfo, error) {
 //   - LogicalType: (recursive TypeInfo deserialization)
 //
 // Example: STRUCT(x INTEGER, y VARCHAR) -> 2 fields with names and types
-func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeStruct(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Property 200: Field list (child_list_t<LogicalType>)
 	var fieldBytes []byte
 	if err := r.ReadProperty(PropertyStructFields, &fieldBytes); err != nil {
-		return nil, fmt.Errorf("failed to read STRUCT fields: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read STRUCT fields: %w",
+			err,
+		)
 	}
 
 	fieldBuf := bytes.NewReader(fieldBytes)
@@ -223,11 +297,16 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 	// Read field count
 	var count uint64
 	if err := binary.Read(fieldBuf, ByteOrder, &count); err != nil {
-		return nil, fmt.Errorf("failed to read STRUCT field count: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read STRUCT field count: %w",
+			err,
+		)
 	}
 
 	if count == 0 {
-		return nil, fmt.Errorf("STRUCT must have at least one field")
+		return nil, fmt.Errorf(
+			"STRUCT must have at least one field",
+		)
 	}
 
 	entries := make([]dukdb.StructEntry, count)
@@ -237,13 +316,21 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 		// Read field name length
 		var nameLen uint64
 		if err := binary.Read(fieldBuf, ByteOrder, &nameLen); err != nil {
-			return nil, fmt.Errorf("failed to read STRUCT field %d name length: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read STRUCT field %d name length: %w",
+				i,
+				err,
+			)
 		}
 
 		// Read field name data
 		nameData := make([]byte, nameLen)
 		if _, err := io.ReadFull(fieldBuf, nameData); err != nil {
-			return nil, fmt.Errorf("failed to read STRUCT field %d name: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read STRUCT field %d name: %w",
+				i,
+				err,
+			)
 		}
 		name := string(nameData)
 
@@ -252,23 +339,42 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 		// Create a new BinaryReader for this field's TypeInfo
 		fieldReader := NewBinaryReader(fieldBuf)
 		if err := fieldReader.Load(); err != nil {
-			return nil, fmt.Errorf("failed to load STRUCT field %d type properties: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to load STRUCT field %d type properties: %w",
+				i,
+				err,
+			)
 		}
 
-		fieldInfo, err := DeserializeTypeInfo(fieldReader)
+		fieldInfo, err := DeserializeTypeInfo(
+			fieldReader,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to deserialize STRUCT field %d type: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to deserialize STRUCT field %d type: %w",
+				i,
+				err,
+			)
 		}
 
-		entry, err := dukdb.NewStructEntry(fieldInfo, name)
+		entry, err := dukdb.NewStructEntry(
+			fieldInfo,
+			name,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create STRUCT field %d entry: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to create STRUCT field %d entry: %w",
+				i,
+				err,
+			)
 		}
 
 		entries[i] = entry
 	}
 
-	return dukdb.NewStructInfo(entries[0], entries[1:]...)
+	return dukdb.NewStructInfo(
+		entries[0],
+		entries[1:]...)
 }
 
 // DeserializeMap deserializes MAP type details from binary format.
@@ -290,41 +396,65 @@ func DeserializeStruct(r *BinaryReader) (dukdb.TypeInfo, error) {
 //
 // This function is called by DeserializeTypeInfo when it detects a LIST with a
 // STRUCT<key, value> child pattern.
-func DeserializeMap(r *BinaryReader) (dukdb.TypeInfo, error) {
+func DeserializeMap(
+	r *BinaryReader,
+) (dukdb.TypeInfo, error) {
 	// Read property 200: Child TypeInfo (will be a STRUCT)
 	var childBytes []byte
 	if err := r.ReadProperty(PropertyChildType, &childBytes); err != nil {
-		return nil, fmt.Errorf("failed to read MAP child type: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read MAP child type: %w",
+			err,
+		)
 	}
 
 	// Deserialize the STRUCT
 	childBuf := bytes.NewReader(childBytes)
 	childReader := NewBinaryReader(childBuf)
 	if err := childReader.Load(); err != nil {
-		return nil, fmt.Errorf("failed to load MAP child type properties: %w", err)
+		return nil, fmt.Errorf(
+			"failed to load MAP child type properties: %w",
+			err,
+		)
 	}
 
-	structInfo, err := DeserializeStruct(childReader)
+	structInfo, err := DeserializeStruct(
+		childReader,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize MAP struct: %w", err)
+		return nil, fmt.Errorf(
+			"failed to deserialize MAP struct: %w",
+			err,
+		)
 	}
 
 	// Extract key and value from STRUCT fields
 	structDetails, ok := structInfo.Details().(*dukdb.StructDetails)
 	if !ok {
-		return nil, fmt.Errorf("MAP child must be a STRUCT")
+		return nil, fmt.Errorf(
+			"MAP child must be a STRUCT",
+		)
 	}
 
 	if len(structDetails.Entries) != 2 {
-		return nil, fmt.Errorf("MAP STRUCT must have exactly 2 fields, got %d", len(structDetails.Entries))
+		return nil, fmt.Errorf(
+			"MAP STRUCT must have exactly 2 fields, got %d",
+			len(structDetails.Entries),
+		)
 	}
 
 	if structDetails.Entries[0].Name() != "key" {
-		return nil, fmt.Errorf("MAP STRUCT first field must be named 'key', got '%s'", structDetails.Entries[0].Name())
+		return nil, fmt.Errorf(
+			"MAP STRUCT first field must be named 'key', got '%s'",
+			structDetails.Entries[0].Name(),
+		)
 	}
 
 	if structDetails.Entries[1].Name() != "value" {
-		return nil, fmt.Errorf("MAP STRUCT second field must be named 'value', got '%s'", structDetails.Entries[1].Name())
+		return nil, fmt.Errorf(
+			"MAP STRUCT second field must be named 'value', got '%s'",
+			structDetails.Entries[1].Name(),
+		)
 	}
 
 	return dukdb.NewMapInfo(

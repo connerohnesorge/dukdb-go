@@ -159,7 +159,9 @@ const EntryHeaderSize = 8 + 8 + 1 // Size + Checksum + Type = 17 bytes
 var CRC64Table = crc64.MakeTable(crc64.ISO)
 
 // Serialize writes the file header to the writer.
-func (h *FileHeader) Serialize(w io.Writer) error {
+func (h *FileHeader) Serialize(
+	w io.Writer,
+) error {
 	if _, err := w.Write(h.Magic[:]); err != nil {
 		return err
 	}
@@ -167,25 +169,42 @@ func (h *FileHeader) Serialize(w io.Writer) error {
 		return err
 	}
 
-	return binary.Write(w, binary.LittleEndian, h.Iteration)
+	return binary.Write(
+		w,
+		binary.LittleEndian,
+		h.Iteration,
+	)
 }
 
 // Deserialize reads the file header from the reader.
-func (h *FileHeader) Deserialize(r io.Reader) error {
+func (h *FileHeader) Deserialize(
+	r io.Reader,
+) error {
 	if _, err := io.ReadFull(r, h.Magic[:]); err != nil {
 		return err
 	}
 	if h.Magic != MagicBytes {
-		return fmt.Errorf("invalid WAL magic: got %v, want %v", h.Magic, MagicBytes)
+		return fmt.Errorf(
+			"invalid WAL magic: got %v, want %v",
+			h.Magic,
+			MagicBytes,
+		)
 	}
 	if err := binary.Read(r, binary.LittleEndian, &h.Version); err != nil {
 		return err
 	}
 	if h.Version > CurrentVersion {
-		return fmt.Errorf("unsupported WAL version: %d", h.Version)
+		return fmt.Errorf(
+			"unsupported WAL version: %d",
+			h.Version,
+		)
 	}
 
-	return binary.Read(r, binary.LittleEndian, &h.Iteration)
+	return binary.Read(
+		r,
+		binary.LittleEndian,
+		&h.Iteration,
+	)
 }
 
 // writeString writes a length-prefixed string to the writer.

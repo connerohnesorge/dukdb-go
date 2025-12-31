@@ -33,7 +33,9 @@ func (m *mockPhysicalOperator) GetTypes() []dukdb.TypeInfo {
 	return m.types
 }
 
-func TestPhysicalFilter_BasicFilter(t *testing.T) {
+func TestPhysicalFilter_BasicFilter(
+	t *testing.T,
+) {
 	// Create a simple table with integers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -43,7 +45,9 @@ func TestPhysicalFilter_BasicFilter(t *testing.T) {
 
 	// Create mock child operator
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -73,7 +77,13 @@ func TestPhysicalFilter_BasicFilter(t *testing.T) {
 	}
 
 	// Create filter operator
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	// Get filtered results
 	resultChunk, err := filterOp.Next()
@@ -87,7 +97,14 @@ func TestPhysicalFilter_BasicFilter(t *testing.T) {
 	for i := 0; i < resultChunk.Count(); i++ {
 		val := resultChunk.GetValue(i, 0)
 		expected := int32(6 + i)
-		assert.Equal(t, expected, val, "Row %d should have value %d", i, expected)
+		assert.Equal(
+			t,
+			expected,
+			val,
+			"Row %d should have value %d",
+			i,
+			expected,
+		)
 	}
 
 	// Next call should return nil (no more data)
@@ -107,7 +124,9 @@ func TestPhysicalFilter_WithNulls(t *testing.T) {
 	chunk.AppendRow([]any{int32(5)})
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -134,7 +153,13 @@ func TestPhysicalFilter_WithNulls(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	resultChunk, err := filterOp.Next()
 	require.NoError(t, err)
@@ -142,11 +167,21 @@ func TestPhysicalFilter_WithNulls(t *testing.T) {
 
 	// Should have 2 rows (3, 5) - NULLs are filtered out
 	assert.Equal(t, 2, resultChunk.Count())
-	assert.Equal(t, int32(3), resultChunk.GetValue(0, 0))
-	assert.Equal(t, int32(5), resultChunk.GetValue(1, 0))
+	assert.Equal(
+		t,
+		int32(3),
+		resultChunk.GetValue(0, 0),
+	)
+	assert.Equal(
+		t,
+		int32(5),
+		resultChunk.GetValue(1, 0),
+	)
 }
 
-func TestPhysicalFilter_AllRowsMatch(t *testing.T) {
+func TestPhysicalFilter_AllRowsMatch(
+	t *testing.T,
+) {
 	// Create table: [10, 20, 30, 40, 50]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -155,7 +190,9 @@ func TestPhysicalFilter_AllRowsMatch(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -182,7 +219,13 @@ func TestPhysicalFilter_AllRowsMatch(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	resultChunk, err := filterOp.Next()
 	require.NoError(t, err)
@@ -192,11 +235,17 @@ func TestPhysicalFilter_AllRowsMatch(t *testing.T) {
 	assert.Equal(t, 5, resultChunk.Count())
 	for i := 0; i < resultChunk.Count(); i++ {
 		expected := int32((i + 1) * 10)
-		assert.Equal(t, expected, resultChunk.GetValue(i, 0))
+		assert.Equal(
+			t,
+			expected,
+			resultChunk.GetValue(i, 0),
+		)
 	}
 }
 
-func TestPhysicalFilter_NoRowsMatch(t *testing.T) {
+func TestPhysicalFilter_NoRowsMatch(
+	t *testing.T,
+) {
 	// Create table: [1, 2, 3, 4, 5]
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 	chunk := storage.NewDataChunk(types)
@@ -205,7 +254,9 @@ func TestPhysicalFilter_NoRowsMatch(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -232,7 +283,13 @@ func TestPhysicalFilter_NoRowsMatch(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	// Should return nil (no matching rows in any chunk)
 	resultChunk, err := filterOp.Next()
@@ -240,7 +297,9 @@ func TestPhysicalFilter_NoRowsMatch(t *testing.T) {
 	assert.Nil(t, resultChunk)
 }
 
-func TestPhysicalFilter_MultipleChunks(t *testing.T) {
+func TestPhysicalFilter_MultipleChunks(
+	t *testing.T,
+) {
 	// Create two chunks
 	types := []dukdb.Type{dukdb.TYPE_INTEGER}
 
@@ -255,10 +314,15 @@ func TestPhysicalFilter_MultipleChunks(t *testing.T) {
 	}
 
 	typeInfos := make([]dukdb.TypeInfo, 1)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
 	mockChild := &mockPhysicalOperator{
-		chunks: []*storage.DataChunk{chunk1, chunk2},
-		types:  typeInfos,
+		chunks: []*storage.DataChunk{
+			chunk1,
+			chunk2,
+		},
+		types: typeInfos,
 	}
 
 	// Filter: x > 3 (should match 4,5 from chunk1 and 6,7,8,9,10 from chunk2)
@@ -282,19 +346,33 @@ func TestPhysicalFilter_MultipleChunks(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	// Get first result chunk (from chunk1)
 	resultChunk1, err := filterOp.Next()
 	require.NoError(t, err)
 	require.NotNil(t, resultChunk1)
-	assert.Equal(t, 2, resultChunk1.Count()) // 4, 5
+	assert.Equal(
+		t,
+		2,
+		resultChunk1.Count(),
+	) // 4, 5
 
 	// Get second result chunk (from chunk2)
 	resultChunk2, err := filterOp.Next()
 	require.NoError(t, err)
 	require.NotNil(t, resultChunk2)
-	assert.Equal(t, 5, resultChunk2.Count()) // 6, 7, 8, 9, 10
+	assert.Equal(
+		t,
+		5,
+		resultChunk2.Count(),
+	) // 6, 7, 8, 9, 10
 
 	// No more chunks
 	resultChunk3, err := filterOp.Next()
@@ -303,12 +381,19 @@ func TestPhysicalFilter_MultipleChunks(t *testing.T) {
 }
 
 func TestPhysicalFilter_GetTypes(t *testing.T) {
-	types := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
+	types := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
 	chunk := storage.NewDataChunk(types)
 
 	typeInfos := make([]dukdb.TypeInfo, 2)
-	typeInfos[0] = &basicTypeInfo{typ: dukdb.TYPE_INTEGER}
-	typeInfos[1] = &basicTypeInfo{typ: dukdb.TYPE_VARCHAR}
+	typeInfos[0] = &basicTypeInfo{
+		typ: dukdb.TYPE_INTEGER,
+	}
+	typeInfos[1] = &basicTypeInfo{
+		typ: dukdb.TYPE_VARCHAR,
+	}
 	mockChild := &mockPhysicalOperator{
 		chunks: []*storage.DataChunk{chunk},
 		types:  typeInfos,
@@ -327,11 +412,25 @@ func TestPhysicalFilter_GetTypes(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	filterOp := NewPhysicalFilterOperator(mockChild, nil, predicate, exec, ctx)
+	filterOp := NewPhysicalFilterOperator(
+		mockChild,
+		nil,
+		predicate,
+		exec,
+		ctx,
+	)
 
 	// GetTypes should return same types as child
 	resultTypes := filterOp.GetTypes()
 	require.Len(t, resultTypes, 2)
-	assert.Equal(t, dukdb.TYPE_INTEGER, resultTypes[0].InternalType())
-	assert.Equal(t, dukdb.TYPE_VARCHAR, resultTypes[1].InternalType())
+	assert.Equal(
+		t,
+		dukdb.TYPE_INTEGER,
+		resultTypes[0].InternalType(),
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		resultTypes[1].InternalType(),
+	)
 }

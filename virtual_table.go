@@ -59,5 +59,7 @@ type VirtualTableRegistry interface {
 
 	// GetVirtualTable returns a virtual table by name.
 	// Returns nil and false if not found.
-	GetVirtualTable(name string) (VirtualTable, bool)
+	GetVirtualTable(
+		name string,
+	) (VirtualTable, bool)
 }

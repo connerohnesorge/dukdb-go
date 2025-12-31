@@ -64,7 +64,9 @@ func NewCheckpointManager(
 }
 
 // SetThreshold sets the auto-checkpoint threshold in bytes.
-func (cm *CheckpointManager) SetThreshold(bytes uint64) {
+func (cm *CheckpointManager) SetThreshold(
+	bytes uint64,
+) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.threshold = bytes
@@ -80,11 +82,17 @@ func (cm *CheckpointManager) Threshold() uint64 {
 
 // Checkpoint performs a checkpoint, writing all data to a new WAL file.
 func (cm *CheckpointManager) Checkpoint() error {
-	return cm.CheckpointWithOptions(CheckpointFull, WALDelete)
+	return cm.CheckpointWithOptions(
+		CheckpointFull,
+		WALDelete,
+	)
 }
 
 // CheckpointWithOptions performs a checkpoint with the specified options.
-func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAction WALAction) error {
+func (cm *CheckpointManager) CheckpointWithOptions(
+	cpType CheckpointType,
+	walAction WALAction,
+) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -92,21 +100,36 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 	iteration := cm.wal.Iteration()
 
 	// Write checkpoint marker to current WAL
-	entry := NewCheckpointEntry(iteration+1, cm.clock.Now())
+	entry := NewCheckpointEntry(
+		iteration+1,
+		cm.clock.Now(),
+	)
 	if err := cm.wal.WriteEntry(entry); err != nil {
-		return fmt.Errorf("failed to write checkpoint entry: %w", err)
+		return fmt.Errorf(
+			"failed to write checkpoint entry: %w",
+			err,
+		)
 	}
 
 	// Sync current WAL
 	if err := cm.wal.Sync(); err != nil {
-		return fmt.Errorf("failed to sync WAL: %w", err)
+		return fmt.Errorf(
+			"failed to sync WAL: %w",
+			err,
+		)
 	}
 
 	// Create checkpoint WAL file
 	ckptPath := cm.walPath + ".ckpt"
-	ckptWriter, err := NewWriter(ckptPath, cm.clock)
+	ckptWriter, err := NewWriter(
+		ckptPath,
+		cm.clock,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create checkpoint WAL: %w", err)
+		return fmt.Errorf(
+			"failed to create checkpoint WAL: %w",
+			err,
+		)
 	}
 
 	// Write all catalog entries
@@ -114,7 +137,10 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
-		return fmt.Errorf("failed to write catalog checkpoint: %w", err)
+		return fmt.Errorf(
+			"failed to write catalog checkpoint: %w",
+			err,
+		)
 	}
 
 	// Write all data entries
@@ -122,16 +148,25 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
-		return fmt.Errorf("failed to write data checkpoint: %w", err)
+		return fmt.Errorf(
+			"failed to write data checkpoint: %w",
+			err,
+		)
 	}
 
 	// Write checkpoint complete marker
-	completeEntry := NewCheckpointEntry(iteration+1, cm.clock.Now())
+	completeEntry := NewCheckpointEntry(
+		iteration+1,
+		cm.clock.Now(),
+	)
 	if err := ckptWriter.WriteEntry(completeEntry); err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
-		return fmt.Errorf("failed to write checkpoint complete entry: %w", err)
+		return fmt.Errorf(
+			"failed to write checkpoint complete entry: %w",
+			err,
+		)
 	}
 
 	// Sync checkpoint WAL
@@ -139,49 +174,77 @@ func (cm *CheckpointManager) CheckpointWithOptions(cpType CheckpointType, walAct
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
-		return fmt.Errorf("failed to sync checkpoint WAL: %w", err)
+		return fmt.Errorf(
+			"failed to sync checkpoint WAL: %w",
+			err,
+		)
 	}
 
 	// Close checkpoint writer
 	if err := ckptWriter.Close(); err != nil {
 		_ = os.Remove(ckptPath)
 
-		return fmt.Errorf("failed to close checkpoint WAL: %w", err)
+		return fmt.Errorf(
+			"failed to close checkpoint WAL: %w",
+			err,
+		)
 	}
 
 	// Sync directory to ensure file is durable
 	if err := syncDir(filepath.Dir(cm.walPath)); err != nil {
-		return fmt.Errorf("failed to sync directory: %w", err)
+		return fmt.Errorf(
+			"failed to sync directory: %w",
+			err,
+		)
 	}
 
 	// Handle WAL action
 	if walAction == WALDelete {
 		// Close current WAL
 		if err := cm.wal.Close(); err != nil {
-			return fmt.Errorf("failed to close WAL: %w", err)
+			return fmt.Errorf(
+				"failed to close WAL: %w",
+				err,
+			)
 		}
 
 		// Remove old WAL
-		if err := os.Remove(cm.walPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove old WAL: %w", err)
+		if err := os.Remove(cm.walPath); err != nil &&
+			!os.IsNotExist(err) {
+			return fmt.Errorf(
+				"failed to remove old WAL: %w",
+				err,
+			)
 		}
 
 		// Rename checkpoint WAL to main WAL
 		if err := os.Rename(ckptPath, cm.walPath); err != nil {
-			return fmt.Errorf("failed to rename checkpoint WAL: %w", err)
+			return fmt.Errorf(
+				"failed to rename checkpoint WAL: %w",
+				err,
+			)
 		}
 
 		// Reopen WAL
-		newWal, err := NewWriter(cm.walPath, cm.clock)
+		newWal, err := NewWriter(
+			cm.walPath,
+			cm.clock,
+		)
 		if err != nil {
-			return fmt.Errorf("failed to reopen WAL: %w", err)
+			return fmt.Errorf(
+				"failed to reopen WAL: %w",
+				err,
+			)
 		}
 		cm.wal = newWal
 	}
 
 	// Sync directory again after rename
 	if err := syncDir(filepath.Dir(cm.walPath)); err != nil {
-		return fmt.Errorf("failed to sync directory after rename: %w", err)
+		return fmt.Errorf(
+			"failed to sync directory after rename: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -202,14 +265,19 @@ func (cm *CheckpointManager) MaybeAutoCheckpoint() error {
 }
 
 // writeCatalogCheckpoint writes all catalog entries to the checkpoint WAL.
-func (cm *CheckpointManager) writeCatalogCheckpoint(w *Writer) error {
+func (cm *CheckpointManager) writeCatalogCheckpoint(
+	w *Writer,
+) error {
 	// Write schemas
 	// Note: For now, we only support the "main" schema
 	// In the future, we should iterate over all schemas
 
 	// Write tables
 	for _, tableDef := range cm.catalog.ListTables() {
-		columns := make([]ColumnDef, len(tableDef.Columns))
+		columns := make(
+			[]ColumnDef,
+			len(tableDef.Columns),
+		)
 		for i, col := range tableDef.Columns {
 			columns[i] = ColumnDef{
 				Name:       col.Name,
@@ -226,7 +294,10 @@ func (cm *CheckpointManager) writeCatalogCheckpoint(w *Writer) error {
 		}
 
 		if err := w.WriteEntry(entry); err != nil {
-			return fmt.Errorf("failed to write table entry: %w", err)
+			return fmt.Errorf(
+				"failed to write table entry: %w",
+				err,
+			)
 		}
 	}
 
@@ -234,32 +305,56 @@ func (cm *CheckpointManager) writeCatalogCheckpoint(w *Writer) error {
 }
 
 // writeDataCheckpoint writes all data entries to the checkpoint WAL.
-func (cm *CheckpointManager) writeDataCheckpoint(w *Writer) error {
+func (cm *CheckpointManager) writeDataCheckpoint(
+	w *Writer,
+) error {
 	// Start a pseudo-transaction for the checkpoint
-	txnID := uint64(0) // Checkpoint transaction ID
+	txnID := uint64(
+		0,
+	) // Checkpoint transaction ID
 
-	beginEntry := NewTxnBeginEntry(txnID, cm.clock.Now())
+	beginEntry := NewTxnBeginEntry(
+		txnID,
+		cm.clock.Now(),
+	)
 	if err := w.WriteEntry(beginEntry); err != nil {
-		return fmt.Errorf("failed to write txn begin entry: %w", err)
+		return fmt.Errorf(
+			"failed to write txn begin entry: %w",
+			err,
+		)
 	}
 
 	// Write all table data
 	for name, table := range cm.storage.Tables() {
 		if err := cm.writeTableData(w, name, table, txnID); err != nil {
-			return fmt.Errorf("failed to write table data: %w", err)
+			return fmt.Errorf(
+				"failed to write table data: %w",
+				err,
+			)
 		}
 	}
 
-	commitEntry := NewTxnCommitEntry(txnID, cm.clock.Now())
+	commitEntry := NewTxnCommitEntry(
+		txnID,
+		cm.clock.Now(),
+	)
 	if err := w.WriteEntry(commitEntry); err != nil {
-		return fmt.Errorf("failed to write txn commit entry: %w", err)
+		return fmt.Errorf(
+			"failed to write txn commit entry: %w",
+			err,
+		)
 	}
 
 	return nil
 }
 
 // writeTableData writes all data for a table to the checkpoint WAL.
-func (cm *CheckpointManager) writeTableData(w *Writer, name string, table *storage.Table, txnID uint64) error {
+func (cm *CheckpointManager) writeTableData(
+	w *Writer,
+	name string,
+	table *storage.Table,
+	txnID uint64,
+) error {
 	// Scan all rows in the table
 	scanner := table.Scan()
 	var allRows [][]any
@@ -272,9 +367,15 @@ func (cm *CheckpointManager) writeTableData(w *Writer, name string, table *stora
 
 		// Extract rows from chunk
 		for row := 0; row < chunk.Count(); row++ {
-			values := make([]any, chunk.ColumnCount())
+			values := make(
+				[]any,
+				chunk.ColumnCount(),
+			)
 			for col := 0; col < chunk.ColumnCount(); col++ {
-				values[col] = chunk.GetValue(row, col)
+				values[col] = chunk.GetValue(
+					row,
+					col,
+				)
 			}
 			allRows = append(allRows, values)
 		}
@@ -286,9 +387,17 @@ func (cm *CheckpointManager) writeTableData(w *Writer, name string, table *stora
 
 	// Write insert entry with all rows
 	// Note: For large tables, we should batch this into multiple entries
-	entry := NewInsertEntry(txnID, "main", name, allRows)
+	entry := NewInsertEntry(
+		txnID,
+		"main",
+		name,
+		allRows,
+	)
 	if err := w.WriteEntry(entry); err != nil {
-		return fmt.Errorf("failed to write insert entry: %w", err)
+		return fmt.Errorf(
+			"failed to write insert entry: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -322,11 +431,13 @@ func (cm *CheckpointManager) SetWAL(wal *Writer) {
 }
 
 // Compile-time check that InsertEntry implements TxnEntry
-var _ TxnEntry = (*InsertEntry)(nil)
-var _ TxnEntry = (*DeleteEntry)(nil)
-var _ TxnEntry = (*UpdateEntry)(nil)
-var _ TxnEntry = (*TxnBeginEntry)(nil)
-var _ TxnEntry = (*TxnCommitEntry)(nil)
+var (
+	_ TxnEntry = (*InsertEntry)(nil)
+	_ TxnEntry = (*DeleteEntry)(nil)
+	_ TxnEntry = (*UpdateEntry)(nil)
+	_ TxnEntry = (*TxnBeginEntry)(nil)
+	_ TxnEntry = (*TxnCommitEntry)(nil)
+)
 
 // Ensure dukdb import is used
 var _ dukdb.Type

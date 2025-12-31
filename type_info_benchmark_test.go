@@ -15,12 +15,15 @@ func BenchmarkNewTypeInfo(b *testing.B) {
 		}
 	})
 
-	b.Run("uncached/first_call", func(b *testing.B) {
-		for range b.N {
-			ClearTypeInfoCache()
-			_, _ = NewTypeInfo(TYPE_INTEGER)
-		}
-	})
+	b.Run(
+		"uncached/first_call",
+		func(b *testing.B) {
+			for range b.N {
+				ClearTypeInfoCache()
+				_, _ = NewTypeInfo(TYPE_INTEGER)
+			}
+		},
+	)
 
 	b.Run("VARCHAR", func(b *testing.B) {
 		ClearTypeInfoCache()
@@ -67,7 +70,17 @@ func BenchmarkNewEnumInfo(b *testing.B) {
 	})
 
 	b.Run("10_values", func(b *testing.B) {
-		values := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}
+		values := []string{
+			"a",
+			"b",
+			"c",
+			"d",
+			"e",
+			"f",
+			"g",
+			"h",
+			"i",
+		}
 		for range b.N {
 			_, _ = NewEnumInfo("first", values...)
 		}
@@ -76,7 +89,9 @@ func BenchmarkNewEnumInfo(b *testing.B) {
 	b.Run("100_values", func(b *testing.B) {
 		values := make([]string, 99)
 		for i := range values {
-			values[i] = string(rune('a' + (i % 26)))
+			values[i] = string(
+				rune('a' + (i % 26)),
+			)
 		}
 		b.ResetTimer()
 
@@ -135,20 +150,34 @@ func BenchmarkNewStructInfo(b *testing.B) {
 
 	b.Run("2_fields", func(b *testing.B) {
 		for range b.N {
-			entry1, _ := NewStructEntry(intInfo, "id")
-			entry2, _ := NewStructEntry(strInfo, "name")
+			entry1, _ := NewStructEntry(
+				intInfo,
+				"id",
+			)
+			entry2, _ := NewStructEntry(
+				strInfo,
+				"name",
+			)
 			_, _ = NewStructInfo(entry1, entry2)
 		}
 	})
 
 	b.Run("10_fields", func(b *testing.B) {
 		for range b.N {
-			entry1, _ := NewStructEntry(intInfo, "f1")
+			entry1, _ := NewStructEntry(
+				intInfo,
+				"f1",
+			)
 			entries := make([]StructEntry, 9)
 			for j := range 9 {
-				entries[j], _ = NewStructEntry(intInfo, string(rune('a'+j)))
+				entries[j], _ = NewStructEntry(
+					intInfo,
+					string(rune('a'+j)),
+				)
 			}
-			_, _ = NewStructInfo(entry1, entries...)
+			_, _ = NewStructInfo(
+				entry1,
+				entries...)
 		}
 	})
 }
@@ -172,7 +201,11 @@ func BenchmarkNewUnionInfo(b *testing.B) {
 	b.Run("3_members", func(b *testing.B) {
 		for range b.N {
 			_, _ = NewUnionInfo(
-				[]TypeInfo{intInfo, strInfo, boolInfo},
+				[]TypeInfo{
+					intInfo,
+					strInfo,
+					boolInfo,
+				},
 				[]string{"num", "str", "flag"},
 			)
 		}
@@ -202,7 +235,17 @@ func BenchmarkSQLType(b *testing.B) {
 	})
 
 	b.Run("ENUM_10_values", func(b *testing.B) {
-		values := []string{"b", "c", "d", "e", "f", "g", "h", "i", "j"}
+		values := []string{
+			"b",
+			"c",
+			"d",
+			"e",
+			"f",
+			"g",
+			"h",
+			"i",
+			"j",
+		}
 		info, _ := NewEnumInfo("a", values...)
 		b.ResetTimer()
 
@@ -221,17 +264,22 @@ func BenchmarkSQLType(b *testing.B) {
 		}
 	})
 
-	b.Run("nested_LIST_3_deep", func(b *testing.B) {
-		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
-		list1, _ := NewListInfo(intInfo)
-		list2, _ := NewListInfo(list1)
-		info, _ := NewListInfo(list2)
-		b.ResetTimer()
+	b.Run(
+		"nested_LIST_3_deep",
+		func(b *testing.B) {
+			intInfo, _ := NewTypeInfo(
+				TYPE_INTEGER,
+			)
+			list1, _ := NewListInfo(intInfo)
+			list2, _ := NewListInfo(list1)
+			info, _ := NewListInfo(list2)
+			b.ResetTimer()
 
-		for range b.N {
-			_ = info.SQLType()
-		}
-	})
+			for range b.N {
+				_ = info.SQLType()
+			}
+		},
+	)
 
 	b.Run("STRUCT_5_fields", func(b *testing.B) {
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
@@ -240,7 +288,13 @@ func BenchmarkSQLType(b *testing.B) {
 		entry3, _ := NewStructEntry(intInfo, "c")
 		entry4, _ := NewStructEntry(intInfo, "d")
 		entry5, _ := NewStructEntry(intInfo, "e")
-		info, _ := NewStructInfo(entry1, entry2, entry3, entry4, entry5)
+		info, _ := NewStructInfo(
+			entry1,
+			entry2,
+			entry3,
+			entry4,
+			entry5,
+		)
 		b.ResetTimer()
 
 		for range b.N {
@@ -252,9 +306,18 @@ func BenchmarkSQLType(b *testing.B) {
 		// MAP[VARCHAR, LIST[STRUCT(id INTEGER, name VARCHAR)]]
 		intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 		strInfo, _ := NewTypeInfo(TYPE_VARCHAR)
-		idEntry, _ := NewStructEntry(intInfo, "id")
-		nameEntry, _ := NewStructEntry(strInfo, "name")
-		structInfo, _ := NewStructInfo(idEntry, nameEntry)
+		idEntry, _ := NewStructEntry(
+			intInfo,
+			"id",
+		)
+		nameEntry, _ := NewStructEntry(
+			strInfo,
+			"name",
+		)
+		structInfo, _ := NewStructInfo(
+			idEntry,
+			nameEntry,
+		)
 		listInfo, _ := NewListInfo(structInfo)
 		info, _ := NewMapInfo(strInfo, listInfo)
 		b.ResetTimer()
@@ -286,7 +349,17 @@ func BenchmarkDetails(b *testing.B) {
 	})
 
 	b.Run("ENUM_10_values", func(b *testing.B) {
-		values := []string{"b", "c", "d", "e", "f", "g", "h", "i", "j"}
+		values := []string{
+			"b",
+			"c",
+			"d",
+			"e",
+			"f",
+			"g",
+			"h",
+			"i",
+			"j",
+		}
 		info, _ := NewEnumInfo("a", values...)
 		b.ResetTimer()
 
@@ -300,9 +373,14 @@ func BenchmarkDetails(b *testing.B) {
 		entry1, _ := NewStructEntry(intInfo, "a")
 		entries := make([]StructEntry, 9)
 		for j := range 9 {
-			entries[j], _ = NewStructEntry(intInfo, string(rune('b'+j)))
+			entries[j], _ = NewStructEntry(
+				intInfo,
+				string(rune('b'+j)),
+			)
 		}
-		info, _ := NewStructInfo(entry1, entries...)
+		info, _ := NewStructInfo(
+			entry1,
+			entries...)
 		b.ResetTimer()
 
 		for range b.N {
@@ -312,7 +390,9 @@ func BenchmarkDetails(b *testing.B) {
 }
 
 // BenchmarkTypeInfoCacheParallel benchmarks cache access under contention.
-func BenchmarkTypeInfoCacheParallel(b *testing.B) {
+func BenchmarkTypeInfoCacheParallel(
+	b *testing.B,
+) {
 	ClearTypeInfoCache()
 	// Warm the cache
 	NewTypeInfo(TYPE_INTEGER)

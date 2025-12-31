@@ -10,7 +10,9 @@ type VirtualTableDef struct {
 }
 
 // NewVirtualTableDef creates a VirtualTableDef from a dukdb.VirtualTable.
-func NewVirtualTableDef(vt dukdb.VirtualTable) *VirtualTableDef {
+func NewVirtualTableDef(
+	vt dukdb.VirtualTable,
+) *VirtualTableDef {
 	schema := vt.Schema()
 	columns := make([]*ColumnDef, len(schema))
 	for i, col := range schema {
@@ -49,7 +51,9 @@ func (v *VirtualTableDef) Columns() []*ColumnDef {
 }
 
 // GetColumn returns a column by name.
-func (v *VirtualTableDef) GetColumn(name string) (*ColumnDef, bool) {
+func (v *VirtualTableDef) GetColumn(
+	name string,
+) (*ColumnDef, bool) {
 	for _, col := range v.columns {
 		if col.Name == name {
 			return col, true
@@ -60,7 +64,9 @@ func (v *VirtualTableDef) GetColumn(name string) (*ColumnDef, bool) {
 }
 
 // GetColumnIndex returns the index of a column by name.
-func (v *VirtualTableDef) GetColumnIndex(name string) (int, bool) {
+func (v *VirtualTableDef) GetColumnIndex(
+	name string,
+) (int, bool) {
 	for i, col := range v.columns {
 		if col.Name == name {
 			return i, true

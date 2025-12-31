@@ -56,16 +56,25 @@ func CalculateChecksum(data []byte) uint64 {
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-func WriteWithChecksum(w io.Writer, data []byte) error {
+func WriteWithChecksum(
+	w io.Writer,
+	data []byte,
+) error {
 	// Write data
 	if _, err := w.Write(data); err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
+		return fmt.Errorf(
+			"failed to write data: %w",
+			err,
+		)
 	}
 
 	// Calculate and write checksum
 	checksum := CalculateChecksum(data)
 	if err := binary.Write(w, ByteOrder, checksum); err != nil {
-		return fmt.Errorf("failed to write checksum: %w", err)
+		return fmt.Errorf(
+			"failed to write checksum: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -98,24 +107,37 @@ func WriteWithChecksum(w io.Writer, data []byte) error {
 //	    }
 //	    log.Fatal(err)
 //	}
-func ReadAndVerifyChecksum(r io.Reader, expectedLen int) ([]byte, error) {
+func ReadAndVerifyChecksum(
+	r io.Reader,
+	expectedLen int,
+) ([]byte, error) {
 	// Read data
 	data := make([]byte, expectedLen)
 	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, fmt.Errorf("failed to read data: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read data: %w",
+			err,
+		)
 	}
 
 	// Read checksum
 	var storedChecksum uint64
 	if err := binary.Read(r, ByteOrder, &storedChecksum); err != nil {
-		return nil, fmt.Errorf("failed to read checksum: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read checksum: %w",
+			err,
+		)
 	}
 
 	// Verify checksum
 	calculatedChecksum := CalculateChecksum(data)
 	if calculatedChecksum != storedChecksum {
-		return nil, fmt.Errorf("%w: expected 0x%x, got 0x%x",
-			ErrChecksumMismatch, storedChecksum, calculatedChecksum)
+		return nil, fmt.Errorf(
+			"%w: expected 0x%x, got 0x%x",
+			ErrChecksumMismatch,
+			storedChecksum,
+			calculatedChecksum,
+		)
 	}
 
 	return data, nil

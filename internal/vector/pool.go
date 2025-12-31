@@ -50,7 +50,10 @@ func NewVectorPool() *VectorPool {
 
 // Get retrieves a vector from the pool or creates a new one.
 // The returned vector has a cleared validity mask (all NULL).
-func (vp *VectorPool) Get(typ VectorType, capacity int) *PooledVector {
+func (vp *VectorPool) Get(
+	typ VectorType,
+	capacity int,
+) *PooledVector {
 	capacityU64 := uint64(capacity)
 
 	// Get or create pool for this type
@@ -67,7 +70,9 @@ func (vp *VectorPool) Get(typ VectorType, capacity int) *PooledVector {
 			pool = &sync.Pool{
 				New: func() any {
 					return &PooledVector{
-						Mask:     NewValidityMaskEmpty(capacityU64),
+						Mask: NewValidityMaskEmpty(
+							capacityU64,
+						),
 						typ:      typ,
 						capacity: capacityU64,
 					}
@@ -89,7 +94,9 @@ func (vp *VectorPool) Get(typ VectorType, capacity int) *PooledVector {
 
 	// Create new vector with correct capacity
 	return &PooledVector{
-		Mask:     NewValidityMaskEmpty(capacityU64),
+		Mask: NewValidityMaskEmpty(
+			capacityU64,
+		),
 		typ:      typ,
 		capacity: capacityU64,
 	}
@@ -119,7 +126,9 @@ func (vp *VectorPool) Put(v *PooledVector) {
 			pool = &sync.Pool{
 				New: func() any {
 					return &PooledVector{
-						Mask:     NewValidityMaskEmpty(v.capacity),
+						Mask: NewValidityMaskEmpty(
+							v.capacity,
+						),
 						typ:      v.typ,
 						capacity: v.capacity,
 					}

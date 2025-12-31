@@ -88,7 +88,10 @@ func (s *Storage) Tables() map[string]*Table {
 }
 
 // ImportTable imports a table into storage
-func (s *Storage) ImportTable(name string, table *Table) error {
+func (s *Storage) ImportTable(
+	name string,
+	table *Table,
+) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

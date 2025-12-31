@@ -214,8 +214,12 @@ func TestDetectStatementType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detectStatementType(tt.sql)
 			if result != tt.expected {
-				t.Errorf("detectStatementType(%q) = %v, want %v",
-					tt.sql, result, tt.expected)
+				t.Errorf(
+					"detectStatementType(%q) = %v, want %v",
+					tt.sql,
+					result,
+					tt.expected,
+				)
 			}
 		})
 	}
@@ -273,8 +277,12 @@ func TestExtractFirstKeyword(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := extractFirstKeyword(tt.sql)
 			if result != tt.expected {
-				t.Errorf("extractFirstKeyword(%q) = %q, want %q",
-					tt.sql, result, tt.expected)
+				t.Errorf(
+					"extractFirstKeyword(%q) = %q, want %q",
+					tt.sql,
+					result,
+					tt.expected,
+				)
 			}
 		})
 	}

@@ -23,30 +23,45 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	require.NotNil(t, conn)
 
 	// Create a table in the catalog
-	tableDef := catalog.NewTableDef("users", []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
-	})
+	tableDef := catalog.NewTableDef(
+		"users",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"id",
+				dukdb.TYPE_INTEGER,
+			),
+			catalog.NewColumnDef(
+				"name",
+				dukdb.TYPE_VARCHAR,
+			),
+		},
+	)
 
 	err = engine1.Catalog().CreateTable(tableDef)
 	require.NoError(t, err)
 
 	// Create table in storage
-	_, err = engine1.Storage().CreateTable("users", []dukdb.Type{
-		dukdb.TYPE_INTEGER,
-		dukdb.TYPE_VARCHAR,
-	})
+	_, err = engine1.Storage().
+		CreateTable("users", []dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		})
 	require.NoError(t, err)
 
 	// Add some data
-	table, ok := engine1.Storage().GetTable("users")
+	table, ok := engine1.Storage().
+		GetTable("users")
 	require.True(t, ok)
 
-	err = table.AppendRow([]any{int32(1), "Alice"})
+	err = table.AppendRow(
+		[]any{int32(1), "Alice"},
+	)
 	require.NoError(t, err)
 	err = table.AppendRow([]any{int32(2), "Bob"})
 	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(3), "Charlie"})
+	err = table.AppendRow(
+		[]any{int32(3), "Charlie"},
+	)
 	require.NoError(t, err)
 
 	// Close engine (should persist to file)
@@ -61,17 +76,35 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	require.NotNil(t, conn2)
 
 	// Verify catalog
-	tableDef2, ok := engine2.Catalog().GetTable("users")
+	tableDef2, ok := engine2.Catalog().
+		GetTable("users")
 	require.True(t, ok)
 	assert.Equal(t, "users", tableDef2.Name)
 	assert.Len(t, tableDef2.Columns, 2)
-	assert.Equal(t, "id", tableDef2.Columns[0].Name)
-	assert.Equal(t, dukdb.TYPE_INTEGER, tableDef2.Columns[0].Type)
-	assert.Equal(t, "name", tableDef2.Columns[1].Name)
-	assert.Equal(t, dukdb.TYPE_VARCHAR, tableDef2.Columns[1].Type)
+	assert.Equal(
+		t,
+		"id",
+		tableDef2.Columns[0].Name,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_INTEGER,
+		tableDef2.Columns[0].Type,
+	)
+	assert.Equal(
+		t,
+		"name",
+		tableDef2.Columns[1].Name,
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		tableDef2.Columns[1].Type,
+	)
 
 	// Verify storage
-	table2, ok := engine2.Storage().GetTable("users")
+	table2, ok := engine2.Storage().
+		GetTable("users")
 	require.True(t, ok)
 	assert.Equal(t, int64(3), table2.RowCount())
 
@@ -82,19 +115,37 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	assert.Equal(t, 3, chunk.Count())
 
 	// Verify row values
-	assert.Equal(t, int32(1), chunk.GetValue(0, 0))
+	assert.Equal(
+		t,
+		int32(1),
+		chunk.GetValue(0, 0),
+	)
 	assert.Equal(t, "Alice", chunk.GetValue(0, 1))
-	assert.Equal(t, int32(2), chunk.GetValue(1, 0))
+	assert.Equal(
+		t,
+		int32(2),
+		chunk.GetValue(1, 0),
+	)
 	assert.Equal(t, "Bob", chunk.GetValue(1, 1))
-	assert.Equal(t, int32(3), chunk.GetValue(2, 0))
-	assert.Equal(t, "Charlie", chunk.GetValue(2, 1))
+	assert.Equal(
+		t,
+		int32(3),
+		chunk.GetValue(2, 0),
+	)
+	assert.Equal(
+		t,
+		"Charlie",
+		chunk.GetValue(2, 1),
+	)
 
 	// Close second engine
 	err = engine2.Close()
 	require.NoError(t, err)
 }
 
-func TestMemoryDatabaseNotPersisted(t *testing.T) {
+func TestMemoryDatabaseNotPersisted(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	engine := NewEngine()
@@ -105,13 +156,20 @@ func TestMemoryDatabaseNotPersisted(t *testing.T) {
 	require.NotNil(t, conn)
 
 	// Create table and add data
-	tableDef := catalog.NewTableDef("test", []*catalog.ColumnDef{
-		catalog.NewColumnDef("x", dukdb.TYPE_INTEGER),
-	})
+	tableDef := catalog.NewTableDef(
+		"test",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"x",
+				dukdb.TYPE_INTEGER,
+			),
+		},
+	)
 	err = engine.Catalog().CreateTable(tableDef)
 	require.NoError(t, err)
 
-	_, err = engine.Storage().CreateTable("test", []dukdb.Type{dukdb.TYPE_INTEGER})
+	_, err = engine.Storage().
+		CreateTable("test", []dukdb.Type{dukdb.TYPE_INTEGER})
 	require.NoError(t, err)
 
 	// Close engine - should not try to persist
@@ -171,10 +229,19 @@ func TestMultipleTablesPersistence(t *testing.T) {
 		{
 			name: "users",
 			columns: []*catalog.ColumnDef{
-				catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-				catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+				catalog.NewColumnDef(
+					"id",
+					dukdb.TYPE_INTEGER,
+				),
+				catalog.NewColumnDef(
+					"name",
+					dukdb.TYPE_VARCHAR,
+				),
 			},
-			types: []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+			types: []dukdb.Type{
+				dukdb.TYPE_INTEGER,
+				dukdb.TYPE_VARCHAR,
+			},
 			rows: [][]any{
 				{int32(1), "Alice"},
 				{int32(2), "Bob"},
@@ -183,10 +250,19 @@ func TestMultipleTablesPersistence(t *testing.T) {
 		{
 			name: "products",
 			columns: []*catalog.ColumnDef{
-				catalog.NewColumnDef("sku", dukdb.TYPE_VARCHAR),
-				catalog.NewColumnDef("price", dukdb.TYPE_DOUBLE),
+				catalog.NewColumnDef(
+					"sku",
+					dukdb.TYPE_VARCHAR,
+				),
+				catalog.NewColumnDef(
+					"price",
+					dukdb.TYPE_DOUBLE,
+				),
 			},
-			types: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_DOUBLE},
+			types: []dukdb.Type{
+				dukdb.TYPE_VARCHAR,
+				dukdb.TYPE_DOUBLE,
+			},
 			rows: [][]any{
 				{"SKU001", float64(19.99)},
 				{"SKU002", float64(29.99)},
@@ -196,11 +272,16 @@ func TestMultipleTablesPersistence(t *testing.T) {
 	}
 
 	for _, tbl := range tables {
-		tableDef := catalog.NewTableDef(tbl.name, tbl.columns)
-		err := engine1.Catalog().CreateTable(tableDef)
+		tableDef := catalog.NewTableDef(
+			tbl.name,
+			tbl.columns,
+		)
+		err := engine1.Catalog().
+			CreateTable(tableDef)
 		require.NoError(t, err)
 
-		table, err := engine1.Storage().CreateTable(tbl.name, tbl.types)
+		table, err := engine1.Storage().
+			CreateTable(tbl.name, tbl.types)
 		require.NoError(t, err)
 
 		for _, row := range tbl.rows {
@@ -219,22 +300,34 @@ func TestMultipleTablesPersistence(t *testing.T) {
 	require.NotNil(t, conn2)
 
 	// Verify users table
-	usersDef, ok := engine2.Catalog().GetTable("users")
+	usersDef, ok := engine2.Catalog().
+		GetTable("users")
 	require.True(t, ok)
 	assert.Equal(t, "users", usersDef.Name)
 
-	usersTable, ok := engine2.Storage().GetTable("users")
+	usersTable, ok := engine2.Storage().
+		GetTable("users")
 	require.True(t, ok)
-	assert.Equal(t, int64(2), usersTable.RowCount())
+	assert.Equal(
+		t,
+		int64(2),
+		usersTable.RowCount(),
+	)
 
 	// Verify products table
-	productsDef, ok := engine2.Catalog().GetTable("products")
+	productsDef, ok := engine2.Catalog().
+		GetTable("products")
 	require.True(t, ok)
 	assert.Equal(t, "products", productsDef.Name)
 
-	productsTable, ok := engine2.Storage().GetTable("products")
+	productsTable, ok := engine2.Storage().
+		GetTable("products")
 	require.True(t, ok)
-	assert.Equal(t, int64(3), productsTable.RowCount())
+	assert.Equal(
+		t,
+		int64(3),
+		productsTable.RowCount(),
+	)
 
 	err = engine2.Close()
 	require.NoError(t, err)
@@ -251,25 +344,39 @@ func TestNullValuesPersistence(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
-	tableDef := catalog.NewTableDef("test", []*catalog.ColumnDef{
-		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-		catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR).WithNullable(true),
-	})
+	tableDef := catalog.NewTableDef(
+		"test",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef(
+				"id",
+				dukdb.TYPE_INTEGER,
+			),
+			catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR).
+				WithNullable(true),
+		},
+	)
 	err = engine1.Catalog().CreateTable(tableDef)
 	require.NoError(t, err)
 
-	table, err := engine1.Storage().CreateTable("test", []dukdb.Type{
-		dukdb.TYPE_INTEGER,
-		dukdb.TYPE_VARCHAR,
-	})
+	table, err := engine1.Storage().
+		CreateTable("test", []dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		})
 	require.NoError(t, err)
 
 	// Add rows with null values
-	err = table.AppendRow([]any{int32(1), "value1"})
+	err = table.AppendRow(
+		[]any{int32(1), "value1"},
+	)
 	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(2), nil}) // NULL value
+	err = table.AppendRow(
+		[]any{int32(2), nil},
+	) // NULL value
 	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(3), "value3"})
+	err = table.AppendRow(
+		[]any{int32(3), "value3"},
+	)
 	require.NoError(t, err)
 
 	err = engine1.Close()
@@ -281,25 +388,51 @@ func TestNullValuesPersistence(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn2)
 
-	table2, ok := engine2.Storage().GetTable("test")
+	table2, ok := engine2.Storage().
+		GetTable("test")
 	require.True(t, ok)
 
 	scanner := table2.Scan()
 	chunk := scanner.Next()
 	require.NotNil(t, chunk)
 
-	assert.Equal(t, int32(1), chunk.GetValue(0, 0))
-	assert.Equal(t, "value1", chunk.GetValue(0, 1))
-	assert.Equal(t, int32(2), chunk.GetValue(1, 0))
-	assert.Nil(t, chunk.GetValue(1, 1)) // Should be nil
-	assert.Equal(t, int32(3), chunk.GetValue(2, 0))
-	assert.Equal(t, "value3", chunk.GetValue(2, 1))
+	assert.Equal(
+		t,
+		int32(1),
+		chunk.GetValue(0, 0),
+	)
+	assert.Equal(
+		t,
+		"value1",
+		chunk.GetValue(0, 1),
+	)
+	assert.Equal(
+		t,
+		int32(2),
+		chunk.GetValue(1, 0),
+	)
+	assert.Nil(
+		t,
+		chunk.GetValue(1, 1),
+	) // Should be nil
+	assert.Equal(
+		t,
+		int32(3),
+		chunk.GetValue(2, 0),
+	)
+	assert.Equal(
+		t,
+		"value3",
+		chunk.GetValue(2, 1),
+	)
 
 	err = engine2.Close()
 	require.NoError(t, err)
 }
 
-func TestAllPrimitiveTypesPersistence(t *testing.T) {
+func TestAllPrimitiveTypesPersistence(
+	t *testing.T,
+) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "types.dukdb")
@@ -310,18 +443,78 @@ func TestAllPrimitiveTypesPersistence(t *testing.T) {
 		value    any
 		expected any
 	}{
-		{"bool_col", dukdb.TYPE_BOOLEAN, true, true},
-		{"tinyint_col", dukdb.TYPE_TINYINT, int8(42), int8(42)},
-		{"smallint_col", dukdb.TYPE_SMALLINT, int16(1000), int16(1000)},
-		{"int_col", dukdb.TYPE_INTEGER, int32(100000), int32(100000)},
-		{"bigint_col", dukdb.TYPE_BIGINT, int64(9999999999), int64(9999999999)},
-		{"utinyint_col", dukdb.TYPE_UTINYINT, uint8(200), uint8(200)},
-		{"usmallint_col", dukdb.TYPE_USMALLINT, uint16(50000), uint16(50000)},
-		{"uint_col", dukdb.TYPE_UINTEGER, uint32(3000000000), uint32(3000000000)},
-		{"ubigint_col", dukdb.TYPE_UBIGINT, uint64(18000000000000000000), uint64(18000000000000000000)},
-		{"float_col", dukdb.TYPE_FLOAT, float32(3.14), float32(3.14)},
-		{"double_col", dukdb.TYPE_DOUBLE, float64(3.14159265359), float64(3.14159265359)},
-		{"varchar_col", dukdb.TYPE_VARCHAR, "Hello, World!", "Hello, World!"},
+		{
+			"bool_col",
+			dukdb.TYPE_BOOLEAN,
+			true,
+			true,
+		},
+		{
+			"tinyint_col",
+			dukdb.TYPE_TINYINT,
+			int8(42),
+			int8(42),
+		},
+		{
+			"smallint_col",
+			dukdb.TYPE_SMALLINT,
+			int16(1000),
+			int16(1000),
+		},
+		{
+			"int_col",
+			dukdb.TYPE_INTEGER,
+			int32(100000),
+			int32(100000),
+		},
+		{
+			"bigint_col",
+			dukdb.TYPE_BIGINT,
+			int64(9999999999),
+			int64(9999999999),
+		},
+		{
+			"utinyint_col",
+			dukdb.TYPE_UTINYINT,
+			uint8(200),
+			uint8(200),
+		},
+		{
+			"usmallint_col",
+			dukdb.TYPE_USMALLINT,
+			uint16(50000),
+			uint16(50000),
+		},
+		{
+			"uint_col",
+			dukdb.TYPE_UINTEGER,
+			uint32(3000000000),
+			uint32(3000000000),
+		},
+		{
+			"ubigint_col",
+			dukdb.TYPE_UBIGINT,
+			uint64(18000000000000000000),
+			uint64(18000000000000000000),
+		},
+		{
+			"float_col",
+			dukdb.TYPE_FLOAT,
+			float32(3.14),
+			float32(3.14),
+		},
+		{
+			"double_col",
+			dukdb.TYPE_DOUBLE,
+			float64(3.14159265359),
+			float64(3.14159265359),
+		},
+		{
+			"varchar_col",
+			dukdb.TYPE_VARCHAR,
+			"Hello, World!",
+			"Hello, World!",
+		},
 	}
 
 	// Create engine
@@ -331,18 +524,28 @@ func TestAllPrimitiveTypesPersistence(t *testing.T) {
 	require.NotNil(t, conn)
 
 	// Create columns
-	columns := make([]*catalog.ColumnDef, len(testTypes))
+	columns := make(
+		[]*catalog.ColumnDef,
+		len(testTypes),
+	)
 	types := make([]dukdb.Type, len(testTypes))
 	for i, tc := range testTypes {
-		columns[i] = catalog.NewColumnDef(tc.name, tc.typ)
+		columns[i] = catalog.NewColumnDef(
+			tc.name,
+			tc.typ,
+		)
 		types[i] = tc.typ
 	}
 
-	tableDef := catalog.NewTableDef("types_test", columns)
+	tableDef := catalog.NewTableDef(
+		"types_test",
+		columns,
+	)
 	err = engine1.Catalog().CreateTable(tableDef)
 	require.NoError(t, err)
 
-	table, err := engine1.Storage().CreateTable("types_test", types)
+	table, err := engine1.Storage().
+		CreateTable("types_test", types)
 	require.NoError(t, err)
 
 	// Add row with all values
@@ -362,7 +565,8 @@ func TestAllPrimitiveTypesPersistence(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn2)
 
-	table2, ok := engine2.Storage().GetTable("types_test")
+	table2, ok := engine2.Storage().
+		GetTable("types_test")
 	require.True(t, ok)
 
 	scanner := table2.Scan()
@@ -371,7 +575,13 @@ func TestAllPrimitiveTypesPersistence(t *testing.T) {
 
 	for i, tc := range testTypes {
 		actual := chunk.GetValue(0, i)
-		assert.Equal(t, tc.expected, actual, "Type %s mismatch", tc.name)
+		assert.Equal(
+			t,
+			tc.expected,
+			actual,
+			"Type %s mismatch",
+			tc.name,
+		)
 	}
 
 	err = engine2.Close()

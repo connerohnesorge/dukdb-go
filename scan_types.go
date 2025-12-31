@@ -82,8 +82,14 @@ func (s *ArrayScanner[T]) Scan(src any) error {
 
 // ScanArray creates a scanner that validates fixed-size arrays.
 // Pass size=-1 to accept any size.
-func ScanArray[T any](dest *[]T, size int) sql.Scanner {
-	return &ArrayScanner[T]{Result: dest, Expected: size}
+func ScanArray[T any](
+	dest *[]T,
+	size int,
+) sql.Scanner {
+	return &ArrayScanner[T]{
+		Result:   dest,
+		Expected: size,
+	}
 }
 
 // StructScanner enables scanning STRUCT columns to Go structs.
@@ -191,7 +197,9 @@ func (s *MapScanner[K, V]) Scan(src any) error {
 }
 
 // ScanMap creates a scanner for scanning MAP columns to Go maps.
-func ScanMap[K comparable, V any](dest *map[K]V) sql.Scanner {
+func ScanMap[K comparable, V any](
+	dest *map[K]V,
+) sql.Scanner {
 	return &MapScanner[K, V]{Result: dest}
 }
 
@@ -204,7 +212,10 @@ type UnionValue struct {
 
 // As extracts the union value into the destination type.
 func (u UnionValue) As(dest any) error {
-	return setFieldValue(reflect.ValueOf(dest).Elem(), u.Value)
+	return setFieldValue(
+		reflect.ValueOf(dest).Elem(),
+		u.Value,
+	)
 }
 
 // UnionScanner enables scanning UNION columns.
@@ -215,7 +226,11 @@ type UnionScanner struct {
 // Scan implements the sql.Scanner interface for UnionScanner.
 func (s *UnionScanner) Scan(src any) error {
 	if src == nil {
-		*s.Result = UnionValue{Tag: "", Index: -1, Value: nil}
+		*s.Result = UnionValue{
+			Tag:   "",
+			Index: -1,
+			Value: nil,
+		}
 
 		return nil
 	}
@@ -411,8 +426,12 @@ func ScanTimeNS(dest *TimeNS) sql.Scanner {
 var (
 	_ sql.Scanner = (*ListScanner[int])(nil)
 	_ sql.Scanner = (*ArrayScanner[int])(nil)
-	_ sql.Scanner = (*StructScanner[struct{}])(nil)
-	_ sql.Scanner = (*MapScanner[string, int])(nil)
+	_ sql.Scanner = (*StructScanner[struct{}])(
+		nil,
+	)
+	_ sql.Scanner = (*MapScanner[string, int])(
+		nil,
+	)
 	_ sql.Scanner = (*UnionScanner)(nil)
 	_ sql.Scanner = (*EnumScanner[string])(nil)
 	_ sql.Scanner = (*JSONScanner[struct{}])(nil)

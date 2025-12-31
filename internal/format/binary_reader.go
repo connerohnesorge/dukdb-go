@@ -54,7 +54,10 @@ func (r *BinaryReader) Load() error {
 	// Read property count
 	var count uint32
 	if err := binary.Read(r.r, ByteOrder, &count); err != nil {
-		return fmt.Errorf("failed to read property count: %w", err)
+		return fmt.Errorf(
+			"failed to read property count: %w",
+			err,
+		)
 	}
 
 	r.properties = make(map[uint32][]byte, count)
@@ -63,19 +66,31 @@ func (r *BinaryReader) Load() error {
 		// Read property ID
 		var id uint32
 		if err := binary.Read(r.r, ByteOrder, &id); err != nil {
-			return fmt.Errorf("failed to read property %d ID: %w", i, err)
+			return fmt.Errorf(
+				"failed to read property %d ID: %w",
+				i,
+				err,
+			)
 		}
 
 		// Read property data length
 		var length uint64
 		if err := binary.Read(r.r, ByteOrder, &length); err != nil {
-			return fmt.Errorf("failed to read property %d length: %w", id, err)
+			return fmt.Errorf(
+				"failed to read property %d length: %w",
+				id,
+				err,
+			)
 		}
 
 		// Read property data
 		data := make([]byte, length)
 		if _, err := io.ReadFull(r.r, data); err != nil {
-			return fmt.Errorf("failed to read property %d data: %w", id, err)
+			return fmt.Errorf(
+				"failed to read property %d data: %w",
+				id,
+				err,
+			)
 		}
 
 		r.properties[id] = data
@@ -96,10 +111,17 @@ func (r *BinaryReader) Load() error {
 //   - *[]byte: raw bytes (no length prefix)
 //
 // Returns an error if the property is missing or if the dest type is not supported.
-func (r *BinaryReader) ReadProperty(id uint32, dest interface{}) error {
+func (r *BinaryReader) ReadProperty(
+	id uint32,
+	dest interface{},
+) error {
 	data, ok := r.properties[id]
 	if !ok {
-		return fmt.Errorf("%w: property %d", ErrRequiredProperty, id)
+		return fmt.Errorf(
+			"%w: property %d",
+			ErrRequiredProperty,
+			id,
+		)
 	}
 
 	return r.deserializeValue(data, dest)
@@ -115,15 +137,22 @@ func (r *BinaryReader) ReadProperty(id uint32, dest interface{}) error {
 // The defaultValue must be of the same type as the value pointed to by dest.
 //
 // Returns an error if the dest type is not supported or if deserialization fails.
-func (r *BinaryReader) ReadPropertyWithDefault(id uint32, dest, defaultValue interface{}) error {
+func (r *BinaryReader) ReadPropertyWithDefault(
+	id uint32,
+	dest, defaultValue interface{},
+) error {
 	data, ok := r.properties[id]
 	if !ok {
 		// Use default value
 		destValue := reflect.ValueOf(dest)
 		if destValue.Kind() != reflect.Ptr {
-			return fmt.Errorf("dest must be a pointer, got %T", dest)
+			return fmt.Errorf(
+				"dest must be a pointer, got %T",
+				dest,
+			)
 		}
-		destValue.Elem().Set(reflect.ValueOf(defaultValue))
+		destValue.Elem().
+			Set(reflect.ValueOf(defaultValue))
 
 		return nil
 	}
@@ -144,10 +173,16 @@ func (r *BinaryReader) ReadPropertyWithDefault(id uint32, dest, defaultValue int
 //
 // Returns a defensive copy of the string slice.
 // Returns an error if the property is missing or if deserialization fails.
-func (r *BinaryReader) ReadList(id uint32) ([]string, error) {
+func (r *BinaryReader) ReadList(
+	id uint32,
+) ([]string, error) {
 	data, ok := r.properties[id]
 	if !ok {
-		return nil, fmt.Errorf("%w: property %d", ErrRequiredProperty, id)
+		return nil, fmt.Errorf(
+			"%w: property %d",
+			ErrRequiredProperty,
+			id,
+		)
 	}
 
 	buf := bytes.NewReader(data)
@@ -155,7 +190,10 @@ func (r *BinaryReader) ReadList(id uint32) ([]string, error) {
 	// Read item count
 	var count uint64
 	if err := binary.Read(buf, ByteOrder, &count); err != nil {
-		return nil, fmt.Errorf("failed to read list count: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read list count: %w",
+			err,
+		)
 	}
 
 	items := make([]string, count)
@@ -164,13 +202,21 @@ func (r *BinaryReader) ReadList(id uint32) ([]string, error) {
 		// Read string length
 		var strLen uint64
 		if err := binary.Read(buf, ByteOrder, &strLen); err != nil {
-			return nil, fmt.Errorf("failed to read list item %d length: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read list item %d length: %w",
+				i,
+				err,
+			)
 		}
 
 		// Read string data
 		strData := make([]byte, strLen)
 		if _, err := io.ReadFull(buf, strData); err != nil {
-			return nil, fmt.Errorf("failed to read list item %d data: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read list item %d data: %w",
+				i,
+				err,
+			)
 		}
 
 		items[i] = string(strData)
@@ -191,7 +237,10 @@ func (r *BinaryReader) ReadList(id uint32) ([]string, error) {
 //
 // Returns an error if the destination type is not supported or if the data
 // cannot be deserialized.
-func (r *BinaryReader) deserializeValue(data []byte, dest interface{}) error {
+func (r *BinaryReader) deserializeValue(
+	data []byte,
+	dest interface{},
+) error {
 	buf := bytes.NewReader(data)
 
 	switch d := dest.(type) {

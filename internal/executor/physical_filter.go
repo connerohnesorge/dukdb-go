@@ -65,7 +65,10 @@ func (op *PhysicalFilterOperator) Next() (*storage.DataChunk, error) {
 			if len(op.childColumns) > 0 {
 				// Use column bindings if available
 				for colIdx := 0; colIdx < inputChunk.ColumnCount() && colIdx < len(op.childColumns); colIdx++ {
-					value := inputChunk.GetValue(rowIdx, colIdx)
+					value := inputChunk.GetValue(
+						rowIdx,
+						colIdx,
+					)
 					col := op.childColumns[colIdx]
 
 					// Add column by simple name
@@ -74,7 +77,8 @@ func (op *PhysicalFilterOperator) Next() (*storage.DataChunk, error) {
 					}
 
 					// Add column by table-qualified name
-					if col.Table != "" && col.Column != "" {
+					if col.Table != "" &&
+						col.Column != "" {
 						qualifiedName := col.Table + "." + col.Column
 						rowMap[qualifiedName] = value
 					}
@@ -88,7 +92,11 @@ func (op *PhysicalFilterOperator) Next() (*storage.DataChunk, error) {
 			}
 
 			// Evaluate the predicate
-			result, err := op.executor.evaluateExpr(op.ctx, op.predicate, rowMap)
+			result, err := op.executor.evaluateExpr(
+				op.ctx,
+				op.predicate,
+				rowMap,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -102,9 +110,15 @@ func (op *PhysicalFilterOperator) Next() (*storage.DataChunk, error) {
 			passes := toBool(result)
 			if passes {
 				// Row passes filter - copy to output chunk
-				values := make([]any, inputChunk.ColumnCount())
+				values := make(
+					[]any,
+					inputChunk.ColumnCount(),
+				)
 				for colIdx := 0; colIdx < inputChunk.ColumnCount(); colIdx++ {
-					values[colIdx] = inputChunk.GetValue(rowIdx, colIdx)
+					values[colIdx] = inputChunk.GetValue(
+						rowIdx,
+						colIdx,
+					)
 				}
 				outputChunk.AppendRow(values)
 			}

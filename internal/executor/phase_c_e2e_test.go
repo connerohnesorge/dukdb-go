@@ -21,20 +21,44 @@ func TestPhaseC_OrderByAsc(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table: CREATE TABLE t (x INTEGER, y VARCHAR)
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "y", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "y",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert test data out of order
-	err = table.AppendRow([]any{int32(3), "charlie"})
+	err = table.AppendRow(
+		[]any{int32(3), "charlie"},
+	)
 	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(1), "alice"})
+	err = table.AppendRow(
+		[]any{int32(1), "alice"},
+	)
 	require.NoError(t, err)
 	err = table.AppendRow([]any{int32(2), "bob"})
 	require.NoError(t, err)
@@ -63,7 +87,11 @@ func TestPhaseC_OrderByAsc(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, sortPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		sortPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify results are sorted by x
@@ -73,7 +101,11 @@ func TestPhaseC_OrderByAsc(t *testing.T) {
 	assert.Equal(t, int32(2), result.Rows[1]["x"])
 	assert.Equal(t, "bob", result.Rows[1]["y"])
 	assert.Equal(t, int32(3), result.Rows[2]["x"])
-	assert.Equal(t, "charlie", result.Rows[2]["y"])
+	assert.Equal(
+		t,
+		"charlie",
+		result.Rows[2]["y"],
+	)
 }
 
 // TestPhaseC_OrderByDesc tests ORDER BY DESC query
@@ -84,13 +116,26 @@ func TestPhaseC_OrderByDesc(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -122,7 +167,11 @@ func TestPhaseC_OrderByDesc(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, sortPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		sortPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify results are sorted descending: 8, 5, 3, 2, 1
@@ -135,21 +184,43 @@ func TestPhaseC_OrderByDesc(t *testing.T) {
 }
 
 // TestPhaseC_OrderByMultipleColumns tests ORDER BY with multiple columns
-func TestPhaseC_OrderByMultipleColumns(t *testing.T) {
+func TestPhaseC_OrderByMultipleColumns(
+	t *testing.T,
+) {
 	// Setup
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	exec := NewExecutor(cat, stor)
 
 	// Create a table: CREATE TABLE t (category VARCHAR, value INTEGER)
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "category", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-		{Name: "value", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "category",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "value",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -164,7 +235,9 @@ func TestPhaseC_OrderByMultipleColumns(t *testing.T) {
 		{"C", 1},
 	}
 	for _, row := range testData {
-		err = table.AppendRow([]any{row.category, row.value})
+		err = table.AppendRow(
+			[]any{row.category, row.value},
+		)
 		require.NoError(t, err)
 	}
 
@@ -199,27 +272,71 @@ func TestPhaseC_OrderByMultipleColumns(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, sortPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		sortPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify results: A(2), A(1), B(3), B(1), C(1)
 	require.Equal(t, 5, len(result.Rows))
 
 	// Category A, sorted by value DESC: 2, 1
-	assert.Equal(t, "A", result.Rows[0]["category"])
-	assert.Equal(t, int32(2), result.Rows[0]["value"])
-	assert.Equal(t, "A", result.Rows[1]["category"])
-	assert.Equal(t, int32(1), result.Rows[1]["value"])
+	assert.Equal(
+		t,
+		"A",
+		result.Rows[0]["category"],
+	)
+	assert.Equal(
+		t,
+		int32(2),
+		result.Rows[0]["value"],
+	)
+	assert.Equal(
+		t,
+		"A",
+		result.Rows[1]["category"],
+	)
+	assert.Equal(
+		t,
+		int32(1),
+		result.Rows[1]["value"],
+	)
 
 	// Category B, sorted by value DESC: 3, 1
-	assert.Equal(t, "B", result.Rows[2]["category"])
-	assert.Equal(t, int32(3), result.Rows[2]["value"])
-	assert.Equal(t, "B", result.Rows[3]["category"])
-	assert.Equal(t, int32(1), result.Rows[3]["value"])
+	assert.Equal(
+		t,
+		"B",
+		result.Rows[2]["category"],
+	)
+	assert.Equal(
+		t,
+		int32(3),
+		result.Rows[2]["value"],
+	)
+	assert.Equal(
+		t,
+		"B",
+		result.Rows[3]["category"],
+	)
+	assert.Equal(
+		t,
+		int32(1),
+		result.Rows[3]["value"],
+	)
 
 	// Category C: 1
-	assert.Equal(t, "C", result.Rows[4]["category"])
-	assert.Equal(t, int32(1), result.Rows[4]["value"])
+	assert.Equal(
+		t,
+		"C",
+		result.Rows[4]["category"],
+	)
+	assert.Equal(
+		t,
+		int32(1),
+		result.Rows[4]["value"],
+	)
 }
 
 // TestPhaseC_Limit tests LIMIT clause
@@ -230,13 +347,26 @@ func TestPhaseC_Limit(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert 10 rows
@@ -260,13 +390,21 @@ func TestPhaseC_Limit(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, limitPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		limitPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify only 5 rows returned
 	require.Equal(t, 5, len(result.Rows))
 	for i := range 5 {
-		assert.Equal(t, int32(i), result.Rows[i]["x"])
+		assert.Equal(
+			t,
+			int32(i),
+			result.Rows[i]["x"],
+		)
 	}
 }
 
@@ -278,13 +416,26 @@ func TestPhaseC_Offset(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert 10 rows
@@ -308,7 +459,11 @@ func TestPhaseC_Offset(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, limitPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		limitPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify only 3 rows returned (7, 8, 9)
@@ -326,13 +481,26 @@ func TestPhaseC_LimitOffset(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert 20 rows
@@ -356,13 +524,21 @@ func TestPhaseC_LimitOffset(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, limitPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		limitPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify 10 rows returned (rows 5-14)
 	require.Equal(t, 10, len(result.Rows))
 	for i := range 10 {
-		assert.Equal(t, int32(i+5), result.Rows[i]["x"])
+		assert.Equal(
+			t,
+			int32(i+5),
+			result.Rows[i]["x"],
+		)
 	}
 }
 
@@ -374,13 +550,26 @@ func TestPhaseC_OrderByWithLimit(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "x", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "x",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert data out of order
@@ -418,7 +607,11 @@ func TestPhaseC_OrderByWithLimit(t *testing.T) {
 
 	// Execute
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, limitPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		limitPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify top 3 values: 9, 8, 7
@@ -433,20 +626,35 @@ func TestPhaseC_OrderByWithLimit(t *testing.T) {
 // ============================================================================
 
 // TestPhaseC_AggregatesWithoutGroupBy tests aggregate functions without GROUP BY (Task 3.39)
-func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
+func TestPhaseC_AggregatesWithoutGroupBy(
+	t *testing.T,
+) {
 	// Setup
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	exec := NewExecutor(cat, stor)
 
 	// Create a table: CREATE TABLE t (value INTEGER)
-	tableDef := catalog.NewTableDef("t", []*catalog.ColumnDef{
-		{Name: "value", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"t",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "value",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("t", []dukdb.Type{dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"t",
+		[]dukdb.Type{dukdb.TYPE_INTEGER},
+	)
 	require.NoError(t, err)
 
 	// Insert test data: 10, 20, 30, 40, 50
@@ -476,19 +684,29 @@ func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
 		}
 
 		aggPlan := &planner.PhysicalHashAggregate{
-			Child:      scanPlan,
-			GroupBy:    []binder.BoundExpr{},
-			Aggregates: []binder.BoundExpr{sumExpr},
-			Aliases:    []string{"SUM"},
+			Child:   scanPlan,
+			GroupBy: []binder.BoundExpr{},
+			Aggregates: []binder.BoundExpr{
+				sumExpr,
+			},
+			Aliases: []string{"SUM"},
 		}
 
 		ctx := context.Background()
-		result, err := exec.Execute(ctx, aggPlan, nil)
+		result, err := exec.Execute(
+			ctx,
+			aggPlan,
+			nil,
+		)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(result.Rows))
 		// SUM(10, 20, 30, 40, 50) = 150
-		assert.Equal(t, float64(150), result.Rows[0]["SUM"])
+		assert.Equal(
+			t,
+			float64(150),
+			result.Rows[0]["SUM"],
+		)
 	})
 
 	// Test COUNT
@@ -507,18 +725,28 @@ func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
 		}
 
 		aggPlan := &planner.PhysicalHashAggregate{
-			Child:      scanPlan,
-			GroupBy:    []binder.BoundExpr{},
-			Aggregates: []binder.BoundExpr{countExpr},
-			Aliases:    []string{"COUNT"},
+			Child:   scanPlan,
+			GroupBy: []binder.BoundExpr{},
+			Aggregates: []binder.BoundExpr{
+				countExpr,
+			},
+			Aliases: []string{"COUNT"},
 		}
 
 		ctx := context.Background()
-		result, err := exec.Execute(ctx, aggPlan, nil)
+		result, err := exec.Execute(
+			ctx,
+			aggPlan,
+			nil,
+		)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(result.Rows))
-		assert.Equal(t, int64(5), result.Rows[0]["COUNT"])
+		assert.Equal(
+			t,
+			int64(5),
+			result.Rows[0]["COUNT"],
+		)
 	})
 
 	// Test AVG
@@ -542,19 +770,29 @@ func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
 		}
 
 		aggPlan := &planner.PhysicalHashAggregate{
-			Child:      scanPlan,
-			GroupBy:    []binder.BoundExpr{},
-			Aggregates: []binder.BoundExpr{avgExpr},
-			Aliases:    []string{"AVG"},
+			Child:   scanPlan,
+			GroupBy: []binder.BoundExpr{},
+			Aggregates: []binder.BoundExpr{
+				avgExpr,
+			},
+			Aliases: []string{"AVG"},
 		}
 
 		ctx := context.Background()
-		result, err := exec.Execute(ctx, aggPlan, nil)
+		result, err := exec.Execute(
+			ctx,
+			aggPlan,
+			nil,
+		)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(result.Rows))
 		// AVG(10, 20, 30, 40, 50) = 30
-		assert.Equal(t, float64(30), result.Rows[0]["AVG"])
+		assert.Equal(
+			t,
+			float64(30),
+			result.Rows[0]["AVG"],
+		)
 	})
 
 	// Test MIN
@@ -578,18 +816,28 @@ func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
 		}
 
 		aggPlan := &planner.PhysicalHashAggregate{
-			Child:      scanPlan,
-			GroupBy:    []binder.BoundExpr{},
-			Aggregates: []binder.BoundExpr{minExpr},
-			Aliases:    []string{"MIN"},
+			Child:   scanPlan,
+			GroupBy: []binder.BoundExpr{},
+			Aggregates: []binder.BoundExpr{
+				minExpr,
+			},
+			Aliases: []string{"MIN"},
 		}
 
 		ctx := context.Background()
-		result, err := exec.Execute(ctx, aggPlan, nil)
+		result, err := exec.Execute(
+			ctx,
+			aggPlan,
+			nil,
+		)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(result.Rows))
-		assert.Equal(t, int32(10), result.Rows[0]["MIN"])
+		assert.Equal(
+			t,
+			int32(10),
+			result.Rows[0]["MIN"],
+		)
 	})
 
 	// Test MAX
@@ -613,37 +861,69 @@ func TestPhaseC_AggregatesWithoutGroupBy(t *testing.T) {
 		}
 
 		aggPlan := &planner.PhysicalHashAggregate{
-			Child:      scanPlan,
-			GroupBy:    []binder.BoundExpr{},
-			Aggregates: []binder.BoundExpr{maxExpr},
-			Aliases:    []string{"MAX"},
+			Child:   scanPlan,
+			GroupBy: []binder.BoundExpr{},
+			Aggregates: []binder.BoundExpr{
+				maxExpr,
+			},
+			Aliases: []string{"MAX"},
 		}
 
 		ctx := context.Background()
-		result, err := exec.Execute(ctx, aggPlan, nil)
+		result, err := exec.Execute(
+			ctx,
+			aggPlan,
+			nil,
+		)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(result.Rows))
-		assert.Equal(t, int32(50), result.Rows[0]["MAX"])
+		assert.Equal(
+			t,
+			int32(50),
+			result.Rows[0]["MAX"],
+		)
 	})
 }
 
 // TestPhaseC_SingleColumnGroupBy tests GROUP BY with a single column (Task 3.40)
-func TestPhaseC_SingleColumnGroupBy(t *testing.T) {
+func TestPhaseC_SingleColumnGroupBy(
+	t *testing.T,
+) {
 	// Setup
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	exec := NewExecutor(cat, stor)
 
 	// Create a table: CREATE TABLE sales (category VARCHAR, amount INTEGER)
-	tableDef := catalog.NewTableDef("sales", []*catalog.ColumnDef{
-		{Name: "category", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-		{Name: "amount", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"sales",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "category",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "amount",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("sales", []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"sales",
+		[]dukdb.Type{
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -658,7 +938,9 @@ func TestPhaseC_SingleColumnGroupBy(t *testing.T) {
 		{"Electronics", 150},
 	}
 	for _, row := range testData {
-		err = table.AppendRow([]any{row.category, row.amount})
+		err = table.AppendRow(
+			[]any{row.category, row.amount},
+		)
 		require.NoError(t, err)
 	}
 
@@ -695,10 +977,19 @@ func TestPhaseC_SingleColumnGroupBy(t *testing.T) {
 	}
 
 	aggPlan := &planner.PhysicalHashAggregate{
-		Child:      scanPlan,
-		GroupBy:    []binder.BoundExpr{groupByExpr},
-		Aggregates: []binder.BoundExpr{sumExpr, countExpr},
-		Aliases:    []string{"category", "SUM", "COUNT"},
+		Child: scanPlan,
+		GroupBy: []binder.BoundExpr{
+			groupByExpr,
+		},
+		Aggregates: []binder.BoundExpr{
+			sumExpr,
+			countExpr,
+		},
+		Aliases: []string{
+			"category",
+			"SUM",
+			"COUNT",
+		},
 	}
 
 	ctx := context.Background()
@@ -719,12 +1010,28 @@ func TestPhaseC_SingleColumnGroupBy(t *testing.T) {
 		}
 	}
 
-	require.NotNil(t, electronicsRow, "Electronics group not found")
-	require.NotNil(t, booksRow, "Books group not found")
+	require.NotNil(
+		t,
+		electronicsRow,
+		"Electronics group not found",
+	)
+	require.NotNil(
+		t,
+		booksRow,
+		"Books group not found",
+	)
 
 	// Electronics: SUM = 450, COUNT = 3
-	assert.Equal(t, float64(450), electronicsRow["SUM"])
-	assert.Equal(t, int64(3), electronicsRow["COUNT"])
+	assert.Equal(
+		t,
+		float64(450),
+		electronicsRow["SUM"],
+	)
+	assert.Equal(
+		t,
+		int64(3),
+		electronicsRow["COUNT"],
+	)
 
 	// Books: SUM = 80, COUNT = 2
 	assert.Equal(t, float64(80), booksRow["SUM"])
@@ -739,15 +1046,40 @@ func TestPhaseC_MultiColumnGroupBy(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// CREATE TABLE orders (region VARCHAR, product VARCHAR, quantity INTEGER)
-	tableDef := catalog.NewTableDef("orders", []*catalog.ColumnDef{
-		{Name: "region", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-		{Name: "product", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-		{Name: "quantity", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"orders",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "region",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "product",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "quantity",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("orders", []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER})
+	table, err := stor.CreateTable(
+		"orders",
+		[]dukdb.Type{
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -764,7 +1096,13 @@ func TestPhaseC_MultiColumnGroupBy(t *testing.T) {
 		{"South", "Widget", 6},
 	}
 	for _, row := range testData {
-		err = table.AppendRow([]any{row.region, row.product, row.quantity})
+		err = table.AppendRow(
+			[]any{
+				row.region,
+				row.product,
+				row.quantity,
+			},
+		)
 		require.NoError(t, err)
 	}
 
@@ -800,10 +1138,17 @@ func TestPhaseC_MultiColumnGroupBy(t *testing.T) {
 	}
 
 	aggPlan := &planner.PhysicalHashAggregate{
-		Child:      scanPlan,
-		GroupBy:    []binder.BoundExpr{groupByRegion, groupByProduct},
+		Child: scanPlan,
+		GroupBy: []binder.BoundExpr{
+			groupByRegion,
+			groupByProduct,
+		},
 		Aggregates: []binder.BoundExpr{sumExpr},
-		Aliases:    []string{"region", "product", "SUM"},
+		Aliases: []string{
+			"region",
+			"product",
+			"SUM",
+		},
 	}
 
 	ctx := context.Background()
@@ -821,15 +1166,33 @@ func TestPhaseC_MultiColumnGroupBy(t *testing.T) {
 		sum := row["SUM"].(float64)
 
 		if groups[region] == nil {
-			groups[region] = make(map[string]float64)
+			groups[region] = make(
+				map[string]float64,
+			)
 		}
 		groups[region][product] = sum
 	}
 
-	assert.Equal(t, float64(22), groups["North"]["Widget"]) // 10 + 12
-	assert.Equal(t, float64(5), groups["North"]["Gadget"])  // 5
-	assert.Equal(t, float64(14), groups["South"]["Widget"]) // 8 + 6
-	assert.Equal(t, float64(3), groups["South"]["Gadget"])  // 3
+	assert.Equal(
+		t,
+		float64(22),
+		groups["North"]["Widget"],
+	) // 10 + 12
+	assert.Equal(
+		t,
+		float64(5),
+		groups["North"]["Gadget"],
+	) // 5
+	assert.Equal(
+		t,
+		float64(14),
+		groups["South"]["Widget"],
+	) // 8 + 6
+	assert.Equal(
+		t,
+		float64(3),
+		groups["South"]["Gadget"],
+	) // 3
 }
 
 // ============================================================================
@@ -844,42 +1207,99 @@ func TestPhaseC_InnerJoin(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create customers table
-	customersDef := catalog.NewTableDef("customers", []*catalog.ColumnDef{
-		{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", customersDef)
+	customersDef := catalog.NewTableDef(
+		"customers",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		customersDef,
+	)
 	require.NoError(t, err)
 
-	customersTable, err := stor.CreateTable("customers", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	customersTable, err := stor.CreateTable(
+		"customers",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert customers
-	err = customersTable.AppendRow([]any{int32(1), "Alice"})
+	err = customersTable.AppendRow(
+		[]any{int32(1), "Alice"},
+	)
 	require.NoError(t, err)
-	err = customersTable.AppendRow([]any{int32(2), "Bob"})
+	err = customersTable.AppendRow(
+		[]any{int32(2), "Bob"},
+	)
 	require.NoError(t, err)
-	err = customersTable.AppendRow([]any{int32(3), "Charlie"})
+	err = customersTable.AppendRow(
+		[]any{int32(3), "Charlie"},
+	)
 	require.NoError(t, err)
 
 	// Create orders table
-	ordersDef := catalog.NewTableDef("orders", []*catalog.ColumnDef{
-		{Name: "order_id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "customer_id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "amount", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err = cat.CreateTableInSchema("main", ordersDef)
+	ordersDef := catalog.NewTableDef(
+		"orders",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "order_id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "customer_id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "amount",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err = cat.CreateTableInSchema(
+		"main",
+		ordersDef,
+	)
 	require.NoError(t, err)
 
-	ordersTable, err := stor.CreateTable("orders", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+	ordersTable, err := stor.CreateTable(
+		"orders",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_INTEGER,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert orders
-	err = ordersTable.AppendRow([]any{int32(101), int32(1), int32(100)})
+	err = ordersTable.AppendRow(
+		[]any{int32(101), int32(1), int32(100)},
+	)
 	require.NoError(t, err)
-	err = ordersTable.AppendRow([]any{int32(102), int32(2), int32(200)})
+	err = ordersTable.AppendRow(
+		[]any{int32(102), int32(2), int32(200)},
+	)
 	require.NoError(t, err)
-	err = ordersTable.AppendRow([]any{int32(103), int32(1), int32(150)})
+	err = ordersTable.AppendRow(
+		[]any{int32(103), int32(1), int32(150)},
+	)
 	require.NoError(t, err)
 	// Customer 3 (Charlie) has no orders
 
@@ -919,7 +1339,11 @@ func TestPhaseC_InnerJoin(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, joinPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		joinPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Should have 3 rows (2 for Alice, 1 for Bob, 0 for Charlie)
@@ -946,52 +1370,116 @@ func TestPhaseC_InnerJoin(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 2, aliceCount, "Alice should have 2 orders")
-	assert.Equal(t, 1, bobCount, "Bob should have 1 order")
+	assert.Equal(
+		t,
+		2,
+		aliceCount,
+		"Alice should have 2 orders",
+	)
+	assert.Equal(
+		t,
+		1,
+		bobCount,
+		"Bob should have 1 order",
+	)
 }
 
 // TestPhaseC_JoinWithWhereOrderByLimit tests JOIN combined with other operators (Task 3.46)
-func TestPhaseC_JoinWithWhereOrderByLimit(t *testing.T) {
+func TestPhaseC_JoinWithWhereOrderByLimit(
+	t *testing.T,
+) {
 	// Setup
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
 	exec := NewExecutor(cat, stor)
 
 	// Create products table
-	productsDef := catalog.NewTableDef("products", []*catalog.ColumnDef{
-		{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", productsDef)
+	productsDef := catalog.NewTableDef(
+		"products",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		productsDef,
+	)
 	require.NoError(t, err)
 
-	productsTable, err := stor.CreateTable("products", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	productsTable, err := stor.CreateTable(
+		"products",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	require.NoError(t, err)
 
-	err = productsTable.AppendRow([]any{int32(1), "Widget"})
+	err = productsTable.AppendRow(
+		[]any{int32(1), "Widget"},
+	)
 	require.NoError(t, err)
-	err = productsTable.AppendRow([]any{int32(2), "Gadget"})
+	err = productsTable.AppendRow(
+		[]any{int32(2), "Gadget"},
+	)
 	require.NoError(t, err)
 
 	// Create sales table
-	salesDef := catalog.NewTableDef("sales", []*catalog.ColumnDef{
-		{Name: "product_id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "quantity", Type: dukdb.TYPE_INTEGER, Nullable: false},
-	})
-	err = cat.CreateTableInSchema("main", salesDef)
+	salesDef := catalog.NewTableDef(
+		"sales",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "product_id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "quantity",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err = cat.CreateTableInSchema(
+		"main",
+		salesDef,
+	)
 	require.NoError(t, err)
 
-	salesTable, err := stor.CreateTable("sales", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+	salesTable, err := stor.CreateTable(
+		"sales",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_INTEGER,
+		},
+	)
 	require.NoError(t, err)
 
 	// Insert sales
-	err = salesTable.AppendRow([]any{int32(1), int32(50)})
+	err = salesTable.AppendRow(
+		[]any{int32(1), int32(50)},
+	)
 	require.NoError(t, err)
-	err = salesTable.AppendRow([]any{int32(2), int32(30)})
+	err = salesTable.AppendRow(
+		[]any{int32(2), int32(30)},
+	)
 	require.NoError(t, err)
-	err = salesTable.AppendRow([]any{int32(1), int32(70)})
+	err = salesTable.AppendRow(
+		[]any{int32(1), int32(70)},
+	)
 	require.NoError(t, err)
-	err = salesTable.AppendRow([]any{int32(2), int32(20)})
+	err = salesTable.AppendRow(
+		[]any{int32(2), int32(20)},
+	)
 	require.NoError(t, err)
 
 	// SELECT * FROM products JOIN sales ON products.id = sales.product_id
@@ -1073,7 +1561,11 @@ func TestPhaseC_JoinWithWhereOrderByLimit(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, limitPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		limitPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Debug: print result rows
@@ -1085,7 +1577,12 @@ func TestPhaseC_JoinWithWhereOrderByLimit(t *testing.T) {
 	// Note: There's a known issue with filtering on joined columns
 	// For now, we'll just verify that we got some results and the query completes
 	// TODO: Fix filter evaluation on joined results
-	require.Greater(t, len(result.Rows), 0, "Should have at least some result rows")
+	require.Greater(
+		t,
+		len(result.Rows),
+		0,
+		"Should have at least some result rows",
+	)
 
 	// Verify that we have quantity column in results
 	getQuantity := func(row map[string]any) int32 {
@@ -1100,7 +1597,12 @@ func TestPhaseC_JoinWithWhereOrderByLimit(t *testing.T) {
 	}
 
 	// Just verify we can read the quantity from first row
-	assert.Greater(t, getQuantity(result.Rows[0]), int32(0), "Should have a valid quantity value")
+	assert.Greater(
+		t,
+		getQuantity(result.Rows[0]),
+		int32(0),
+		"Should have a valid quantity value",
+	)
 }
 
 // ============================================================================
@@ -1115,14 +1617,34 @@ func TestPhaseC_InsertMultipleRows(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	// Create a table
-	tableDef := catalog.NewTableDef("items", []*catalog.ColumnDef{
-		{Name: "id", Type: dukdb.TYPE_INTEGER, Nullable: false},
-		{Name: "name", Type: dukdb.TYPE_VARCHAR, Nullable: false},
-	})
-	err := cat.CreateTableInSchema("main", tableDef)
+	tableDef := catalog.NewTableDef(
+		"items",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
 	require.NoError(t, err)
 
-	table, err := stor.CreateTable("items", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	table, err := stor.CreateTable(
+		"items",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
 	require.NoError(t, err)
 
 	// Test inserting multiple rows
@@ -1136,7 +1658,9 @@ func TestPhaseC_InsertMultipleRows(t *testing.T) {
 	}
 
 	for _, row := range testData {
-		err = table.AppendRow([]any{row.id, row.name})
+		err = table.AppendRow(
+			[]any{row.id, row.name},
+		)
 		require.NoError(t, err)
 	}
 
@@ -1148,15 +1672,27 @@ func TestPhaseC_InsertMultipleRows(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result, err := exec.Execute(ctx, scanPlan, nil)
+	result, err := exec.Execute(
+		ctx,
+		scanPlan,
+		nil,
+	)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(result.Rows))
 
 	// Verify row contents
 	for i, expectedRow := range testData {
-		assert.Equal(t, expectedRow.id, result.Rows[i]["id"])
-		assert.Equal(t, expectedRow.name, result.Rows[i]["name"])
+		assert.Equal(
+			t,
+			expectedRow.id,
+			result.Rows[i]["id"],
+		)
+		assert.Equal(
+			t,
+			expectedRow.name,
+			result.Rows[i]["name"],
+		)
 	}
 }
 
@@ -1164,12 +1700,16 @@ func TestPhaseC_InsertMultipleRows(t *testing.T) {
 func TestPhaseC_UpdateWithWhere(t *testing.T) {
 	// Note: This test is a placeholder as UPDATE requires DML operator implementation
 	// For now, we test the concept using storage layer directly
-	t.Skip("UPDATE operator not yet implemented in Phase C")
+	t.Skip(
+		"UPDATE operator not yet implemented in Phase C",
+	)
 }
 
 // TestPhaseC_DeleteWithWhere tests DELETE with WHERE clause (Task 3.54)
 func TestPhaseC_DeleteWithWhere(t *testing.T) {
 	// Note: This test is a placeholder as DELETE requires DML operator implementation
 	// For now, we test the concept using storage layer directly
-	t.Skip("DELETE operator not yet implemented in Phase C")
+	t.Skip(
+		"DELETE operator not yet implemented in Phase C",
+	)
 }
