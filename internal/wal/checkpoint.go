@@ -133,7 +133,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 	}
 
 	// Write all catalog entries
-	if err := cm.writeCatalogCheckpoint(ckptWriter); err != nil {
+	err = cm.writeCatalogCheckpoint(ckptWriter)
+	if err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
@@ -144,7 +145,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 	}
 
 	// Write all data entries
-	if err := cm.writeDataCheckpoint(ckptWriter); err != nil {
+	err = cm.writeDataCheckpoint(ckptWriter)
+	if err != nil {
 		_ = ckptWriter.Close()
 		_ = os.Remove(ckptPath)
 
@@ -191,7 +193,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 	}
 
 	// Sync directory to ensure file is durable
-	if err := syncDir(filepath.Dir(cm.walPath)); err != nil {
+	err = syncDir(filepath.Dir(cm.walPath))
+	if err != nil {
 		return fmt.Errorf(
 			"failed to sync directory: %w",
 			err,
@@ -201,7 +204,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 	// Handle WAL action
 	if walAction == WALDelete {
 		// Close current WAL
-		if err := cm.wal.Close(); err != nil {
+		err = cm.wal.Close()
+		if err != nil {
 			return fmt.Errorf(
 				"failed to close WAL: %w",
 				err,
@@ -209,7 +213,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 		}
 
 		// Remove old WAL
-		if err := os.Remove(cm.walPath); err != nil &&
+		err = os.Remove(cm.walPath)
+		if err != nil &&
 			!os.IsNotExist(err) {
 			return fmt.Errorf(
 				"failed to remove old WAL: %w",
@@ -218,7 +223,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 		}
 
 		// Rename checkpoint WAL to main WAL
-		if err := os.Rename(ckptPath, cm.walPath); err != nil {
+		err = os.Rename(ckptPath, cm.walPath)
+		if err != nil {
 			return fmt.Errorf(
 				"failed to rename checkpoint WAL: %w",
 				err,
@@ -240,7 +246,8 @@ func (cm *CheckpointManager) CheckpointWithOptions(
 	}
 
 	// Sync directory again after rename
-	if err := syncDir(filepath.Dir(cm.walPath)); err != nil {
+	err = syncDir(filepath.Dir(cm.walPath))
+	if err != nil {
 		return fmt.Errorf(
 			"failed to sync directory after rename: %w",
 			err,

@@ -132,7 +132,7 @@ func (b *Binder) Bind(
 	}
 }
 
-func (b *Binder) errorf(
+func (*Binder) errorf(
 	format string,
 	args ...any,
 ) error {
@@ -166,7 +166,7 @@ func (*BoundSelectStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELE
 
 func (*BoundSelectStmt) boundExprNode() {}
 
-func (s *BoundSelectStmt) ResultType() dukdb.Type { return dukdb.TYPE_ANY }
+func (*BoundSelectStmt) ResultType() dukdb.Type { return dukdb.TYPE_ANY }
 
 // BoundSelectColumn represents a bound column in SELECT.
 type BoundSelectColumn struct {
@@ -447,8 +447,6 @@ type BoundStarExpr struct {
 func (*BoundStarExpr) boundExprNode() {}
 
 func (*BoundStarExpr) ResultType() dukdb.Type { return dukdb.TYPE_ANY }
-
-// ---------- Binding Implementation ----------
 
 func (b *Binder) bindSelect(
 	s *parser.SelectStmt,
