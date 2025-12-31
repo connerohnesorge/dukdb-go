@@ -16,11 +16,14 @@ import (
 //
 // PreparedStmt is safe for concurrent use by multiple goroutines.
 type PreparedStmt struct {
-	conn      *Conn
-	query     string
-	numParams int
-	closed    bool
-	mu        sync.Mutex
+	conn            *Conn
+	query           string
+	numParams       int
+	stmtType        StmtType
+	extractedParams []placeholder // extracted parameters in order
+	boundParams     []driver.NamedValue
+	closed          bool
+	mu              sync.Mutex
 }
 
 // countPlaceholders counts the number of placeholder parameters in a query.
@@ -77,6 +80,54 @@ func countPlaceholders(query string) int {
 	return 0
 }
 
+// extractOrderedParams extracts unique parameters from a query and returns them
+// in canonical order. For positional parameters, they are sorted by index ($1, $2, $3).
+// For named parameters, they are returned in first-occurrence order.
+func extractOrderedParams(query string) []placeholder {
+	positional := extractPositionalPlaceholders(query)
+	named := extractNamedPlaceholders(query)
+
+	// Mixed mode - not supported for introspection, return empty
+	if len(positional) > 0 && len(named) > 0 {
+		return nil
+	}
+
+	// Positional parameters: create entries for each index 1..max
+	if len(positional) > 0 {
+		maxIndex := 0
+		for _, p := range positional {
+			idx, err := strconv.Atoi(p.name)
+			if err == nil && idx > maxIndex {
+				maxIndex = idx
+			}
+		}
+
+		result := make([]placeholder, maxIndex)
+		for i := range result {
+			result[i] = placeholder{
+				name:         strconv.Itoa(i + 1),
+				isPositional: true,
+			}
+		}
+		return result
+	}
+
+	// Named parameters: return unique names in first-occurrence order
+	if len(named) > 0 {
+		seen := make(map[string]bool)
+		var result []placeholder
+		for _, p := range named {
+			if !seen[p.name] {
+				seen[p.name] = true
+				result = append(result, p)
+			}
+		}
+		return result
+	}
+
+	return nil
+}
+
 // Prepare creates a new prepared statement bound to this connection.
 // The query string may contain $1, $2, etc. for positional parameters
 // or @name for named parameters, but not both styles mixed.
@@ -94,11 +145,22 @@ func (c *Conn) PreparePreparedStmt(
 	}
 
 	numParams := countPlaceholders(query)
+	stmtType := detectStatementType(query)
+	extractedParams := extractOrderedParams(query)
+
+	// Initialize boundParams with the same capacity as numParams
+	var boundParams []driver.NamedValue
+	if numParams > 0 {
+		boundParams = make([]driver.NamedValue, numParams)
+	}
 
 	return &PreparedStmt{
-		conn:      c,
-		query:     query,
-		numParams: numParams,
+		conn:            c,
+		query:           query,
+		numParams:       numParams,
+		stmtType:        stmtType,
+		extractedParams: extractedParams,
+		boundParams:     boundParams,
 	}, nil
 }
 
@@ -123,6 +185,193 @@ func (s *PreparedStmt) Close() error {
 func (s *PreparedStmt) NumInput() int {
 	// No lock needed - numParams is immutable after creation
 	return s.numParams
+}
+
+// StatementType returns the type of SQL statement (SELECT, INSERT, UPDATE, etc.).
+// This value is determined at Prepare time using simple keyword detection.
+//
+// The detection is based on the first keyword in the SQL query after stripping
+// leading comments and whitespace. For complex cases where full parsing is
+// needed, use the parser package directly.
+func (s *PreparedStmt) StatementType() StmtType {
+	// No lock needed - stmtType is immutable after creation
+	return s.stmtType
+}
+
+// ParamCount returns the number of placeholder parameters in the query.
+// This is an alias for NumInput() for consistency with the introspection API.
+func (s *PreparedStmt) ParamCount() int {
+	return s.numParams
+}
+
+// ParamName returns the name of the parameter at the given index (0-based).
+// For positional parameters ($1, $2), returns "1", "2", etc.
+// For named parameters (@name), returns the parameter name without the @ prefix.
+// Returns an error if the index is out of bounds.
+func (s *PreparedStmt) ParamName(idx int) (string, error) {
+	if idx < 0 || idx >= len(s.extractedParams) {
+		return "", &Error{
+			Type: ErrorTypeInvalid,
+			Msg: fmt.Sprintf(
+				"parameter index %d out of range [0, %d)",
+				idx, len(s.extractedParams),
+			),
+		}
+	}
+	return s.extractedParams[idx].name, nil
+}
+
+// Bind stores a parameter value for later execution with ExecBound() or QueryBound().
+// The index is 0-based and must be in range [0, ParamCount()).
+// For positional parameters ($1, $2), idx 0 corresponds to $1, idx 1 to $2, etc.
+// For named parameters (@name), idx corresponds to the order of first occurrence.
+//
+// Bind is not thread-safe - do not call concurrently with other Bind calls
+// or with ExecBound/QueryBound.
+func (s *PreparedStmt) Bind(idx int, value any) error {
+	if s.closed {
+		return &Error{
+			Type: ErrorTypeClosed,
+			Msg:  "statement is closed",
+		}
+	}
+	if idx < 0 || idx >= s.numParams {
+		return &Error{
+			Type: ErrorTypeInvalid,
+			Msg: fmt.Sprintf(
+				"parameter index %d out of range [0, %d)",
+				idx, s.numParams,
+			),
+		}
+	}
+
+	// Store the bound value
+	if len(s.extractedParams) > idx {
+		// Named parameter - use the name
+		if !s.extractedParams[idx].isPositional {
+			s.boundParams[idx] = driver.NamedValue{
+				Name:  s.extractedParams[idx].name,
+				Value: value,
+			}
+		} else {
+			// Positional parameter - use ordinal (1-based)
+			s.boundParams[idx] = driver.NamedValue{
+				Ordinal: idx + 1,
+				Value:   value,
+			}
+		}
+	} else {
+		// Default to positional (1-based ordinal)
+		s.boundParams[idx] = driver.NamedValue{
+			Ordinal: idx + 1,
+			Value:   value,
+		}
+	}
+
+	return nil
+}
+
+// ClearBindings resets all bound parameter values.
+// After calling ClearBindings, you must call Bind for each parameter
+// before calling ExecBound or QueryBound.
+func (s *PreparedStmt) ClearBindings() {
+	for i := range s.boundParams {
+		s.boundParams[i] = driver.NamedValue{}
+	}
+}
+
+// allParamsBound checks if all parameters have been bound.
+func (s *PreparedStmt) allParamsBound() bool {
+	for i := 0; i < s.numParams; i++ {
+		// Check if this slot has been set (Value is non-nil or Ordinal > 0 or Name non-empty)
+		if s.boundParams[i].Ordinal == 0 &&
+			s.boundParams[i].Name == "" &&
+			s.boundParams[i].Value == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// ExecBound executes the prepared statement using previously bound parameters.
+// All parameters must be bound using Bind() before calling this method.
+// Returns an error if any parameter has not been bound.
+func (s *PreparedStmt) ExecBound(ctx context.Context) (driver.Result, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil, &Error{
+			Type: ErrorTypeClosed,
+			Msg:  "statement is closed",
+		}
+	}
+	if s.conn.closed {
+		return nil, &Error{
+			Type: ErrorTypeConnection,
+			Msg:  "connection is closed",
+		}
+	}
+	if !s.allParamsBound() {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg:  "not all parameters have been bound",
+		}
+	}
+
+	// Check context cancellation before execution
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Make a copy of boundParams to avoid data races
+	args := make([]driver.NamedValue, len(s.boundParams))
+	copy(args, s.boundParams)
+
+	return s.conn.ExecContext(ctx, s.query, args)
+}
+
+// QueryBound executes the prepared statement using previously bound parameters
+// and returns the query results as driver.Rows.
+// All parameters must be bound using Bind() before calling this method.
+// Returns an error if any parameter has not been bound.
+func (s *PreparedStmt) QueryBound(ctx context.Context) (driver.Rows, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil, &Error{
+			Type: ErrorTypeClosed,
+			Msg:  "statement is closed",
+		}
+	}
+	if s.conn.closed {
+		return nil, &Error{
+			Type: ErrorTypeConnection,
+			Msg:  "connection is closed",
+		}
+	}
+	if !s.allParamsBound() {
+		return nil, &Error{
+			Type: ErrorTypeInvalid,
+			Msg:  "not all parameters have been bound",
+		}
+	}
+
+	// Check context cancellation before execution
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Make a copy of boundParams to avoid data races
+	args := make([]driver.NamedValue, len(s.boundParams))
+	copy(args, s.boundParams)
+
+	return s.conn.QueryContext(ctx, s.query, args)
 }
 
 // ExecContext executes the prepared statement with the given arguments.
