@@ -1698,10 +1698,290 @@ func TestPhaseC_InsertMultipleRows(t *testing.T) {
 
 // TestPhaseC_UpdateWithWhere tests UPDATE with WHERE clause (Task 3.53)
 func TestPhaseC_UpdateWithWhere(t *testing.T) {
-	// Note: This test is a placeholder as UPDATE requires DML operator implementation
-	// For now, we test the concept using storage layer directly
-	t.Skip(
-		"UPDATE operator not yet implemented in Phase C",
+	// Setup
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	// Create a table
+	tableDef := catalog.NewTableDef(
+		"products",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "name",
+				Type:     dukdb.TYPE_VARCHAR,
+				Nullable: false,
+			},
+			{
+				Name:     "price",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
+	require.NoError(t, err)
+
+	table, err := stor.CreateTable(
+		"products",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+		},
+	)
+	require.NoError(t, err)
+
+	// Insert test data
+	testData := []struct {
+		id    int32
+		name  string
+		price int32
+	}{
+		{1, "Widget", 100},
+		{2, "Gadget", 200},
+		{3, "Doohickey", 50},
+	}
+	for _, row := range testData {
+		err = table.AppendRow(
+			[]any{row.id, row.name, row.price},
+		)
+		require.NoError(t, err)
+	}
+
+	// Scan plan to find rows to update (WHERE price < 150)
+	scanPlan := &planner.PhysicalScan{
+		TableName: "products",
+		Alias:     "products",
+		TableDef:  tableDef,
+	}
+
+	filterExpr := &binder.BoundBinaryExpr{
+		Op: 8, // OpLt
+		Left: &binder.BoundColumnRef{
+			Table:   "products",
+			Column:  "price",
+			ColType: dukdb.TYPE_INTEGER,
+		},
+		Right: &binder.BoundLiteral{
+			Value:   int32(150),
+			ValType: dukdb.TYPE_INTEGER,
+		},
+		ResType: dukdb.TYPE_BOOLEAN,
+	}
+
+	filterPlan := &planner.PhysicalFilter{
+		Child:     scanPlan,
+		Condition: filterExpr,
+	}
+
+	// Create UPDATE plan: UPDATE products SET price = 75 WHERE price < 150
+	updatePlan := &planner.PhysicalUpdate{
+		Schema:   "main",
+		Table:    "products",
+		TableDef: tableDef,
+		Source:   filterPlan,
+		Set: []*binder.BoundSetClause{
+			{
+				ColumnIdx: 2, // price column
+				Value: &binder.BoundLiteral{
+					Value:   int32(75),
+					ValType: dukdb.TYPE_INTEGER,
+				},
+			},
+		},
+	}
+
+	// Execute UPDATE
+	ctx := context.Background()
+	result, err := exec.Execute(
+		ctx,
+		updatePlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have updated 2 rows (Widget and Doohickey)
+	require.Equal(t, int64(2), result.RowsAffected)
+
+	// Verify update by scanning the table
+	verifyScanPlan := &planner.PhysicalScan{
+		TableName: "products",
+		Alias:     "products",
+		TableDef:  tableDef,
+	}
+
+	verifyResult, err := exec.Execute(
+		ctx,
+		verifyScanPlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have 3 rows
+	require.Equal(t, 3, len(verifyResult.Rows))
+
+	// Verify the prices were updated
+	// Widget (id 1) should have price 75
+	assert.Equal(
+		t,
+		int32(75),
+		verifyResult.Rows[0]["price"],
+		"Widget price should be updated to 75",
+	)
+
+	// Gadget (id 2) should still have price 200 (not updated)
+	assert.Equal(
+		t,
+		int32(200),
+		verifyResult.Rows[1]["price"],
+		"Gadget price should remain 200",
+	)
+
+	// Doohickey (id 3) should have price 75
+	assert.Equal(
+		t,
+		int32(75),
+		verifyResult.Rows[2]["price"],
+		"Doohickey price should be updated to 75",
+	)
+}
+
+// TestPhaseC_UpdateWithoutWhere tests UPDATE without WHERE clause (all rows updated)
+func TestPhaseC_UpdateWithoutWhere(t *testing.T) {
+	// Setup
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	// Create a table
+	tableDef := catalog.NewTableDef(
+		"accounts",
+		[]*catalog.ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+			{
+				Name:     "balance",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	)
+	err := cat.CreateTableInSchema(
+		"main",
+		tableDef,
+	)
+	require.NoError(t, err)
+
+	table, err := stor.CreateTable(
+		"accounts",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_INTEGER,
+		},
+	)
+	require.NoError(t, err)
+
+	// Insert test data
+	testData := []struct {
+		id      int32
+		balance int32
+	}{
+		{1, 100},
+		{2, 200},
+		{3, 300},
+	}
+	for _, row := range testData {
+		err = table.AppendRow(
+			[]any{row.id, row.balance},
+		)
+		require.NoError(t, err)
+	}
+
+	// Create UPDATE plan: UPDATE accounts SET balance = balance + 50 (no WHERE)
+	updatePlan := &planner.PhysicalUpdate{
+		Schema:   "main",
+		Table:    "accounts",
+		TableDef: tableDef,
+		Source:   nil, // No filter - update all rows
+		Set: []*binder.BoundSetClause{
+			{
+				ColumnIdx: 1, // balance column
+				Value: &binder.BoundBinaryExpr{
+					Op: 0, // OpAdd
+					Left: &binder.BoundColumnRef{
+						Table:   "accounts",
+						Column:  "balance",
+						ColType: dukdb.TYPE_INTEGER,
+					},
+					Right: &binder.BoundLiteral{
+						Value:   int32(50),
+						ValType: dukdb.TYPE_INTEGER,
+					},
+					ResType: dukdb.TYPE_INTEGER,
+				},
+			},
+		},
+	}
+
+	// Execute UPDATE
+	ctx := context.Background()
+	result, err := exec.Execute(
+		ctx,
+		updatePlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have updated 3 rows (all of them)
+	require.Equal(t, int64(3), result.RowsAffected)
+
+	// Verify update by scanning the table
+	verifyScanPlan := &planner.PhysicalScan{
+		TableName: "accounts",
+		Alias:     "accounts",
+		TableDef:  tableDef,
+	}
+
+	verifyResult, err := exec.Execute(
+		ctx,
+		verifyScanPlan,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Should have 3 rows
+	require.Equal(t, 3, len(verifyResult.Rows))
+
+	// Verify all balances were increased by 50
+	assert.Equal(
+		t,
+		int32(150),
+		verifyResult.Rows[0]["balance"],
+		"Account 1 balance should be 150",
+	)
+	assert.Equal(
+		t,
+		int32(250),
+		verifyResult.Rows[1]["balance"],
+		"Account 2 balance should be 250",
+	)
+	assert.Equal(
+		t,
+		int32(350),
+		verifyResult.Rows[2]["balance"],
+		"Account 3 balance should be 350",
 	)
 }
 
