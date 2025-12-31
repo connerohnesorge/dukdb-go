@@ -38,6 +38,11 @@ func (*SelectStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
 
 func (*SelectStmt) exprNode() {} // SelectStmt can be used as subquery expression
 
+// Accept implements the Visitor pattern for SelectStmt.
+func (s *SelectStmt) Accept(v Visitor) {
+	v.VisitSelectStmt(s)
+}
+
 // SelectColumn represents a column in the SELECT list.
 type SelectColumn struct {
 	Expr  Expr
@@ -53,6 +58,7 @@ type FromClause struct {
 
 // TableRef represents a table reference.
 type TableRef struct {
+	Catalog   string // Optional catalog name (e.g., "main")
 	Schema    string
 	TableName string
 	Alias     string
@@ -96,6 +102,11 @@ func (*InsertStmt) stmtNode() {}
 
 func (*InsertStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_INSERT }
 
+// Accept implements the Visitor pattern for InsertStmt.
+func (s *InsertStmt) Accept(v Visitor) {
+	v.VisitInsertStmt(s)
+}
+
 // UpdateStmt represents an UPDATE statement.
 type UpdateStmt struct {
 	Schema string
@@ -107,6 +118,11 @@ type UpdateStmt struct {
 func (*UpdateStmt) stmtNode() {}
 
 func (*UpdateStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_UPDATE }
+
+// Accept implements the Visitor pattern for UpdateStmt.
+func (s *UpdateStmt) Accept(v Visitor) {
+	v.VisitUpdateStmt(s)
+}
 
 // SetClause represents a SET clause in an UPDATE statement.
 type SetClause struct {
@@ -125,6 +141,11 @@ func (*DeleteStmt) stmtNode() {}
 
 func (*DeleteStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DELETE }
 
+// Accept implements the Visitor pattern for DeleteStmt.
+func (s *DeleteStmt) Accept(v Visitor) {
+	v.VisitDeleteStmt(s)
+}
+
 // CreateTableStmt represents a CREATE TABLE statement.
 type CreateTableStmt struct {
 	Schema      string
@@ -137,6 +158,11 @@ type CreateTableStmt struct {
 func (*CreateTableStmt) stmtNode() {}
 
 func (*CreateTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateTableStmt.
+func (s *CreateTableStmt) Accept(v Visitor) {
+	v.VisitCreateTableStmt(s)
+}
 
 // ColumnDefClause represents a column definition in CREATE TABLE.
 type ColumnDefClause struct {
@@ -157,6 +183,11 @@ type DropTableStmt struct {
 func (*DropTableStmt) stmtNode() {}
 
 func (*DropTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropTableStmt.
+func (s *DropTableStmt) Accept(v Visitor) {
+	v.VisitDropTableStmt(s)
+}
 
 // ---------- Expression Types ----------
 
@@ -333,6 +364,11 @@ func (*BeginStmt) stmtNode() {}
 
 func (*BeginStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
 
+// Accept implements the Visitor pattern for BeginStmt.
+func (s *BeginStmt) Accept(v Visitor) {
+	v.VisitBeginStmt(s)
+}
+
 // CommitStmt represents a COMMIT statement.
 type CommitStmt struct{}
 
@@ -340,9 +376,19 @@ func (*CommitStmt) stmtNode() {}
 
 func (*CommitStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
 
+// Accept implements the Visitor pattern for CommitStmt.
+func (s *CommitStmt) Accept(v Visitor) {
+	v.VisitCommitStmt(s)
+}
+
 // RollbackStmt represents a ROLLBACK statement.
 type RollbackStmt struct{}
 
 func (*RollbackStmt) stmtNode() {}
 
 func (*RollbackStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// Accept implements the Visitor pattern for RollbackStmt.
+func (s *RollbackStmt) Accept(v Visitor) {
+	v.VisitRollbackStmt(s)
+}

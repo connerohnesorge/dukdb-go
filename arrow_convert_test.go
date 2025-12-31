@@ -424,7 +424,7 @@ func TestRecordBatchToDataChunk_Primitives(
 		nil,
 	)
 
-	record := builder.NewRecord()
+	record := builder.NewRecordBatch()
 	defer record.Release()
 
 	// Create chunk with matching types
@@ -483,7 +483,7 @@ func TestRecordBatchToDataChunk_WithNulls(
 	intBuilder.AppendNull()
 	intBuilder.Append(99)
 
-	record := builder.NewRecord()
+	record := builder.NewRecordBatch()
 	defer record.Release()
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
@@ -831,7 +831,7 @@ func TestRecordBatchToDataChunk_ErrorCases(
 	builder.Field(0).(*array.Int32Builder).Append(
 		42,
 	)
-	record := builder.NewRecord()
+	record := builder.NewRecordBatch()
 	defer record.Release()
 	builder.Release()
 

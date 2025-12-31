@@ -285,10 +285,11 @@ type token struct {
 }
 
 type parser struct {
-	input  string
-	pos    int
-	tokens []token
-	tokPos int
+	input    string
+	pos      int
+	tokens   []token
+	tokPos   int
+	tokenErr error // Error encountered during tokenization
 }
 
 func newParser(input string) *parser {
@@ -414,6 +415,7 @@ func (p *parser) scanParameter() {
 func (p *parser) scanString(quote byte) {
 	start := p.pos
 	p.pos++ // skip opening quote
+	terminated := false
 	for p.pos < len(p.input) {
 		if p.input[p.pos] == quote {
 			if p.pos+1 < len(p.input) &&
@@ -422,11 +424,22 @@ func (p *parser) scanString(quote byte) {
 				p.pos += 2
 			} else {
 				p.pos++
+				terminated = true
 
 				break
 			}
 		} else {
 			p.pos++
+		}
+	}
+	if !terminated {
+		// Unterminated string literal
+		p.tokenErr = &dukdb.Error{
+			Type: dukdb.ErrorTypeParser,
+			Msg: fmt.Sprintf(
+				"Parser Error: unterminated quoted string at or near %q",
+				p.input[start:p.pos],
+			),
 		}
 	}
 	p.tokens = append(
@@ -604,6 +617,11 @@ func (p *parser) errorf(
 }
 
 func (p *parser) parse() (Statement, error) {
+	// Check for tokenization errors first
+	if p.tokenErr != nil {
+		return nil, p.tokenErr
+	}
+
 	if p.current().typ == tokenEOF {
 		return nil, p.errorf("empty query")
 	}

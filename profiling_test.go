@@ -427,9 +427,4 @@ func TestProfilingContext_DeterministicTiming(
 	)
 }
 
-// Test that no time.Sleep is used in tests
-func TestNoTimeSleepInTests(t *testing.T) {
-	// This test exists to document that we don't use time.Sleep
-	// The actual verification is done via grep in the validation phase
-	assert.True(t, true)
-}
+

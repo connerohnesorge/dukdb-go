@@ -72,7 +72,7 @@ func DataChunkToRecordBatch(
 	}
 
 	// Create record - takes ownership of arrays
-	record := array.NewRecord(
+	record := array.NewRecordBatch(
 		schema,
 		arrays,
 		int64(chunk.GetSize()),

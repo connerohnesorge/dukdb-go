@@ -20,12 +20,6 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 		skipOK bool // Some parsers are lenient
 	}{
 		{
-			name:   "missing FROM keyword",
-			sql:    "SELECT * users",
-			errMsg: "Parser Error",
-			skipOK: true, // Parser may treat "users" as an alias
-		},
-		{
 			name:   "invalid CREATE TABLE syntax",
 			sql:    "CREATE users (id INTEGER)",
 			errMsg: "Parser Error",
@@ -36,16 +30,9 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 			errMsg: "Parser Error",
 		},
 		{
-			name:   "invalid operator",
-			sql:    "SELECT 1 ++ 2",
-			errMsg: "Parser Error",
-			skipOK: true, // May be parsed as unary +
-		},
-		{
 			name:   "unclosed string literal",
 			sql:    "SELECT 'hello",
-			errMsg: "Parser Error",
-			skipOK: true, // Some parsers auto-close strings
+			errMsg: "unterminated quoted string",
 		},
 	}
 
@@ -499,10 +486,12 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 			},
 		},
 		{
-			name:          "syntax error is clear",
-			sql:           "SELECT * users",
-			expectedInMsg: []string{}, // Just needs to be an error
-			skipOK:        true,       // Parser may accept this
+			name: "unclosed string error is clear",
+			sql:  "SELECT 'hello",
+			expectedInMsg: []string{
+				"unterminated",
+				"quoted string",
+			},
 		},
 	}
 
@@ -574,12 +563,11 @@ func TestPhaseD_Error_TypeClassification(
 	}{
 		{
 			name: "parser error",
-			sql:  "SELECT * users", // Missing FROM
+			sql:  "SELECT 'hello", // Unclosed string
 			expectedTypes: []dukdb.ErrorType{
 				dukdb.ErrorTypeParser,
 				dukdb.ErrorTypeSyntax,
 			},
-			skipOK: true, // Parser may accept this
 		},
 		{
 			name: "catalog error",
