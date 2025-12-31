@@ -75,6 +75,46 @@ type BackendConnCatalog interface {
 	GetCatalog() any
 }
 
+// BackendConnIdentifiable is an optional interface for backends that support
+// connection identification.
+//
+// This interface enables the public [ConnId] API to retrieve unique connection
+// IDs for debugging, tracing, and connection pool management. Backend
+// implementations that support connection identification should implement
+// this interface on their connection types.
+//
+// # Implementation Requirements
+//
+// Backends implementing this interface must guarantee:
+//   - ID uniqueness: Each connection gets a distinct ID
+//   - ID stability: The same connection always returns the same ID
+//   - Never-reuse: IDs are never recycled within a process lifetime
+//   - Thread-safety: Both methods must be safe for concurrent use
+//
+// # Example Implementation
+//
+// See [internal/engine.EngineConn] for a reference implementation that uses
+// atomic counters for ID generation.
+type BackendConnIdentifiable interface {
+	// ID returns the unique connection ID.
+	//
+	// The ID is assigned when the connection is created and remains stable
+	// throughout the connection's lifetime. IDs are unique within a process
+	// and never reused (monotonically increasing).
+	//
+	// Returns 0 only if the implementation failed to assign an ID, which
+	// should not occur in normal operation. The public [ConnId] API treats
+	// 0 as an invalid ID returned only on error.
+	ID() uint64
+
+	// IsClosed returns whether the connection has been closed.
+	//
+	// This is used by [ConnId] to return an appropriate error when
+	// attempting to get the ID of a closed connection. Implementations
+	// should return true after [BackendConn.Close] has been called.
+	IsClosed() bool
+}
+
 // BackendStmt represents a prepared statement from a backend.
 type BackendStmt interface {
 	// Execute executes the prepared statement with the given arguments
@@ -216,6 +256,7 @@ type StmtProperties struct {
 // BackendStmtProperties extends BackendStmt with properties access.
 type BackendStmtProperties interface {
 	BackendStmt
+	// Properties returns metadata about the statement's behavior.
 	Properties() StmtProperties
 }
 

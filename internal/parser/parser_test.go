@@ -577,3 +577,202 @@ func TestParseTypeName(t *testing.T) {
 		})
 	}
 }
+
+// Phase 1: WHERE Clause Integration - Parser Tests
+
+// Task 1.1: Verify parser correctly captures WHERE clauses in UpdateStmt AST nodes
+func TestParseUpdateWithWhere(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		hasWhere bool
+	}{
+		{
+			name:     "UPDATE without WHERE",
+			sql:      "UPDATE users SET name = 'John'",
+			hasWhere: false,
+		},
+		{
+			name:     "UPDATE with simple WHERE",
+			sql:      "UPDATE users SET name = 'John' WHERE id = 1",
+			hasWhere: true,
+		},
+		{
+			name:     "UPDATE with complex WHERE",
+			sql:      "UPDATE users SET name = 'John' WHERE age > 18 AND active = true",
+			hasWhere: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			updateStmt, ok := stmt.(*UpdateStmt)
+			if !ok {
+				t.Fatalf("Expected UpdateStmt, got %T", stmt)
+			}
+
+			if tt.hasWhere && updateStmt.Where == nil {
+				t.Error("Expected WHERE clause but got nil")
+			}
+			if !tt.hasWhere && updateStmt.Where != nil {
+				t.Error("Expected no WHERE clause but got one")
+			}
+		})
+	}
+}
+
+// Task 1.2: Verify parser correctly captures WHERE clauses in DeleteStmt AST nodes
+func TestParseDeleteWithWhere(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		hasWhere bool
+	}{
+		{
+			name:     "DELETE without WHERE",
+			sql:      "DELETE FROM users",
+			hasWhere: false,
+		},
+		{
+			name:     "DELETE with simple WHERE",
+			sql:      "DELETE FROM users WHERE id = 1",
+			hasWhere: true,
+		},
+		{
+			name:     "DELETE with complex WHERE",
+			sql:      "DELETE FROM users WHERE age > 18 AND active = false",
+			hasWhere: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			deleteStmt, ok := stmt.(*DeleteStmt)
+			if !ok {
+				t.Fatalf("Expected DeleteStmt, got %T", stmt)
+			}
+
+			if tt.hasWhere && deleteStmt.Where == nil {
+				t.Error("Expected WHERE clause but got nil")
+			}
+			if !tt.hasWhere && deleteStmt.Where != nil {
+				t.Error("Expected no WHERE clause but got one")
+			}
+		})
+	}
+}
+
+// Task 1.3: Test: Parse "DELETE FROM t WHERE x > 5" and verify WHERE expression in AST
+func TestParseDeleteWhereExpression(t *testing.T) {
+	sql := "DELETE FROM t WHERE x > 5"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	deleteStmt, ok := stmt.(*DeleteStmt)
+	if !ok {
+		t.Fatalf("Expected DeleteStmt, got %T", stmt)
+	}
+
+	if deleteStmt.Where == nil {
+		t.Fatal("Expected WHERE clause but got nil")
+	}
+
+	// Verify it's a binary expression (x > 5)
+	binExpr, ok := deleteStmt.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("Expected BinaryExpr, got %T", deleteStmt.Where)
+	}
+
+	if binExpr.Op != OpGt {
+		t.Errorf("Expected Op = OpGt, got %v", binExpr.Op)
+	}
+
+	// Verify left side is column reference (x)
+	leftCol, ok := binExpr.Left.(*ColumnRef)
+	if !ok {
+		t.Fatalf("Expected ColumnRef on left, got %T", binExpr.Left)
+	}
+	if leftCol.Column != "x" {
+		t.Errorf("Expected column 'x', got '%s'", leftCol.Column)
+	}
+
+	// Verify right side is literal (5)
+	rightLit, ok := binExpr.Right.(*Literal)
+	if !ok {
+		t.Fatalf("Expected Literal on right, got %T", binExpr.Right)
+	}
+	if rightLit.Value != int64(5) {
+		t.Errorf("Expected value 5, got %v", rightLit.Value)
+	}
+}
+
+// Task 1.4: Test: Parse "UPDATE t SET a = 1 WHERE b IN (1,2,3)" and verify complex WHERE
+func TestParseUpdateWhereInList(t *testing.T) {
+	sql := "UPDATE t SET a = 1 WHERE b IN (1,2,3)"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	updateStmt, ok := stmt.(*UpdateStmt)
+	if !ok {
+		t.Fatalf("Expected UpdateStmt, got %T", stmt)
+	}
+
+	if updateStmt.Where == nil {
+		t.Fatal("Expected WHERE clause but got nil")
+	}
+
+	// Verify it's an IN list expression
+	inExpr, ok := updateStmt.Where.(*InListExpr)
+	if !ok {
+		t.Fatalf("Expected InListExpr, got %T", updateStmt.Where)
+	}
+
+	// Verify column is 'b'
+	colRef, ok := inExpr.Expr.(*ColumnRef)
+	if !ok {
+		t.Fatalf("Expected ColumnRef, got %T", inExpr.Expr)
+	}
+	if colRef.Column != "b" {
+		t.Errorf("Expected column 'b', got '%s'", colRef.Column)
+	}
+
+	// Verify list has 3 values
+	if len(inExpr.Values) != 3 {
+		t.Errorf("Expected 3 values in IN list, got %d", len(inExpr.Values))
+	}
+
+	// Verify values are 1, 2, 3
+	expectedValues := []int64{1, 2, 3}
+	for i, expected := range expectedValues {
+		lit, ok := inExpr.Values[i].(*Literal)
+		if !ok {
+			t.Errorf("Value %d: expected Literal, got %T", i, inExpr.Values[i])
+			continue
+		}
+		if lit.Value != expected {
+			t.Errorf("Value %d: expected %d, got %v", i, expected, lit.Value)
+		}
+	}
+
+	// Verify SET clause
+	if len(updateStmt.Set) != 1 {
+		t.Fatalf("Expected 1 SET clause, got %d", len(updateStmt.Set))
+	}
+	if updateStmt.Set[0].Column != "a" {
+		t.Errorf("Expected column 'a', got '%s'", updateStmt.Set[0].Column)
+	}
+}

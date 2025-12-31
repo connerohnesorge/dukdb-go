@@ -1513,3 +1513,272 @@ func TestParameterTypeInferenceINList(
 		}
 	}
 }
+
+// Connection ID Tests
+
+func TestConnectionID_NonZero(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	engineConn := conn.(*EngineConn)
+	id := engineConn.ID()
+
+	if id == 0 {
+		t.Error("Connection ID should be non-zero")
+	}
+}
+
+func TestConnectionID_Uniqueness(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	// Create 100 connections and verify all IDs are unique
+	ids := make(map[uint64]bool)
+	conns := make([]*EngineConn, 100)
+
+	for i := range 100 {
+		conn, err := engine.Open(":memory:", nil)
+		if err != nil {
+			t.Fatalf("Open failed at iteration %d: %v", i, err)
+		}
+		engineConn := conn.(*EngineConn)
+		conns[i] = engineConn
+
+		id := engineConn.ID()
+		if ids[id] {
+			t.Errorf("Duplicate connection ID found: %d", id)
+		}
+		ids[id] = true
+	}
+
+	// Clean up
+	for _, conn := range conns {
+		conn.Close()
+	}
+}
+
+func TestConnectionID_Stability(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	engineConn := conn.(*EngineConn)
+	firstID := engineConn.ID()
+
+	// Call ID() 100 times and verify same ID returned
+	for i := range 100 {
+		id := engineConn.ID()
+		if id != firstID {
+			t.Errorf(
+				"ID changed on call %d: expected %d, got %d",
+				i,
+				firstID,
+				id,
+			)
+		}
+	}
+}
+
+func TestConnectionID_DifferentConnections(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn1, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open conn1 failed: %v", err)
+	}
+	defer conn1.Close()
+
+	conn2, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open conn2 failed: %v", err)
+	}
+	defer conn2.Close()
+
+	engineConn1 := conn1.(*EngineConn)
+	engineConn2 := conn2.(*EngineConn)
+
+	id1 := engineConn1.ID()
+	id2 := engineConn2.ID()
+
+	if id1 == id2 {
+		t.Errorf(
+			"Different connections should have different IDs: both got %d",
+			id1,
+		)
+	}
+}
+
+func TestConnectionID_Concurrent(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	// Create 100 connections concurrently
+	var wg sync.WaitGroup
+	ids := make(chan uint64, 100)
+	errors := make(chan error, 100)
+
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			conn, err := engine.Open(":memory:", nil)
+			if err != nil {
+				errors <- err
+				return
+			}
+			defer conn.Close()
+
+			engineConn := conn.(*EngineConn)
+			ids <- engineConn.ID()
+		}()
+	}
+
+	wg.Wait()
+	close(ids)
+	close(errors)
+
+	// Check for errors
+	for err := range errors {
+		t.Fatalf("Concurrent open failed: %v", err)
+	}
+
+	// Verify all IDs are unique
+	seenIDs := make(map[uint64]bool)
+	for id := range ids {
+		if seenIDs[id] {
+			t.Errorf("Duplicate ID found in concurrent test: %d", id)
+		}
+		seenIDs[id] = true
+	}
+}
+
+func TestConnectionID_ConcurrentCalls(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer conn.Close()
+
+	engineConn := conn.(*EngineConn)
+	expectedID := engineConn.ID()
+
+	// Call ID() from 10 goroutines concurrently
+	var wg sync.WaitGroup
+	errors := make(chan string, 100)
+
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 10 {
+				id := engineConn.ID()
+				if id != expectedID {
+					errors <- "ID mismatch in concurrent call"
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for errMsg := range errors {
+		t.Error(errMsg)
+	}
+}
+
+func TestConnectionIsClosed(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	engineConn := conn.(*EngineConn)
+
+	// Should not be closed initially
+	if engineConn.IsClosed() {
+		t.Error("Connection should not be closed initially")
+	}
+
+	// Close the connection
+	err = engineConn.Close()
+	if err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Should be closed now
+	if !engineConn.IsClosed() {
+		t.Error("Connection should be closed after Close()")
+	}
+}
+
+func TestConnectionID_AfterClose(t *testing.T) {
+	engine := NewEngine()
+	defer engine.Close()
+
+	conn, err := engine.Open(":memory:", nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	engineConn := conn.(*EngineConn)
+	idBeforeClose := engineConn.ID()
+
+	// Close the connection
+	err = engineConn.Close()
+	if err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// ID should still be accessible after close (stable)
+	idAfterClose := engineConn.ID()
+	if idAfterClose != idBeforeClose {
+		t.Errorf(
+			"ID changed after close: expected %d, got %d",
+			idBeforeClose,
+			idAfterClose,
+		)
+	}
+}
+
+func TestGenerateConnID_Sequential(t *testing.T) {
+	// Test that generateConnID returns sequential IDs
+	// Note: This test may be affected by other tests running concurrently
+	// so we just verify uniqueness and ordering for a batch
+
+	ids := make([]uint64, 10)
+	for i := range 10 {
+		ids[i] = generateConnID()
+	}
+
+	// Verify all IDs are unique and increasing
+	for i := 1; i < len(ids); i++ {
+		if ids[i] <= ids[i-1] {
+			t.Errorf(
+				"IDs not strictly increasing: ids[%d]=%d <= ids[%d]=%d",
+				i,
+				ids[i],
+				i-1,
+				ids[i-1],
+			)
+		}
+	}
+}

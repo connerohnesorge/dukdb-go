@@ -73,6 +73,9 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundInListExpr:
 		return e.evaluateInListExpr(ctx, ex, row)
 
+	case *binder.BoundInSubqueryExpr:
+		return e.evaluateInSubqueryExpr(ctx, ex, row)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -614,6 +617,66 @@ func (e *Executor) evaluateInListExpr(
 			}
 
 			return true, nil
+		}
+	}
+
+	if expr.Not {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (e *Executor) evaluateInSubqueryExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundInSubqueryExpr,
+	row map[string]any,
+) (any, error) {
+	// Evaluate the left-hand side expression
+	val, err := e.evaluateExpr(
+		ctx,
+		expr.Expr,
+		row,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if val == nil {
+		return nil, nil
+	}
+
+	// Execute the subquery to get the result set
+	// We need to plan and execute the subquery
+	plan, err := e.planner.Plan(expr.Subquery)
+	if err != nil {
+		return nil, err
+	}
+
+	subqueryResult, err := e.Execute(
+		ctx.Context,
+		plan,
+		ctx.Args,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if val is in the subquery results
+	// Subquery should return a single column
+	for _, subRow := range subqueryResult.Rows {
+		// Get the first (and should be only) column value
+		for _, subVal := range subRow {
+			if subVal != nil &&
+				compareValues(val, subVal) == 0 {
+				if expr.Not {
+					return false, nil
+				}
+
+				return true, nil
+			}
+
+			break // Only check first column
 		}
 	}
 

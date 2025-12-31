@@ -43,6 +43,10 @@ func TestAllCompatibility(t *testing.T) {
 			FeatureCompatibilityTests,
 		)
 	})
+
+	t.Run("DML", func(t *testing.T) {
+		runner.RunTests(t, DMLCompatibilityTests)
+	})
 }
 
 // TestSQLCompatibility runs only SQL compatibility tests.
@@ -73,6 +77,12 @@ func TestErrorCompatibility(t *testing.T) {
 func TestFeatureCompatibility(t *testing.T) {
 	runner := NewTestRunner(nil)
 	runner.RunTests(t, FeatureCompatibilityTests)
+}
+
+// TestDMLCompatibility runs only DML (UPDATE/DELETE) compatibility tests.
+func TestDMLCompatibility(t *testing.T) {
+	runner := NewTestRunner(nil)
+	runner.RunTests(t, DMLCompatibilityTests)
 }
 
 // TestQuickCompatibility runs a subset of tests for quick validation.
@@ -183,6 +193,7 @@ func GetTestCounts() map[string]int {
 		"Features": len(
 			FeatureCompatibilityTests,
 		),
+		"DML": len(DMLCompatibilityTests),
 	}
 }
 

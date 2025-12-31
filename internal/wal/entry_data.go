@@ -88,11 +88,13 @@ func (e *InsertEntry) Deserialize(
 }
 
 // DeleteEntry represents a DELETE WAL entry.
+// DeletedData stores the row values before deletion for rollback support (ACID compliance).
 type DeleteEntry struct {
-	txnID  uint64
-	Schema string
-	Table  string
-	RowIDs []uint64
+	txnID       uint64
+	Schema      string
+	Table       string
+	RowIDs      []uint64
+	DeletedData [][]any // Row values before deletion for rollback
 }
 
 // NewDeleteEntry creates a new DeleteEntry.
@@ -102,11 +104,33 @@ func NewDeleteEntry(
 	rowIDs []uint64,
 ) *DeleteEntry {
 	return &DeleteEntry{
-		txnID:  txnID,
-		Schema: schema,
-		Table:  table,
-		RowIDs: rowIDs,
+		txnID:       txnID,
+		Schema:      schema,
+		Table:       table,
+		RowIDs:      rowIDs,
+		DeletedData: nil,
 	}
+}
+
+// NewDeleteEntryWithData creates a new DeleteEntry with deleted row data for rollback support.
+func NewDeleteEntryWithData(
+	txnID uint64,
+	schema, table string,
+	rowIDs []uint64,
+	deletedData [][]any,
+) *DeleteEntry {
+	return &DeleteEntry{
+		txnID:       txnID,
+		Schema:      schema,
+		Table:       table,
+		RowIDs:      rowIDs,
+		DeletedData: deletedData,
+	}
+}
+
+// GetDeletedData returns the deleted row data.
+func (e *DeleteEntry) GetDeletedData() [][]any {
+	return e.DeletedData
 }
 
 // Type returns the entry type.
@@ -141,7 +165,14 @@ func (e *DeleteEntry) Serialize(
 		}
 	}
 
-	return nil
+	// Serialize deleted data for rollback support (ACID compliance)
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(e.DeletedData); err != nil {
+		return err
+	}
+
+	return writeBytes(w, buf.Bytes())
 }
 
 // Deserialize reads the entry from the reader.
@@ -169,20 +200,30 @@ func (e *DeleteEntry) Deserialize(
 		}
 	}
 
-	return nil
+	// Deserialize deleted data for rollback support
+	data, err := readBytes(r)
+	if err != nil {
+		return err
+	}
+	dec := gob.NewDecoder(bytes.NewReader(data))
+
+	return dec.Decode(&e.DeletedData)
 }
 
 // UpdateEntry represents an UPDATE WAL entry.
+// BeforeValues stores the row values before update for rollback support (ACID compliance).
+// AfterValues (NewValues) stores the row values after update for redo support.
 type UpdateEntry struct {
-	txnID      uint64
-	Schema     string
-	Table      string
-	RowIDs     []uint64
-	ColumnIdxs []int
-	NewValues  [][]any
+	txnID        uint64
+	Schema       string
+	Table        string
+	RowIDs       []uint64
+	ColumnIdxs   []int
+	BeforeValues [][]any // Row values before update for rollback (CRITICAL for MVCC)
+	NewValues    [][]any // Row values after update for redo (AfterValues)
 }
 
-// NewUpdateEntry creates a new UpdateEntry.
+// NewUpdateEntry creates a new UpdateEntry (backward compatible).
 func NewUpdateEntry(
 	txnID uint64,
 	schema, table string,
@@ -191,13 +232,44 @@ func NewUpdateEntry(
 	newValues [][]any,
 ) *UpdateEntry {
 	return &UpdateEntry{
-		txnID:      txnID,
-		Schema:     schema,
-		Table:      table,
-		RowIDs:     rowIDs,
-		ColumnIdxs: columnIdxs,
-		NewValues:  newValues,
+		txnID:        txnID,
+		Schema:       schema,
+		Table:        table,
+		RowIDs:       rowIDs,
+		ColumnIdxs:   columnIdxs,
+		BeforeValues: nil,
+		NewValues:    newValues,
 	}
+}
+
+// NewUpdateEntryWithBeforeValues creates a new UpdateEntry with before values for rollback support.
+func NewUpdateEntryWithBeforeValues(
+	txnID uint64,
+	schema, table string,
+	rowIDs []uint64,
+	columnIdxs []int,
+	beforeValues [][]any,
+	newValues [][]any,
+) *UpdateEntry {
+	return &UpdateEntry{
+		txnID:        txnID,
+		Schema:       schema,
+		Table:        table,
+		RowIDs:       rowIDs,
+		ColumnIdxs:   columnIdxs,
+		BeforeValues: beforeValues,
+		NewValues:    newValues,
+	}
+}
+
+// GetBeforeValues returns the before values.
+func (e *UpdateEntry) GetBeforeValues() [][]any {
+	return e.BeforeValues
+}
+
+// GetAfterValues returns the after values (alias for NewValues).
+func (e *UpdateEntry) GetAfterValues() [][]any {
+	return e.NewValues
 }
 
 // Type returns the entry type.
@@ -244,14 +316,24 @@ func (e *UpdateEntry) Serialize(
 		}
 	}
 
-	// Write new values using gob
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(e.NewValues); err != nil {
+	// Write before values using gob for rollback support (ACID compliance)
+	var beforeBuf bytes.Buffer
+	beforeEnc := gob.NewEncoder(&beforeBuf)
+	if err := beforeEnc.Encode(e.BeforeValues); err != nil {
+		return err
+	}
+	if err := writeBytes(w, beforeBuf.Bytes()); err != nil {
 		return err
 	}
 
-	return writeBytes(w, buf.Bytes())
+	// Write new/after values using gob for redo support
+	var afterBuf bytes.Buffer
+	afterEnc := gob.NewEncoder(&afterBuf)
+	if err := afterEnc.Encode(e.NewValues); err != nil {
+		return err
+	}
+
+	return writeBytes(w, afterBuf.Bytes())
 }
 
 // Deserialize reads the entry from the reader.
@@ -295,14 +377,23 @@ func (e *UpdateEntry) Deserialize(
 		e.ColumnIdxs[i] = int(idx)
 	}
 
-	// Read new values using gob
-	data, err := readBytes(r)
+	// Read before values using gob for rollback support
+	beforeData, err := readBytes(r)
 	if err != nil {
 		return err
 	}
-	dec := gob.NewDecoder(bytes.NewReader(data))
+	beforeDec := gob.NewDecoder(bytes.NewReader(beforeData))
+	if err := beforeDec.Decode(&e.BeforeValues); err != nil {
+		return err
+	}
 
-	return dec.Decode(&e.NewValues)
+	// Read new/after values using gob for redo support
+	afterData, err := readBytes(r)
+	if err != nil {
+		return err
+	}
+	afterDec := gob.NewDecoder(bytes.NewReader(afterData))
+	return afterDec.Decode(&e.NewValues)
 }
 
 // UseTableEntry represents a USE TABLE WAL entry.

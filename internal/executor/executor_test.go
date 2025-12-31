@@ -2,14 +2,17 @@ package executor
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
+	"github.com/coder/quartz"
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
 func setupTestExecutor() (*Executor, *catalog.Catalog, *storage.Storage) {
@@ -18,6 +21,78 @@ func setupTestExecutor() (*Executor, *catalog.Catalog, *storage.Storage) {
 	exec := NewExecutor(cat, stor)
 
 	return exec, cat, stor
+}
+
+// setupTestExecutorWithWAL creates a test executor with WAL enabled
+func setupTestExecutorWithWAL(t *testing.T) (*Executor, *catalog.Catalog, *storage.Storage) {
+	t.Helper()
+
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	// Create WAL writer in temp directory
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	walWriter, err := wal.NewWriter(walPath, clock)
+	if err != nil {
+		t.Fatalf("Failed to create WAL writer: %v", err)
+	}
+
+	// Set WAL on executor
+	exec.SetWAL(walWriter)
+	exec.SetTxnID(1)
+
+	// Store the WAL path for later access
+	t.Cleanup(func() {
+		_ = walWriter.Close()
+	})
+
+	return exec, cat, stor
+}
+
+// getWALEntries reads all WAL entries from the executor's WAL
+func getWALEntries(t *testing.T, exec *Executor) []wal.Entry {
+	t.Helper()
+
+	if exec.wal == nil {
+		t.Fatal("Executor has no WAL configured")
+	}
+
+	// Sync WAL to ensure all entries are written
+	if err := exec.wal.Sync(); err != nil {
+		t.Fatalf("Failed to sync WAL: %v", err)
+	}
+
+	// Get the WAL path and read entries
+	walPath := exec.wal.Path()
+	clock := quartz.NewReal()
+
+	reader, err := wal.NewReader(walPath, clock)
+	if err != nil {
+		t.Fatalf("Failed to create WAL reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	entries, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("Failed to read WAL entries: %v", err)
+	}
+
+	return entries
+}
+
+// countInsertEntries counts INSERT entries in the WAL entries slice
+func countInsertEntries(entries []wal.Entry) int {
+	count := 0
+	for _, entry := range entries {
+		if entry.Type().String() == "INSERT" {
+			count++
+		}
+	}
+	return count
 }
 
 func executeQuery(

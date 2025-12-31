@@ -429,6 +429,10 @@ func toInt8(val any) int8 {
 		return int8(v)
 	case int64:
 		return int8(v)
+	case float64:
+		return int8(v)
+	case float32:
+		return int8(v)
 	default:
 		return 0
 	}
@@ -445,6 +449,10 @@ func toInt16(val any) int16 {
 	case int32:
 		return int16(v)
 	case int64:
+		return int16(v)
+	case float64:
+		return int16(v)
+	case float32:
 		return int16(v)
 	default:
 		return 0
@@ -463,6 +471,10 @@ func toInt32(val any) int32 {
 		return int32(v)
 	case int64:
 		return int32(v)
+	case float64:
+		return int32(v)
+	case float32:
+		return int32(v)
 	default:
 		return 0
 	}
@@ -479,6 +491,10 @@ func toInt64(val any) int64 {
 	case int16:
 		return int64(v)
 	case int32:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case float32:
 		return int64(v)
 	default:
 		return 0

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"sync"
+	"sync/atomic"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -13,10 +14,69 @@ import (
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
 
+// nextConnID is the global atomic counter for generating unique connection IDs.
+//
+// IDs start at 1 and increment monotonically. The counter is thread-safe
+// and uses [sync/atomic.Uint64] operations to ensure uniqueness across
+// concurrent connection creations. ID 0 is reserved as an invalid/error
+// sentinel value.
+//
+// The counter is initialized to 1 in [init] to ensure the first call to
+// [generateConnID] returns 1 (not 0).
+var nextConnID atomic.Uint64
+
+// init initializes the connection ID counter to start at 1.
+//
+// This ensures:
+//   - The first connection gets ID 1 (not 0)
+//   - ID 0 remains reserved as an invalid/error sentinel
+//   - [generateConnID] can use Add(1)-1 pattern for atomic fetch-and-increment
+func init() {
+	nextConnID.Store(1)
+}
+
+// generateConnID generates a unique connection ID using atomic increment.
+//
+// Each call returns a new, never-before-used ID. The implementation uses
+// [sync/atomic.Uint64.Add] which provides both atomicity and memory ordering
+// guarantees for concurrent access.
+//
+// # ID Assignment
+//
+// IDs are assigned sequentially starting at 1:
+//   - First connection gets ID 1
+//   - Second connection gets ID 2
+//   - And so on...
+//
+// ID 0 is reserved as an invalid/error sentinel and is never returned.
+//
+// # Thread Safety
+//
+// This function is safe to call concurrently from any number of goroutines.
+// Each call is guaranteed to return a unique ID even under heavy contention.
+// The atomic increment operation ensures no two connections ever receive
+// the same ID.
+//
+// # Wraparound Behavior
+//
+// With a uint64 counter, wraparound would only occur after 2^64 connections
+// (over 18 quintillion). At 1 million connections per second, this would
+// take over 500,000 years. Wraparound is not a practical concern.
+//
+// # Process Lifetime
+//
+// IDs are unique within a single process lifetime. After process restart,
+// IDs reset to 1. If global ID coordination is required, a higher-level
+// mechanism must be used.
+func generateConnID() uint64 {
+	return nextConnID.Add(1) - 1
+}
+
 // EngineConn represents a connection to the engine.
 // It implements the BackendConn interface.
 type EngineConn struct {
 	mu     sync.Mutex
+	id     uint64 // Unique connection ID, assigned at creation
 	engine *Engine
 	txn    *Transaction
 	closed bool
@@ -202,6 +262,41 @@ func (c *EngineConn) Close() error {
 	}
 
 	return nil
+}
+
+// ID returns the unique connection ID for this engine connection.
+//
+// The ID is assigned during connection creation via [generateConnID] and
+// remains stable throughout the connection's lifetime. IDs are:
+//   - Unique: Each connection within a process gets a distinct ID
+//   - Stable: The same connection always returns the same ID
+//   - Never reused: IDs increment monotonically and are never recycled
+//   - Sequential: IDs are assigned in creation order (1, 2, 3, ...)
+//
+// This method implements the [dukdb.BackendConnIdentifiable] interface,
+// enabling the public [dukdb.ConnId] API to retrieve connection IDs.
+//
+// # Thread Safety
+//
+// This method is safe to call concurrently from multiple goroutines.
+// The ID is immutable once assigned during connection creation.
+//
+// # ID Space
+//
+// Connection IDs are 64-bit unsigned integers starting at 1 (ID 0 is
+// reserved as an invalid/error value). The uint64 space allows for
+// over 18 quintillion unique IDs before wraparound, which is not a
+// practical concern for any application.
+func (c *EngineConn) ID() uint64 {
+	return c.id
+}
+
+// IsClosed returns whether the connection has been closed.
+// Thread-safe.
+func (c *EngineConn) IsClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
 }
 
 // Ping verifies that the connection is still alive.

@@ -55,6 +55,7 @@ func (e *Engine) Open(
 		isolatedEngine.persistent = false
 
 		conn := &EngineConn{
+			id:     generateConnID(),
 			engine: isolatedEngine,
 			txn:    isolatedEngine.txnMgr.Begin(),
 		}
@@ -95,6 +96,7 @@ func (e *Engine) Open(
 
 	// Create a new connection
 	conn := &EngineConn{
+		id:     generateConnID(),
 		engine: e,
 		txn:    e.txnMgr.Begin(),
 	}

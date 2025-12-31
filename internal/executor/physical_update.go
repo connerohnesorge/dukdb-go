@@ -1,17 +1,27 @@
 package executor
 
 import (
+	"fmt"
+
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
-// executeUpdate executes an UPDATE operation.
+// executeUpdate executes an UPDATE operation using the RowID/tombstone architecture.
 // UPDATE works by:
-// 1. Scanning all rows from the table
-// 2. For each row, checking if it matches the filter condition (from Source plan if present)
-// 3. For matching rows, evaluating SET expressions and updating column values
-// 4. Recreating the table with all rows (both updated and unchanged)
+// 1. Scanning the table to find rows matching the WHERE clause
+// 2. For each matching row, evaluating SET expressions using current row values
+// 3. Collecting RowIDs and their new column values
+// 4. Updating rows in-place using storage.UpdateRows() (no data copying)
 // 5. Returning the count of updated rows
+//
+// This approach is efficient because:
+// - No data is copied (unlike drop/recreate)
+// - Updates are in-place via RowID lookup
+// - Supports expressions in SET clause that reference current row values (e.g., SET x = x + 1)
+// - Supports future MVCC and rollback capabilities
 func (e *Executor) executeUpdate(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalUpdate,
@@ -22,72 +32,77 @@ func (e *Executor) executeUpdate(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	// Get all rows from the table
+	// Create a scanner with RowID tracking enabled
 	scanner := table.Scan()
-	allRows := make([][]any, 0)
 
+	// Collect updates: each entry maps a RowID to its new column values
+	// We need per-row updates because SET expressions may reference current row values
+	type rowUpdate struct {
+		rowID        storage.RowID
+		columnValues map[int]any // column index -> new value
+		beforeValues []any       // values before update for WAL logging
+	}
+	var updates []rowUpdate
+
+	// Iterate through all rows in the table
 	for {
 		chunk := scanner.Next()
 		if chunk == nil {
 			break
 		}
 
+		// Process each row in the chunk
 		for i := 0; i < chunk.Count(); i++ {
-			row := make(
-				[]any,
-				chunk.ColumnCount(),
-			)
-			for j := 0; j < chunk.ColumnCount(); j++ {
-				row[j] = chunk.GetValue(i, j)
-			}
-			allRows = append(allRows, row)
-		}
-	}
-
-	// Process each row to determine which ones should be updated
-	updatedRows := make([][]any, 0, len(allRows))
-	updatedCount := int64(0)
-
-	for _, row := range allRows {
-		// Convert row array to map for evaluation
-		rowMap := make(map[string]any)
-		for i, col := range plan.TableDef.Columns {
-			if i < len(row) {
-				rowMap[col.Name] = row[i]
-			}
-		}
-
-		// Check if this row should be updated based on Source filter
-		var shouldUpdate bool
-		if plan.Source != nil {
-			// Extract the filter condition from the source plan
-			if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
-				// Evaluate the filter condition against this row
-				passes, err := e.evaluateExprAsBool(
-					ctx,
-					filter.Condition,
-					rowMap,
-				)
-				if err != nil {
-					return nil, err
+			// Convert chunk row to map for WHERE clause and SET expression evaluation
+			// Also collect before values for WAL logging
+			rowMap := make(map[string]any)
+			beforeValues := make([]any, len(plan.TableDef.Columns))
+			for j, col := range plan.TableDef.Columns {
+				if j < chunk.ColumnCount() {
+					value := chunk.GetValue(i, j)
+					rowMap[col.Name] = value
+					beforeValues[j] = value
 				}
-				shouldUpdate = passes
+			}
+
+			// Evaluate WHERE clause (three-valued logic: NULL comparisons return NULL/false)
+			var shouldUpdate bool
+			if plan.Source != nil {
+				// Check if source is a filter (WHERE clause)
+				if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
+					match, err := e.evaluateExprAsBool(
+						ctx,
+						filter.Condition,
+						rowMap,
+					)
+					if err != nil {
+						return nil, err
+					}
+					shouldUpdate = match
+				} else {
+					// No filter means update all rows
+					shouldUpdate = true
+				}
 			} else {
-				// If source is not a filter, update all rows
+				// No source plan means UPDATE all rows
 				shouldUpdate = true
 			}
-		} else {
-			// No source plan means update all rows (UPDATE without WHERE)
-			shouldUpdate = true
-		}
 
-		if shouldUpdate {
-			// Apply SET clauses to create updated row
-			updatedRow := make([]any, len(row))
-			copy(updatedRow, row)
+			if !shouldUpdate {
+				continue // Skip non-matching rows
+			}
 
+			// Get the RowID for this row from the scanner
+			rowID := scanner.GetRowID(i)
+			if rowID == nil {
+				// Skip rows without RowID (shouldn't happen in normal operation)
+				continue
+			}
+
+			// Evaluate SET expressions for this specific row
+			columnValues := make(map[int]any)
 			for _, setClause := range plan.Set {
-				// Evaluate the new value expression
+				// Evaluate the SET expression using current row values
 				newValue, err := e.evaluateExpr(
 					ctx,
 					setClause.Value,
@@ -97,64 +112,95 @@ func (e *Executor) executeUpdate(
 					return nil, err
 				}
 
-				// Update the column in the row
-				if setClause.ColumnIdx >= 0 &&
-					setClause.ColumnIdx < len(
-						updatedRow,
-					) {
-					// Convert the new value to the correct type for this column
-					if setClause.ColumnIdx < len(
-						plan.TableDef.Columns,
-					) {
-						colType := plan.TableDef.Columns[setClause.ColumnIdx].Type
-						castedValue, castErr := castValue(newValue, colType)
-						if castErr != nil {
-							return nil, castErr
-						}
-						newValue = castedValue
+				// Cast the new value to the correct column type
+				if setClause.ColumnIdx < len(plan.TableDef.Columns) {
+					colType := plan.TableDef.Columns[setClause.ColumnIdx].Type
+					castedValue, castErr := castValue(newValue, colType)
+					if castErr != nil {
+						return nil, castErr
 					}
-					updatedRow[setClause.ColumnIdx] = newValue
-					// Also update rowMap for subsequent SET clauses that might reference this updated column
-					if setClause.ColumnIdx < len(
-						plan.TableDef.Columns,
-					) {
-						rowMap[plan.TableDef.Columns[setClause.ColumnIdx].Name] = newValue
-					}
+					newValue = castedValue
+				}
+
+				// Store the new value for this column
+				columnValues[setClause.ColumnIdx] = newValue
+
+				// Update rowMap for subsequent SET clauses that might reference this column
+				// This handles cases like: UPDATE t SET x = 1, y = x WHERE ...
+				if setClause.ColumnIdx < len(plan.TableDef.Columns) {
+					rowMap[plan.TableDef.Columns[setClause.ColumnIdx].Name] = newValue
 				}
 			}
 
-			updatedRows = append(
-				updatedRows,
-				updatedRow,
-			)
-			updatedCount++
-		} else {
-			// Keep the original row unchanged
-			updatedRows = append(updatedRows, row)
+			// Record this row's update
+			updates = append(updates, rowUpdate{
+				rowID:        *rowID,
+				columnValues: columnValues,
+				beforeValues: beforeValues,
+			})
 		}
 	}
 
-	// Recreate the table with updated rows
-	if err := e.storage.DropTable(plan.Table); err != nil {
-		return nil, err
-	}
-
-	newTable, err := e.storage.CreateTable(
-		plan.Table,
-		table.ColumnTypes(),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Append all rows (both updated and unchanged)
-	for _, row := range updatedRows {
-		if err := newTable.AppendRow(row); err != nil {
+	// Apply all updates using in-place modification
+	// Since UpdateRows() applies the same values to all rows, we need to call it per row
+	// for expressions that produce row-specific values (like SET x = x + 1)
+	for _, update := range updates {
+		if err := table.UpdateRows([]storage.RowID{update.rowID}, update.columnValues); err != nil {
 			return nil, err
 		}
 	}
 
+	// WAL logging: Log UPDATE entry AFTER successful update
+	// This ensures atomicity - if the update fails, no WAL entry is written
+	if e.wal != nil && len(updates) > 0 {
+		schema := "main" // Default schema
+		if plan.TableDef != nil && plan.TableDef.Schema != "" {
+			schema = plan.TableDef.Schema
+		}
+
+		// Collect column indices that were updated
+		var columnIdxs []int
+		if len(updates) > 0 {
+			for idx := range updates[0].columnValues {
+				columnIdxs = append(columnIdxs, idx)
+			}
+		}
+
+		// Collect row IDs, before values, and after values for WAL
+		rowIDs := make([]uint64, len(updates))
+		beforeValues := make([][]any, len(updates))
+		afterValues := make([][]any, len(updates))
+
+		for i, update := range updates {
+			rowIDs[i] = uint64(update.rowID)
+			beforeValues[i] = update.beforeValues
+
+			// Construct after values by applying updates to before values
+			after := make([]any, len(update.beforeValues))
+			copy(after, update.beforeValues)
+			for colIdx, newVal := range update.columnValues {
+				if colIdx < len(after) {
+					after[colIdx] = newVal
+				}
+			}
+			afterValues[i] = after
+		}
+
+		entry := wal.NewUpdateEntryWithBeforeValues(
+			e.txnID,
+			schema,
+			plan.Table,
+			rowIDs,
+			columnIdxs,
+			beforeValues,
+			afterValues,
+		)
+		if err := e.wal.WriteEntry(entry); err != nil {
+			return nil, fmt.Errorf("WAL append failed: %w", err)
+		}
+	}
+
 	return &ExecutionResult{
-		RowsAffected: updatedCount,
+		RowsAffected: int64(len(updates)),
 	}, nil
 }

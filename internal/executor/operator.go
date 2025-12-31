@@ -11,6 +11,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
 // ExecutionContext holds context for query execution.
@@ -95,6 +96,9 @@ type Sink interface {
 type Executor struct {
 	catalog *catalog.Catalog
 	storage *storage.Storage
+	planner *planner.Planner
+	wal     *wal.Writer // WAL writer for logging DML operations (optional, may be nil)
+	txnID   uint64      // Current transaction ID for WAL entries
 }
 
 // NewExecutor creates a new Executor.
@@ -105,7 +109,19 @@ func NewExecutor(
 	return &Executor{
 		catalog: cat,
 		storage: stor,
+		planner: planner.NewPlanner(cat),
 	}
+}
+
+// SetWAL sets the WAL writer for logging DML operations.
+// If set to nil, WAL logging is disabled.
+func (e *Executor) SetWAL(w *wal.Writer) {
+	e.wal = w
+}
+
+// SetTxnID sets the current transaction ID for WAL entries.
+func (e *Executor) SetTxnID(txnID uint64) {
+	e.txnID = txnID
 }
 
 // Execute executes a physical plan and returns the result.
@@ -286,7 +302,9 @@ func (e *Executor) executeVirtualTableScan(
 			),
 		}
 	}
-	defer it.Close()
+	defer func() {
+		_ = it.Close()
+	}()
 
 	outputCols := plan.OutputColumns()
 	result := &ExecutionResult{
@@ -859,8 +877,29 @@ func (e *Executor) executeInsert(
 		return nil
 	}
 
+	// Get column types for DataChunk creation
+	columnTypes := table.ColumnTypes()
+
+	// Batch size is StandardVectorSize (2048) for DuckDB compatibility
+	batchSize := storage.StandardVectorSize
+
+	// Collect all inserted values for WAL logging
+	var allInsertedValues [][]any
+
+	// Helper function to flush a DataChunk to the table
+	flushChunk := func(chunk *storage.DataChunk) (int, error) {
+		if chunk.Count() == 0 {
+			return 0, nil
+		}
+		count, err := table.InsertChunk(chunk)
+		if err != nil {
+			return 0, err
+		}
+		return count, nil
+	}
+
 	if plan.Source != nil {
-		// INSERT ... SELECT
+		// INSERT ... SELECT with DataChunk batching
 		sourceResult, err := e.Execute(
 			ctx.Context,
 			plan.Source,
@@ -869,6 +908,9 @@ func (e *Executor) executeInsert(
 		if err != nil {
 			return nil, err
 		}
+
+		// Create initial chunk for batching
+		currentChunk := storage.NewDataChunkWithCapacity(columnTypes, batchSize)
 
 		for _, row := range sourceResult.Rows {
 			values := make(
@@ -881,13 +923,42 @@ func (e *Executor) executeInsert(
 			if err := checkPrimaryKey(values); err != nil {
 				return nil, err
 			}
-			if err := table.AppendRow(values); err != nil {
+
+			// Collect values for WAL logging
+			if e.wal != nil {
+				valuesCopy := make([]any, len(values))
+				copy(valuesCopy, values)
+				allInsertedValues = append(allInsertedValues, valuesCopy)
+			}
+
+			// Append to current chunk
+			currentChunk.AppendRow(values)
+
+			// Flush when chunk is full (reached batch size)
+			if currentChunk.Count() >= batchSize {
+				count, err := flushChunk(currentChunk)
+				if err != nil {
+					return nil, err
+				}
+				rowsAffected += int64(count)
+				// Create new chunk for next batch
+				currentChunk = storage.NewDataChunkWithCapacity(columnTypes, batchSize)
+			}
+		}
+
+		// Flush remaining rows in the final chunk
+		if currentChunk.Count() > 0 {
+			count, err := flushChunk(currentChunk)
+			if err != nil {
 				return nil, err
 			}
-			rowsAffected++
+			rowsAffected += int64(count)
 		}
 	} else {
-		// INSERT ... VALUES
+		// INSERT ... VALUES with DataChunk batching
+		// Create initial chunk for batching
+		currentChunk := storage.NewDataChunkWithCapacity(columnTypes, batchSize)
+
 		for _, valueRow := range plan.Values {
 			if len(valueRow) != len(plan.Columns) {
 				return nil, fmt.Errorf(
@@ -897,6 +968,7 @@ func (e *Executor) executeInsert(
 				)
 			}
 
+			// Evaluate each expression in the row
 			values := make([]any, len(plan.TableDef.Columns))
 			for i, expr := range valueRow {
 				val, err := e.evaluateExpr(ctx, expr, nil)
@@ -908,10 +980,49 @@ func (e *Executor) executeInsert(
 			if err := checkPrimaryKey(values); err != nil {
 				return nil, err
 			}
-			if err := table.AppendRow(values); err != nil {
+
+			// Collect values for WAL logging
+			if e.wal != nil {
+				valuesCopy := make([]any, len(values))
+				copy(valuesCopy, values)
+				allInsertedValues = append(allInsertedValues, valuesCopy)
+			}
+
+			// Append to current chunk
+			currentChunk.AppendRow(values)
+
+			// Flush when chunk is full (reached batch size of 2048 rows)
+			if currentChunk.Count() >= batchSize {
+				count, err := flushChunk(currentChunk)
+				if err != nil {
+					return nil, err
+				}
+				rowsAffected += int64(count)
+				// Create new chunk for next batch
+				currentChunk = storage.NewDataChunkWithCapacity(columnTypes, batchSize)
+			}
+		}
+
+		// Flush remaining rows in the final chunk
+		if currentChunk.Count() > 0 {
+			count, err := flushChunk(currentChunk)
+			if err != nil {
 				return nil, err
 			}
-			rowsAffected++
+			rowsAffected += int64(count)
+		}
+	}
+
+	// WAL logging: Log INSERT entry AFTER successful insertion
+	// This ensures atomicity - if the insert fails, no WAL entry is written
+	if e.wal != nil && rowsAffected > 0 {
+		schema := "main" // Default schema
+		if plan.TableDef != nil && plan.TableDef.Schema != "" {
+			schema = plan.TableDef.Schema
+		}
+		entry := wal.NewInsertEntry(e.txnID, schema, plan.Table, allInsertedValues)
+		if err := e.wal.WriteEntry(entry); err != nil {
+			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
 	}
 

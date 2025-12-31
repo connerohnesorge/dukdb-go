@@ -1,15 +1,25 @@
 package executor
 
 import (
+	"fmt"
+
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
-// executeDelete executes a DELETE operation.
+// executeDelete executes a DELETE operation using the RowID/tombstone architecture.
 // DELETE works by:
-// 1. Executing the source plan (scan + optional filter) to find rows to delete
-// 2. For each matching row, removing it from storage
-// 3. Returning the count of deleted rows
+// 1. Scanning the table to find rows matching the WHERE clause
+// 2. Collecting RowIDs of matching rows
+// 3. Marking those RowIDs as deleted using tombstones (no physical deletion)
+// 4. Returning the count of deleted rows
+//
+// This approach is efficient because:
+// - No data is copied (unlike drop/recreate)
+// - Deletion is in-place via tombstone marking
+// - Supports future MVCC and rollback capabilities
 func (e *Executor) executeDelete(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalDelete,
@@ -20,76 +30,44 @@ func (e *Executor) executeDelete(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	var rowsAffected int64 = 0
+	// Create a scanner with RowID tracking enabled
+	scanner := table.Scan()
 
-	if plan.Source != nil {
-		// DELETE with WHERE clause - execute source to find matching rows
-		sourceResult, err := e.Execute(
-			ctx.Context,
-			plan.Source,
-			ctx.Args,
-		)
-		if err != nil {
-			return nil, err
+	// Collect RowIDs and data of rows to delete
+	// We store both RowID and row data for WAL logging (rollback support)
+	type deletedRow struct {
+		rowID storage.RowID
+		data  []any
+	}
+	var deletedRows []deletedRow
+
+	// Iterate through all rows in the table
+	for {
+		chunk := scanner.Next()
+		if chunk == nil {
+			break
 		}
 
-		// Count the rows that would be deleted
-		rowsAffected = int64(
-			len(sourceResult.Rows),
-		)
-
-		// For now, we implement DELETE by:
-		// 1. Collecting all non-deleted rows
-		// 2. Recreating the table with only those rows
-		// This is a simple but inefficient approach that works for the initial implementation
-
-		// Build a set of row identifiers to delete
-		// Since we don't have row IDs, we'll use a different approach:
-		// Scan the table and compare each row against the filter condition
-
-		// For simplicity in this phase, we'll recreate the table without deleted rows
-		// First, get all rows from the table
-		scanner := table.Scan()
-		allRows := make([][]any, 0)
-
-		for {
-			chunk := scanner.Next()
-			if chunk == nil {
-				break
-			}
-
-			for i := 0; i < chunk.Count(); i++ {
-				row := make(
-					[]any,
-					chunk.ColumnCount(),
-				)
-				for j := 0; j < chunk.ColumnCount(); j++ {
-					row[j] = chunk.GetValue(i, j)
-				}
-				allRows = append(allRows, row)
-			}
-		}
-
-		// Now filter out rows that match the WHERE condition
-		// We need to re-evaluate the filter for each row
-		keptRows := make([][]any, 0)
-		deletedCount := int64(0)
-
-		for _, row := range allRows {
-			// Convert row array to map for evaluation
+		// Process each row in the chunk
+		for i := 0; i < chunk.Count(); i++ {
+			// Convert chunk row to map for WHERE clause evaluation
+			// Also collect row data for WAL logging
 			rowMap := make(map[string]any)
-			for i, col := range plan.TableDef.Columns {
-				if i < len(row) {
-					rowMap[col.Name] = row[i]
+			rowData := make([]any, len(plan.TableDef.Columns))
+			for j, col := range plan.TableDef.Columns {
+				if j < chunk.ColumnCount() {
+					value := chunk.GetValue(i, j)
+					rowMap[col.Name] = value
+					rowData[j] = value
 				}
 			}
 
-			// Check if this row should be deleted
-			shouldDelete := false
+			// Evaluate WHERE clause (three-valued logic: NULL comparisons return NULL/false)
+			var shouldDelete bool
 			if plan.Source != nil {
-				// Re-execute the filter condition
+				// Check if source is a filter (WHERE clause)
 				if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
-					passes, err := e.evaluateExprAsBool(
+					match, err := e.evaluateExprAsBool(
 						ctx,
 						filter.Condition,
 						rowMap,
@@ -97,56 +75,74 @@ func (e *Executor) executeDelete(
 					if err != nil {
 						return nil, err
 					}
-					shouldDelete = passes
+					shouldDelete = match
 				} else {
-					// No filter means delete all
+					// No filter means delete all rows
 					shouldDelete = true
 				}
-			}
-
-			if shouldDelete {
-				deletedCount++
 			} else {
-				keptRows = append(keptRows, row)
+				// No source plan means DELETE all rows
+				shouldDelete = true
+			}
+
+			if !shouldDelete {
+				continue // Skip non-matching rows
+			}
+
+			// Get the RowID for this row from the scanner
+			// The scanner tracks RowIDs for all rows in the last returned chunk
+			rowID := scanner.GetRowID(i)
+			if rowID != nil {
+				deletedRows = append(deletedRows, deletedRow{
+					rowID: *rowID,
+					data:  rowData,
+				})
 			}
 		}
+	}
 
-		// Recreate the table with kept rows
-		if err := e.storage.DropTable(plan.Table); err != nil {
-			return nil, err
-		}
+	// Extract RowIDs for deletion
+	deletedRowIDs := make([]storage.RowID, len(deletedRows))
+	for i, row := range deletedRows {
+		deletedRowIDs[i] = row.rowID
+	}
 
-		newTable, err := e.storage.CreateTable(
-			plan.Table,
-			table.ColumnTypes(),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Append kept rows
-		for _, row := range keptRows {
-			if err := newTable.AppendRow(row); err != nil {
-				return nil, err
-			}
-		}
-
-		rowsAffected = deletedCount
-	} else {
-		// DELETE without WHERE clause - delete all rows
-		rowsAffected = table.RowCount()
-
-		// Drop and recreate empty table
-		if err := e.storage.DropTable(plan.Table); err != nil {
-			return nil, err
-		}
-
-		if _, err := e.storage.CreateTable(plan.Table, table.ColumnTypes()); err != nil {
+	// Mark rows as deleted using tombstones (in-place deletion)
+	if len(deletedRowIDs) > 0 {
+		if err := table.DeleteRows(deletedRowIDs); err != nil {
 			return nil, err
 		}
 	}
 
+	// WAL logging: Log DELETE entry AFTER successful deletion
+	// This ensures atomicity - if the delete fails, no WAL entry is written
+	if e.wal != nil && len(deletedRows) > 0 {
+		schema := "main" // Default schema
+		if plan.TableDef != nil && plan.TableDef.Schema != "" {
+			schema = plan.TableDef.Schema
+		}
+
+		// Collect row IDs and deleted data for WAL
+		rowIDs := make([]uint64, len(deletedRows))
+		deletedData := make([][]any, len(deletedRows))
+		for i, row := range deletedRows {
+			rowIDs[i] = uint64(row.rowID)
+			deletedData[i] = row.data
+		}
+
+		entry := wal.NewDeleteEntryWithData(
+			e.txnID,
+			schema,
+			plan.Table,
+			rowIDs,
+			deletedData,
+		)
+		if err := e.wal.WriteEntry(entry); err != nil {
+			return nil, fmt.Errorf("WAL append failed: %w", err)
+		}
+	}
+
 	return &ExecutionResult{
-		RowsAffected: rowsAffected,
+		RowsAffected: int64(len(deletedRows)),
 	}, nil
 }
