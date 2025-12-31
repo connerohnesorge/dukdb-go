@@ -83,10 +83,6 @@ nix fmt
         ];
 
       scripts = {
-        dx = {
-          exec = rooted ''$EDITOR "$REPO_ROOT"/flake.nix'';
-          description = "Edit flake.nix";
-        };
         lint = {
           exec = ''
             golangci-lint run

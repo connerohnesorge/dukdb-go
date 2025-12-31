@@ -31,6 +31,16 @@ type GlobalOperatorState interface{}
 // LocalOperatorState holds local state for a single operator instance.
 type LocalOperatorState interface{}
 
+// PhysicalOperator is the interface for physical operators that produce DataChunks.
+// This interface is used by the execution engine to iterate through query results.
+type PhysicalOperator interface {
+	// Next returns the next DataChunk of results, or nil if no more data.
+	Next() (*storage.DataChunk, error)
+
+	// GetTypes returns the TypeInfo for each column produced by this operator.
+	GetTypes() []dukdb.TypeInfo
+}
+
 // Source produces data chunks.
 type Source interface {
 	GetData(
@@ -859,29 +869,6 @@ func (e *Executor) executeInsert(
 	}, nil
 }
 
-func (e *Executor) executeUpdate(
-	ctx *ExecutionContext,
-	plan *planner.PhysicalUpdate,
-) (*ExecutionResult, error) {
-	// For now, UPDATE is not fully implemented due to complexity of in-place updates
-	// This would require row-level modification support in the storage layer
-	return nil, &dukdb.Error{
-		Type: dukdb.ErrorTypeNotImplemented,
-		Msg:  "UPDATE not fully implemented",
-	}
-}
-
-func (e *Executor) executeDelete(
-	ctx *ExecutionContext,
-	plan *planner.PhysicalDelete,
-) (*ExecutionResult, error) {
-	// For now, DELETE is not fully implemented due to complexity of in-place deletes
-	// This would require row-level deletion support in the storage layer
-	return nil, &dukdb.Error{
-		Type: dukdb.ErrorTypeNotImplemented,
-		Msg:  "DELETE not fully implemented",
-	}
-}
 
 func (e *Executor) executeCreateTable(
 	ctx *ExecutionContext,

@@ -145,9 +145,17 @@ func (t *Table) AppendRow(values []any) error {
 }
 
 // Scan creates a scanner for iterating over the table.
+// It snapshots the row groups to avoid holding locks during iteration.
 func (t *Table) Scan() *TableScanner {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Snapshot row groups to avoid deadlocks during concurrent access
+	rowGroups := make([]*RowGroup, len(t.rowGroups))
+	copy(rowGroups, t.rowGroups)
+
 	return &TableScanner{
-		table:       t,
+		rowGroups:   rowGroups,
 		currentRG:   0,
 		currentRow:  0,
 		columnTypes: t.columnTypes,
@@ -265,8 +273,9 @@ func (rg *RowGroup) GetChunk(
 }
 
 // TableScanner provides iteration over table rows.
+// It uses a snapshot of row groups to avoid holding locks during iteration.
 type TableScanner struct {
-	table       *Table
+	rowGroups   []*RowGroup // Snapshot of row groups
 	currentRG   int
 	currentRow  int
 	columnTypes []dukdb.Type
@@ -274,15 +283,13 @@ type TableScanner struct {
 
 // Next advances to the next chunk and returns it.
 // Returns nil when there are no more chunks.
+// No locks are held during iteration since row groups are snapshotted.
 func (s *TableScanner) Next() *DataChunk {
-	s.table.mu.RLock()
-	defer s.table.mu.RUnlock()
-
-	if s.currentRG >= len(s.table.rowGroups) {
+	if s.currentRG >= len(s.rowGroups) {
 		return nil
 	}
 
-	rg := s.table.rowGroups[s.currentRG]
+	rg := s.rowGroups[s.currentRG]
 
 	// Calculate how many rows to read
 	remaining := rg.Count() - s.currentRow

@@ -173,22 +173,32 @@ The engine SHALL support INSERT, UPDATE, and DELETE.
 
 ### Requirement: Columnar Storage
 
-The engine SHALL store data in columnar format.
+**Base Spec** (lines 174-192): Engine SHALL store data in columnar format.
 
-#### Scenario: Column data storage
-- GIVEN table with INT column
-- WHEN inserting 1000 rows
-- THEN data is stored as contiguous []int64
+**Enhancement**: Integrate P0-2 DataChunk/Vector for columnar storage.
 
-#### Scenario: NULL handling
-- GIVEN table with nullable column
-- WHEN inserting NULL values
-- THEN null bitmap correctly tracks NULL positions
+#### Scenario: Column data stored in DataChunk vectors
 
-#### Scenario: Chunk-based organization
-- GIVEN table with many rows
-- WHEN storing data
-- THEN rows are organized into chunks of ~2048 rows
+```go
+// Original spec says: "data is stored as contiguous []int64"
+// Enhanced: Data stored in Vector from P0-2
+table, _ := storage.GetTable("t")
+chunk := table.GetChunk(0)
+vec := chunk.GetVector(0) // INT column
+assert.IsType(t, &IntVector{}, vec)
+```
+
+#### Scenario: NULL handling via ValidityMask
+
+```go
+// Original spec says: "null bitmap correctly tracks NULL positions"
+// Enhanced: Use ValidityMask from P0-2
+vec := chunk.GetVector(0)
+assert.False(t, vec.IsValid(5)) // Row 5 is NULL
+assert.True(t, vec.IsValid(0))  // Row 0 is valid
+```
+
+---
 
 ### Requirement: Type Support
 
@@ -289,3 +299,137 @@ The engine SHALL return structured errors with appropriate types.
 - WHEN executing query
 - THEN ErrorTypeDivideByZero is returned
 
+### Requirement: DataChunk Operator Interface
+
+All physical operators MUST produce and consume DataChunks from P0-2.
+
+**Context**: Integrates columnar storage into execution pipeline.
+
+#### Scenario: Scan produces DataChunk
+
+```go
+scan := PhysicalScan{table: t}
+chunk, err := scan.Next()
+assert.NoError(t, err)
+assert.IsType(t, &DataChunk{}, chunk)
+assert.Equal(t, 2048, chunk.Capacity())
+```
+
+#### Scenario: Filter consumes/produces DataChunk
+
+```go
+filter := PhysicalFilter{child: scan, predicate: expr}
+chunk, err := filter.Next()
+assert.NoError(t, err)
+assert.IsType(t, &DataChunk{}, chunk)
+```
+
+#### Scenario: Operators propagate TypeInfo
+
+```go
+chunk, _ := scan.Next()
+types := chunk.GetTypes()
+assert.Len(t, types, 2)
+assert.Equal(t, TYPE_INTEGER, types[0].InternalType())
+```
+
+---
+
+### Requirement: Result Set Implementation
+
+QueryContext MUST return ResultSet implementing driver.Rows with DataChunk backing.
+
+**Context**: Provides row-by-row access to query results.
+
+#### Scenario: ResultSet wraps DataChunks
+
+```go
+chunks := []*DataChunk{chunk1, chunk2}
+rs := NewResultSet(chunks)
+assert.Len(t, rs.chunks, 2)
+```
+
+#### Scenario: ResultSet iterates rows
+
+```go
+rs := NewResultSet(chunks)
+count := 0
+dest := make([]driver.Value, 2)
+for rs.Next(dest) == nil {
+    count++
+}
+assert.Equal(t, 2048, count) // Full chunk
+```
+
+#### Scenario: ColumnTypeDatabaseTypeName for P0-3
+
+```go
+rs := NewResultSet(chunks)
+typeName := rs.ColumnTypeDatabaseTypeName(0)
+assert.Equal(t, "INTEGER", typeName)
+```
+
+---
+
+### Requirement: EngineConn Pipeline Integration
+
+EngineConn MUST route ExecContext and QueryContext through the execution pipeline.
+
+**Context**: Wires database/sql driver to execution engine.
+
+#### Scenario: ExecContext routes through pipeline
+
+```go
+conn, _ := engine.Open(":memory:", nil)
+result, err := conn.ExecContext(ctx, "INSERT INTO t VALUES (1)", nil)
+assert.NoError(t, err)
+affected, _ := result.RowsAffected()
+assert.Equal(t, int64(1), affected)
+```
+
+#### Scenario: QueryContext routes through pipeline
+
+```go
+conn, _ := engine.Open(":memory:", nil)
+rows, err := conn.QueryContext(ctx, "SELECT * FROM t", nil)
+assert.NoError(t, err)
+assert.NotNil(t, rows)
+```
+
+#### Scenario: Error types propagated correctly
+
+```go
+conn, _ := engine.Open(":memory:", nil)
+_, err := conn.QueryContext(ctx, "SELECT * FROM nonexistent", nil)
+assert.Error(t, err)
+assert.Equal(t, ErrorTypeCatalog, err.(*Error).Type)
+```
+
+---
+
+### Requirement: Column Metadata for P0-3
+
+PreparedStmt MUST expose column metadata via TypeInfo after binding.
+
+**Context**: Enables P0-3 statement introspection completion.
+
+#### Scenario: Prepared statement has column metadata
+
+```go
+stmt, _ := conn.Prepare("SELECT id, name FROM users")
+// After binding in EngineConn.Prepare:
+plan := stmt.(*PreparedPlan)
+assert.Len(t, plan.ColumnTypes, 2)
+assert.Equal(t, TYPE_INTEGER, plan.ColumnTypes[0].InternalType())
+assert.Equal(t, TYPE_VARCHAR, plan.ColumnTypes[1].InternalType())
+```
+
+#### Scenario: ColumnTypeInfo returns full TypeInfo
+
+```go
+typeInfo := plan.ColumnTypeInfo(0)
+assert.Equal(t, TYPE_INTEGER, typeInfo.InternalType())
+assert.Equal(t, "INTEGER", typeInfo.SQLType())
+```
+
+---
