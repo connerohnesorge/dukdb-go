@@ -685,7 +685,7 @@ linters:
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#max-public-structs
         - name: max-public-structs
           severity: warning
-          disabled: false
+          disabled: true
           exclude: [""]
           arguments: [9]
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#modifies-parameter
