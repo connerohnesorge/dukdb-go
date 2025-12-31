@@ -1462,35 +1462,6 @@ severity:
 
 version: "2"
 
-issues:
-  exclude-rules:
-    # Disable line-length-limit for test files - readability is more important
-    - path: _test\.go
-      linters:
-        - revive
-      text: "line-length-limit"
-
-    # Disable strict limits that hurt readability in production code
-    - linters:
-        - revive
-      text: "line-length-limit"
-
-    # Allow constants defined inline when they're only used once or twice
-    - linters:
-        - revive
-      text: "add-constant.*string literal"
-
-    # File length limits already handled with inline nolint where needed
-    - linters:
-        - revive
-      text: "file-length-limit"
-
-    # Allow comprehensive function arguments for validation functions
-    - path: internal/validation/
-      linters:
-        - revive
-      text: "argument-limit"
-
 run:
   timeout: "1m"
   issues-exit-code: 1
