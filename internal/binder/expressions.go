@@ -5,8 +5,6 @@ import (
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
-// ---------- Bound Expression Types ----------
-
 // BoundColumnRef represents a bound column reference.
 type BoundColumnRef struct {
 	Table     string
