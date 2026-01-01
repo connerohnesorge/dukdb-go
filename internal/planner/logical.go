@@ -252,7 +252,7 @@ func (a *LogicalAggregate) OutputColumns() []ColumnBinding {
 // LogicalWindow represents a window function operator in the logical plan.
 // It evaluates window expressions over partitioned and ordered data.
 type LogicalWindow struct {
-	Child       LogicalPlan              // Child plan
+	Child       LogicalPlan               // Child plan
 	WindowExprs []*binder.BoundWindowExpr // Window expressions to evaluate
 	columns     []ColumnBinding
 }
@@ -271,9 +271,7 @@ func (w *LogicalWindow) OutputColumns() []ColumnBinding {
 	w.columns = make([]ColumnBinding, len(childCols)+len(w.WindowExprs))
 
 	// Copy child columns
-	for i, col := range childCols {
-		w.columns[i] = col
-	}
+	copy(w.columns, childCols)
 
 	// Add window result columns
 	for i, windowExpr := range w.WindowExprs {

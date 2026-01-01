@@ -34,7 +34,8 @@ func TestPreparedStmtExecBoundWithoutParams(t *testing.T) {
 		require.NoError(t, conn.Close())
 	}()
 
-	dukConn := conn.(*dukdb.Conn)
+	dukConn, ok := conn.(*dukdb.Conn)
+	require.True(t, ok, "expected *dukdb.Conn")
 	ctx := context.Background()
 
 	// Create table
@@ -81,7 +82,8 @@ func TestPreparedStmtExecBoundWithParams(t *testing.T) {
 		require.NoError(t, conn.Close())
 	}()
 
-	dukConn := conn.(*dukdb.Conn)
+	dukConn, ok := conn.(*dukdb.Conn)
+	require.True(t, ok, "expected *dukdb.Conn")
 	ctx := context.Background()
 
 	// Create table
@@ -135,7 +137,8 @@ func TestPreparedStmtQueryBoundWithParams(t *testing.T) {
 		require.NoError(t, conn.Close())
 	}()
 
-	dukConn := conn.(*dukdb.Conn)
+	dukConn, ok := conn.(*dukdb.Conn)
+	require.True(t, ok, "expected *dukdb.Conn")
 	ctx := context.Background()
 
 	// Create and populate table
@@ -200,7 +203,8 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 		require.NoError(t, conn.Close())
 	}()
 
-	dukConn := conn.(*dukdb.Conn)
+	dukConn, ok := conn.(*dukdb.Conn)
+	require.True(t, ok, "expected *dukdb.Conn")
 	ctx := context.Background()
 
 	// Create and populate table

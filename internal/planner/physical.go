@@ -259,8 +259,8 @@ func (a *PhysicalHashAggregate) OutputColumns() []ColumnBinding {
 // PhysicalWindow represents a physical window function operator.
 // It evaluates window expressions over partitioned and ordered data.
 type PhysicalWindow struct {
-	Child       PhysicalPlan               // Child plan
-	WindowExprs []*binder.BoundWindowExpr  // Bound window expressions
+	Child       PhysicalPlan              // Child plan
+	WindowExprs []*binder.BoundWindowExpr // Bound window expressions
 	columns     []ColumnBinding
 }
 
@@ -278,9 +278,7 @@ func (w *PhysicalWindow) OutputColumns() []ColumnBinding {
 	w.columns = make([]ColumnBinding, len(childCols)+len(w.WindowExprs))
 
 	// Copy child columns
-	for i, col := range childCols {
-		w.columns[i] = col
-	}
+	copy(w.columns, childCols)
 
 	// Add window result columns
 	for i, windowExpr := range w.WindowExprs {
