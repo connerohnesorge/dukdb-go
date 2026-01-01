@@ -210,6 +210,23 @@ func (te *TableExtractor) VisitRollbackStmt(stmt *RollbackStmt) {
 	// No table references in ROLLBACK statements
 }
 
+// VisitCopyStmt extracts table references from COPY statements.
+func (te *TableExtractor) VisitCopyStmt(stmt *CopyStmt) {
+	// Extract the table being copied to/from
+	if stmt.TableName != "" {
+		ref := EnhancedTableRef{
+			Schema: stmt.Schema,
+			Table:  stmt.TableName,
+		}
+		te.tables[ref] = struct{}{}
+	}
+
+	// If COPY (SELECT...) TO, visit the SELECT query
+	if stmt.Query != nil {
+		te.VisitSelectStmt(stmt.Query)
+	}
+}
+
 // visitTableRef extracts table from AST TableRef
 func (te *TableExtractor) visitTableRef(astRef *TableRef) {
 	// Current AST TableRef has: Catalog, Schema, TableName, Alias, Subquery

@@ -14,4 +14,5 @@ type Visitor interface {
 	VisitBeginStmt(stmt *BeginStmt)
 	VisitCommitStmt(stmt *CommitStmt)
 	VisitRollbackStmt(stmt *RollbackStmt)
+	VisitCopyStmt(stmt *CopyStmt)
 }

@@ -1,0 +1,5 @@
+id,name,value,extra
+1,alice,100,first
+2,,200,
+3,charlie,,third
+4,,,

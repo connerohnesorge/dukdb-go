@@ -140,6 +140,8 @@ func (e *Executor) Execute(
 		return e.executeScan(execCtx, p)
 	case *planner.PhysicalVirtualTableScan:
 		return e.executeVirtualTableScan(execCtx, p)
+	case *planner.PhysicalTableFunctionScan:
+		return e.executeTableFunctionScan(execCtx, p)
 	case *planner.PhysicalFilter:
 		return e.executeFilter(execCtx, p)
 	case *planner.PhysicalProject:
@@ -176,6 +178,10 @@ func (e *Executor) Execute(
 		return e.executeRollback(execCtx, p)
 	case *planner.PhysicalWindow:
 		return e.executeWindow(execCtx, p)
+	case *planner.PhysicalCopyFrom:
+		return e.executeCopyFrom(execCtx, p)
+	case *planner.PhysicalCopyTo:
+		return e.executeCopyTo(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

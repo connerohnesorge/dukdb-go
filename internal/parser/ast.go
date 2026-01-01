@@ -68,11 +68,23 @@ type FromClause struct {
 
 // TableRef represents a table reference.
 type TableRef struct {
-	Catalog   string // Optional catalog name (e.g., "main")
-	Schema    string
-	TableName string
-	Alias     string
-	Subquery  *SelectStmt
+	Catalog       string // Optional catalog name (e.g., "main")
+	Schema        string
+	TableName     string
+	Alias         string
+	Subquery      *SelectStmt
+	TableFunction *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
+}
+
+// TableFunctionRef represents a table function call in a FROM clause.
+// Example: read_csv('file.csv', delimiter=',', header=true)
+type TableFunctionRef struct {
+	// Name is the function name (e.g., "read_csv", "read_json", "read_parquet").
+	Name string
+	// Args are positional arguments passed to the function.
+	Args []Expr
+	// NamedArgs are named arguments (key=value pairs).
+	NamedArgs map[string]Expr
 }
 
 // JoinClause represents a JOIN clause.
@@ -405,6 +417,37 @@ type IntervalLiteral struct {
 }
 
 func (*IntervalLiteral) exprNode() {}
+
+// CopyStmt represents a COPY statement for importing/exporting data.
+// Supports:
+//   - COPY table FROM 'path' (OPTIONS)
+//   - COPY table TO 'path' (OPTIONS)
+//   - COPY (SELECT...) TO 'path' (OPTIONS)
+type CopyStmt struct {
+	// TableName is the target table name for COPY FROM/TO table.
+	TableName string
+	// Schema is the optional schema name (default "main").
+	Schema string
+	// Columns is an optional column list for partial import/export.
+	Columns []string
+	// FilePath is the file path to read from or write to.
+	FilePath string
+	// IsFrom is true for COPY FROM (import), false for COPY TO (export).
+	IsFrom bool
+	// Query is set for COPY (SELECT...) TO syntax.
+	Query *SelectStmt
+	// Options contains COPY options like DELIMITER, HEADER, FORMAT, etc.
+	Options map[string]any
+}
+
+func (*CopyStmt) stmtNode() {}
+
+func (*CopyStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY }
+
+// Accept implements the Visitor pattern for CopyStmt.
+func (s *CopyStmt) Accept(v Visitor) {
+	v.VisitCopyStmt(s)
+}
 
 // BeginStmt represents a BEGIN TRANSACTION statement.
 type BeginStmt struct{}

@@ -27,13 +27,14 @@ type ColumnBinding struct {
 
 // LogicalScan represents a table scan.
 type LogicalScan struct {
-	Schema       string
-	TableName    string
-	Alias        string
-	TableDef     *catalog.TableDef
-	VirtualTable *catalog.VirtualTableDef // Set for virtual tables
-	Projections  []int                    // Column indices to project, nil for all
-	columns      []ColumnBinding
+	Schema        string
+	TableName     string
+	Alias         string
+	TableDef      *catalog.TableDef
+	VirtualTable  *catalog.VirtualTableDef  // Set for virtual tables
+	TableFunction *binder.BoundTableFunctionRef // Set for table functions
+	Projections   []int                     // Column indices to project, nil for all
+	columns       []ColumnBinding
 }
 
 func (*LogicalScan) logicalPlanNode() {}
@@ -42,6 +43,22 @@ func (*LogicalScan) Children() []LogicalPlan { return nil }
 
 func (s *LogicalScan) OutputColumns() []ColumnBinding {
 	if s.columns != nil {
+		return s.columns
+	}
+
+	// Handle table functions - columns are deferred until execution
+	if s.TableFunction != nil {
+		if s.TableFunction.Columns != nil {
+			s.columns = make([]ColumnBinding, len(s.TableFunction.Columns))
+			for i, col := range s.TableFunction.Columns {
+				s.columns[i] = ColumnBinding{
+					Table:     s.Alias,
+					Column:    col.Name,
+					Type:      col.Type,
+					ColumnIdx: i,
+				}
+			}
+		}
 		return s.columns
 	}
 
@@ -445,3 +462,41 @@ func (*LogicalRollback) logicalPlanNode() {}
 func (*LogicalRollback) Children() []LogicalPlan { return nil }
 
 func (*LogicalRollback) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCopyFrom represents a COPY FROM operation (import data from file).
+type LogicalCopyFrom struct {
+	Schema   string
+	Table    string
+	TableDef *catalog.TableDef
+	Columns  []int          // Column indices to import (nil for all)
+	FilePath string
+	Options  map[string]any
+}
+
+func (*LogicalCopyFrom) logicalPlanNode() {}
+
+func (*LogicalCopyFrom) Children() []LogicalPlan { return nil }
+
+func (*LogicalCopyFrom) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCopyTo represents a COPY TO operation (export data to file).
+type LogicalCopyTo struct {
+	Schema   string
+	Table    string
+	TableDef *catalog.TableDef
+	Columns  []int          // Column indices to export (nil for all)
+	FilePath string
+	Options  map[string]any
+	Source   LogicalPlan    // For COPY (SELECT...) TO
+}
+
+func (*LogicalCopyTo) logicalPlanNode() {}
+
+func (c *LogicalCopyTo) Children() []LogicalPlan {
+	if c.Source != nil {
+		return []LogicalPlan{c.Source}
+	}
+	return nil
+}
+
+func (*LogicalCopyTo) OutputColumns() []ColumnBinding { return nil }

@@ -455,6 +455,44 @@ func (*PhysicalRollback) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalRollback) OutputColumns() []ColumnBinding { return nil }
 
+// PhysicalCopyFrom represents a physical COPY FROM operation.
+type PhysicalCopyFrom struct {
+	Schema   string
+	Table    string
+	TableDef *catalog.TableDef
+	Columns  []int
+	FilePath string
+	Options  map[string]any
+}
+
+func (*PhysicalCopyFrom) physicalPlanNode() {}
+
+func (*PhysicalCopyFrom) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCopyFrom) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCopyTo represents a physical COPY TO operation.
+type PhysicalCopyTo struct {
+	Schema   string
+	Table    string
+	TableDef *catalog.TableDef
+	Columns  []int
+	FilePath string
+	Options  map[string]any
+	Source   PhysicalPlan // For COPY (SELECT...) TO
+}
+
+func (*PhysicalCopyTo) physicalPlanNode() {}
+
+func (c *PhysicalCopyTo) Children() []PhysicalPlan {
+	if c.Source != nil {
+		return []PhysicalPlan{c.Source}
+	}
+	return nil
+}
+
+func (*PhysicalCopyTo) OutputColumns() []ColumnBinding { return nil }
+
 // PhysicalVirtualTableScan represents a physical virtual table scan.
 type PhysicalVirtualTableScan struct {
 	Schema       string
@@ -463,6 +501,18 @@ type PhysicalVirtualTableScan struct {
 	VirtualTable *catalog.VirtualTableDef
 	Projections  []int
 	columns      []ColumnBinding
+}
+
+// PhysicalTableFunctionScan represents a physical table function scan.
+// This is used for table functions like read_csv, read_json, read_parquet.
+type PhysicalTableFunctionScan struct {
+	FunctionName  string
+	Alias         string
+	Path          string
+	Options       map[string]any
+	Projections   []int
+	columns       []ColumnBinding
+	TableFunction *binder.BoundTableFunctionRef
 }
 
 func (*PhysicalVirtualTableScan) physicalPlanNode() {}
@@ -491,6 +541,32 @@ func (s *PhysicalVirtualTableScan) OutputColumns() []ColumnBinding {
 	} else {
 		s.columns = make([]ColumnBinding, len(cols))
 		for i, col := range cols {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    col.Name,
+				Type:      col.Type,
+				ColumnIdx: i,
+			}
+		}
+	}
+
+	return s.columns
+}
+
+func (*PhysicalTableFunctionScan) physicalPlanNode() {}
+
+func (*PhysicalTableFunctionScan) Children() []PhysicalPlan { return nil }
+
+func (s *PhysicalTableFunctionScan) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+
+	// Columns are determined dynamically at execution time
+	// If we have bound columns from the table function, use those
+	if s.TableFunction != nil && s.TableFunction.Columns != nil {
+		s.columns = make([]ColumnBinding, len(s.TableFunction.Columns))
+		for i, col := range s.TableFunction.Columns {
 			s.columns[i] = ColumnBinding{
 				Table:     s.Alias,
 				Column:    col.Name,
@@ -548,6 +624,8 @@ func (p *Planner) createLogicalPlan(
 		return &LogicalCommit{}, nil
 	case *binder.BoundRollbackStmt:
 		return &LogicalRollback{}, nil
+	case *binder.BoundCopyStmt:
+		return p.planCopy(s)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -564,23 +642,11 @@ func (p *Planner) planSelect(
 	// Start with FROM clause
 	if len(s.From) > 0 {
 		// First table
-		plan = &LogicalScan{
-			Schema:       s.From[0].Schema,
-			TableName:    s.From[0].TableName,
-			Alias:        s.From[0].Alias,
-			TableDef:     s.From[0].TableDef,
-			VirtualTable: s.From[0].VirtualTable,
-		}
+		plan = p.createScanForBoundTableRef(s.From[0])
 
 		// Additional tables (implicit cross join)
 		for i := 1; i < len(s.From); i++ {
-			right := &LogicalScan{
-				Schema:       s.From[i].Schema,
-				TableName:    s.From[i].TableName,
-				Alias:        s.From[i].Alias,
-				TableDef:     s.From[i].TableDef,
-				VirtualTable: s.From[i].VirtualTable,
-			}
+			right := p.createScanForBoundTableRef(s.From[i])
 			plan = &LogicalJoin{
 				Left:     plan,
 				Right:    right,
@@ -590,13 +656,7 @@ func (p *Planner) planSelect(
 
 		// Explicit JOINs
 		for _, join := range s.Joins {
-			right := &LogicalScan{
-				Schema:       join.Table.Schema,
-				TableName:    join.Table.TableName,
-				Alias:        join.Table.Alias,
-				TableDef:     join.Table.TableDef,
-				VirtualTable: join.Table.VirtualTable,
-			}
+			right := p.createScanForBoundTableRef(join.Table)
 
 			joinType := JoinType(join.Type)
 			plan = &LogicalJoin{
@@ -812,11 +872,73 @@ func (p *Planner) planDropTable(
 	}, nil
 }
 
+func (p *Planner) planCopy(
+	s *binder.BoundCopyStmt,
+) (LogicalPlan, error) {
+	if s.IsFrom {
+		// COPY FROM - import data from file
+		return &LogicalCopyFrom{
+			Schema:   s.Schema,
+			Table:    s.Table,
+			TableDef: s.TableDef,
+			Columns:  s.Columns,
+			FilePath: s.FilePath,
+			Options:  s.Options,
+		}, nil
+	}
+
+	// COPY TO - export data to file
+	plan := &LogicalCopyTo{
+		Schema:   s.Schema,
+		Table:    s.Table,
+		TableDef: s.TableDef,
+		Columns:  s.Columns,
+		FilePath: s.FilePath,
+		Options:  s.Options,
+	}
+
+	// If there's a query, plan it as the source
+	if s.Query != nil {
+		source, err := p.planSelect(s.Query)
+		if err != nil {
+			return nil, err
+		}
+		plan.Source = source
+	}
+
+	return plan, nil
+}
+
+// createScanForBoundTableRef creates a LogicalScan for a bound table reference.
+// This handles regular tables, virtual tables, and table functions.
+func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalPlan {
+	return &LogicalScan{
+		Schema:        ref.Schema,
+		TableName:     ref.TableName,
+		Alias:         ref.Alias,
+		TableDef:      ref.TableDef,
+		VirtualTable:  ref.VirtualTable,
+		TableFunction: ref.TableFunction,
+	}
+}
+
 func (p *Planner) createPhysicalPlan(
 	logical LogicalPlan,
 ) (PhysicalPlan, error) {
 	switch l := logical.(type) {
 	case *LogicalScan:
+		// Check if this is a table function scan
+		if l.TableFunction != nil {
+			return &PhysicalTableFunctionScan{
+				FunctionName:  l.TableFunction.Name,
+				Alias:         l.Alias,
+				Path:          l.TableFunction.Path,
+				Options:       l.TableFunction.Options,
+				Projections:   l.Projections,
+				TableFunction: l.TableFunction,
+			}, nil
+		}
+
 		// Check if this is a virtual table scan
 		if l.VirtualTable != nil {
 			return &PhysicalVirtualTableScan{
@@ -1022,6 +1144,35 @@ func (p *Planner) createPhysicalPlan(
 
 	case *LogicalRollback:
 		return &PhysicalRollback{}, nil
+
+	case *LogicalCopyFrom:
+		return &PhysicalCopyFrom{
+			Schema:   l.Schema,
+			Table:    l.Table,
+			TableDef: l.TableDef,
+			Columns:  l.Columns,
+			FilePath: l.FilePath,
+			Options:  l.Options,
+		}, nil
+
+	case *LogicalCopyTo:
+		var source PhysicalPlan
+		if l.Source != nil {
+			var err error
+			source, err = p.createPhysicalPlan(l.Source)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &PhysicalCopyTo{
+			Schema:   l.Schema,
+			Table:    l.Table,
+			TableDef: l.TableDef,
+			Columns:  l.Columns,
+			FilePath: l.FilePath,
+			Options:  l.Options,
+			Source:   source,
+		}, nil
 
 	default:
 		return nil, &dukdb.Error{

@@ -1,0 +1,4 @@
+id,int_col,double_col,bool_col,date_col,timestamp_col,varchar_col
+1,42,3.14159,true,2024-01-15,2024-01-15T10:30:00Z,hello world
+2,-100,2.71828,false,2024-06-30,2024-06-30T14:45:30Z,foo bar
+3,9999,0.0,yes,2024-12-31,2024-12-31T23:59:59Z,special chars: @#$%

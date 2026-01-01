@@ -139,3 +139,27 @@ type BoundRollbackStmt struct{}
 func (*BoundRollbackStmt) boundStmtNode() {}
 
 func (*BoundRollbackStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// BoundCopyStmt represents a bound COPY statement.
+type BoundCopyStmt struct {
+	// Schema is the schema name (default "main").
+	Schema string
+	// Table is the table name (for COPY table FROM/TO).
+	Table string
+	// TableDef is the table definition (for COPY FROM/TO table).
+	TableDef *catalog.TableDef
+	// Columns are the column indices to import/export (nil for all).
+	Columns []int
+	// FilePath is the file path.
+	FilePath string
+	// IsFrom is true for COPY FROM, false for COPY TO.
+	IsFrom bool
+	// Query is the bound SELECT query (for COPY (SELECT...) TO).
+	Query *BoundSelectStmt
+	// Options are the COPY options.
+	Options map[string]any
+}
+
+func (*BoundCopyStmt) boundStmtNode() {}
+
+func (*BoundCopyStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY }

@@ -27,12 +27,25 @@ type BindScope struct {
 
 // BoundTableRef represents a bound table reference.
 type BoundTableRef struct {
-	Schema       string
-	TableName    string
-	Alias        string
-	TableDef     *catalog.TableDef
-	VirtualTable *catalog.VirtualTableDef // Set for virtual tables
-	Columns      []*BoundColumn
+	Schema        string
+	TableName     string
+	Alias         string
+	TableDef      *catalog.TableDef
+	VirtualTable  *catalog.VirtualTableDef // Set for virtual tables
+	TableFunction *BoundTableFunctionRef   // Set for table functions (read_csv, etc.)
+	Columns       []*BoundColumn
+}
+
+// BoundTableFunctionRef represents a bound table function call.
+type BoundTableFunctionRef struct {
+	// Name is the function name (e.g., "read_csv", "read_json").
+	Name string
+	// Path is the file path for file-reading functions.
+	Path string
+	// Options contains parsed options for the table function.
+	Options map[string]any
+	// Columns contains the schema determined by the table function.
+	Columns []*catalog.ColumnDef
 }
 
 // BoundColumn represents a bound column reference.
@@ -93,6 +106,8 @@ func (b *Binder) Bind(
 		return &BoundCommitStmt{}, nil
 	case *parser.RollbackStmt:
 		return &BoundRollbackStmt{}, nil
+	case *parser.CopyStmt:
+		return b.bindCopy(s)
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}

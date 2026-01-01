@@ -2,9 +2,14 @@ package binder
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/io/csv"
+	"github.com/dukdb/dukdb-go/internal/io/json"
+	"github.com/dukdb/dukdb-go/internal/io/parquet"
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
@@ -219,6 +224,11 @@ func (b *Binder) bindTableRef(
 		return boundRef, nil
 	}
 
+	// Check for table function
+	if ref.TableFunction != nil {
+		return b.bindTableFunction(ref)
+	}
+
 	// Table reference
 	schema := ref.Schema
 	if schema == "" {
@@ -299,6 +309,327 @@ func (b *Binder) bindTableRef(
 	b.scope.aliases[alias] = ref.TableName
 
 	return boundRef, nil
+}
+
+// bindTableFunction binds a table function call (e.g., read_csv, read_json).
+func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	alias := ref.Alias
+	if alias == "" {
+		alias = tableFunc.Name
+	}
+
+	// Extract the file path from the first positional argument
+	if len(tableFunc.Args) == 0 {
+		return nil, b.errorf("table function %s requires a file path argument", tableFunc.Name)
+	}
+
+	pathExpr := tableFunc.Args[0]
+	pathLit, ok := pathExpr.(*parser.Literal)
+	if !ok || pathLit.Type != dukdb.TYPE_VARCHAR {
+		return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
+	}
+	path, ok := pathLit.Value.(string)
+	if !ok {
+		return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
+	}
+
+	// Build options map from named arguments
+	options := make(map[string]any)
+	for name, expr := range tableFunc.NamedArgs {
+		lit, ok := expr.(*parser.Literal)
+		if !ok {
+			return nil, b.errorf("table function option %s must be a literal value", name)
+		}
+		options[name] = lit.Value
+	}
+
+	// Determine the schema at bind time by reading the file
+	columns, err := b.inferTableFunctionSchema(tableFunc.Name, path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create bound table function reference
+	boundFunc := &BoundTableFunctionRef{
+		Name:    tableFunc.Name,
+		Path:    path,
+		Options: options,
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     tableFunc.Name,
+		Alias:         alias,
+		TableFunction: boundFunc,
+	}
+
+	// Create bound columns for the table function
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = tableFunc.Name
+
+	return boundRef, nil
+}
+
+// inferTableFunctionSchema infers the schema for a table function by reading the file.
+func (b *Binder) inferTableFunctionSchema(
+	funcName string,
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
+	switch strings.ToLower(funcName) {
+	case "read_csv":
+		return b.inferCSVSchema(path, options)
+	case "read_csv_auto":
+		// read_csv_auto uses auto-detection for everything
+		// No explicit options are passed - let the CSV reader auto-detect
+		return b.inferCSVSchema(path, nil)
+	case "read_json":
+		return b.inferJSONSchema(path, options)
+	case "read_json_auto":
+		// read_json_auto uses auto-detection for format and schema
+		return b.inferJSONSchema(path, nil)
+	case "read_ndjson":
+		// read_ndjson is an alias for read_json with NDJSON format
+		if options == nil {
+			options = make(map[string]any)
+		}
+		options["format"] = "newline_delimited"
+		return b.inferJSONSchema(path, options)
+	case "read_parquet":
+		return b.inferParquetSchema(path, options)
+	default:
+		// For unknown table functions, return no columns
+		// The executor will handle the error
+		return nil, nil
+	}
+}
+
+// inferCSVSchema reads a CSV file and infers its schema.
+func (b *Binder) inferCSVSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Open the file
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, b.errorf("failed to open CSV file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Build reader options from options map
+	opts := csv.DefaultReaderOptions()
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "delimiter", "delim", "sep":
+			if s, ok := val.(string); ok && s != "" {
+				opts.Delimiter = rune(s[0])
+			}
+		case "quote":
+			if s, ok := val.(string); ok && s != "" {
+				opts.Quote = rune(s[0])
+			}
+		case "header":
+			if boolVal, ok := val.(bool); ok {
+				opts.Header = boolVal
+			}
+		case "nullstr", "null":
+			if s, ok := val.(string); ok {
+				opts.NullStr = s
+			}
+		case "skip":
+			switch v := val.(type) {
+			case int64:
+				opts.Skip = int(v)
+			case int:
+				opts.Skip = v
+			}
+		case "ignore_errors":
+			if boolVal, ok := val.(bool); ok {
+				opts.IgnoreErrors = boolVal
+			}
+		}
+	}
+
+	// Create the CSV reader
+	reader, err := csv.NewReader(file, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create CSV reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get CSV schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get CSV types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
+}
+
+// inferJSONSchema reads a JSON file and infers its schema.
+func (b *Binder) inferJSONSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Open the file
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, b.errorf("failed to open JSON file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Build reader options from options map
+	opts := json.DefaultReaderOptions()
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "format":
+			if s, ok := val.(string); ok {
+				switch strings.ToLower(s) {
+				case "array":
+					opts.Format = json.FormatArray
+				case "newline_delimited", "ndjson":
+					opts.Format = json.FormatNDJSON
+				case "auto":
+					opts.Format = json.FormatAuto
+				}
+			}
+		case "maximum_depth", "max_depth":
+			switch v := val.(type) {
+			case int64:
+				opts.MaxDepth = int(v)
+			case int:
+				opts.MaxDepth = v
+			}
+		case "sample_size":
+			switch v := val.(type) {
+			case int64:
+				opts.SampleSize = int(v)
+			case int:
+				opts.SampleSize = v
+			}
+		case "ignore_errors":
+			if boolVal, ok := val.(bool); ok {
+				opts.IgnoreErrors = boolVal
+			}
+		}
+	}
+
+	// Create the JSON reader
+	reader, err := json.NewReader(file, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create JSON reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get JSON schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get JSON types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
+}
+
+// inferParquetSchema reads a Parquet file and infers its schema.
+func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Build reader options from options map
+	opts := parquet.DefaultReaderOptions()
+
+	// Apply column projection if specified
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "columns":
+			switch v := val.(type) {
+			case []string:
+				opts.Columns = v
+			case []any:
+				cols := make([]string, 0, len(v))
+				for _, c := range v {
+					if s, ok := c.(string); ok {
+						cols = append(cols, s)
+					}
+				}
+				opts.Columns = cols
+			}
+		}
+	}
+
+	// Create the Parquet reader from path
+	reader, err := parquet.NewReaderFromPath(path, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create Parquet reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get Parquet schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get Parquet types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
 }
 
 func (b *Binder) bindJoin(
@@ -615,4 +946,106 @@ func (b *Binder) bindDropTable(
 		Table:    s.Table,
 		IfExists: s.IfExists,
 	}, nil
+}
+
+func (b *Binder) bindCopy(
+	s *parser.CopyStmt,
+) (*BoundCopyStmt, error) {
+	bound := &BoundCopyStmt{
+		FilePath: s.FilePath,
+		IsFrom:   s.IsFrom,
+		Options:  s.Options,
+	}
+
+	// Handle COPY (SELECT...) TO syntax
+	if s.Query != nil {
+		// Bind the SELECT query
+		query, err := b.bindSelect(s.Query)
+		if err != nil {
+			return nil, err
+		}
+		bound.Query = query
+		return bound, nil
+	}
+
+	// Handle COPY table FROM/TO syntax
+	schema := s.Schema
+	if schema == "" {
+		schema = "main"
+	}
+	bound.Schema = schema
+	bound.Table = s.TableName
+
+	// For COPY FROM, we need the table to exist
+	// For COPY TO, we need the table to exist
+	tableDef, ok := b.catalog.GetTableInSchema(schema, s.TableName)
+	if !ok {
+		return nil, b.errorf("table not found: %s", s.TableName)
+	}
+	bound.TableDef = tableDef
+
+	// Resolve column indices if specified
+	if len(s.Columns) > 0 {
+		for _, colName := range s.Columns {
+			idx, ok := tableDef.GetColumnIndex(colName)
+			if !ok {
+				return nil, b.errorf("column not found: %s", colName)
+			}
+			bound.Columns = append(bound.Columns, idx)
+		}
+	}
+
+	// Validate options
+	if err := b.validateCopyOptions(bound); err != nil {
+		return nil, err
+	}
+
+	return bound, nil
+}
+
+// validateCopyOptions validates COPY statement options.
+func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
+	// Validate FORMAT option
+	if format, ok := stmt.Options["FORMAT"]; ok {
+		formatStr, isStr := format.(string)
+		if !isStr {
+			return b.errorf("FORMAT option must be a string")
+		}
+		switch strings.ToUpper(formatStr) {
+		case "CSV", "PARQUET", "JSON", "NDJSON":
+			// Valid formats
+		default:
+			return b.errorf("unsupported FORMAT: %s (supported: CSV, PARQUET, JSON, NDJSON)", formatStr)
+		}
+	}
+
+	// Validate CODEC option for Parquet
+	if codec, ok := stmt.Options["CODEC"]; ok {
+		codecStr, isStr := codec.(string)
+		if !isStr {
+			return b.errorf("CODEC option must be a string")
+		}
+		switch strings.ToUpper(codecStr) {
+		case "UNCOMPRESSED", "SNAPPY", "GZIP", "ZSTD", "LZ4", "LZ4_RAW", "BROTLI":
+			// Valid codecs
+		default:
+			return b.errorf("unsupported CODEC: %s (supported: UNCOMPRESSED, SNAPPY, GZIP, ZSTD, LZ4, LZ4_RAW, BROTLI)", codecStr)
+		}
+	}
+
+	// Validate COMPRESSION option
+	if compression, ok := stmt.Options["COMPRESSION"]; ok {
+		compStr, isStr := compression.(string)
+		if !isStr {
+			return b.errorf("COMPRESSION option must be a string")
+		}
+		switch strings.ToUpper(compStr) {
+		case "NONE", "GZIP", "ZSTD", "SNAPPY":
+			// Valid compressions
+		default:
+			return b.errorf("unsupported COMPRESSION: %s (supported: NONE, GZIP, ZSTD, SNAPPY)", compStr)
+		}
+	}
+
+	return nil
 }

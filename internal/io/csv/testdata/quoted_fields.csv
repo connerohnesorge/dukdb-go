@@ -1,0 +1,7 @@
+id,name,description
+1,"Alice Smith","Hello, World"
+2,"Bob ""The Builder""","Value with ""quotes"""
+3,"Charlie
+Newline","Multi
+line
+value"

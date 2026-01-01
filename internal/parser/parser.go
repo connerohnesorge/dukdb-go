@@ -692,6 +692,8 @@ func (p *parser) parse() (Statement, error) {
 	case p.isKeyword("ROLLBACK"):
 		stmt = &RollbackStmt{}
 		p.advance()
+	case p.isKeyword("COPY"):
+		stmt, err = p.parseCopy()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",
@@ -1046,14 +1048,26 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			return ref, err
 		}
 	} else if p.current().typ == tokenIdent {
-		ref.TableName = p.advance().value
-		if p.current().typ == tokenDot {
+		name := p.advance().value
+
+		// Check if this is a table function call (identifier followed by left paren)
+		if p.current().typ == tokenLParen {
+			// This is a table function call like read_csv('file.csv')
+			tableFunc, err := p.parseTableFunction(name)
+			if err != nil {
+				return ref, err
+			}
+			ref.TableFunction = tableFunc
+			ref.TableName = name // Use function name as table name for alias resolution
+		} else if p.current().typ == tokenDot {
 			p.advance()
-			ref.Schema = ref.TableName
+			ref.Schema = name
 			if p.current().typ != tokenIdent {
 				return ref, p.errorf("expected table name after dot")
 			}
 			ref.TableName = p.advance().value
+		} else {
+			ref.TableName = name
 		}
 	} else {
 		return ref, p.errorf("expected table name or subquery")
@@ -1078,6 +1092,56 @@ func (p *parser) parseTableRef() (TableRef, error) {
 	}
 
 	return ref, nil
+}
+
+// parseTableFunction parses a table function call in a FROM clause.
+// The function name has already been consumed.
+// Example: read_csv('file.csv', delimiter=',', header=true)
+func (p *parser) parseTableFunction(name string) (*TableFunctionRef, error) {
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	tableFunc := &TableFunctionRef{
+		Name:      strings.ToLower(name), // Normalize to lowercase
+		Args:      make([]Expr, 0),
+		NamedArgs: make(map[string]Expr),
+	}
+
+	// Parse arguments
+	if p.current().typ != tokenRParen {
+		for {
+			// Check if this is a named argument (identifier = value)
+			if p.current().typ == tokenIdent && p.peek().typ == tokenOperator && p.peek().value == "=" {
+				// Named argument
+				argName := strings.ToLower(p.advance().value)
+				p.advance() // consume '='
+				argValue, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				tableFunc.NamedArgs[argName] = argValue
+			} else {
+				// Positional argument
+				arg, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				tableFunc.Args = append(tableFunc.Args, arg)
+			}
+
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return tableFunc, nil
 }
 
 func (p *parser) parseJoin() (JoinClause, error) {
@@ -1652,6 +1716,263 @@ func (p *parser) parseBegin() (*BeginStmt, error) {
 	}
 
 	return &BeginStmt{}, nil
+}
+
+// parseCopy parses a COPY statement.
+// Supports:
+//   - COPY table FROM 'path' (OPTIONS)
+//   - COPY table TO 'path' (OPTIONS)
+//   - COPY table (col1, col2) FROM 'path' (OPTIONS)
+//   - COPY table (col1, col2) TO 'path' (OPTIONS)
+//   - COPY (SELECT...) TO 'path' (OPTIONS)
+func (p *parser) parseCopy() (*CopyStmt, error) {
+	if err := p.expectKeyword("COPY"); err != nil {
+		return nil, err
+	}
+
+	stmt := &CopyStmt{
+		Options: make(map[string]any),
+	}
+
+	// Check for COPY (SELECT...) TO syntax
+	if p.current().typ == tokenLParen {
+		p.advance() // consume '('
+		if !p.isKeyword("SELECT") && !p.isKeyword("WITH") {
+			return nil, p.errorf("expected SELECT after COPY (")
+		}
+
+		// Parse the SELECT query
+		var query *SelectStmt
+		var err error
+		if p.isKeyword("WITH") {
+			query, err = p.parseWithSelect()
+		} else {
+			query, err = p.parseSelect()
+		}
+		if err != nil {
+			return nil, err
+		}
+		stmt.Query = query
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		// Must be TO for query export
+		if !p.isKeyword("TO") {
+			return nil, p.errorf("expected TO after COPY (SELECT...)")
+		}
+		stmt.IsFrom = false
+		p.advance() // consume TO
+	} else {
+		// Parse table name (possibly with schema)
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after COPY")
+		}
+		name := p.advance().value
+
+		// Check for schema.table
+		if p.current().typ == tokenDot {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected table name after dot")
+			}
+			stmt.Schema = name
+			stmt.TableName = p.advance().value
+		} else {
+			stmt.TableName = name
+		}
+
+		// Optional column list
+		if p.current().typ == tokenLParen {
+			p.advance() // consume '('
+			for {
+				if p.current().typ != tokenIdent {
+					return nil, p.errorf("expected column name")
+				}
+				stmt.Columns = append(stmt.Columns, p.advance().value)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance() // consume ','
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+		}
+
+		// FROM or TO
+		if p.isKeyword("FROM") {
+			stmt.IsFrom = true
+			p.advance()
+		} else if p.isKeyword("TO") {
+			stmt.IsFrom = false
+			p.advance()
+		} else {
+			return nil, p.errorf("expected FROM or TO after table name")
+		}
+	}
+
+	// Parse file path (string literal)
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected file path string")
+	}
+	pathTok := p.advance()
+	// Remove quotes from the path
+	stmt.FilePath = pathTok.value[1 : len(pathTok.value)-1]
+	stmt.FilePath = strings.ReplaceAll(stmt.FilePath, "''", "'")
+
+	// Parse optional options clause
+	if p.current().typ == tokenLParen || p.isKeyword("WITH") {
+		if p.isKeyword("WITH") {
+			p.advance() // consume WITH
+		}
+		if err := p.parseCopyOptions(stmt); err != nil {
+			return nil, err
+		}
+	}
+
+	return stmt, nil
+}
+
+// parseCopyOptions parses the options clause for a COPY statement.
+// Options are in the form (name value, name value, ...) or (name, name, ...)
+// Supported options: DELIMITER, HEADER, FORMAT, NULL, CODEC, COMPRESSION,
+// QUOTE, ESCAPE, ENCODING, SKIP, FORCE_QUOTE, FORCE_NOT_NULL, etc.
+func (p *parser) parseCopyOptions(stmt *CopyStmt) error {
+	if _, err := p.expect(tokenLParen); err != nil {
+		return err
+	}
+
+	for p.current().typ != tokenRParen && p.current().typ != tokenEOF {
+		// Parse option name
+		if p.current().typ != tokenIdent {
+			return p.errorf("expected option name")
+		}
+		optName := strings.ToUpper(p.advance().value)
+
+		// Parse option value
+		var optValue any = true // Default for boolean options
+
+		// Check if there's a value (could be '=' or just the value)
+		if p.current().typ == tokenOperator && p.current().value == "=" {
+			p.advance() // consume '='
+		}
+
+		// Parse the value if present
+		switch p.current().typ {
+		case tokenString:
+			tok := p.advance()
+			s := tok.value[1 : len(tok.value)-1]
+			s = strings.ReplaceAll(s, "''", "'")
+			optValue = s
+		case tokenNumber:
+			tok := p.advance()
+			if strings.Contains(tok.value, ".") {
+				f, _ := strconv.ParseFloat(tok.value, 64)
+				optValue = f
+			} else {
+				i, _ := strconv.ParseInt(tok.value, 10, 64)
+				optValue = i
+			}
+		case tokenIdent:
+			// Could be boolean (true/false) or identifier value (FORMAT PARQUET)
+			val := p.current().value
+			switch strings.ToUpper(val) {
+			case "TRUE":
+				optValue = true
+				p.advance()
+			case "FALSE":
+				optValue = false
+				p.advance()
+			case "CSV", "PARQUET", "JSON", "NDJSON":
+				// Format value
+				optValue = strings.ToUpper(val)
+				p.advance()
+			case "GZIP", "ZSTD", "SNAPPY", "LZ4", "LZ4_RAW", "BROTLI", "UNCOMPRESSED", "NONE":
+				// Compression/codec value
+				optValue = strings.ToUpper(val)
+				p.advance()
+			case "UTF8", "UTF16", "LATIN1", "ASCII":
+				// Encoding value
+				optValue = strings.ToUpper(val)
+				p.advance()
+			default:
+				// Check if it's an option that takes a column list
+				if optName == "FORCE_QUOTE" || optName == "FORCE_NOT_NULL" || optName == "COLUMNS" {
+					// Parse column list
+					if p.current().typ == tokenLParen {
+						p.advance()
+						cols := make([]string, 0)
+						for {
+							if p.current().typ != tokenIdent {
+								return p.errorf("expected column name in %s", optName)
+							}
+							cols = append(cols, p.advance().value)
+							if p.current().typ != tokenComma {
+								break
+							}
+							p.advance()
+						}
+						if _, err := p.expect(tokenRParen); err != nil {
+							return err
+						}
+						optValue = cols
+					} else if p.current().typ == tokenIdent {
+						// Single column without parens
+						optValue = []string{p.advance().value}
+					}
+				} else {
+					// Treat as string value for unknown options
+					optValue = val
+					p.advance()
+				}
+			}
+		case tokenLParen:
+			// Column list for options like FORCE_QUOTE (col1, col2)
+			p.advance()
+			cols := make([]string, 0)
+			for {
+				if p.current().typ != tokenIdent {
+					return p.errorf("expected column name")
+				}
+				cols = append(cols, p.advance().value)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance()
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return err
+			}
+			optValue = cols
+		}
+
+		// Normalize option names
+		switch optName {
+		case "DELIM", "SEP", "SEPARATOR":
+			optName = "DELIMITER"
+		case "NULL", "NULLSTR":
+			optName = "NULL"
+		case "COMPRESSION_LEVEL":
+			optName = "COMPRESSION_LEVEL"
+		case "ROW_GROUP_SIZE":
+			optName = "ROW_GROUP_SIZE"
+		}
+
+		stmt.Options[optName] = optValue
+
+		// Consume comma if present
+		if p.current().typ == tokenComma {
+			p.advance()
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (p *parser) parseExprList() ([]Expr, error) {

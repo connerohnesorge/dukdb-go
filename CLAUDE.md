@@ -67,6 +67,32 @@ database/sql API
 - **`internal/executor/`**: Query execution
 - **`internal/binder/`**: SQL binding/resolution
 - **`internal/vector/`**: Columnar data representation
+- **`internal/io/`**: File format I/O (CSV, JSON, Parquet)
+
+### File Format Support
+
+The project supports reading and writing multiple file formats:
+
+**CSV**: `internal/io/csv/`
+- `read_csv(path, delimiter, header, nullstr, ...)` - Read CSV with options
+- `read_csv_auto(path)` - Auto-detect CSV format
+- CSV writer with configurable options
+
+**JSON**: `internal/io/json/`
+- `read_json(path, format, ...)` - Read JSON array or NDJSON
+- `read_json_auto(path)` - Auto-detect JSON format
+- `read_ndjson(path)` - Read newline-delimited JSON
+- JSON/NDJSON writer
+
+**Parquet**: `internal/io/parquet/`
+- `read_parquet(path)` - Read Parquet files with column projection
+- Parquet writer with compression support (SNAPPY, GZIP, ZSTD, LZ4, BROTLI)
+- Uses `github.com/parquet-go/parquet-go` (pure Go, no CGO)
+
+**COPY Statement**:
+- `COPY table FROM 'path' (OPTIONS)` - Import data
+- `COPY table TO 'path' (OPTIONS)` - Export data
+- `COPY (SELECT ...) TO 'path' (OPTIONS)` - Export query results
 
 ### Reference Implementation
 
