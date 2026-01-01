@@ -115,6 +115,43 @@ type BackendConnIdentifiable interface {
 	IsClosed() bool
 }
 
+// BackendConnTableExtractor is an optional interface for backends that support
+// extracting table names from SQL queries.
+//
+// This interface enables the public [GetTableNames] API to extract table
+// references from SQL queries without executing them. Implementations should
+// parse the query and return all table names referenced in the statement.
+//
+// # Implementation Requirements
+//
+// Backends implementing this interface must:
+//   - Parse the query to extract table references
+//   - Return an empty slice (not nil) for queries with no table references
+//   - Return an error for queries that cannot be parsed
+//   - Handle the qualified parameter to return qualified (schema.table) or unqualified names
+//
+// # Supported Statement Types
+//
+// Implementations should support at minimum:
+//   - SELECT (including JOINs and subqueries)
+//   - INSERT (target table and SELECT subquery)
+//   - UPDATE (target table and WHERE subqueries)
+//   - DELETE (target table and WHERE subqueries)
+//   - CREATE TABLE (the table being created)
+//   - DROP TABLE (the table being dropped)
+type BackendConnTableExtractor interface {
+	// ExtractTableNames parses the query and returns all referenced table names.
+	//
+	// If qualified is true, returns fully qualified names (e.g., "schema.table").
+	// If qualified is false, returns just the table name (e.g., "table").
+	//
+	// Returns:
+	//   - A sorted, deduplicated slice of table names
+	//   - An empty slice (not nil) if no tables are referenced
+	//   - An error if the query cannot be parsed
+	ExtractTableNames(query string, qualified bool) ([]string, error)
+}
+
 // BackendStmt represents a prepared statement from a backend.
 type BackendStmt interface {
 	// Execute executes the prepared statement with the given arguments

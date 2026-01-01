@@ -461,7 +461,9 @@ func BenchmarkSerializeCatalog(b *testing.B) {
 			}
 		}
 
-		schema.CreateTable(tableDef)
+		if err := schema.CreateTable(tableDef); err != nil {
+			b.Fatalf("CreateTable failed: %v", err)
+		}
 	}
 
 	b.ReportAllocs()
@@ -593,7 +595,9 @@ func BenchmarkDeserializeCatalog(b *testing.B) {
 			}
 		}
 
-		schema.CreateTable(tableDef)
+		if err := schema.CreateTable(tableDef); err != nil {
+			b.Fatalf("CreateTable failed: %v", err)
+		}
 	}
 
 	// Pre-serialize the catalog
@@ -787,7 +791,9 @@ func FuzzCatalogDeserializer(f *testing.F) {
 			},
 		},
 	}
-	schema.CreateTable(tableDef)
+	if err := schema.CreateTable(tableDef); err != nil {
+		f.Fatal(err)
+	}
 
 	buf := new(bytes.Buffer)
 	if err := SerializeCatalog(buf, cat); err != nil {

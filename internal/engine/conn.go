@@ -613,12 +613,90 @@ func (c *EngineConn) GetCatalog() any {
 	return c.engine.Catalog()
 }
 
+// ExtractTableNames parses a SQL query and returns all referenced table names.
+// Implements the BackendConnTableExtractor interface.
+//
+// This method uses the internal parser to extract table references from the query
+// without executing it. It supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE,
+// and DROP TABLE statements.
+//
+// Parameters:
+//   - query: The SQL query string to parse
+//   - qualified: If true, returns qualified names (schema.table); if false, returns unqualified names
+//
+// Returns:
+//   - A sorted, deduplicated slice of table names
+//   - An empty slice (not nil) for queries with no table references
+//   - An error if the query cannot be parsed
+func (c *EngineConn) ExtractTableNames(query string, qualified bool) ([]string, error) {
+	// Note: This operation doesn't require connection state or locking
+	// since it only parses the query without accessing the database
+
+	// Handle empty query - return empty slice, not nil
+	trimmedQuery := query
+	for trimmedQuery != "" && (trimmedQuery[0] == ' ' || trimmedQuery[0] == '\t' || trimmedQuery[0] == '\n' || trimmedQuery[0] == '\r') {
+		trimmedQuery = trimmedQuery[1:]
+	}
+	if trimmedQuery == "" {
+		return []string{}, nil
+	}
+
+	// Parse the query using the internal parser
+	stmt, err := parser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a table extractor with the specified qualified mode
+	extractor := parser.NewTableExtractor(qualified)
+
+	// Use the visitor pattern to extract table names
+	// Each statement type has an Accept method that calls the appropriate visitor method
+	switch s := stmt.(type) {
+	case *parser.SelectStmt:
+		s.Accept(extractor)
+	case *parser.InsertStmt:
+		s.Accept(extractor)
+	case *parser.UpdateStmt:
+		s.Accept(extractor)
+	case *parser.DeleteStmt:
+		s.Accept(extractor)
+	case *parser.CreateTableStmt:
+		s.Accept(extractor)
+	case *parser.DropTableStmt:
+		s.Accept(extractor)
+	case *parser.BeginStmt:
+		s.Accept(extractor)
+	case *parser.CommitStmt:
+		s.Accept(extractor)
+	case *parser.RollbackStmt:
+		s.Accept(extractor)
+	default:
+		// Unknown statement type - no tables to extract
+		// Return empty slice, not nil
+		return []string{}, nil
+	}
+
+	// Get the sorted, deduplicated table names
+	tables := extractor.GetTables()
+
+	// Ensure we never return nil - return empty slice instead
+	if tables == nil {
+		return []string{}, nil
+	}
+
+	return tables, nil
+}
+
 // Verify interface implementations
 var (
 	_ dukdb.BackendConn = (*EngineConn)(
 		nil,
 	)
 	_ dukdb.BackendConnCatalog = (*EngineConn)(
+		nil,
+	)
+	_ dukdb.BackendConnTableExtractor = (*EngineConn)(
 		nil,
 	)
 	_ dukdb.BackendStmt = (*EngineStmt)(

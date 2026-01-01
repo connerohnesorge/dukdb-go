@@ -249,6 +249,44 @@ func (a *LogicalAggregate) OutputColumns() []ColumnBinding {
 	return a.columns
 }
 
+// LogicalWindow represents a window function operator in the logical plan.
+// It evaluates window expressions over partitioned and ordered data.
+type LogicalWindow struct {
+	Child       LogicalPlan              // Child plan
+	WindowExprs []*binder.BoundWindowExpr // Window expressions to evaluate
+	columns     []ColumnBinding
+}
+
+func (*LogicalWindow) logicalPlanNode() {}
+
+func (w *LogicalWindow) Children() []LogicalPlan { return []LogicalPlan{w.Child} }
+
+func (w *LogicalWindow) OutputColumns() []ColumnBinding {
+	if w.columns != nil {
+		return w.columns
+	}
+
+	// Window operator outputs all child columns plus window result columns
+	childCols := w.Child.OutputColumns()
+	w.columns = make([]ColumnBinding, len(childCols)+len(w.WindowExprs))
+
+	// Copy child columns
+	for i, col := range childCols {
+		w.columns[i] = col
+	}
+
+	// Add window result columns
+	for i, windowExpr := range w.WindowExprs {
+		w.columns[len(childCols)+i] = ColumnBinding{
+			Column:    windowExpr.FunctionName,
+			Type:      windowExpr.ResType,
+			ColumnIdx: len(childCols) + i,
+		}
+	}
+
+	return w.columns
+}
+
 // LogicalSort represents a sort operation (ORDER BY).
 type LogicalSort struct {
 	Child   LogicalPlan

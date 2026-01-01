@@ -443,7 +443,9 @@ func TestExecBoundUnboundParams(t *testing.T) {
 		"SELECT $1",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	// Try to execute without binding - should error before hitting backend
 	_, err = stmt.ExecBound(context.Background())
@@ -464,7 +466,9 @@ func TestQueryBoundUnboundParams(t *testing.T) {
 		"SELECT $1",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	// Try to query without binding - should error before hitting backend
 	_, err = stmt.QueryBound(context.Background())

@@ -287,11 +287,15 @@ func TestGetProfilingInfo_NotEnabled(
 	setupProfilingTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Profiling not enabled
 	_, err = GetProfilingInfo(conn)
@@ -304,11 +308,15 @@ func TestGetProfilingInfo_WithProfiling(
 	setupProfilingTest(t)
 	db, err := sql.Open("dukdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Set up profiling context on the connection
 	err = conn.Raw(func(driverConn any) error {

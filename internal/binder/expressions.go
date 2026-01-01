@@ -172,3 +172,70 @@ type BoundStarExpr struct {
 func (*BoundStarExpr) boundExprNode() {}
 
 func (*BoundStarExpr) ResultType() dukdb.Type { return dukdb.TYPE_ANY }
+
+// BoundExtractExpr represents a bound EXTRACT(part FROM source) expression.
+// This extracts a date/time field from a temporal value.
+// Returns DOUBLE per SQL standard (same as DATE_PART).
+type BoundExtractExpr struct {
+	Part   string    // The part to extract (YEAR, MONTH, DAY, etc.)
+	Source BoundExpr // The source expression
+}
+
+func (*BoundExtractExpr) boundExprNode() {}
+
+func (*BoundExtractExpr) ResultType() dukdb.Type { return dukdb.TYPE_DOUBLE }
+
+// BoundIntervalLiteral represents a bound INTERVAL literal expression.
+// Contains the parsed interval components: months, days, and microseconds.
+type BoundIntervalLiteral struct {
+	Months int32 // Number of months (includes years * 12)
+	Days   int32 // Number of days
+	Micros int64 // Number of microseconds (sub-day time)
+}
+
+func (*BoundIntervalLiteral) boundExprNode() {}
+
+func (*BoundIntervalLiteral) ResultType() dukdb.Type { return dukdb.TYPE_INTERVAL }
+
+// ---------- Window Function Types ----------
+
+// WindowFunctionType categorizes window functions by their behavior.
+type WindowFunctionType int
+
+const (
+	// WindowFunctionRanking - ROW_NUMBER, RANK, DENSE_RANK, NTILE
+	WindowFunctionRanking WindowFunctionType = iota
+	// WindowFunctionValue - LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTH_VALUE
+	WindowFunctionValue
+	// WindowFunctionDistribution - PERCENT_RANK, CUME_DIST
+	WindowFunctionDistribution
+	// WindowFunctionAggregate - COUNT, SUM, AVG, MIN, MAX with OVER
+	WindowFunctionAggregate
+)
+
+// BoundWindowOrder represents bound ORDER BY with null ordering.
+type BoundWindowOrder struct {
+	Expr       BoundExpr
+	Desc       bool
+	NullsFirst bool
+}
+
+// BoundWindowExpr represents a bound window expression.
+type BoundWindowExpr struct {
+	FunctionName string             // e.g., "row_number", "sum"
+	FunctionType WindowFunctionType // Ranking, Value, Distribution, Aggregate
+	Args         []BoundExpr        // Bound function arguments
+	PartitionBy  []BoundExpr        // Bound partition expressions
+	OrderBy      []BoundWindowOrder // Bound order expressions with NULLS FIRST/LAST
+	Frame        *parser.WindowFrame // Resolved frame (with defaults applied)
+	ResType      dukdb.Type          // Result type of the window function
+	IgnoreNulls  bool               // IGNORE NULLS modifier
+	Filter       BoundExpr          // Bound FILTER expression (or nil)
+	Distinct     bool               // DISTINCT modifier for aggregates
+	ResultIndex  int                // Column index in output
+}
+
+func (*BoundWindowExpr) boundExprNode() {}
+
+// ResultType returns the result type of the window expression.
+func (w *BoundWindowExpr) ResultType() dukdb.Type { return w.ResType }

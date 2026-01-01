@@ -418,7 +418,11 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 			err,
 		)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if closeErr := gzReader.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close gzip reader: %w", closeErr)
+		}
+	}()
 
 	data, err := io.ReadAll(gzReader)
 	if err != nil {
@@ -711,7 +715,11 @@ func VerifyFile(path string) error {
 			err,
 		)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close file: %w", closeErr)
+		}
+	}()
 
 	// Get file size
 	stat, err := file.Stat()

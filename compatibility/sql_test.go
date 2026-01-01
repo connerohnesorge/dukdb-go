@@ -194,7 +194,9 @@ func testSelectStar(t *testing.T, db *sql.DB) {
 		`SELECT * FROM test_select_star ORDER BY id`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []struct {
 		id   int
@@ -271,7 +273,9 @@ func testSelectLimit(t *testing.T, db *sql.DB) {
 		`SELECT id FROM test_limit ORDER BY id LIMIT 3`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var ids []int
 	for rows.Next() {
@@ -303,7 +307,9 @@ func testSelectLimitOffset(
 		`SELECT id FROM test_limit_offset ORDER BY id LIMIT 2 OFFSET 2`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var ids []int
 	for rows.Next() {
@@ -335,7 +341,9 @@ func testSelectDistinct(
 		`SELECT DISTINCT category FROM test_distinct ORDER BY category`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var categories []string
 	for rows.Next() {
@@ -383,7 +391,9 @@ func testSelectJoinInner(
 		`SELECT u.name, o.product FROM users u INNER JOIN user_orders o ON u.id = o.user_id ORDER BY u.name, o.product`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []struct {
 		name    string
@@ -439,7 +449,9 @@ func testSelectJoinLeft(
 		`SELECT u.name, o.product FROM left_users u LEFT JOIN left_orders o ON u.id = o.user_id ORDER BY u.name`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []struct {
 		name    string

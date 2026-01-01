@@ -133,7 +133,9 @@ func TestQueryBound(t *testing.T) {
 	rows, err := stmt.QueryBound()
 	require.NoError(t, err)
 	require.NotNil(t, rows)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	assert.Equal(
 		t,
@@ -302,7 +304,9 @@ func TestQueryBoundContextClockSuccess(
 	)
 	require.NoError(t, err)
 	require.NotNil(t, rows)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	assert.Equal(
 		t,

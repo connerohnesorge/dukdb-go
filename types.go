@@ -281,36 +281,6 @@ func inferTimestamp(val any) (int64, error) {
 	return ti.UnixMicro(), nil
 }
 
-// inferTimestampS converts a time.Time value to seconds since epoch.
-func inferTimestampS(val any) (int64, error) {
-	ti, err := castToTime(val)
-	if err != nil {
-		return 0, err
-	}
-
-	return ti.Unix(), nil
-}
-
-// inferTimestampMS converts a time.Time value to milliseconds since epoch.
-func inferTimestampMS(val any) (int64, error) {
-	ti, err := castToTime(val)
-	if err != nil {
-		return 0, err
-	}
-
-	return ti.UnixMilli(), nil
-}
-
-// inferTimestampNS converts a time.Time value to nanoseconds since epoch.
-func inferTimestampNS(val any) (int64, error) {
-	ti, err := castToTime(val)
-	if err != nil {
-		return 0, err
-	}
-
-	return ti.UnixNano(), nil
-}
-
 // inferDate converts a time.Time value to days since epoch.
 func inferDate(val any) (int32, error) {
 	ti, err := castToTime(val)

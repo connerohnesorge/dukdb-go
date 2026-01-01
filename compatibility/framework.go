@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/coder/quartz"
+	"github.com/stretchr/testify/require"
 
 	// Import dukdb driver and engine (engine init() registers the backend)
 	_ "github.com/dukdb/dukdb-go"
@@ -181,7 +182,9 @@ func (r *TestRunner) RunTests(
 					err,
 				)
 			}
-			defer db.Close()
+			defer func() {
+				require.NoError(t, db.Close())
+			}()
 
 			// Run setup if provided
 			if test.Setup != nil {
@@ -234,7 +237,9 @@ func (r *TestRunner) RunTestsParallel(
 					err,
 				)
 			}
-			defer db.Close()
+			defer func() {
+				require.NoError(t, db.Close())
+			}()
 
 			// Run setup if provided
 			if test.Setup != nil {

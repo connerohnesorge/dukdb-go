@@ -256,6 +256,44 @@ func (a *PhysicalHashAggregate) OutputColumns() []ColumnBinding {
 	return a.columns
 }
 
+// PhysicalWindow represents a physical window function operator.
+// It evaluates window expressions over partitioned and ordered data.
+type PhysicalWindow struct {
+	Child       PhysicalPlan               // Child plan
+	WindowExprs []*binder.BoundWindowExpr  // Bound window expressions
+	columns     []ColumnBinding
+}
+
+func (*PhysicalWindow) physicalPlanNode() {}
+
+func (w *PhysicalWindow) Children() []PhysicalPlan { return []PhysicalPlan{w.Child} }
+
+func (w *PhysicalWindow) OutputColumns() []ColumnBinding {
+	if w.columns != nil {
+		return w.columns
+	}
+
+	// Window operator outputs all child columns plus window result columns
+	childCols := w.Child.OutputColumns()
+	w.columns = make([]ColumnBinding, len(childCols)+len(w.WindowExprs))
+
+	// Copy child columns
+	for i, col := range childCols {
+		w.columns[i] = col
+	}
+
+	// Add window result columns
+	for i, windowExpr := range w.WindowExprs {
+		w.columns[len(childCols)+i] = ColumnBinding{
+			Column:    windowExpr.FunctionName,
+			Type:      windowExpr.ResType,
+			ColumnIdx: len(childCols) + i,
+		}
+	}
+
+	return w.columns
+}
+
 // PhysicalSort represents a physical sort operation.
 type PhysicalSort struct {
 	Child   PhysicalPlan
@@ -583,11 +621,11 @@ func (p *Planner) planSelect(
 		}
 	}
 
-	// GROUP BY / Aggregates
+	// GROUP BY / Aggregates (only non-window aggregates)
 	if len(s.GroupBy) > 0 ||
-		hasAggregates(s.Columns) {
+		hasNonWindowAggregates(s.Columns) {
 		groupBy := s.GroupBy
-		aggregates := extractAggregates(s.Columns)
+		aggregates := extractNonWindowAggregates(s.Columns)
 		aliases := extractAliases(s.Columns)
 
 		plan = &LogicalAggregate{
@@ -603,6 +641,16 @@ func (p *Planner) planSelect(
 				Child:     plan,
 				Condition: s.Having,
 			}
+		}
+	}
+
+	// WINDOW - detect and add window expressions
+	// Window goes AFTER aggregation/filter, BEFORE projection
+	windowExprs := extractWindowExprs(s.Columns)
+	if len(windowExprs) > 0 {
+		plan = &LogicalWindow{
+			Child:       plan,
+			WindowExprs: windowExprs,
 		}
 	}
 
@@ -853,6 +901,17 @@ func (p *Planner) createPhysicalPlan(
 			Aliases:    l.Aliases,
 		}, nil
 
+	case *LogicalWindow:
+		child, err := p.createPhysicalPlan(l.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		return &PhysicalWindow{
+			Child:       child,
+			WindowExprs: l.WindowExprs,
+		}, nil
+
 	case *LogicalSort:
 		child, err := p.createPhysicalPlan(l.Child)
 		if err != nil {
@@ -1072,4 +1131,80 @@ func toInt64(v any) int64 {
 	default:
 		return 0
 	}
+}
+
+// hasNonWindowAggregates checks if any column contains a non-window aggregate.
+func hasNonWindowAggregates(
+	columns []*binder.BoundSelectColumn,
+) bool {
+	for _, col := range columns {
+		if containsNonWindowAggregate(col.Expr) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsNonWindowAggregate checks if an expression is a non-window aggregate.
+func containsNonWindowAggregate(
+	expr binder.BoundExpr,
+) bool {
+	// Window expressions are handled separately
+	if _, ok := expr.(*binder.BoundWindowExpr); ok {
+		return false
+	}
+	switch e := expr.(type) {
+	case *binder.BoundFunctionCall:
+		name := e.Name
+		switch name {
+		case "COUNT", "SUM", "AVG", "MIN", "MAX":
+			return true
+		}
+	}
+	return false
+}
+
+// extractNonWindowAggregates extracts non-window aggregate expressions from columns.
+func extractNonWindowAggregates(
+	columns []*binder.BoundSelectColumn,
+) []binder.BoundExpr {
+	var aggs []binder.BoundExpr
+	for _, col := range columns {
+		// Skip window expressions
+		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			continue
+		}
+		if fn, ok := col.Expr.(*binder.BoundFunctionCall); ok {
+			switch fn.Name {
+			case "COUNT", "SUM", "AVG", "MIN", "MAX":
+				aggs = append(aggs, col.Expr)
+			}
+		}
+	}
+	return aggs
+}
+
+// extractWindowExprs extracts window expressions from SELECT columns.
+func extractWindowExprs(
+	columns []*binder.BoundSelectColumn,
+) []*binder.BoundWindowExpr {
+	var windowExprs []*binder.BoundWindowExpr
+	for _, col := range columns {
+		if windowExpr, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			windowExprs = append(windowExprs, windowExpr)
+		}
+	}
+	return windowExprs
+}
+
+// containsWindowExpr checks if any column contains a window expression.
+func containsWindowExpr(
+	columns []*binder.BoundSelectColumn,
+) bool {
+	for _, col := range columns {
+		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			return true
+		}
+	}
+	return false
 }

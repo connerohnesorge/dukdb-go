@@ -1,0 +1,8 @@
+warning: Git tree '/home/connerohnesorge/Documents/001Repos/dukdb-go' has uncommitted changes
+internal/catalog/catalog.go:7:8: could not import github.com/dukdb/dukdb-go (-: # github.com/dukdb/dukdb-go
+./gettablenames.go:90:17: dukdbConn.backend undefined (type *Conn has no field or method backend)
+./gettablenames.go:91:35: dukdbConn.backend undefined (type *Conn has no field or method backend)) (typecheck)
+	dukdb "github.com/dukdb/dukdb-go"
+	      ^
+1 issues:
+* typecheck: 1

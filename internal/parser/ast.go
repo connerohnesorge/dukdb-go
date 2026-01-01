@@ -18,8 +18,16 @@ type Expr interface {
 
 // ---------- Statement Types ----------
 
+// CTE represents a Common Table Expression (WITH clause).
+type CTE struct {
+	Name    string      // CTE name (e.g., "tmp" in WITH tmp AS ...)
+	Columns []string    // Optional column names
+	Query   *SelectStmt // The CTE query
+}
+
 // SelectStmt represents a SELECT statement.
 type SelectStmt struct {
+	CTEs       []CTE // Common Table Expressions (WITH clause)
 	Distinct   bool
 	Columns    []SelectColumn
 	From       *FromClause
@@ -30,6 +38,8 @@ type SelectStmt struct {
 	Limit      Expr
 	Offset     Expr
 	IsSubquery bool
+	SetOp      SetOpType   // Type of set operation (UNION, INTERSECT, EXCEPT)
+	Right      *SelectStmt // Right side of set operation
 }
 
 func (*SelectStmt) stmtNode() {}
@@ -83,6 +93,19 @@ const (
 	JoinTypeCross
 )
 
+// SetOpType represents the type of set operation.
+type SetOpType int
+
+const (
+	SetOpNone SetOpType = iota
+	SetOpUnion
+	SetOpUnionAll
+	SetOpIntersect
+	SetOpIntersectAll
+	SetOpExcept
+	SetOpExceptAll
+)
+
 // OrderByExpr represents an ORDER BY expression.
 type OrderByExpr struct {
 	Expr Expr
@@ -112,6 +135,7 @@ type UpdateStmt struct {
 	Schema string
 	Table  string
 	Set    []SetClause
+	From   *FromClause // Optional FROM clause for UPDATE...FROM
 	Where  Expr
 }
 
@@ -153,6 +177,7 @@ type CreateTableStmt struct {
 	IfNotExists bool
 	Columns     []ColumnDefClause
 	PrimaryKey  []string
+	AsSelect    *SelectStmt // For CREATE TABLE ... AS SELECT
 }
 
 func (*CreateTableStmt) stmtNode() {}
@@ -357,6 +382,30 @@ type StarExpr struct {
 
 func (*StarExpr) exprNode() {}
 
+// ExtractExpr represents an EXTRACT(part FROM source) expression.
+// This is SQL standard syntax that extracts a date/time field from a temporal value.
+type ExtractExpr struct {
+	Part   string // The part to extract (YEAR, MONTH, DAY, HOUR, MINUTE, SECOND, etc.)
+	Source Expr   // The source expression (date, timestamp, or time value)
+}
+
+func (*ExtractExpr) exprNode() {}
+
+// IntervalLiteral represents an INTERVAL literal expression.
+// Supports various DuckDB syntaxes:
+//   - INTERVAL 'n' UNIT (e.g., INTERVAL '5' DAY)
+//   - INTERVAL 'n unit' (e.g., INTERVAL '5 days')
+//   - INTERVAL 'n units m units' (e.g., INTERVAL '2 hours 30 minutes')
+//
+// The Value field contains the parsed interval components.
+type IntervalLiteral struct {
+	Months int32 // Number of months (includes years * 12)
+	Days   int32 // Number of days
+	Micros int64 // Number of microseconds (sub-day time)
+}
+
+func (*IntervalLiteral) exprNode() {}
+
 // BeginStmt represents a BEGIN TRANSACTION statement.
 type BeginStmt struct{}
 
@@ -392,3 +441,70 @@ func (*RollbackStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSAC
 func (s *RollbackStmt) Accept(v Visitor) {
 	v.VisitRollbackStmt(s)
 }
+
+// ---------- Window Function Types ----------
+
+// WindowExpr represents a window function expression.
+// Example: ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC)
+type WindowExpr struct {
+	Function    *FunctionCall   // The window function (ROW_NUMBER, RANK, etc.)
+	PartitionBy []Expr          // PARTITION BY expressions
+	OrderBy     []WindowOrderBy // ORDER BY within window (with NULLS FIRST/LAST)
+	Frame       *WindowFrame    // Optional frame specification
+	IgnoreNulls bool            // IGNORE NULLS modifier (for LAG, LEAD, FIRST_VALUE, etc.)
+	Filter      Expr            // FILTER (WHERE ...) clause for aggregate windows
+	Distinct    bool            // DISTINCT modifier for aggregate windows
+}
+
+func (*WindowExpr) exprNode() {}
+
+// WindowOrderBy extends OrderByExpr with NULLS FIRST/LAST support.
+type WindowOrderBy struct {
+	Expr       Expr
+	Desc       bool
+	NullsFirst bool // true for NULLS FIRST, false for NULLS LAST (default)
+}
+
+// WindowFrame represents ROWS/RANGE/GROUPS BETWEEN specification.
+type WindowFrame struct {
+	Type    FrameType   // ROWS, RANGE, or GROUPS
+	Start   WindowBound // Start boundary
+	End     WindowBound // End boundary
+	Exclude ExcludeMode // EXCLUDE clause
+}
+
+// FrameType distinguishes ROWS vs RANGE vs GROUPS semantics.
+type FrameType int
+
+const (
+	FrameTypeRows   FrameType = iota // ROWS BETWEEN (physical offset)
+	FrameTypeRange                   // RANGE BETWEEN (logical offset)
+	FrameTypeGroups                  // GROUPS BETWEEN (peer group offset)
+)
+
+// WindowBound represents a frame boundary.
+type WindowBound struct {
+	Type   BoundType // UNBOUNDED, CURRENT, or OFFSET
+	Offset Expr      // For N PRECEDING / N FOLLOWING (must be non-negative constant)
+}
+
+// BoundType represents the type of window frame boundary.
+type BoundType int
+
+const (
+	BoundUnboundedPreceding BoundType = iota
+	BoundPreceding                    // N PRECEDING
+	BoundCurrentRow                   // CURRENT ROW
+	BoundFollowing                    // N FOLLOWING
+	BoundUnboundedFollowing
+)
+
+// ExcludeMode specifies which rows to exclude from frame.
+type ExcludeMode int
+
+const (
+	ExcludeNoOthers   ExcludeMode = iota // EXCLUDE NO OTHERS (default)
+	ExcludeCurrentRow                    // EXCLUDE CURRENT ROW
+	ExcludeGroup                         // EXCLUDE GROUP (current row's peer group)
+	ExcludeTies                          // EXCLUDE TIES (peers but not current row)
+)

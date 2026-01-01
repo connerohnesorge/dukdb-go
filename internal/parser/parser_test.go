@@ -461,6 +461,71 @@ func TestParseExpressions(t *testing.T) {
 			sql:     "SELECT CAST(age AS VARCHAR) FROM users",
 			wantErr: false,
 		},
+		{
+			name:    "extract year",
+			sql:     "SELECT EXTRACT(YEAR FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract month",
+			sql:     "SELECT EXTRACT(MONTH FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract day",
+			sql:     "SELECT EXTRACT(DAY FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract hour",
+			sql:     "SELECT EXTRACT(HOUR FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract minute",
+			sql:     "SELECT EXTRACT(MINUTE FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract second",
+			sql:     "SELECT EXTRACT(SECOND FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract epoch",
+			sql:     "SELECT EXTRACT(EPOCH FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract from expression",
+			sql:     "SELECT EXTRACT(YEAR FROM NOW())",
+			wantErr: false,
+		},
+		{
+			name:    "extract quarter",
+			sql:     "SELECT EXTRACT(QUARTER FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract week",
+			sql:     "SELECT EXTRACT(WEEK FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract dayofweek",
+			sql:     "SELECT EXTRACT(DAYOFWEEK FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract dayofyear",
+			sql:     "SELECT EXTRACT(DAYOFYEAR FROM created_at) FROM events",
+			wantErr: false,
+		},
+		{
+			name:    "extract invalid part",
+			sql:     "SELECT EXTRACT(INVALID FROM created_at) FROM events",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -774,5 +839,973 @@ func TestParseUpdateWhereInList(t *testing.T) {
 	}
 	if updateStmt.Set[0].Column != "a" {
 		t.Errorf("Expected column 'a', got '%s'", updateStmt.Set[0].Column)
+	}
+}
+
+// Test set operations (UNION, INTERSECT, EXCEPT)
+func TestParseSetOperations(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		wantOp   SetOpType
+		wantErr  bool
+	}{
+		{
+			name:    "UNION",
+			sql:     "SELECT * FROM users UNION SELECT * FROM admins",
+			wantOp:  SetOpUnion,
+			wantErr: false,
+		},
+		{
+			name:    "UNION ALL",
+			sql:     "SELECT * FROM users UNION ALL SELECT * FROM admins",
+			wantOp:  SetOpUnionAll,
+			wantErr: false,
+		},
+		{
+			name:    "INTERSECT",
+			sql:     "SELECT * FROM t1 INTERSECT SELECT * FROM t2",
+			wantOp:  SetOpIntersect,
+			wantErr: false,
+		},
+		{
+			name:    "INTERSECT ALL",
+			sql:     "SELECT * FROM t1 INTERSECT ALL SELECT * FROM t2",
+			wantOp:  SetOpIntersectAll,
+			wantErr: false,
+		},
+		{
+			name:    "EXCEPT",
+			sql:     "SELECT * FROM t1 EXCEPT SELECT * FROM t2",
+			wantOp:  SetOpExcept,
+			wantErr: false,
+		},
+		{
+			name:    "EXCEPT ALL",
+			sql:     "SELECT * FROM t1 EXCEPT ALL SELECT * FROM t2",
+			wantOp:  SetOpExceptAll,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			if selectStmt.SetOp != tt.wantOp {
+				t.Errorf("SetOp = %v, want %v", selectStmt.SetOp, tt.wantOp)
+			}
+
+			if selectStmt.Right == nil {
+				t.Error("Right side of set operation is nil")
+			}
+		})
+	}
+}
+
+// Test table extraction with set operations
+func TestTableExtractorSetOperations(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected []string
+	}{
+		{
+			name:     "UNION extracts both tables",
+			sql:      "SELECT * FROM users UNION SELECT * FROM admins",
+			expected: []string{"admins", "users"},
+		},
+		{
+			name:     "INTERSECT extracts both tables",
+			sql:      "SELECT * FROM t1 INTERSECT SELECT * FROM t2",
+			expected: []string{"t1", "t2"},
+		},
+		{
+			name:     "EXCEPT extracts both tables",
+			sql:      "SELECT * FROM t1 EXCEPT SELECT * FROM t2",
+			expected: []string{"t1", "t2"},
+		},
+		{
+			name:     "chained UNION extracts all tables",
+			sql:      "SELECT * FROM t1 UNION ALL SELECT * FROM t2 UNION SELECT * FROM t3",
+			expected: []string{"t1", "t2", "t3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			extractor := NewTableExtractor(false)
+			selectStmt.Accept(extractor)
+			tables := extractor.GetTables()
+
+			if len(tables) != len(tt.expected) {
+				t.Errorf("Got %d tables %v, expected %d tables %v", len(tables), tables, len(tt.expected), tt.expected)
+				return
+			}
+
+			for i, expected := range tt.expected {
+				if tables[i] != expected {
+					t.Errorf("Table %d: got %s, expected %s", i, tables[i], expected)
+				}
+			}
+		})
+	}
+}
+
+// ---------- Window Function Parser Tests ----------
+
+// Test ROW_NUMBER() OVER () parsing
+func TestParseWindowRowNumber(t *testing.T) {
+	sql := "SELECT ROW_NUMBER() OVER () FROM users"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt, ok := stmt.(*SelectStmt)
+	if !ok {
+		t.Fatalf("Expected SelectStmt, got %T", stmt)
+	}
+
+	if len(selectStmt.Columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(selectStmt.Columns))
+	}
+
+	windowExpr, ok := selectStmt.Columns[0].Expr.(*WindowExpr)
+	if !ok {
+		t.Fatalf("Expected WindowExpr, got %T", selectStmt.Columns[0].Expr)
+	}
+
+	if windowExpr.Function.Name != "ROW_NUMBER" {
+		t.Errorf("Expected function name ROW_NUMBER, got %s", windowExpr.Function.Name)
+	}
+
+	if len(windowExpr.PartitionBy) != 0 {
+		t.Errorf("Expected no PARTITION BY, got %d expressions", len(windowExpr.PartitionBy))
+	}
+
+	if len(windowExpr.OrderBy) != 0 {
+		t.Errorf("Expected no ORDER BY, got %d expressions", len(windowExpr.OrderBy))
+	}
+}
+
+// Test RANK() OVER (PARTITION BY x ORDER BY y) parsing
+func TestParseWindowRankWithPartitionAndOrder(t *testing.T) {
+	sql := "SELECT RANK() OVER (PARTITION BY dept ORDER BY salary) FROM employees"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Function.Name != "RANK" {
+		t.Errorf("Expected function name RANK, got %s", windowExpr.Function.Name)
+	}
+
+	if len(windowExpr.PartitionBy) != 1 {
+		t.Fatalf("Expected 1 PARTITION BY expression, got %d", len(windowExpr.PartitionBy))
+	}
+
+	partCol, ok := windowExpr.PartitionBy[0].(*ColumnRef)
+	if !ok || partCol.Column != "dept" {
+		t.Errorf("Expected PARTITION BY dept, got %v", windowExpr.PartitionBy[0])
+	}
+
+	if len(windowExpr.OrderBy) != 1 {
+		t.Fatalf("Expected 1 ORDER BY expression, got %d", len(windowExpr.OrderBy))
+	}
+
+	orderCol, ok := windowExpr.OrderBy[0].Expr.(*ColumnRef)
+	if !ok || orderCol.Column != "salary" {
+		t.Errorf("Expected ORDER BY salary, got %v", windowExpr.OrderBy[0].Expr)
+	}
+}
+
+// Test SUM(x) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+func TestParseWindowSumWithRowsFrame(t *testing.T) {
+	sql := "SELECT SUM(amount) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM orders"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Function.Name != "SUM" {
+		t.Errorf("Expected function name SUM, got %s", windowExpr.Function.Name)
+	}
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Type != FrameTypeRows {
+		t.Errorf("Expected ROWS frame, got %v", windowExpr.Frame.Type)
+	}
+
+	if windowExpr.Frame.Start.Type != BoundPreceding {
+		t.Errorf("Expected start bound PRECEDING, got %v", windowExpr.Frame.Start.Type)
+	}
+
+	startOffset, ok := windowExpr.Frame.Start.Offset.(*Literal)
+	if !ok || startOffset.Value != int64(1) {
+		t.Errorf("Expected start offset 1, got %v", windowExpr.Frame.Start.Offset)
+	}
+
+	if windowExpr.Frame.End.Type != BoundFollowing {
+		t.Errorf("Expected end bound FOLLOWING, got %v", windowExpr.Frame.End.Type)
+	}
+
+	endOffset, ok := windowExpr.Frame.End.Offset.(*Literal)
+	if !ok || endOffset.Value != int64(1) {
+		t.Errorf("Expected end offset 1, got %v", windowExpr.Frame.End.Offset)
+	}
+}
+
+// Test GROUPS BETWEEN parsing
+func TestParseWindowGroupsFrame(t *testing.T) {
+	sql := "SELECT AVG(val) OVER (ORDER BY id GROUPS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Type != FrameTypeGroups {
+		t.Errorf("Expected GROUPS frame, got %v", windowExpr.Frame.Type)
+	}
+}
+
+// Test EXCLUDE clause parsing
+func TestParseWindowExcludeClause(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		excludeMode ExcludeMode
+	}{
+		{
+			name:        "EXCLUDE NO OTHERS",
+			sql:         "SELECT SUM(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE NO OTHERS) FROM t",
+			excludeMode: ExcludeNoOthers,
+		},
+		{
+			name:        "EXCLUDE CURRENT ROW",
+			sql:         "SELECT SUM(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM t",
+			excludeMode: ExcludeCurrentRow,
+		},
+		{
+			name:        "EXCLUDE GROUP",
+			sql:         "SELECT SUM(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE GROUP) FROM t",
+			excludeMode: ExcludeGroup,
+		},
+		{
+			name:        "EXCLUDE TIES",
+			sql:         "SELECT SUM(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES) FROM t",
+			excludeMode: ExcludeTies,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt := stmt.(*SelectStmt)
+			windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+			if windowExpr.Frame == nil {
+				t.Fatal("Expected frame specification")
+			}
+
+			if windowExpr.Frame.Exclude != tt.excludeMode {
+				t.Errorf("Expected exclude mode %v, got %v", tt.excludeMode, windowExpr.Frame.Exclude)
+			}
+		})
+	}
+}
+
+// Test NULLS FIRST/LAST parsing
+func TestParseWindowNullsFirstLast(t *testing.T) {
+	tests := []struct {
+		name       string
+		sql        string
+		desc       bool
+		nullsFirst bool
+	}{
+		{
+			name:       "ORDER BY x NULLS FIRST",
+			sql:        "SELECT ROW_NUMBER() OVER (ORDER BY x NULLS FIRST) FROM t",
+			desc:       false,
+			nullsFirst: true,
+		},
+		{
+			name:       "ORDER BY x NULLS LAST",
+			sql:        "SELECT ROW_NUMBER() OVER (ORDER BY x NULLS LAST) FROM t",
+			desc:       false,
+			nullsFirst: false,
+		},
+		{
+			name:       "ORDER BY x DESC NULLS FIRST",
+			sql:        "SELECT ROW_NUMBER() OVER (ORDER BY x DESC NULLS FIRST) FROM t",
+			desc:       true,
+			nullsFirst: true,
+		},
+		{
+			name:       "ORDER BY x DESC NULLS LAST",
+			sql:        "SELECT ROW_NUMBER() OVER (ORDER BY x DESC NULLS LAST) FROM t",
+			desc:       true,
+			nullsFirst: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt := stmt.(*SelectStmt)
+			windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+			if len(windowExpr.OrderBy) != 1 {
+				t.Fatalf("Expected 1 ORDER BY expression, got %d", len(windowExpr.OrderBy))
+			}
+
+			if windowExpr.OrderBy[0].Desc != tt.desc {
+				t.Errorf("Expected Desc = %v, got %v", tt.desc, windowExpr.OrderBy[0].Desc)
+			}
+
+			if windowExpr.OrderBy[0].NullsFirst != tt.nullsFirst {
+				t.Errorf("Expected NullsFirst = %v, got %v", tt.nullsFirst, windowExpr.OrderBy[0].NullsFirst)
+			}
+		})
+	}
+}
+
+// Test IGNORE NULLS parsing
+func TestParseWindowIgnoreNulls(t *testing.T) {
+	sql := "SELECT LAG(x) IGNORE NULLS OVER (ORDER BY id) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if !windowExpr.IgnoreNulls {
+		t.Error("Expected IgnoreNulls = true")
+	}
+}
+
+// Test RESPECT NULLS parsing (explicit default)
+func TestParseWindowRespectNulls(t *testing.T) {
+	sql := "SELECT LAG(x) RESPECT NULLS OVER (ORDER BY id) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.IgnoreNulls {
+		t.Error("Expected IgnoreNulls = false (RESPECT NULLS is default)")
+	}
+}
+
+// Test FILTER clause parsing
+func TestParseWindowFilterClause(t *testing.T) {
+	sql := "SELECT COUNT(*) FILTER (WHERE x > 5) OVER (PARTITION BY y) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Filter == nil {
+		t.Fatal("Expected FILTER clause")
+	}
+
+	binExpr, ok := windowExpr.Filter.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("Expected BinaryExpr in FILTER, got %T", windowExpr.Filter)
+	}
+
+	if binExpr.Op != OpGt {
+		t.Errorf("Expected Op = OpGt, got %v", binExpr.Op)
+	}
+}
+
+// Test DISTINCT aggregate window parsing
+func TestParseWindowDistinctAggregate(t *testing.T) {
+	sql := "SELECT COUNT(DISTINCT x) OVER () FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if !windowExpr.Distinct {
+		t.Error("Expected Distinct = true")
+	}
+
+	if !windowExpr.Function.Distinct {
+		t.Error("Expected Function.Distinct = true")
+	}
+}
+
+// Test multiple window functions in single SELECT
+func TestParseMultipleWindowFunctions(t *testing.T) {
+	sql := "SELECT ROW_NUMBER() OVER (ORDER BY id), RANK() OVER (PARTITION BY dept ORDER BY salary) FROM employees"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+
+	if len(selectStmt.Columns) != 2 {
+		t.Fatalf("Expected 2 columns, got %d", len(selectStmt.Columns))
+	}
+
+	// Check first window function
+	windowExpr1, ok := selectStmt.Columns[0].Expr.(*WindowExpr)
+	if !ok {
+		t.Fatalf("Expected WindowExpr for column 0, got %T", selectStmt.Columns[0].Expr)
+	}
+	if windowExpr1.Function.Name != "ROW_NUMBER" {
+		t.Errorf("Expected ROW_NUMBER, got %s", windowExpr1.Function.Name)
+	}
+
+	// Check second window function
+	windowExpr2, ok := selectStmt.Columns[1].Expr.(*WindowExpr)
+	if !ok {
+		t.Fatalf("Expected WindowExpr for column 1, got %T", selectStmt.Columns[1].Expr)
+	}
+	if windowExpr2.Function.Name != "RANK" {
+		t.Errorf("Expected RANK, got %s", windowExpr2.Function.Name)
+	}
+}
+
+// Test window function with alias
+func TestParseWindowFunctionWithAlias(t *testing.T) {
+	sql := "SELECT ROW_NUMBER() OVER (ORDER BY id) AS row_num FROM users"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+
+	if len(selectStmt.Columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(selectStmt.Columns))
+	}
+
+	if selectStmt.Columns[0].Alias != "row_num" {
+		t.Errorf("Expected alias 'row_num', got '%s'", selectStmt.Columns[0].Alias)
+	}
+
+	_, ok := selectStmt.Columns[0].Expr.(*WindowExpr)
+	if !ok {
+		t.Fatalf("Expected WindowExpr, got %T", selectStmt.Columns[0].Expr)
+	}
+}
+
+// Test RANGE BETWEEN parsing
+func TestParseWindowRangeFrame(t *testing.T) {
+	sql := "SELECT SUM(x) OVER (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Type != FrameTypeRange {
+		t.Errorf("Expected RANGE frame, got %v", windowExpr.Frame.Type)
+	}
+
+	if windowExpr.Frame.Start.Type != BoundUnboundedPreceding {
+		t.Errorf("Expected start bound UNBOUNDED PRECEDING, got %v", windowExpr.Frame.Start.Type)
+	}
+
+	if windowExpr.Frame.End.Type != BoundCurrentRow {
+		t.Errorf("Expected end bound CURRENT ROW, got %v", windowExpr.Frame.End.Type)
+	}
+}
+
+// Test single-bound shorthand (e.g., ROWS 3 PRECEDING)
+func TestParseWindowSingleBoundShorthand(t *testing.T) {
+	sql := "SELECT SUM(x) OVER (ORDER BY id ROWS 3 PRECEDING) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Type != FrameTypeRows {
+		t.Errorf("Expected ROWS frame, got %v", windowExpr.Frame.Type)
+	}
+
+	if windowExpr.Frame.Start.Type != BoundPreceding {
+		t.Errorf("Expected start bound PRECEDING, got %v", windowExpr.Frame.Start.Type)
+	}
+
+	startOffset, ok := windowExpr.Frame.Start.Offset.(*Literal)
+	if !ok || startOffset.Value != int64(3) {
+		t.Errorf("Expected start offset 3, got %v", windowExpr.Frame.Start.Offset)
+	}
+
+	// Single-bound shorthand should default end to CURRENT ROW
+	if windowExpr.Frame.End.Type != BoundCurrentRow {
+		t.Errorf("Expected end bound CURRENT ROW, got %v", windowExpr.Frame.End.Type)
+	}
+}
+
+// Test LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTH_VALUE with IGNORE NULLS
+func TestParseWindowValueFunctionsWithIgnoreNulls(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		funcName string
+	}{
+		{"LAG", "SELECT LAG(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LAG"},
+		{"LEAD", "SELECT LEAD(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LEAD"},
+		{"FIRST_VALUE", "SELECT FIRST_VALUE(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "FIRST_VALUE"},
+		{"LAST_VALUE", "SELECT LAST_VALUE(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LAST_VALUE"},
+		{"NTH_VALUE", "SELECT NTH_VALUE(x, 2) IGNORE NULLS OVER (ORDER BY id) FROM t", "NTH_VALUE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt := stmt.(*SelectStmt)
+			windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+			if windowExpr.Function.Name != tt.funcName {
+				t.Errorf("Expected function name %s, got %s", tt.funcName, windowExpr.Function.Name)
+			}
+
+			if !windowExpr.IgnoreNulls {
+				t.Error("Expected IgnoreNulls = true")
+			}
+		})
+	}
+}
+
+// Test COUNT, SUM, AVG with FILTER
+func TestParseWindowAggregatesWithFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		funcName string
+	}{
+		{"COUNT", "SELECT COUNT(*) FILTER (WHERE x > 5) OVER () FROM t", "COUNT"},
+		{"SUM", "SELECT SUM(amount) FILTER (WHERE status = 'active') OVER () FROM t", "SUM"},
+		{"AVG", "SELECT AVG(score) FILTER (WHERE valid = true) OVER () FROM t", "AVG"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt := stmt.(*SelectStmt)
+			windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+			if windowExpr.Function.Name != tt.funcName {
+				t.Errorf("Expected function name %s, got %s", tt.funcName, windowExpr.Function.Name)
+			}
+
+			if windowExpr.Filter == nil {
+				t.Error("Expected FILTER clause")
+			}
+		})
+	}
+}
+
+// Test COUNT(DISTINCT x) OVER, SUM(DISTINCT x) OVER
+func TestParseWindowDistinctAggregates(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		funcName string
+	}{
+		{"COUNT DISTINCT", "SELECT COUNT(DISTINCT x) OVER () FROM t", "COUNT"},
+		{"SUM DISTINCT", "SELECT SUM(DISTINCT x) OVER () FROM t", "SUM"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt := stmt.(*SelectStmt)
+			windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+			if windowExpr.Function.Name != tt.funcName {
+				t.Errorf("Expected function name %s, got %s", tt.funcName, windowExpr.Function.Name)
+			}
+
+			if !windowExpr.Distinct {
+				t.Error("Expected Distinct = true")
+			}
+		})
+	}
+}
+
+// Test UNBOUNDED PRECEDING/FOLLOWING
+func TestParseWindowUnboundedBounds(t *testing.T) {
+	sql := "SELECT SUM(x) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Start.Type != BoundUnboundedPreceding {
+		t.Errorf("Expected start UNBOUNDED PRECEDING, got %v", windowExpr.Frame.Start.Type)
+	}
+
+	if windowExpr.Frame.End.Type != BoundUnboundedFollowing {
+		t.Errorf("Expected end UNBOUNDED FOLLOWING, got %v", windowExpr.Frame.End.Type)
+	}
+}
+
+// Test CURRENT ROW bound
+func TestParseWindowCurrentRowBound(t *testing.T) {
+	sql := "SELECT SUM(x) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 5 FOLLOWING) FROM t"
+	stmt, err := Parse(sql)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	selectStmt := stmt.(*SelectStmt)
+	windowExpr := selectStmt.Columns[0].Expr.(*WindowExpr)
+
+	if windowExpr.Frame == nil {
+		t.Fatal("Expected frame specification")
+	}
+
+	if windowExpr.Frame.Start.Type != BoundCurrentRow {
+		t.Errorf("Expected start CURRENT ROW, got %v", windowExpr.Frame.Start.Type)
+	}
+
+	if windowExpr.Frame.End.Type != BoundFollowing {
+		t.Errorf("Expected end FOLLOWING, got %v", windowExpr.Frame.End.Type)
+	}
+
+	endOffset, ok := windowExpr.Frame.End.Offset.(*Literal)
+	if !ok || endOffset.Value != int64(5) {
+		t.Errorf("Expected end offset 5, got %v", windowExpr.Frame.End.Offset)
+	}
+}
+
+// Test comprehensive window function parsing
+func TestParseWindowFunctions(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+	}{
+		{
+			name:    "ROW_NUMBER simple",
+			sql:     "SELECT ROW_NUMBER() OVER () FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "RANK with partition and order",
+			sql:     "SELECT RANK() OVER (PARTITION BY dept ORDER BY sal DESC) FROM emp",
+			wantErr: false,
+		},
+		{
+			name:    "DENSE_RANK",
+			sql:     "SELECT DENSE_RANK() OVER (ORDER BY score) FROM students",
+			wantErr: false,
+		},
+		{
+			name:    "NTILE",
+			sql:     "SELECT NTILE(4) OVER (ORDER BY id) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "LAG with default",
+			sql:     "SELECT LAG(price, 1, 0) OVER (ORDER BY date) FROM prices",
+			wantErr: false,
+		},
+		{
+			name:    "LEAD",
+			sql:     "SELECT LEAD(value, 2) OVER (PARTITION BY category ORDER BY id) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "FIRST_VALUE",
+			sql:     "SELECT FIRST_VALUE(name) OVER (PARTITION BY dept ORDER BY hire_date) FROM emp",
+			wantErr: false,
+		},
+		{
+			name:    "LAST_VALUE with frame",
+			sql:     "SELECT LAST_VALUE(price) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "NTH_VALUE",
+			sql:     "SELECT NTH_VALUE(name, 3) OVER (ORDER BY score DESC) FROM students",
+			wantErr: false,
+		},
+		{
+			name:    "PERCENT_RANK",
+			sql:     "SELECT PERCENT_RANK() OVER (ORDER BY score) FROM students",
+			wantErr: false,
+		},
+		{
+			name:    "CUME_DIST",
+			sql:     "SELECT CUME_DIST() OVER (ORDER BY salary DESC) FROM emp",
+			wantErr: false,
+		},
+		{
+			name:    "SUM OVER with frame",
+			sql:     "SELECT SUM(amount) OVER (ORDER BY id ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING) FROM orders",
+			wantErr: false,
+		},
+		{
+			name:    "COUNT OVER",
+			sql:     "SELECT COUNT(*) OVER (PARTITION BY category) FROM products",
+			wantErr: false,
+		},
+		{
+			name:    "AVG OVER with RANGE",
+			sql:     "SELECT AVG(price) OVER (ORDER BY date RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "MIN OVER",
+			sql:     "SELECT MIN(value) OVER (PARTITION BY group_id) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "MAX OVER",
+			sql:     "SELECT MAX(score) OVER (ORDER BY id) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "Multiple partitions",
+			sql:     "SELECT SUM(x) OVER (PARTITION BY a, b, c ORDER BY d) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "Multiple order by columns",
+			sql:     "SELECT ROW_NUMBER() OVER (ORDER BY a DESC, b ASC, c DESC NULLS FIRST) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "Complex expression in partition by",
+			sql:     "SELECT SUM(x) OVER (PARTITION BY a + b ORDER BY c) FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "Case insensitive keywords",
+			sql:     "SELECT row_number() over (partition by x order by y) FROM t",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && stmt == nil {
+				t.Error("Parse() returned nil statement")
+			}
+		})
+	}
+}
+
+// Test INTERVAL literal parsing
+func TestParseIntervalLiteral(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		wantMonths  int32
+		wantDays    int32
+		wantMicros  int64
+		wantErr     bool
+	}{
+		{
+			name:        "INTERVAL with DAY unit keyword",
+			sql:         "SELECT INTERVAL '5' DAY",
+			wantMonths:  0,
+			wantDays:    5,
+			wantMicros:  0,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with HOUR unit keyword",
+			sql:         "SELECT INTERVAL '2' HOUR",
+			wantMonths:  0,
+			wantDays:    0,
+			wantMicros:  2 * 60 * 60 * 1_000_000,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with MONTH unit keyword",
+			sql:         "SELECT INTERVAL '3' MONTH",
+			wantMonths:  3,
+			wantDays:    0,
+			wantMicros:  0,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with YEAR unit keyword",
+			sql:         "SELECT INTERVAL '1' YEAR",
+			wantMonths:  12,
+			wantDays:    0,
+			wantMicros:  0,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with inline unit",
+			sql:         "SELECT INTERVAL '5 days'",
+			wantMonths:  0,
+			wantDays:    5,
+			wantMicros:  0,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with compound units",
+			sql:         "SELECT INTERVAL '2 hours 30 minutes'",
+			wantMonths:  0,
+			wantDays:    0,
+			wantMicros:  2*60*60*1_000_000 + 30*60*1_000_000,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with WEEK unit",
+			sql:         "SELECT INTERVAL '2' WEEKS",
+			wantMonths:  0,
+			wantDays:    14,
+			wantMicros:  0,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with MINUTE unit",
+			sql:         "SELECT INTERVAL '45' MINUTE",
+			wantMonths:  0,
+			wantDays:    0,
+			wantMicros:  45 * 60 * 1_000_000,
+			wantErr:     false,
+		},
+		{
+			name:        "INTERVAL with SECOND unit",
+			sql:         "SELECT INTERVAL '30' SECOND",
+			wantMonths:  0,
+			wantDays:    0,
+			wantMicros:  30 * 1_000_000,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			if len(selectStmt.Columns) != 1 {
+				t.Fatalf("Expected 1 column, got %d", len(selectStmt.Columns))
+			}
+
+			interval, ok := selectStmt.Columns[0].Expr.(*IntervalLiteral)
+			if !ok {
+				t.Fatalf("Expected IntervalLiteral, got %T", selectStmt.Columns[0].Expr)
+			}
+
+			if interval.Months != tt.wantMonths {
+				t.Errorf("Months = %d, want %d", interval.Months, tt.wantMonths)
+			}
+			if interval.Days != tt.wantDays {
+				t.Errorf("Days = %d, want %d", interval.Days, tt.wantDays)
+			}
+			if interval.Micros != tt.wantMicros {
+				t.Errorf("Micros = %d, want %d", interval.Micros, tt.wantMicros)
+			}
+		})
 	}
 }

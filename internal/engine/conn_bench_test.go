@@ -3,6 +3,8 @@ package engine
 import (
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // BenchmarkGenerateConnID benchmarks the ID generation function.
@@ -40,13 +42,17 @@ func BenchmarkGenerateConnID_Concurrent(b *testing.B) {
 // Should be nearly zero overhead since it just returns a field.
 func BenchmarkEngineConn_ID(b *testing.B) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(b, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		b.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(b, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 
@@ -64,13 +70,17 @@ func BenchmarkEngineConn_ID(b *testing.B) {
 // BenchmarkEngineConn_ID_Concurrent benchmarks concurrent ID() calls on the same connection.
 func BenchmarkEngineConn_ID_Concurrent(b *testing.B) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(b, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		b.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(b, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 
@@ -92,13 +102,17 @@ func BenchmarkEngineConn_ID_Concurrent(b *testing.B) {
 // This involves mutex locking, so may be slower than ID().
 func BenchmarkEngineConn_IsClosed(b *testing.B) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(b, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		b.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(b, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 
@@ -117,7 +131,9 @@ func BenchmarkEngineConn_IsClosed(b *testing.B) {
 // This measures the full overhead including connection creation.
 func BenchmarkEngineConn_NewAndID(b *testing.B) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(b, engine.Close())
+	}()
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -131,11 +147,11 @@ func BenchmarkEngineConn_NewAndID(b *testing.B) {
 		engineConn := conn.(*EngineConn)
 		id := engineConn.ID()
 		if id == 0 {
-			conn.Close()
+			require.NoError(b, conn.Close())
 			b.Fatal("unexpected zero ID")
 		}
 
-		conn.Close()
+		require.NoError(b, conn.Close())
 	}
 }
 

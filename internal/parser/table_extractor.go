@@ -10,6 +10,7 @@ import (
 type TableExtractor struct {
 	tables    map[EnhancedTableRef]struct{} // Use map for automatic deduplication
 	qualified bool                          // Whether to resolve qualified names
+	cteNames  map[string]struct{}           // Track CTE names to exclude from table references
 }
 
 // NewTableExtractor creates a new TableExtractor with the specified qualified name mode.
@@ -17,6 +18,7 @@ func NewTableExtractor(qualified bool) *TableExtractor {
 	return &TableExtractor{
 		tables:    make(map[EnhancedTableRef]struct{}),
 		qualified: qualified,
+		cteNames:  make(map[string]struct{}),
 	}
 }
 
@@ -54,6 +56,19 @@ func (te *TableExtractor) GetTables() []string {
 
 // VisitSelectStmt extracts table references from SELECT statements.
 func (te *TableExtractor) VisitSelectStmt(stmt *SelectStmt) {
+	// Handle CTEs (Common Table Expressions / WITH clause)
+	// 1. Register CTE names so they are excluded from table references
+	// 2. Visit CTE queries to extract tables from CTE definitions
+	for _, cte := range stmt.CTEs {
+		// Register CTE name to exclude from table references
+		te.cteNames[cte.Name] = struct{}{}
+
+		// Visit CTE query to extract tables from CTE definitions
+		if cte.Query != nil {
+			te.VisitSelectStmt(cte.Query)
+		}
+	}
+
 	// Extract FROM clause tables
 	if stmt.From != nil {
 		// Extract tables from FROM clause
@@ -84,8 +99,10 @@ func (te *TableExtractor) VisitSelectStmt(stmt *SelectStmt) {
 		}
 	}
 
-	// NOTE: CTEs NOT supported - requires AST enhancement
-	// Once SelectStmt has CTEs field, add CTE handling here
+	// Handle set operations (UNION/INTERSECT/EXCEPT)
+	if stmt.Right != nil {
+		te.VisitSelectStmt(stmt.Right)
+	}
 }
 
 // VisitInsertStmt extracts table references from INSERT statements.
@@ -114,8 +131,15 @@ func (te *TableExtractor) VisitUpdateStmt(stmt *UpdateStmt) {
 	}
 	te.tables[ref] = struct{}{}
 
-	// NOTE: UPDATE...FROM NOT supported - requires AST enhancement
-	// UpdateStmt currently has no From field
+	// Extract tables from FROM clause if present (UPDATE...FROM syntax)
+	if stmt.From != nil {
+		for _, tableRef := range stmt.From.Tables {
+			te.visitTableRef(&tableRef)
+		}
+		for _, join := range stmt.From.Joins {
+			te.visitTableRef(&join.Table)
+		}
+	}
 
 	// Visit WHERE clause subqueries
 	if stmt.Where != nil {
@@ -146,13 +170,63 @@ func (te *TableExtractor) VisitDeleteStmt(stmt *DeleteStmt) {
 	}
 }
 
+// VisitCreateTableStmt extracts table references from CREATE TABLE statements.
+func (te *TableExtractor) VisitCreateTableStmt(stmt *CreateTableStmt) {
+	// Extract the table being created
+	ref := EnhancedTableRef{
+		Schema: stmt.Schema,
+		Table:  stmt.Table,
+	}
+	te.tables[ref] = struct{}{}
+
+	// If CREATE TABLE AS SELECT, also extract from the SELECT
+	if stmt.AsSelect != nil {
+		te.VisitSelectStmt(stmt.AsSelect)
+	}
+}
+
+// VisitDropTableStmt extracts table references from DROP TABLE statements.
+func (te *TableExtractor) VisitDropTableStmt(stmt *DropTableStmt) {
+	// Extract the table being dropped
+	ref := EnhancedTableRef{
+		Schema: stmt.Schema,
+		Table:  stmt.Table,
+	}
+	te.tables[ref] = struct{}{}
+}
+
+// VisitBeginStmt is a no-op for BEGIN statements (no table references).
+func (te *TableExtractor) VisitBeginStmt(stmt *BeginStmt) {
+	// No table references in BEGIN statements
+}
+
+// VisitCommitStmt is a no-op for COMMIT statements (no table references).
+func (te *TableExtractor) VisitCommitStmt(stmt *CommitStmt) {
+	// No table references in COMMIT statements
+}
+
+// VisitRollbackStmt is a no-op for ROLLBACK statements (no table references).
+func (te *TableExtractor) VisitRollbackStmt(stmt *RollbackStmt) {
+	// No table references in ROLLBACK statements
+}
+
 // visitTableRef extracts table from AST TableRef
 func (te *TableExtractor) visitTableRef(astRef *TableRef) {
 	// Current AST TableRef has: Catalog, Schema, TableName, Alias, Subquery
 	if astRef.Subquery != nil {
 		// This is a subquery in FROM clause, recurse into it
 		te.VisitSelectStmt(astRef.Subquery)
+
 		return
+	}
+
+	// Skip CTE references (they are not real tables)
+	// Only skip if table has no schema/catalog (CTE references are unqualified)
+	if astRef.Schema == "" && astRef.Catalog == "" {
+		if _, isCTE := te.cteNames[astRef.TableName]; isCTE {
+
+			return
+		}
 	}
 
 	// This is a real table reference

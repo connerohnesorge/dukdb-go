@@ -24,6 +24,7 @@ func (t EnhancedTableRef) QualifiedName() string {
 		parts = append(parts, t.Schema)
 	}
 	parts = append(parts, t.Table)
+
 	return strings.Join(parts, ".")
 }
 
@@ -35,5 +36,6 @@ func (t EnhancedTableRef) String() string {
 	if t.Schema != "" {
 		return t.Schema + "." + t.Table
 	}
+
 	return t.Table
 }

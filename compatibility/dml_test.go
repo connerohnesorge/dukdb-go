@@ -119,7 +119,9 @@ func testUpdateMultipleRows(t *testing.T, db *sql.DB) {
 		`SELECT id, salary FROM employees_multi ORDER BY id`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expectedSalaries := map[int]int{
 		1: 70000, // Alice - updated
@@ -202,7 +204,9 @@ func testDeleteSingleRow(t *testing.T, db *sql.DB) {
 	// Verify the data state with SELECT - count remaining rows
 	rows, err := db.Query(`SELECT id FROM products ORDER BY id`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var ids []int
 	for rows.Next() {
@@ -246,7 +250,9 @@ func testDeleteMultipleRows(t *testing.T, db *sql.DB) {
 	// Verify all rows are deleted by querying remaining rows
 	rows, err := db.Query(`SELECT id FROM products_multi`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	rowCount := 0
 	for rows.Next() {
@@ -282,7 +288,9 @@ func testDeleteNoMatching(t *testing.T, db *sql.DB) {
 	// Verify original data is unchanged by querying all rows
 	rows, err := db.Query(`SELECT id FROM products_no_match ORDER BY id`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var ids []int
 	for rows.Next() {
@@ -327,7 +335,9 @@ func testDeleteAllRows(t *testing.T, db *sql.DB) {
 	// Verify all rows are deleted by querying remaining rows
 	rows, err := db.Query(`SELECT id FROM products_all`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	rowCount := 0
 	for rows.Next() {

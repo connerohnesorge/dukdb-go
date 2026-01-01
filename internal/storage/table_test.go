@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRowIDGeneration tests that RowIDs are generated monotonically
@@ -363,8 +364,9 @@ func TestDeleteAlreadyDeletedRow(t *testing.T) {
 	table := NewTable("test", []dukdb.Type{dukdb.TYPE_INTEGER})
 
 	// Insert and delete a row
-	table.AppendRow([]any{int32(1)})
-	err := table.DeleteRows([]RowID{0})
+	err := table.AppendRow([]any{int32(1)})
+	require.NoError(t, err)
+	err = table.DeleteRows([]RowID{0})
 	if err != nil {
 		t.Fatalf("First delete failed: %v", err)
 	}

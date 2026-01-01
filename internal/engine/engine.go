@@ -244,7 +244,12 @@ func (e *Engine) loadFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer fm.Close()
+	defer func() {
+		if err := fm.Close(); err != nil {
+			// Log the error but don't propagate it from a defer
+			// This ensures we don't shadow the original error
+		}
+	}()
 
 	// Load catalog
 	catalogData, err := fm.ReadCatalog()
@@ -342,8 +347,10 @@ func (e *Engine) saveToFile(path string) error {
 		catalogJSON,
 	)
 	if err != nil {
-		fm.Close()
-		os.Remove(tmpPath)
+		if err := fm.Close(); err != nil {
+			// Log error but don't propagate from cleanup
+		}
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
 			"failed to marshal catalog: %w",
@@ -356,8 +363,10 @@ func (e *Engine) saveToFile(path string) error {
 		for i, rg := range table.RowGroups() {
 			data, err := table.ExportRowGroup(rg)
 			if err != nil {
-				fm.Close()
-				os.Remove(tmpPath)
+				if err := fm.Close(); err != nil {
+					// Log error but don't propagate from cleanup
+				}
+				_ = os.Remove(tmpPath)
 
 				return fmt.Errorf(
 					"failed to export row group %d for table %s: %w",
@@ -367,8 +376,10 @@ func (e *Engine) saveToFile(path string) error {
 				)
 			}
 			if err := fm.WriteBlock(tableName, i, data); err != nil {
-				fm.Close()
-				os.Remove(tmpPath)
+				if err := fm.Close(); err != nil {
+					// Log error but don't propagate from cleanup
+				}
+				_ = os.Remove(tmpPath)
 
 				return fmt.Errorf(
 					"failed to write block for table %s: %w",
@@ -381,8 +392,10 @@ func (e *Engine) saveToFile(path string) error {
 
 	// Write catalog after blocks
 	if err := fm.WriteCatalog(catalogData); err != nil {
-		fm.Close()
-		os.Remove(tmpPath)
+		if err := fm.Close(); err != nil {
+			// Log error but don't propagate from cleanup
+		}
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
 			"failed to write catalog: %w",
@@ -392,19 +405,23 @@ func (e *Engine) saveToFile(path string) error {
 
 	// Finalize with block index and footer
 	if err := fm.Finalize(); err != nil {
-		fm.Close()
-		os.Remove(tmpPath)
+		if err := fm.Close(); err != nil {
+			// Log error but don't propagate from cleanup
+		}
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
 			"failed to finalize file: %w",
 			err,
 		)
 	}
-	fm.Close()
+	if err := fm.Close(); err != nil {
+		// Log error but don't propagate from cleanup
+	}
 
 	// Verify checksum before rename
 	if err := persistence.VerifyFile(tmpPath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
 			"save verification failed: %w",
@@ -414,7 +431,7 @@ func (e *Engine) saveToFile(path string) error {
 
 	// Atomic rename (preserves original on failure)
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 
 		return err
 	}

@@ -48,7 +48,9 @@ func TestArrowWithClock(t *testing.T) {
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	arrowConn, err := NewArrowFromConn(conn)
 	require.NoError(t, err)
@@ -79,7 +81,9 @@ func TestArrowWithAllocator(t *testing.T) {
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	arrowConn, err := NewArrowFromConn(conn)
 	require.NoError(t, err)
@@ -107,7 +111,9 @@ func TestArrowContextDeadlineExceeded(
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	arrowConn, err := NewArrowFromConn(conn)
 	require.NoError(t, err)

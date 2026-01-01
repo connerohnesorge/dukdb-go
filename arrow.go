@@ -1071,7 +1071,7 @@ type arrowRowIterator struct {
 	columns []VirtualColumnDef
 	clock   quartz.Clock
 
-	batch   arrow.Record
+	batch   arrow.RecordBatch
 	rowIdx  int64
 	numRows int64
 	values  []any
@@ -1105,7 +1105,7 @@ func (it *arrowRowIterator) Next() bool {
 			return false
 		}
 
-		it.batch = it.reader.Record()
+		it.batch = it.reader.RecordBatch()
 		if it.batch != nil {
 			it.batch.Retain()
 			it.numRows = it.batch.NumRows()

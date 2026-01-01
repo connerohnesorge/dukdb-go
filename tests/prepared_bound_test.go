@@ -22,13 +22,17 @@ func TestPreparedStmtExecBoundWithoutParams(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	dukConn := conn.(*dukdb.Conn)
 	ctx := context.Background()
@@ -46,7 +50,9 @@ func TestPreparedStmtExecBoundWithoutParams(t *testing.T) {
 		"INSERT INTO test VALUES (1, 'alice')",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	result, err := stmt.ExecBound(ctx)
 	require.NoError(t, err)
@@ -63,13 +69,17 @@ func TestPreparedStmtExecBoundWithParams(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	dukConn := conn.(*dukdb.Conn)
 	ctx := context.Background()
@@ -87,7 +97,9 @@ func TestPreparedStmtExecBoundWithParams(t *testing.T) {
 		"INSERT INTO test VALUES ($1, $2)",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	// Bind parameters
 	err = stmt.Bind(0, 1)
@@ -111,13 +123,17 @@ func TestPreparedStmtQueryBoundWithParams(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	dukConn := conn.(*dukdb.Conn)
 	ctx := context.Background()
@@ -141,7 +157,9 @@ func TestPreparedStmtQueryBoundWithParams(t *testing.T) {
 		"SELECT name FROM test WHERE id = $1",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	// Bind and query
 	err = stmt.Bind(0, 1)
@@ -149,7 +167,9 @@ func TestPreparedStmtQueryBoundWithParams(t *testing.T) {
 
 	rows, err := stmt.QueryBound(ctx)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	// Verify result
 	cols := rows.Columns()
@@ -168,13 +188,17 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
 	)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	dukConn := conn.(*dukdb.Conn)
 	ctx := context.Background()
@@ -198,7 +222,9 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 		"SELECT name FROM test WHERE id = $1",
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	// First execution - find alice
 	err = stmt.Bind(0, 1)
@@ -211,7 +237,7 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 	err = rows.Next(dest)
 	require.NoError(t, err)
 	assert.Equal(t, "alice", dest[0])
-	rows.Close()
+	require.NoError(t, rows.Close())
 
 	// Clear and rebind for second execution - find bob
 	stmt.ClearBindings()
@@ -224,7 +250,7 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 	err = rows.Next(dest)
 	require.NoError(t, err)
 	assert.Equal(t, "bob", dest[0])
-	rows.Close()
+	require.NoError(t, rows.Close())
 
 	// Third execution without clearing - just rebind - find charlie
 	err = stmt.Bind(0, 3)
@@ -236,5 +262,5 @@ func TestPreparedStmtRebindParameters(t *testing.T) {
 	err = rows.Next(dest)
 	require.NoError(t, err)
 	assert.Equal(t, "charlie", dest[0])
-	rows.Close()
+	require.NoError(t, rows.Close())
 }

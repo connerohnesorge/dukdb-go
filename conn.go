@@ -32,9 +32,6 @@ type Conn struct {
 
 	// profiling holds the profiling context for this connection.
 	profiling *ProfilingContext
-
-	// replacementScan holds the replacement scan context for this connection.
-	replacementScan *ReplacementScanContext
 }
 
 // Prepare returns a prepared statement, bound to this connection.

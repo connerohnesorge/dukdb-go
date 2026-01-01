@@ -107,10 +107,6 @@ type parallelRowSource struct {
 	current    int64
 }
 
-type parallelRowLocalState struct {
-	threadID int
-}
-
 func (s *parallelRowSource) ColumnInfos() []ColumnInfo {
 	return s.cols
 }
@@ -128,7 +124,7 @@ func (s *parallelRowSource) Init() ParallelTableSourceInfo {
 }
 
 func (s *parallelRowSource) NewLocalState() any {
-	return &parallelRowLocalState{}
+	return &struct{}{}
 }
 
 func (s *parallelRowSource) FillRow(

@@ -99,7 +99,9 @@ func testTypeTinyInt(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_tinyint ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []int8{-128, 0, 127}
 	var idx int
@@ -128,7 +130,9 @@ func testTypeSmallInt(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_smallint ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []int16{-32768, 0, 32767}
 	var idx int
@@ -157,7 +161,9 @@ func testTypeInteger(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_integer ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []int32{
 		-2147483648,
@@ -192,7 +198,9 @@ func testTypeFloat(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_float ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []float32{-3.14, 0.0, 3.14}
 	var idx int
@@ -226,7 +234,9 @@ func testTypeDouble(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_double ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []float64{
 		-3.14159265358979,
@@ -266,7 +276,9 @@ func testTypeVarchar(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_varchar ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []string{"", "hello", "world"}
 	var idx int
@@ -313,7 +325,9 @@ func testTypeVarcharUnicode(
 		`SELECT val FROM type_varchar_unicode ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []string
 	for rows.Next() {
@@ -371,7 +385,9 @@ func testTypeBoolean(t *testing.T, db *sql.DB) {
 		`SELECT val FROM type_boolean ORDER BY val`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var vals []bool
 	for rows.Next() {
@@ -406,7 +422,9 @@ func testTypeNullInteger(
 		`SELECT val FROM type_null_int ORDER BY val NULLS FIRST`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []sql.NullInt64
 	for rows.Next() {
@@ -440,7 +458,9 @@ func testTypeNullVarchar(
 		`SELECT val FROM type_null_varchar ORDER BY val NULLS FIRST`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []sql.NullString
 	for rows.Next() {
@@ -474,7 +494,9 @@ func testTypeNullBoolean(
 		`SELECT val FROM type_null_bool ORDER BY val NULLS FIRST`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var results []sql.NullBool
 	for rows.Next() {

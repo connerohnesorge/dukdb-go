@@ -1,13 +1,18 @@
 package dukdb
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 // BenchmarkNewTypeInfo benchmarks primitive type creation.
 func BenchmarkNewTypeInfo(b *testing.B) {
 	b.Run("cached/INTEGER", func(b *testing.B) {
 		ClearTypeInfoCache()
 		// Warm the cache
-		NewTypeInfo(TYPE_INTEGER)
+		_, err := NewTypeInfo(TYPE_INTEGER)
+		require.NoError(b, err)
 		b.ResetTimer()
 
 		for range b.N {
@@ -27,7 +32,8 @@ func BenchmarkNewTypeInfo(b *testing.B) {
 
 	b.Run("VARCHAR", func(b *testing.B) {
 		ClearTypeInfoCache()
-		NewTypeInfo(TYPE_VARCHAR)
+		_, err := NewTypeInfo(TYPE_VARCHAR)
+		require.NoError(b, err)
 		b.ResetTimer()
 
 		for range b.N {
@@ -37,7 +43,8 @@ func BenchmarkNewTypeInfo(b *testing.B) {
 
 	b.Run("TIMESTAMP", func(b *testing.B) {
 		ClearTypeInfoCache()
-		NewTypeInfo(TYPE_TIMESTAMP)
+		_, err := NewTypeInfo(TYPE_TIMESTAMP)
+		require.NoError(b, err)
 		b.ResetTimer()
 
 		for range b.N {
@@ -395,7 +402,8 @@ func BenchmarkTypeInfoCacheParallel(
 ) {
 	ClearTypeInfoCache()
 	// Warm the cache
-	NewTypeInfo(TYPE_INTEGER)
+	_, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(b, err)
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {

@@ -163,7 +163,9 @@ func testPingContext(t *testing.T, db *sql.DB) {
 func testConnRaw(t *testing.T, db *sql.DB) {
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Test Raw() access to underlying driver connection
 	err = conn.Raw(func(driverConn any) error {
@@ -214,7 +216,9 @@ func testPrepareExec(t *testing.T, db *sql.DB) {
 		`INSERT INTO prep_exec VALUES ($1, $2)`,
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	result, err := stmt.Exec(1, "Alice")
 	require.NoError(t, err)
@@ -239,7 +243,9 @@ func testPrepareQuery(t *testing.T, db *sql.DB) {
 		`SELECT name FROM prep_query WHERE id = $1`,
 	)
 	require.NoError(t, err)
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	var name string
 	err = stmt.QueryRow(2).Scan(&name)
@@ -358,7 +364,9 @@ func testRowsColumns(t *testing.T, db *sql.DB) {
 		`SELECT 1 as col_a, 'hello' as col_b, 3.14 as col_c`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	cols, err := rows.Columns()
 	require.NoError(t, err)
@@ -384,7 +392,9 @@ func testRowsNext(t *testing.T, db *sql.DB) {
 		`SELECT id FROM rows_next ORDER BY id`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	var ids []int
 	for rows.Next() {
@@ -422,7 +432,7 @@ func testRowsErr(t *testing.T, db *sql.DB) {
 
 	// Err should be nil after successful iteration
 	require.NoError(t, rows.Err())
-	rows.Close()
+	require.NoError(t, rows.Close())
 }
 
 // Result info tests

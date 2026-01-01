@@ -132,6 +132,26 @@ func (c *paramCollector) collectExpr(expr Expr) {
 		for _, arg := range e.Args {
 			c.collectExpr(arg)
 		}
+	case *WindowExpr:
+		// Collect from function arguments
+		for _, arg := range e.Function.Args {
+			c.collectExpr(arg)
+		}
+		// Collect from partition by
+		for _, p := range e.PartitionBy {
+			c.collectExpr(p)
+		}
+		// Collect from order by
+		for _, o := range e.OrderBy {
+			c.collectExpr(o.Expr)
+		}
+		// Collect from frame bounds
+		if e.Frame != nil {
+			c.collectExpr(e.Frame.Start.Offset)
+			c.collectExpr(e.Frame.End.Offset)
+		}
+		// Collect from filter
+		c.collectExpr(e.Filter)
 	case *CastExpr:
 		c.collectExpr(e.Expr)
 	case *CaseExpr:
@@ -232,6 +252,26 @@ func (c *paramCounter) countExpr(expr Expr) {
 		for _, arg := range e.Args {
 			c.countExpr(arg)
 		}
+	case *WindowExpr:
+		// Count from function arguments
+		for _, arg := range e.Function.Args {
+			c.countExpr(arg)
+		}
+		// Count from partition by
+		for _, p := range e.PartitionBy {
+			c.countExpr(p)
+		}
+		// Count from order by
+		for _, o := range e.OrderBy {
+			c.countExpr(o.Expr)
+		}
+		// Count from frame bounds
+		if e.Frame != nil {
+			c.countExpr(e.Frame.Start.Offset)
+			c.countExpr(e.Frame.End.Offset)
+		}
+		// Count from filter
+		c.countExpr(e.Filter)
 	case *CastExpr:
 		c.countExpr(e.Expr)
 	case *CaseExpr:
@@ -630,6 +670,8 @@ func (p *parser) parse() (Statement, error) {
 	var err error
 
 	switch {
+	case p.isKeyword("WITH"):
+		stmt, err = p.parseWithSelect()
 	case p.isKeyword("SELECT"):
 		stmt, err = p.parseSelect()
 	case p.isKeyword("INSERT"):
@@ -665,6 +707,98 @@ func (p *parser) parse() (Statement, error) {
 	if p.current().typ == tokenSemicolon {
 		p.advance()
 	}
+
+	return stmt, nil
+}
+
+func (p *parser) parseWithSelect() (*SelectStmt, error) {
+	if err := p.expectKeyword("WITH"); err != nil {
+		return nil, err
+	}
+
+	var ctes []CTE
+
+	// Parse CTEs
+	for {
+		// Parse CTE name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected CTE name")
+		}
+		cteName := p.advance().value
+
+		cte := CTE{Name: cteName}
+
+		// Optional column list: WITH cte_name(col1, col2) AS (...)
+		if p.current().typ == tokenLParen {
+			p.advance()
+			for {
+				if p.current().typ != tokenIdent {
+					return nil, p.errorf("expected column name in CTE")
+				}
+				cte.Columns = append(cte.Columns, p.advance().value)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance()
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+		}
+
+		// AS keyword
+		if err := p.expectKeyword("AS"); err != nil {
+			return nil, err
+		}
+
+		// CTE query in parentheses
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+
+		// Parse the CTE query (must be a SELECT)
+		if !p.isKeyword("SELECT") && !p.isKeyword("WITH") {
+			return nil, p.errorf("expected SELECT in CTE")
+		}
+
+		var cteQuery *SelectStmt
+		var err error
+		if p.isKeyword("WITH") {
+			// Nested CTE
+			cteQuery, err = p.parseWithSelect()
+		} else {
+			cteQuery, err = p.parseSelect()
+		}
+		if err != nil {
+			return nil, err
+		}
+		cte.Query = cteQuery
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		ctes = append(ctes, cte)
+
+		// Check for more CTEs (comma-separated)
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	// Now parse the main SELECT
+	if !p.isKeyword("SELECT") {
+		return nil, p.errorf("expected SELECT after CTEs")
+	}
+
+	stmt, err := p.parseSelect()
+	if err != nil {
+		return nil, err
+	}
+
+	// Attach CTEs to the statement
+	stmt.CTEs = ctes
 
 	return stmt, nil
 }
@@ -762,6 +896,45 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			}
 			stmt.Offset = offset
 		}
+	}
+
+	// Check for set operations (UNION, INTERSECT, EXCEPT)
+	if p.isKeyword("UNION") || p.isKeyword("INTERSECT") || p.isKeyword("EXCEPT") {
+		var setOp SetOpType
+		switch {
+		case p.isKeyword("UNION"):
+			p.advance()
+			if p.isKeyword("ALL") {
+				p.advance()
+				setOp = SetOpUnionAll
+			} else {
+				setOp = SetOpUnion
+			}
+		case p.isKeyword("INTERSECT"):
+			p.advance()
+			if p.isKeyword("ALL") {
+				p.advance()
+				setOp = SetOpIntersectAll
+			} else {
+				setOp = SetOpIntersect
+			}
+		case p.isKeyword("EXCEPT"):
+			p.advance()
+			if p.isKeyword("ALL") {
+				p.advance()
+				setOp = SetOpExceptAll
+			} else {
+				setOp = SetOpExcept
+			}
+		}
+
+		// Parse the right side SELECT
+		right, err := p.parseSelect()
+		if err != nil {
+			return nil, err
+		}
+		stmt.SetOp = setOp
+		stmt.Right = right
 	}
 
 	return stmt, nil
@@ -899,7 +1072,8 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 		!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
-		!p.isKeyword("ON") && !p.isKeyword("HAVING") {
+		!p.isKeyword("ON") && !p.isKeyword("HAVING") &&
+		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 		ref.Alias = p.advance().value
 	}
 
@@ -1112,6 +1286,12 @@ func (p *parser) parseUpdate() (*UpdateStmt, error) {
 		stmt.Table = p.advance().value
 	}
 
+	// Optional alias (UPDATE users u SET ...)
+	// Skip alias if present - it's an identifier that is NOT the SET keyword
+	if p.current().typ == tokenIdent && !p.isKeyword("SET") {
+		p.advance() // Skip the alias
+	}
+
 	// SET
 	if err := p.expectKeyword("SET"); err != nil {
 		return nil, err
@@ -1147,6 +1327,15 @@ func (p *parser) parseUpdate() (*UpdateStmt, error) {
 			break
 		}
 		p.advance()
+	}
+
+	// FROM (UPDATE...FROM syntax)
+	if p.isKeyword("FROM") {
+		from, err := p.parseFrom()
+		if err != nil {
+			return nil, err
+		}
+		stmt.From = from
 	}
 
 	// WHERE
@@ -1254,6 +1443,27 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 			)
 		}
 		stmt.Table = p.advance().value
+	}
+
+	// Check for AS SELECT (CREATE TABLE ... AS SELECT ...)
+	if p.isKeyword("AS") {
+		p.advance()
+		if !p.isKeyword("SELECT") && !p.isKeyword("WITH") {
+			return nil, p.errorf("expected SELECT or WITH after AS")
+		}
+		var selectStmt *SelectStmt
+		var err error
+		if p.isKeyword("WITH") {
+			selectStmt, err = p.parseWithSelect()
+		} else {
+			selectStmt, err = p.parseSelect()
+		}
+		if err != nil {
+			return nil, err
+		}
+		stmt.AsSelect = selectStmt
+
+		return stmt, nil
 	}
 
 	// Column definitions
@@ -2045,6 +2255,10 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		return p.parseCast()
 	case "EXISTS":
 		return p.parseExists()
+	case "EXTRACT":
+		return p.parseExtract()
+	case "INTERVAL":
+		return p.parseInterval()
 	}
 
 	// Function call or column reference
@@ -2095,7 +2309,8 @@ func (p *parser) parseFunctionCall(
 			return nil, err
 		}
 
-		return fn, nil
+		// Check for window function OVER clause after COUNT(*)
+		return p.maybeParseWindowExpr(fn)
 	}
 
 	// Check for DISTINCT
@@ -2117,7 +2332,334 @@ func (p *parser) parseFunctionCall(
 		return nil, err
 	}
 
-	return fn, nil
+	// Check for window function OVER clause
+	return p.maybeParseWindowExpr(fn)
+}
+
+// maybeParseWindowExpr checks for IGNORE/RESPECT NULLS, FILTER, and OVER clauses
+// after a function call and wraps it in a WindowExpr if OVER is found.
+func (p *parser) maybeParseWindowExpr(fn *FunctionCall) (Expr, error) {
+	windowExpr := &WindowExpr{
+		Function: fn,
+		Distinct: fn.Distinct, // Carry over DISTINCT from function call
+	}
+
+	// Check for IGNORE NULLS or RESPECT NULLS (before OVER)
+	if p.isKeyword("IGNORE") {
+		p.advance()
+		if err := p.expectKeyword("NULLS"); err != nil {
+			return nil, err
+		}
+		windowExpr.IgnoreNulls = true
+	} else if p.isKeyword("RESPECT") {
+		p.advance()
+		if err := p.expectKeyword("NULLS"); err != nil {
+			return nil, err
+		}
+		// RESPECT NULLS is the default, so we don't set IgnoreNulls
+	}
+
+	// Check for FILTER clause (before OVER)
+	if p.isKeyword("FILTER") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		if err := p.expectKeyword("WHERE"); err != nil {
+			return nil, err
+		}
+		filterExpr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		windowExpr.Filter = filterExpr
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// Check for OVER clause
+	if !p.isKeyword("OVER") {
+		// No OVER clause - if we had IGNORE NULLS or FILTER without OVER, it's an error
+		if windowExpr.IgnoreNulls || windowExpr.Filter != nil {
+			return nil, p.errorf("IGNORE NULLS and FILTER require OVER clause")
+		}
+		return fn, nil
+	}
+
+	// Parse OVER clause
+	p.advance() // consume OVER
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse window specification
+	if err := p.parseWindowSpec(windowExpr); err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return windowExpr, nil
+}
+
+// parseWindowSpec parses the contents of OVER (...).
+func (p *parser) parseWindowSpec(windowExpr *WindowExpr) error {
+	// Parse PARTITION BY (optional)
+	if p.isKeyword("PARTITION") {
+		p.advance()
+		if err := p.expectKeyword("BY"); err != nil {
+			return err
+		}
+		partitionBy, err := p.parseWindowExprList()
+		if err != nil {
+			return err
+		}
+		windowExpr.PartitionBy = partitionBy
+	}
+
+	// Parse ORDER BY (optional)
+	if p.isKeyword("ORDER") {
+		p.advance()
+		if err := p.expectKeyword("BY"); err != nil {
+			return err
+		}
+		orderBy, err := p.parseWindowOrderBy()
+		if err != nil {
+			return err
+		}
+		windowExpr.OrderBy = orderBy
+	}
+
+	// Parse frame specification (optional): ROWS/RANGE/GROUPS
+	if p.isKeyword("ROWS") || p.isKeyword("RANGE") || p.isKeyword("GROUPS") {
+		frame, err := p.parseFrameSpec()
+		if err != nil {
+			return err
+		}
+		windowExpr.Frame = frame
+	}
+
+	return nil
+}
+
+// parseWindowExprList parses a comma-separated list of expressions for PARTITION BY.
+// It stops when it encounters ORDER, ROWS, RANGE, GROUPS, or closing paren.
+func (p *parser) parseWindowExprList() ([]Expr, error) {
+	var exprs []Expr
+
+	for {
+		expr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+
+		// Check for comma to continue
+		if p.current().typ != tokenComma {
+			break
+		}
+
+		// Look ahead to see if next token is a window keyword (ORDER, ROWS, etc.)
+		// If so, stop parsing the expression list
+		next := p.peek()
+		if next.typ == tokenIdent {
+			upperVal := strings.ToUpper(next.value)
+			if upperVal == "ORDER" || upperVal == "ROWS" || upperVal == "RANGE" ||
+				upperVal == "GROUPS" {
+				break
+			}
+		}
+		p.advance() // consume comma
+	}
+
+	return exprs, nil
+}
+
+// parseWindowOrderBy parses ORDER BY expressions within a window specification.
+// Each expression can have ASC/DESC and NULLS FIRST/LAST.
+func (p *parser) parseWindowOrderBy() ([]WindowOrderBy, error) {
+	var orderBy []WindowOrderBy
+
+	for {
+		expr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		order := WindowOrderBy{Expr: expr}
+
+		// Check for ASC/DESC
+		if p.isKeyword("DESC") {
+			p.advance()
+			order.Desc = true
+		} else if p.isKeyword("ASC") {
+			p.advance()
+		}
+
+		// Check for NULLS FIRST/LAST
+		if p.isKeyword("NULLS") {
+			p.advance()
+			if p.isKeyword("FIRST") {
+				p.advance()
+				order.NullsFirst = true
+			} else if p.isKeyword("LAST") {
+				p.advance()
+				order.NullsFirst = false
+			} else {
+				return nil, p.errorf("expected FIRST or LAST after NULLS")
+			}
+		}
+
+		orderBy = append(orderBy, order)
+
+		// Check for comma to continue
+		if p.current().typ != tokenComma {
+			break
+		}
+
+		// Look ahead to see if next token is a frame keyword
+		next := p.peek()
+		if next.typ == tokenIdent {
+			upperVal := strings.ToUpper(next.value)
+			if upperVal == "ROWS" || upperVal == "RANGE" || upperVal == "GROUPS" {
+				break
+			}
+		}
+		p.advance() // consume comma
+	}
+
+	return orderBy, nil
+}
+
+// parseFrameSpec parses ROWS/RANGE/GROUPS frame specification.
+func (p *parser) parseFrameSpec() (*WindowFrame, error) {
+	frame := &WindowFrame{}
+
+	// Determine frame type
+	switch {
+	case p.isKeyword("ROWS"):
+		p.advance()
+		frame.Type = FrameTypeRows
+	case p.isKeyword("RANGE"):
+		p.advance()
+		frame.Type = FrameTypeRange
+	case p.isKeyword("GROUPS"):
+		p.advance()
+		frame.Type = FrameTypeGroups
+	default:
+		return nil, p.errorf("expected ROWS, RANGE, or GROUPS")
+	}
+
+	// Check for BETWEEN ... AND ... or single bound
+	if p.isKeyword("BETWEEN") {
+		p.advance()
+
+		// Parse start bound
+		start, err := p.parseFrameBound()
+		if err != nil {
+			return nil, err
+		}
+		frame.Start = start
+
+		if err := p.expectKeyword("AND"); err != nil {
+			return nil, err
+		}
+
+		// Parse end bound
+		end, err := p.parseFrameBound()
+		if err != nil {
+			return nil, err
+		}
+		frame.End = end
+	} else {
+		// Single bound shorthand: ROWS 3 PRECEDING means ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+		bound, err := p.parseFrameBound()
+		if err != nil {
+			return nil, err
+		}
+		frame.Start = bound
+		frame.End = WindowBound{Type: BoundCurrentRow}
+	}
+
+	// Parse EXCLUDE clause (optional)
+	if p.isKeyword("EXCLUDE") {
+		p.advance()
+
+		switch {
+		case p.isKeyword("NO"):
+			p.advance()
+			if err := p.expectKeyword("OTHERS"); err != nil {
+				return nil, err
+			}
+			frame.Exclude = ExcludeNoOthers
+		case p.isKeyword("CURRENT"):
+			p.advance()
+			if err := p.expectKeyword("ROW"); err != nil {
+				return nil, err
+			}
+			frame.Exclude = ExcludeCurrentRow
+		case p.isKeyword("GROUP"):
+			p.advance()
+			frame.Exclude = ExcludeGroup
+		case p.isKeyword("TIES"):
+			p.advance()
+			frame.Exclude = ExcludeTies
+		default:
+			return nil, p.errorf("expected NO OTHERS, CURRENT ROW, GROUP, or TIES after EXCLUDE")
+		}
+	}
+
+	return frame, nil
+}
+
+// parseFrameBound parses a single frame boundary.
+func (p *parser) parseFrameBound() (WindowBound, error) {
+	bound := WindowBound{}
+
+	switch {
+	case p.isKeyword("UNBOUNDED"):
+		p.advance()
+		if p.isKeyword("PRECEDING") {
+			p.advance()
+			bound.Type = BoundUnboundedPreceding
+		} else if p.isKeyword("FOLLOWING") {
+			p.advance()
+			bound.Type = BoundUnboundedFollowing
+		} else {
+			return bound, p.errorf("expected PRECEDING or FOLLOWING after UNBOUNDED")
+		}
+
+	case p.isKeyword("CURRENT"):
+		p.advance()
+		if err := p.expectKeyword("ROW"); err != nil {
+			return bound, err
+		}
+		bound.Type = BoundCurrentRow
+
+	default:
+		// N PRECEDING or N FOLLOWING - parse an expression for the offset
+		expr, err := p.parseUnaryExpr() // Use unaryExpr to avoid consuming PRECEDING/FOLLOWING as expression
+		if err != nil {
+			return bound, err
+		}
+		bound.Offset = expr
+
+		if p.isKeyword("PRECEDING") {
+			p.advance()
+			bound.Type = BoundPreceding
+		} else if p.isKeyword("FOLLOWING") {
+			p.advance()
+			bound.Type = BoundFollowing
+		} else {
+			return bound, p.errorf("expected PRECEDING or FOLLOWING after offset expression")
+		}
+	}
+
+	return bound, nil
 }
 
 func (p *parser) parseCase() (Expr, error) {
@@ -2237,6 +2779,237 @@ func (p *parser) parseExists() (Expr, error) {
 	}
 
 	return &ExistsExpr{Subquery: subquery}, nil
+}
+
+// parseExtract parses an EXTRACT(part FROM source) expression.
+// This is SQL standard syntax for extracting date/time fields.
+// Valid parts: YEAR, QUARTER, MONTH, WEEK, DAY, DAYOFWEEK, DOW, DAYOFYEAR, DOY,
+// HOUR, MINUTE, SECOND, MILLISECOND, MICROSECOND, EPOCH
+func (p *parser) parseExtract() (Expr, error) {
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse the part specifier (must be an identifier)
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected date part in EXTRACT, got %s", p.current().value)
+	}
+	part := strings.ToUpper(p.advance().value)
+
+	// Validate the part specifier
+	validParts := map[string]bool{
+		"YEAR": true, "QUARTER": true, "MONTH": true, "WEEK": true,
+		"DAY": true, "DAYOFWEEK": true, "DOW": true, "DAYOFYEAR": true, "DOY": true,
+		"HOUR": true, "MINUTE": true, "SECOND": true,
+		"MILLISECOND": true, "MICROSECOND": true, "EPOCH": true,
+	}
+	if !validParts[part] {
+		return nil, p.errorf("invalid date part in EXTRACT: %s", part)
+	}
+
+	// Expect FROM keyword
+	if err := p.expectKeyword("FROM"); err != nil {
+		return nil, err
+	}
+
+	// Parse the source expression
+	source, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return &ExtractExpr{
+		Part:   part,
+		Source: source,
+	}, nil
+}
+
+// parseInterval parses an INTERVAL literal.
+// Supports the following syntaxes:
+//   - INTERVAL 'n' UNIT (e.g., INTERVAL '5' DAY)
+//   - INTERVAL 'n unit' (e.g., INTERVAL '5 days')
+//   - INTERVAL 'n units m units' (e.g., INTERVAL '2 hours 30 minutes')
+func (p *parser) parseInterval() (Expr, error) {
+	// We've already consumed 'INTERVAL' keyword
+
+	// Expect a string literal containing the interval value
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected string after INTERVAL, got %s", p.current().value)
+	}
+
+	// Remove quotes from the string
+	stringTok := p.advance()
+	intervalStr := stringTok.value[1 : len(stringTok.value)-1]
+	intervalStr = strings.ReplaceAll(intervalStr, "''", "'")
+
+	// Check if there's a unit keyword following the string (INTERVAL '5' DAY syntax)
+	var unitKeyword string
+	if p.current().typ == tokenIdent {
+		upper := strings.ToUpper(p.current().value)
+		if isIntervalUnit(upper) {
+			unitKeyword = upper
+			p.advance()
+		}
+	}
+
+	// Parse the interval
+	months, days, micros, err := parseIntervalValue(intervalStr, unitKeyword)
+	if err != nil {
+		return nil, p.errorf("invalid interval: %v", err)
+	}
+
+	return &IntervalLiteral{
+		Months: months,
+		Days:   days,
+		Micros: micros,
+	}, nil
+}
+
+// isIntervalUnit checks if a string is a valid interval unit keyword.
+func isIntervalUnit(s string) bool {
+	switch s {
+	case "YEAR", "YEARS", "MONTH", "MONTHS", "WEEK", "WEEKS",
+		"DAY", "DAYS", "HOUR", "HOURS", "MINUTE", "MINUTES",
+		"SECOND", "SECONDS", "MILLISECOND", "MILLISECONDS",
+		"MICROSECOND", "MICROSECONDS":
+		return true
+	}
+	return false
+}
+
+// parseIntervalValue parses an interval string value.
+// If unitKeyword is provided, it's the INTERVAL '5' DAY syntax.
+// Otherwise, parse 'n unit' or 'n units m units' from the string itself.
+func parseIntervalValue(s string, unitKeyword string) (months int32, days int32, micros int64, err error) {
+	s = strings.TrimSpace(s)
+
+	// If unitKeyword is provided, parse as simple number + unit
+	if unitKeyword != "" {
+		val, parseErr := strconv.ParseInt(s, 10, 64)
+		if parseErr != nil {
+			// Try parsing as float for fractional values
+			fval, fErr := strconv.ParseFloat(s, 64)
+			if fErr != nil {
+				return 0, 0, 0, fmt.Errorf("invalid interval number: %s", s)
+			}
+			return applyIntervalUnit(fval, unitKeyword)
+		}
+		return applyIntervalUnit(float64(val), unitKeyword)
+	}
+
+	// Parse compound interval string (e.g., "2 hours 30 minutes")
+	tokens := tokenizeIntervalString(s)
+	if len(tokens) == 0 {
+		return 0, 0, 0, fmt.Errorf("empty interval string")
+	}
+
+	// Process tokens in pairs: number unit number unit ...
+	i := 0
+	for i < len(tokens) {
+		// Expect a number
+		val, parseErr := strconv.ParseFloat(tokens[i], 64)
+		if parseErr != nil {
+			return 0, 0, 0, fmt.Errorf("expected number in interval, got: %s", tokens[i])
+		}
+		i++
+
+		if i >= len(tokens) {
+			return 0, 0, 0, fmt.Errorf("expected unit after number in interval")
+		}
+
+		// Expect a unit
+		unit := strings.ToUpper(tokens[i])
+		if !isIntervalUnit(unit) {
+			return 0, 0, 0, fmt.Errorf("unknown interval unit: %s", tokens[i])
+		}
+		i++
+
+		// Apply this component
+		m, d, u, applyErr := applyIntervalUnit(val, unit)
+		if applyErr != nil {
+			return 0, 0, 0, applyErr
+		}
+		months += m
+		days += d
+		micros += u
+	}
+
+	return months, days, micros, nil
+}
+
+// tokenizeIntervalString splits an interval string into tokens (numbers and units).
+func tokenizeIntervalString(s string) []string {
+	var tokens []string
+	var current strings.Builder
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+		} else if (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == '+' {
+			// Part of a number
+			if current.Len() > 0 {
+				// Check if we're transitioning from letters to digits
+				lastCh := current.String()[current.Len()-1]
+				if (lastCh >= 'a' && lastCh <= 'z') || (lastCh >= 'A' && lastCh <= 'Z') {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+			}
+			current.WriteByte(ch)
+		} else if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') {
+			// Part of a unit name
+			if current.Len() > 0 {
+				// Check if we're transitioning from digits to letters
+				lastCh := current.String()[current.Len()-1]
+				if (lastCh >= '0' && lastCh <= '9') || lastCh == '.' {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+			}
+			current.WriteByte(ch)
+		}
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
+}
+
+// applyIntervalUnit converts a value with a unit to months, days, and microseconds.
+func applyIntervalUnit(val float64, unit string) (months int32, days int32, micros int64, err error) {
+	switch strings.ToUpper(unit) {
+	case "YEAR", "YEARS":
+		months = int32(val * 12)
+	case "MONTH", "MONTHS":
+		months = int32(val)
+	case "WEEK", "WEEKS":
+		days = int32(val * 7)
+	case "DAY", "DAYS":
+		days = int32(val)
+	case "HOUR", "HOURS":
+		micros = int64(val * 60 * 60 * 1_000_000)
+	case "MINUTE", "MINUTES":
+		micros = int64(val * 60 * 1_000_000)
+	case "SECOND", "SECONDS":
+		micros = int64(val * 1_000_000)
+	case "MILLISECOND", "MILLISECONDS":
+		micros = int64(val * 1_000)
+	case "MICROSECOND", "MICROSECONDS":
+		micros = int64(val)
+	default:
+		return 0, 0, 0, fmt.Errorf("unknown interval unit: %s", unit)
+	}
+	return months, days, micros, nil
 }
 
 // parseTypeName converts a type name string to a Type.

@@ -45,7 +45,9 @@ func TestCreateAndOpenFile(t *testing.T) {
 	fm2, err := OpenFile(dbPath)
 	require.NoError(t, err)
 	require.NotNil(t, fm2)
-	defer fm2.Close()
+	defer func() {
+		require.NoError(t, fm2.Close())
+	}()
 
 	// Read catalog
 	readCatalog, err := fm2.ReadCatalog()
@@ -95,7 +97,9 @@ func TestWriteAndReadBlocks(t *testing.T) {
 	// Reopen and read blocks
 	fm2, err := OpenFile(dbPath)
 	require.NoError(t, err)
-	defer fm2.Close()
+	defer func() {
+		require.NoError(t, fm2.Close())
+	}()
 
 	blocks := fm2.DataBlocks()
 	require.Len(t, blocks, 2)
@@ -154,7 +158,7 @@ func TestChecksumVerification(t *testing.T) {
 
 	err = fm.Finalize()
 	require.NoError(t, err)
-	fm.Close()
+	require.NoError(t, fm.Close())
 
 	// Verify it's valid
 	err = VerifyFile(dbPath)
@@ -261,7 +265,7 @@ func TestEmptyDatabase(t *testing.T) {
 
 	err = fm.Finalize()
 	require.NoError(t, err)
-	fm.Close()
+	require.NoError(t, fm.Close())
 
 	// Verify
 	err = VerifyFile(dbPath)
@@ -270,7 +274,9 @@ func TestEmptyDatabase(t *testing.T) {
 	// Open and verify empty
 	fm2, err := OpenFile(dbPath)
 	require.NoError(t, err)
-	defer fm2.Close()
+	defer func() {
+		require.NoError(t, fm2.Close())
+	}()
 
 	assert.Empty(t, fm2.DataBlocks())
 }
@@ -302,7 +308,7 @@ func TestLargeBlock(t *testing.T) {
 
 	err = fm.Finalize()
 	require.NoError(t, err)
-	fm.Close()
+	require.NoError(t, fm.Close())
 
 	// Verify
 	err = VerifyFile(dbPath)
@@ -311,7 +317,9 @@ func TestLargeBlock(t *testing.T) {
 	// Read back
 	fm2, err := OpenFile(dbPath)
 	require.NoError(t, err)
-	defer fm2.Close()
+	defer func() {
+		require.NoError(t, fm2.Close())
+	}()
 
 	blocks := fm2.DataBlocks()
 	require.Len(t, blocks, 1)

@@ -76,6 +76,39 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundInSubqueryExpr:
 		return e.evaluateInSubqueryExpr(ctx, ex, row)
 
+	case *binder.BoundExtractExpr:
+		return e.evaluateExtractExpr(ctx, ex, row)
+
+	case *binder.BoundIntervalLiteral:
+		// Return as an Interval struct
+		return Interval{
+			Months: ex.Months,
+			Days:   ex.Days,
+			Micros: ex.Micros,
+		}, nil
+
+	case *binder.BoundWindowExpr:
+		// Window expressions should have already been evaluated by the PhysicalWindowExecutor
+		// and their results stored in the row map using the function name as the key.
+		// Look up the pre-computed result.
+		if row == nil {
+			return nil, nil
+		}
+		// Try the function name directly
+		if val, ok := row[ex.FunctionName]; ok {
+			return val, nil
+		}
+		// Try uppercase version
+		if val, ok := row[strings.ToUpper(ex.FunctionName)]; ok {
+			return val, nil
+		}
+		// Try lowercase version
+		if val, ok := row[strings.ToLower(ex.FunctionName)]; ok {
+			return val, nil
+		}
+		// Window result not found - return nil
+		return nil, nil
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -467,6 +500,123 @@ func (e *Executor) evaluateFunctionCall(
 			toString(args[1]),
 			toString(args[2]),
 		), nil
+
+	// Date/Time extraction functions
+	case "YEAR":
+		return evalYear(args)
+
+	case "MONTH":
+		return evalMonth(args)
+
+	case "DAY":
+		return evalDay(args)
+
+	case "HOUR":
+		return evalHour(args)
+
+	case "MINUTE":
+		return evalMinute(args)
+
+	case "SECOND":
+		return evalSecond(args)
+
+	case "DAYOFWEEK":
+		return evalDayOfWeek(args)
+
+	case "DAYOFYEAR":
+		return evalDayOfYear(args)
+
+	case "WEEK":
+		return evalWeek(args)
+
+	case "QUARTER":
+		return evalQuarter(args)
+
+	// Date arithmetic functions
+	case "DATE_ADD":
+		return evalDateAdd(args)
+
+	case "DATE_SUB":
+		return evalDateSub(args)
+
+	case "DATE_DIFF", "DATEDIFF":
+		return evalDateDiff(args)
+
+	case "DATE_TRUNC":
+		return evalDateTrunc(args)
+
+	case "DATE_PART":
+		return evalDatePart(args)
+
+	case "AGE":
+		return evalAge(args)
+
+	case "LAST_DAY":
+		return evalLastDay(args)
+
+	// Date construction functions
+	case "MAKE_DATE":
+		return evalMakeDate(args)
+
+	case "MAKE_TIMESTAMP":
+		return evalMakeTimestamp(args)
+
+	case "MAKE_TIME":
+		return evalMakeTime(args)
+
+	// Formatting/Parsing functions
+	case "STRFTIME":
+		return evalStrftime(args)
+
+	case "STRPTIME":
+		return evalStrptime(args)
+
+	case "TO_TIMESTAMP":
+		return evalToTimestamp(args)
+
+	case "EPOCH":
+		return evalEpoch(args)
+
+	case "EPOCH_MS":
+		return evalEpochMs(args)
+
+	// Interval extraction functions
+	case "TO_YEARS":
+		return evalToYears(args)
+
+	case "TO_MONTHS":
+		return evalToMonths(args)
+
+	case "TO_DAYS":
+		return evalToDays(args)
+
+	case "TO_HOURS":
+		return evalToHours(args)
+
+	case "TO_MINUTES":
+		return evalToMinutes(args)
+
+	case "TO_SECONDS":
+		return evalToSeconds(args)
+
+	// Total extraction functions
+	case "TOTAL_YEARS":
+		return evalTotalYears(args)
+
+	case "TOTAL_MONTHS":
+		return evalTotalMonths(args)
+
+	case "TOTAL_DAYS":
+		return evalTotalDays(args)
+
+	case "TOTAL_HOURS":
+		return evalTotalHours(args)
+
+	case "TOTAL_MINUTES":
+		return evalTotalMinutes(args)
+
+	case "TOTAL_SECONDS":
+		return evalTotalSeconds(args)
 
 	default:
 		// For aggregate functions called in scalar context, return NULL
@@ -1026,6 +1176,15 @@ func toNumber(v any) (float64, bool) {
 }
 
 func addValues(a, b any) (any, error) {
+	// Handle date/timestamp + interval -> date/timestamp
+	if interval, ok := b.(Interval); ok {
+		return addIntervalToTemporal(a, interval)
+	}
+	if interval, ok := a.(Interval); ok {
+		// interval + date/timestamp is commutative
+		return addIntervalToTemporal(b, interval)
+	}
+
 	if aNum, ok := toNumber(a); ok {
 		if bNum, ok := toNumber(b); ok {
 			return aNum + bNum, nil
@@ -1035,7 +1194,37 @@ func addValues(a, b any) (any, error) {
 	return toString(a) + toString(b), nil
 }
 
+// addIntervalToTemporal adds an interval to a date or timestamp value.
+func addIntervalToTemporal(temporal any, interval Interval) (any, error) {
+	switch v := temporal.(type) {
+	case int32: // DATE (days since epoch)
+		t := dateToTime(v)
+		result := addInterval(t, interval)
+		return timeToDate(result), nil
+	case int64: // TIMESTAMP (microseconds since epoch)
+		t := timestampToTime(v)
+		result := addInterval(t, interval)
+		return timeToTimestamp(result), nil
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("cannot add interval to type %T", temporal),
+		}
+	}
+}
+
 func subValues(a, b any) (any, error) {
+	// Handle date/timestamp - interval -> date/timestamp
+	if interval, ok := b.(Interval); ok {
+		// Negate the interval
+		negInterval := Interval{
+			Months: -interval.Months,
+			Days:   -interval.Days,
+			Micros: -interval.Micros,
+		}
+		return addIntervalToTemporal(a, negInterval)
+	}
+
 	if aNum, ok := toNumber(a); ok {
 		if bNum, ok := toNumber(b); ok {
 			return aNum - bNum, nil
@@ -1049,6 +1238,27 @@ func subValues(a, b any) (any, error) {
 }
 
 func mulValues(a, b any) (any, error) {
+	// Handle interval * number -> interval
+	if interval, ok := a.(Interval); ok {
+		if factor, ok := toNumber(b); ok {
+			return Interval{
+				Months: int32(float64(interval.Months) * factor),
+				Days:   int32(float64(interval.Days) * factor),
+				Micros: int64(float64(interval.Micros) * factor),
+			}, nil
+		}
+	}
+	// Handle number * interval -> interval
+	if interval, ok := b.(Interval); ok {
+		if factor, ok := toNumber(a); ok {
+			return Interval{
+				Months: int32(float64(interval.Months) * factor),
+				Days:   int32(float64(interval.Days) * factor),
+				Micros: int64(float64(interval.Micros) * factor),
+			}, nil
+		}
+	}
+
 	if aNum, ok := toNumber(a); ok {
 		if bNum, ok := toNumber(b); ok {
 			return aNum * bNum, nil
@@ -1139,6 +1349,32 @@ func castValue(
 	default:
 		return v, nil
 	}
+}
+
+// evaluateExtractExpr evaluates an EXTRACT(part FROM source) expression.
+// This delegates to the DATE_PART logic, returning DOUBLE per SQL standard.
+func (e *Executor) evaluateExtractExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundExtractExpr,
+	row map[string]any,
+) (any, error) {
+	// Evaluate the source expression
+	sourceVal, err := e.evaluateExpr(ctx, expr.Source, row)
+	if err != nil {
+		return nil, err
+	}
+
+	// NULL propagation
+	if sourceVal == nil {
+		return nil, nil
+	}
+
+	// Delegate to evalDatePart - it takes (part, timestamp) args
+	// The part needs to be normalized to lowercase for the DATE_PART function
+	part := strings.ToLower(expr.Part)
+	args := []any{part, sourceVal}
+
+	return evalDatePart(args)
 }
 
 func matchLike(

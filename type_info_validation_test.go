@@ -573,14 +573,16 @@ func TestTypeInfoCaching(t *testing.T) {
 				TypeInfoCacheSize(),
 			)
 
-			NewTypeInfo(TYPE_INTEGER)
+			_, err := NewTypeInfo(TYPE_INTEGER)
+			require.NoError(t, err)
 			assert.Equal(
 				t,
 				1,
 				TypeInfoCacheSize(),
 			)
 
-			NewTypeInfo(TYPE_VARCHAR)
+			_, err = NewTypeInfo(TYPE_VARCHAR)
+			require.NoError(t, err)
 			assert.Equal(
 				t,
 				2,
@@ -588,7 +590,8 @@ func TestTypeInfoCaching(t *testing.T) {
 			)
 
 			// Same type doesn't increase cache size
-			NewTypeInfo(TYPE_INTEGER)
+			_, err = NewTypeInfo(TYPE_INTEGER)
+			require.NoError(t, err)
 			assert.Equal(
 				t,
 				2,
@@ -600,9 +603,12 @@ func TestTypeInfoCaching(t *testing.T) {
 	t.Run(
 		"ClearTypeInfoCache clears all entries",
 		func(t *testing.T) {
-			NewTypeInfo(TYPE_INTEGER)
-			NewTypeInfo(TYPE_VARCHAR)
-			NewTypeInfo(TYPE_BOOLEAN)
+			_, err := NewTypeInfo(TYPE_INTEGER)
+			require.NoError(t, err)
+			_, err = NewTypeInfo(TYPE_VARCHAR)
+			require.NoError(t, err)
+			_, err = NewTypeInfo(TYPE_BOOLEAN)
+			require.NoError(t, err)
 
 			assert.Greater(
 				t,

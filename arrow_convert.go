@@ -19,7 +19,7 @@ func DataChunkToRecordBatch(
 	chunk *DataChunk,
 	schema *arrow.Schema,
 	alloc memory.Allocator,
-) (arrow.Record, error) {
+) (arrow.RecordBatch, error) {
 	if chunk == nil {
 		return nil, errors.New(
 			"chunk cannot be nil",
@@ -421,7 +421,7 @@ func appendValueToBuilder(
 // The chunk must be pre-initialized with the correct column types.
 // Uses copy semantics for memory safety.
 func RecordBatchToDataChunk(
-	record arrow.Record,
+	record arrow.RecordBatch,
 	chunk *DataChunk,
 ) error {
 	if record == nil {

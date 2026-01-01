@@ -174,6 +174,8 @@ func (e *Executor) Execute(
 		return e.executeCommit(execCtx, p)
 	case *planner.PhysicalRollback:
 		return e.executeRollback(execCtx, p)
+	case *planner.PhysicalWindow:
+		return e.executeWindow(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -1155,6 +1157,148 @@ func (e *Executor) executeRollback(
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
 
+// executeWindow executes a window function operator.
+// Window functions are blocking operators that materialize all input,
+// partition/sort, evaluate window functions, and emit results.
+func (e *Executor) executeWindow(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalWindow,
+) (*ExecutionResult, error) {
+	// First execute child
+	childResult, err := e.Execute(
+		ctx.Context,
+		plan.Child,
+		ctx.Args,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get child columns from the child plan
+	childColumns := plan.Child.OutputColumns()
+
+	// Create the window executor
+	// We need to create a PhysicalOperator for the child that yields our rows
+	childOp := &resultSetOperator{
+		rows:    childResult.Rows,
+		columns: childColumns,
+		index:   0,
+	}
+
+	windowExec, err := NewPhysicalWindowExecutor(
+		plan,
+		childOp,
+		childColumns,
+		e,
+		ctx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect results
+	result := &ExecutionResult{
+		Rows:    make([]map[string]any, 0),
+		Columns: make([]string, 0),
+	}
+
+	// Build column names: child columns + window result columns
+	for _, col := range childColumns {
+		if col.Column != "" {
+			result.Columns = append(result.Columns, col.Column)
+		} else {
+			result.Columns = append(result.Columns, "col")
+		}
+	}
+	for _, windowExpr := range plan.WindowExprs {
+		result.Columns = append(result.Columns, windowExpr.FunctionName)
+	}
+
+	// Collect all chunks from the window executor
+	for {
+		chunk, err := windowExec.Next()
+		if err != nil {
+			return nil, err
+		}
+		if chunk == nil {
+			break
+		}
+
+		// Convert chunk to rows
+		for i := 0; i < chunk.Count(); i++ {
+			row := make(map[string]any)
+			for j := 0; j < len(result.Columns); j++ {
+				row[result.Columns[j]] = chunk.GetValue(i, j)
+			}
+			result.Rows = append(result.Rows, row)
+		}
+	}
+
+	return result, nil
+}
+
+// resultSetOperator wraps an ExecutionResult to provide PhysicalOperator interface.
+// This allows us to feed the results of child execution into the window executor.
+type resultSetOperator struct {
+	rows    []map[string]any
+	columns []planner.ColumnBinding
+	index   int
+}
+
+func (r *resultSetOperator) Next() (*storage.DataChunk, error) {
+	if r.index >= len(r.rows) {
+		return nil, nil
+	}
+
+	// Create types for the chunk
+	types := make([]dukdb.Type, len(r.columns))
+	for i, col := range r.columns {
+		types[i] = col.Type
+	}
+
+	// Create chunk with capacity for remaining rows
+	remaining := len(r.rows) - r.index
+	chunkSize := storage.StandardVectorSize
+	if remaining < chunkSize {
+		chunkSize = remaining
+	}
+
+	chunk := storage.NewDataChunkWithCapacity(types, chunkSize)
+
+	// Add rows to chunk
+	for i := 0; i < chunkSize && r.index < len(r.rows); i++ {
+		row := r.rows[r.index]
+		values := make([]any, len(r.columns))
+		for j, col := range r.columns {
+			// Try column name first
+			if val, ok := row[col.Column]; ok {
+				values[j] = val
+			} else if val, ok := row[col.Table+"."+col.Column]; ok {
+				values[j] = val
+			} else {
+				values[j] = nil
+			}
+		}
+		chunk.AppendRow(values)
+		r.index++
+	}
+
+	return chunk, nil
+}
+
+func (r *resultSetOperator) GetTypes() []dukdb.TypeInfo {
+	types := make([]dukdb.TypeInfo, len(r.columns))
+	for i, col := range r.columns {
+		info, err := dukdb.NewTypeInfo(col.Type)
+		if err != nil {
+			types[i] = &basicTypeInfo{typ: col.Type}
+		} else {
+			types[i] = info
+		}
+	}
+	return types
+}
+
 // Helper functions
 
 func formatGroupKey(values []any) string {
@@ -1167,21 +1311,6 @@ func formatGroupKey(values []any) string {
 			result += "|"
 		}
 		result += formatValue(v)
-	}
-
-	return result
-}
-
-func formatRowKey(
-	row map[string]any,
-	columns []string,
-) string {
-	result := ""
-	for i, col := range columns {
-		if i > 0 {
-			result += "|"
-		}
-		result += formatValue(row[col])
 	}
 
 	return result

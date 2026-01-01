@@ -47,6 +47,14 @@ func TestAllCompatibility(t *testing.T) {
 	t.Run("DML", func(t *testing.T) {
 		runner.RunTests(t, DMLCompatibilityTests)
 	})
+
+	t.Run("GetTableNames", func(t *testing.T) {
+		runner.RunTests(t, GetTableNamesCompatibilityTests)
+	})
+
+	t.Run("Window", func(t *testing.T) {
+		runner.RunTests(t, WindowCompatibilityTests)
+	})
 }
 
 // TestSQLCompatibility runs only SQL compatibility tests.
@@ -83,6 +91,12 @@ func TestFeatureCompatibility(t *testing.T) {
 func TestDMLCompatibility(t *testing.T) {
 	runner := NewTestRunner(nil)
 	runner.RunTests(t, DMLCompatibilityTests)
+}
+
+// TestGetTableNamesCompatibility runs only GetTableNames compatibility tests.
+func TestGetTableNamesCompatibility(t *testing.T) {
+	runner := NewTestRunner(nil)
+	runner.RunTests(t, GetTableNamesCompatibilityTests)
 }
 
 // TestQuickCompatibility runs a subset of tests for quick validation.
@@ -186,14 +200,14 @@ type CategoryReport struct {
 // GetTestCounts returns the total number of tests in each category.
 func GetTestCounts() map[string]int {
 	return map[string]int{
-		"SQL":    len(SQLCompatibilityTests),
-		"Types":  len(TypeCompatibilityTests),
-		"API":    len(APICompatibilityTests),
-		"Errors": len(ErrorCompatibilityTests),
-		"Features": len(
-			FeatureCompatibilityTests,
-		),
-		"DML": len(DMLCompatibilityTests),
+		"SQL":           len(SQLCompatibilityTests),
+		"Types":         len(TypeCompatibilityTests),
+		"API":           len(APICompatibilityTests),
+		"Errors":        len(ErrorCompatibilityTests),
+		"Features":      len(FeatureCompatibilityTests),
+		"DML":           len(DMLCompatibilityTests),
+		"GetTableNames": len(GetTableNamesCompatibilityTests),
+		"Window":        len(WindowCompatibilityTests),
 	}
 }
 

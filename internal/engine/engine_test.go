@@ -6,18 +6,23 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	dukdb "github.com/dukdb/dukdb-go"
 )
 
 func TestEngineOpen(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	if conn == nil {
 		t.Error("Connection should not be nil")
@@ -26,13 +31,17 @@ func TestEngineOpen(t *testing.T) {
 
 func TestEnginePing(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	err = conn.Ping(context.Background())
 	if err != nil {
@@ -42,13 +51,17 @@ func TestEnginePing(t *testing.T) {
 
 func TestEngineCreateAndQuery(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create table
 	_, err = conn.Execute(
@@ -103,13 +116,17 @@ func TestEngineCreateAndQuery(t *testing.T) {
 
 func TestEngineMultipleOperations(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create table
 	_, err = conn.Execute(
@@ -200,13 +217,17 @@ func TestEngineMultipleOperations(t *testing.T) {
 
 func TestEnginePreparedStatement(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create table
 	_, err = conn.Execute(
@@ -226,7 +247,9 @@ func TestEnginePreparedStatement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	if stmt.NumInput() != 0 {
 		t.Errorf(
@@ -238,7 +261,9 @@ func TestEnginePreparedStatement(t *testing.T) {
 
 func TestEngineCloseConnection(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
@@ -262,13 +287,17 @@ func TestEngineCloseConnection(t *testing.T) {
 
 func TestEngineConcurrentQueries(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create table
 	_, err = conn.Execute(
@@ -322,7 +351,9 @@ func TestEngineConcurrentQueries(t *testing.T) {
 
 func TestEngineMultipleConnections(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	// Open multiple connections
 	var conns []dukdb.BackendConn
@@ -345,7 +376,9 @@ func TestEngineMultipleConnections(t *testing.T) {
 
 func TestEngineConfig(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	config := &dukdb.Config{
 		AccessMode: "read_write",
@@ -360,7 +393,9 @@ func TestEngineConfig(t *testing.T) {
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Verify connection works
 	err = conn.Ping(context.Background())
@@ -371,13 +406,17 @@ func TestEngineConfig(t *testing.T) {
 
 func TestEngineExpressionQuery(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Query without table
 	rows, _, err := conn.Query(
@@ -470,13 +509,17 @@ func TestBackendInterface(t *testing.T) {
 
 func TestStatementType(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table
 	_, err = conn.Execute(
@@ -537,7 +580,9 @@ func TestStatementType(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			intro, ok := stmt.(dukdb.BackendStmtIntrospector)
 			if !ok {
@@ -562,13 +607,17 @@ func TestStatementTypeClosedStatement(
 	t *testing.T,
 ) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	stmt, err := conn.Prepare(
 		context.Background(),
@@ -579,7 +628,7 @@ func TestStatementTypeClosedStatement(
 	}
 
 	// Close the statement first
-	stmt.Close()
+	require.NoError(t, stmt.Close())
 
 	intro := stmt.(*EngineStmt)
 	stmtType := intro.StatementType()
@@ -595,13 +644,17 @@ func TestStatementTypeClosedStatement(
 
 func TestParameterMetadata(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	t.Run(
 		"positional parameters",
@@ -616,7 +669,9 @@ func TestParameterMetadata(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			if stmt.NumInput() != 3 {
 				t.Errorf(
@@ -640,7 +695,9 @@ func TestParameterMetadata(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			if stmt.NumInput() != 3 {
 				t.Errorf(
@@ -659,7 +716,9 @@ func TestParameterMetadata(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Prepare failed: %v", err)
 		}
-		defer stmt.Close()
+		defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 		if stmt.NumInput() != 0 {
 			t.Errorf(
@@ -672,13 +731,17 @@ func TestParameterMetadata(t *testing.T) {
 
 func TestColumnMetadata(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table
 	_, err = conn.Execute(
@@ -703,7 +766,9 @@ func TestColumnMetadata(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -776,7 +841,9 @@ func TestColumnMetadata(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Prepare failed: %v", err)
 		}
-		defer stmt.Close()
+		defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 		intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -812,7 +879,9 @@ func TestColumnMetadata(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -830,13 +899,17 @@ func TestColumnMetadata(t *testing.T) {
 
 func TestParamNameAndType(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	stmt, err := conn.Prepare(
 		context.Background(),
@@ -845,7 +918,9 @@ func TestParamNameAndType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -897,13 +972,17 @@ func TestStatementIntrospectionWithAliases(
 	t *testing.T,
 ) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table
 	_, err = conn.Execute(
@@ -922,7 +1001,9 @@ func TestStatementIntrospectionWithAliases(
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -1009,13 +1090,17 @@ func TestStmtTypeConstants(t *testing.T) {
 
 func TestBoundExecution(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table
 	_, err = conn.Execute(
@@ -1050,7 +1135,9 @@ func TestBoundExecution(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			// Execute with bound parameter
 			rows, cols, err := stmt.Query(
@@ -1097,7 +1184,9 @@ func TestBoundExecution(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			// Execute with bound parameters
 			affected, err := stmt.Execute(
@@ -1142,13 +1231,17 @@ func TestBoundExecution(t *testing.T) {
 
 func TestColumnTypeInfo(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table with various types
 	_, err = conn.Execute(
@@ -1167,7 +1260,9 @@ func TestColumnTypeInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -1261,13 +1356,17 @@ func TestColumnTypeInfo(t *testing.T) {
 
 func TestParameterTypeInference(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Create a test table with various column types
 	_, err = conn.Execute(
@@ -1399,7 +1498,9 @@ func TestParameterTypeInference(t *testing.T) {
 					err,
 				)
 			}
-			defer stmt.Close()
+			defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 			actualType := intro.ParamType(
@@ -1423,13 +1524,17 @@ func TestParameterTypeInferenceBETWEEN(
 	t *testing.T,
 ) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	_, err = conn.Execute(
 		context.Background(),
@@ -1448,7 +1553,9 @@ func TestParameterTypeInferenceBETWEEN(
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -1473,13 +1580,17 @@ func TestParameterTypeInferenceINList(
 	t *testing.T,
 ) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	_, err = conn.Execute(
 		context.Background(),
@@ -1498,7 +1609,9 @@ func TestParameterTypeInferenceINList(
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		require.NoError(t, stmt.Close())
+	}()
 
 	intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -1518,13 +1631,17 @@ func TestParameterTypeInferenceINList(
 
 func TestConnectionID_NonZero(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 	id := engineConn.ID()
@@ -1536,7 +1653,9 @@ func TestConnectionID_NonZero(t *testing.T) {
 
 func TestConnectionID_Uniqueness(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	// Create 100 connections and verify all IDs are unique
 	ids := make(map[uint64]bool)
@@ -1559,19 +1678,23 @@ func TestConnectionID_Uniqueness(t *testing.T) {
 
 	// Clean up
 	for _, conn := range conns {
-		conn.Close()
+		require.NoError(t, conn.Close())
 	}
 }
 
 func TestConnectionID_Stability(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 	firstID := engineConn.ID()
@@ -1592,19 +1715,25 @@ func TestConnectionID_Stability(t *testing.T) {
 
 func TestConnectionID_DifferentConnections(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn1, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open conn1 failed: %v", err)
 	}
-	defer conn1.Close()
+	defer func() {
+		require.NoError(t, conn1.Close())
+	}()
 
 	conn2, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open conn2 failed: %v", err)
 	}
-	defer conn2.Close()
+	defer func() {
+		require.NoError(t, conn2.Close())
+	}()
 
 	engineConn1 := conn1.(*EngineConn)
 	engineConn2 := conn2.(*EngineConn)
@@ -1622,7 +1751,9 @@ func TestConnectionID_DifferentConnections(t *testing.T) {
 
 func TestConnectionID_Concurrent(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	// Create 100 connections concurrently
 	var wg sync.WaitGroup
@@ -1638,7 +1769,9 @@ func TestConnectionID_Concurrent(t *testing.T) {
 				errors <- err
 				return
 			}
-			defer conn.Close()
+			defer func() {
+				require.NoError(t, conn.Close())
+			}()
 
 			engineConn := conn.(*EngineConn)
 			ids <- engineConn.ID()
@@ -1666,13 +1799,17 @@ func TestConnectionID_Concurrent(t *testing.T) {
 
 func TestConnectionID_ConcurrentCalls(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	engineConn := conn.(*EngineConn)
 	expectedID := engineConn.ID()
@@ -1704,7 +1841,9 @@ func TestConnectionID_ConcurrentCalls(t *testing.T) {
 
 func TestConnectionIsClosed(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {
@@ -1732,7 +1871,9 @@ func TestConnectionIsClosed(t *testing.T) {
 
 func TestConnectionID_AfterClose(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer func() {
+		require.NoError(t, engine.Close())
+	}()
 
 	conn, err := engine.Open(":memory:", nil)
 	if err != nil {

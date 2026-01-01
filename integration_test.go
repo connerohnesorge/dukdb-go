@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // testMockBackend implements Backend for testing purposes.
@@ -168,7 +170,9 @@ func TestDriverOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Driver.Open failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	// Verify connection works
 	if conn == nil {
@@ -213,7 +217,9 @@ func TestConnectorConnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -224,7 +230,9 @@ func TestConnectorConnect(t *testing.T) {
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	if conn == nil {
 		t.Error(
@@ -243,7 +251,9 @@ func TestConnectorLazyInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	// Backend should not be opened yet
 	backend.mu.Lock()
@@ -265,7 +275,7 @@ func TestConnectorLazyInit(t *testing.T) {
 			err,
 		)
 	}
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	backend.mu.Lock()
 	if backend.openCalled != 1 {
@@ -286,7 +296,7 @@ func TestConnectorLazyInit(t *testing.T) {
 			err,
 		)
 	}
-	conn2.Close()
+	require.NoError(t, conn2.Close())
 
 	backend.mu.Lock()
 	if backend.openCalled != 1 {
@@ -310,7 +320,9 @@ func TestConnectorContextCancellation(
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	// Initialize the backend first
 	conn, err := connector.Connect(
@@ -322,7 +334,7 @@ func TestConnectorContextCancellation(
 			err,
 		)
 	}
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	// Create cancelled context
 	ctx, cancel := context.WithCancel(
@@ -361,7 +373,7 @@ func TestConnectorClose(t *testing.T) {
 			err,
 		)
 	}
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	// Close connector
 	if err := connector.Close(); err != nil {
@@ -401,7 +413,9 @@ func TestConnPingIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -412,7 +426,9 @@ func TestConnPingIntegration(t *testing.T) {
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	pinger, ok := conn.(driver.Pinger)
 	if !ok {
@@ -447,7 +463,9 @@ func TestConnResetSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -458,7 +476,9 @@ func TestConnResetSession(t *testing.T) {
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	resetter, ok := conn.(driver.SessionResetter)
 	if !ok {
@@ -487,7 +507,9 @@ func TestConnResetSessionWithTransaction(
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -498,7 +520,9 @@ func TestConnResetSessionWithTransaction(
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	c := conn.(*Conn)
 
@@ -539,7 +563,9 @@ func TestConnIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -566,7 +592,7 @@ func TestConnIsValid(t *testing.T) {
 	}
 
 	// Close connection
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	// Should be invalid after close
 	if validator.IsValid() {
@@ -593,7 +619,9 @@ func TestConnInitCallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -604,7 +632,9 @@ func TestConnInitCallback(t *testing.T) {
 			err,
 		)
 	}
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 
 	if !initCalled {
 		t.Error(
@@ -631,7 +661,7 @@ func TestDriverThreadSafety(t *testing.T) {
 
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}()
 	}
 
@@ -656,7 +686,9 @@ func TestConnectorThreadSafety(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	var wg sync.WaitGroup
 	errors := make(chan error, 100)
@@ -674,7 +706,7 @@ func TestConnectorThreadSafety(t *testing.T) {
 
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}()
 	}
 
@@ -699,10 +731,14 @@ func TestConnectionPooling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	db := sql.OpenDB(connector)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	// Configure pool
 	db.SetMaxOpenConns(5)
@@ -749,10 +785,14 @@ func TestHealthCheckWithPool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	db := sql.OpenDB(connector)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	// Ping to establish connection
 	if err := db.Ping(); err != nil {
@@ -785,7 +825,9 @@ func TestNewConnectorWithConfig(t *testing.T) {
 			err,
 		)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	if connector.Config().Path != config.Path {
 		t.Errorf(
@@ -816,7 +858,9 @@ func TestNewConnectorWithNilConfig(t *testing.T) {
 			err,
 		)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	// Should use default config with :memory:
 	if connector.Config().Path != ":memory:" {
@@ -837,7 +881,9 @@ func TestConnPingAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -850,7 +896,7 @@ func TestConnPingAfterClose(t *testing.T) {
 	}
 
 	// Close the connection
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	// Ping should fail
 	pinger := conn.(driver.Pinger)
@@ -874,7 +920,9 @@ func TestConnResetSessionAfterClose(
 	if err != nil {
 		t.Fatalf("NewConnector failed: %v", err)
 	}
-	defer connector.Close()
+	defer func() {
+		require.NoError(t, connector.Close())
+	}()
 
 	conn, err := connector.Connect(
 		context.Background(),
@@ -887,7 +935,7 @@ func TestConnResetSessionAfterClose(
 	}
 
 	// Close the connection
-	conn.Close()
+	require.NoError(t, conn.Close())
 
 	// ResetSession should fail
 	resetter := conn.(driver.SessionResetter)

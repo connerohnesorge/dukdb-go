@@ -64,6 +64,12 @@ func (b *Binder) bindExpr(
 		return b.bindStarExpr(e)
 	case *parser.SelectStmt:
 		return b.bindSelect(e)
+	case *parser.ExtractExpr:
+		return b.bindExtractExpr(e)
+	case *parser.IntervalLiteral:
+		return b.bindIntervalLiteral(e)
+	case *parser.WindowExpr:
+		return b.bindWindowExpr(e)
 	default:
 		return nil, b.errorf("unsupported expression type: %T", expr)
 	}
@@ -537,4 +543,299 @@ func (b *Binder) bindStarExpr(
 	}
 
 	return bound, nil
+}
+
+// bindExtractExpr binds an EXTRACT(part FROM source) expression.
+// The source should be a temporal type (DATE, TIMESTAMP, or TIME).
+// Returns DOUBLE per SQL standard.
+func (b *Binder) bindExtractExpr(
+	e *parser.ExtractExpr,
+) (*BoundExtractExpr, error) {
+	// Bind the source expression - expect a temporal type
+	source, err := b.bindExpr(e.Source, dukdb.TYPE_TIMESTAMP)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BoundExtractExpr{
+		Part:   e.Part,
+		Source: source,
+	}, nil
+}
+
+// bindIntervalLiteral binds an INTERVAL literal expression.
+// Returns TYPE_INTERVAL with the parsed months, days, and microseconds components.
+func (b *Binder) bindIntervalLiteral(
+	e *parser.IntervalLiteral,
+) (*BoundIntervalLiteral, error) {
+	return &BoundIntervalLiteral{
+		Months: e.Months,
+		Days:   e.Days,
+		Micros: e.Micros,
+	}, nil
+}
+
+// bindWindowExpr binds a window expression.
+// This validates the window function, binds all subexpressions, applies default frame,
+// and infers the result type.
+func (b *Binder) bindWindowExpr(
+	e *parser.WindowExpr,
+) (*BoundWindowExpr, error) {
+	funcName := strings.ToUpper(e.Function.Name)
+
+	// Determine function type and validate it can be used as a window function
+	var funcType WindowFunctionType
+	var supportsIgnoreNulls bool
+
+	if info := GetWindowFunctionInfo(funcName); info != nil {
+		funcType = info.FuncType
+		supportsIgnoreNulls = info.SupportsIgnoreNulls
+
+		// Validate argument count
+		argCount := len(e.Function.Args)
+		if argCount < info.MinArgs || argCount > info.MaxArgs {
+			if info.MinArgs == info.MaxArgs {
+				return nil, b.errorf(
+					"window function %s requires exactly %d argument(s), got %d",
+					funcName, info.MinArgs, argCount)
+			}
+			return nil, b.errorf(
+				"window function %s requires between %d and %d arguments, got %d",
+				funcName, info.MinArgs, info.MaxArgs, argCount)
+		}
+	} else if IsAggregateWindowCapable(funcName) {
+		funcType = WindowFunctionAggregate
+		supportsIgnoreNulls = false
+	} else {
+		return nil, b.errorf(
+			"function %s cannot be used as a window function", e.Function.Name)
+	}
+
+	// Validate IGNORE NULLS is only used with value functions
+	if e.IgnoreNulls && !supportsIgnoreNulls {
+		return nil, b.errorf(
+			"IGNORE NULLS can only be used with LAG, LEAD, FIRST_VALUE, LAST_VALUE, or NTH_VALUE")
+	}
+
+	// Validate FILTER is only used with aggregate functions
+	if e.Filter != nil && funcType != WindowFunctionAggregate {
+		return nil, b.errorf(
+			"FILTER clause can only be used with aggregate window functions")
+	}
+
+	// Validate DISTINCT is only used with aggregate functions
+	if e.Distinct && funcType != WindowFunctionAggregate {
+		return nil, b.errorf(
+			"DISTINCT can only be used with aggregate window functions")
+	}
+
+	// Bind function arguments
+	boundArgs := make([]BoundExpr, 0, len(e.Function.Args))
+	for _, arg := range e.Function.Args {
+		bound, err := b.bindExpr(arg, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundArgs = append(boundArgs, bound)
+	}
+
+	// Function-specific argument validation
+	if err := b.validateWindowFunctionArgs(funcName, boundArgs); err != nil {
+		return nil, err
+	}
+
+	// Bind PARTITION BY expressions
+	partitionBy := make([]BoundExpr, 0, len(e.PartitionBy))
+	for _, expr := range e.PartitionBy {
+		bound, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		partitionBy = append(partitionBy, bound)
+	}
+
+	// Bind ORDER BY expressions
+	orderBy := make([]BoundWindowOrder, 0, len(e.OrderBy))
+	for _, ob := range e.OrderBy {
+		bound, err := b.bindExpr(ob.Expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		orderBy = append(orderBy, BoundWindowOrder{
+			Expr:       bound,
+			Desc:       ob.Desc,
+			NullsFirst: ob.NullsFirst,
+		})
+	}
+
+	// Apply default frame based on ORDER BY presence
+	frame := e.Frame
+	if frame == nil {
+		if len(orderBy) > 0 {
+			// Default: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+			frame = &parser.WindowFrame{
+				Type: parser.FrameTypeRange,
+				Start: parser.WindowBound{
+					Type: parser.BoundUnboundedPreceding,
+				},
+				End: parser.WindowBound{
+					Type: parser.BoundCurrentRow,
+				},
+				Exclude: parser.ExcludeNoOthers,
+			}
+		} else {
+			// Default: ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+			frame = &parser.WindowFrame{
+				Type: parser.FrameTypeRows,
+				Start: parser.WindowBound{
+					Type: parser.BoundUnboundedPreceding,
+				},
+				End: parser.WindowBound{
+					Type: parser.BoundUnboundedFollowing,
+				},
+				Exclude: parser.ExcludeNoOthers,
+			}
+		}
+	}
+
+	// Validate frame
+	if err := b.validateWindowFrame(frame, orderBy); err != nil {
+		return nil, err
+	}
+
+	// Bind FILTER expression
+	var boundFilter BoundExpr
+	if e.Filter != nil {
+		var err error
+		boundFilter, err = b.bindExpr(e.Filter, dukdb.TYPE_BOOLEAN)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Infer result type
+	resType := InferWindowFunctionResultType(funcName, boundArgs)
+
+	return &BoundWindowExpr{
+		FunctionName: funcName,
+		FunctionType: funcType,
+		Args:         boundArgs,
+		PartitionBy:  partitionBy,
+		OrderBy:      orderBy,
+		Frame:        frame,
+		ResType:      resType,
+		IgnoreNulls:  e.IgnoreNulls,
+		Filter:       boundFilter,
+		Distinct:     e.Distinct,
+	}, nil
+}
+
+// validateWindowFunctionArgs validates function-specific arguments.
+func (b *Binder) validateWindowFunctionArgs(funcName string, args []BoundExpr) error {
+	switch funcName {
+	case "NTILE":
+		// NTILE argument must be a positive integer
+		if len(args) > 0 {
+			if lit, ok := args[0].(*BoundLiteral); ok {
+				if val, ok := getIntValue(lit.Value); ok && val <= 0 {
+					return b.errorf("NTILE bucket count must be a positive integer, got %d", val)
+				}
+			}
+		}
+
+	case "LAG", "LEAD":
+		// Offset (second arg) must be non-negative
+		if len(args) >= 2 {
+			if lit, ok := args[1].(*BoundLiteral); ok {
+				if val, ok := getIntValue(lit.Value); ok && val < 0 {
+					return b.errorf("%s offset must be non-negative, got %d", funcName, val)
+				}
+			}
+		}
+
+	case "NTH_VALUE":
+		// Index (second arg) must be positive
+		if len(args) >= 2 {
+			if lit, ok := args[1].(*BoundLiteral); ok {
+				if val, ok := getIntValue(lit.Value); ok && val <= 0 {
+					return b.errorf("NTH_VALUE index must be positive, got %d", val)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateWindowFrame validates the window frame specification.
+func (b *Binder) validateWindowFrame(frame *parser.WindowFrame, orderBy []BoundWindowOrder) error {
+	if frame == nil {
+		return nil
+	}
+
+	// RANGE frame requires exactly one ORDER BY column
+	if frame.Type == parser.FrameTypeRange {
+		// Check if any bound uses an offset (N PRECEDING or N FOLLOWING)
+		hasOffset := (frame.Start.Type == parser.BoundPreceding || frame.Start.Type == parser.BoundFollowing) ||
+			(frame.End.Type == parser.BoundPreceding || frame.End.Type == parser.BoundFollowing)
+
+		if hasOffset && len(orderBy) != 1 {
+			return b.errorf("RANGE frame with offset requires exactly one ORDER BY column, got %d", len(orderBy))
+		}
+	}
+
+	// Validate frame bounds are logically valid (start <= end)
+	if !isValidFrameBounds(frame.Start.Type, frame.End.Type) {
+		return b.errorf("window frame start must not be after frame end")
+	}
+
+	return nil
+}
+
+// isValidFrameBounds checks if start bound <= end bound.
+func isValidFrameBounds(start, end parser.BoundType) bool {
+	// Order: UNBOUNDED_PRECEDING < PRECEDING < CURRENT_ROW < FOLLOWING < UNBOUNDED_FOLLOWING
+	startRank := boundTypeRank(start)
+	endRank := boundTypeRank(end)
+	return startRank <= endRank
+}
+
+// boundTypeRank returns the relative order of a bound type.
+func boundTypeRank(bt parser.BoundType) int {
+	switch bt {
+	case parser.BoundUnboundedPreceding:
+		return 0
+	case parser.BoundPreceding:
+		return 1
+	case parser.BoundCurrentRow:
+		return 2
+	case parser.BoundFollowing:
+		return 3
+	case parser.BoundUnboundedFollowing:
+		return 4
+	default:
+		return 2 // Default to CURRENT_ROW rank
+	}
+}
+
+// getIntValue extracts an integer value from a literal.
+func getIntValue(v any) (int64, bool) {
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int8:
+		return int64(val), true
+	case int16:
+		return int64(val), true
+	case int32:
+		return int64(val), true
+	case int64:
+		return val, true
+	case float32:
+		return int64(val), true
+	case float64:
+		return int64(val), true
+	default:
+		return 0, false
+	}
 }

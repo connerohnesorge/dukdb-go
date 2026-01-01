@@ -118,7 +118,9 @@ func testCase(t *testing.T, db *sql.DB) {
 		FROM case_test ORDER BY val
 	`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		require.NoError(t, rows.Close())
+	}()
 
 	expected := []string{"one", "two", "other"}
 	var idx int

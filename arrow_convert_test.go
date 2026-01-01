@@ -525,19 +525,19 @@ func TestRoundTrip_DataChunk_RecordBatch(
 	require.NoError(t, err)
 
 	// Set values
-	original.SetValue(0, 0, int32(42))
-	original.SetValue(1, 0, "hello")
-	original.SetValue(2, 0, true)
+	require.NoError(t, original.SetValue(0, 0, int32(42)))
+	require.NoError(t, original.SetValue(1, 0, "hello"))
+	require.NoError(t, original.SetValue(2, 0, true))
 
-	original.SetValue(0, 1, nil) // NULL
-	original.SetValue(1, 1, "world")
-	original.SetValue(2, 1, false)
+	require.NoError(t, original.SetValue(0, 1, nil)) // NULL
+	require.NoError(t, original.SetValue(1, 1, "world"))
+	require.NoError(t, original.SetValue(2, 1, false))
 
-	original.SetValue(0, 2, int32(99))
-	original.SetValue(1, 2, nil) // NULL
-	original.SetValue(2, 2, true)
+	require.NoError(t, original.SetValue(0, 2, int32(99)))
+	require.NoError(t, original.SetValue(1, 2, nil)) // NULL
+	require.NoError(t, original.SetValue(2, 2, true))
 
-	original.SetSize(3)
+	require.NoError(t, original.SetSize(3))
 
 	// Convert to Arrow
 	schema := arrow.NewSchema([]arrow.Field{
@@ -754,8 +754,8 @@ func TestDataChunkToRecordBatch_ErrorCases(
 
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	chunk, _ := NewDataChunk([]TypeInfo{intInfo})
-	chunk.SetSize(1)
-	chunk.SetValue(0, 0, int32(42))
+	require.NoError(t, chunk.SetSize(1))
+	require.NoError(t, chunk.SetValue(0, 0, int32(42)))
 
 	alloc := memory.NewGoAllocator()
 
