@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ============================================================================
-// Phase D: End-to-End DML Tests (Tasks 4.7-4.10)
-// ============================================================================
-
 // TestPhaseD_Insert tests all INSERT scenarios (Task 4.7)
 func TestPhaseD_Insert(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()

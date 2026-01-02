@@ -12,9 +12,7 @@ import (
 	"github.com/coder/quartz"
 )
 
-// Core Types
-
-// ArgregateFuncConfig defines aggregate function signature and behavior.
+// AggregateFuncConfig defines aggregate function signature and behavior.
 type AggregateFuncConfig struct {
 	// InputTypeInfos contains Type information for each input parameter of the aggregate function.
 	// Cannot be empty, and each element cannot be nil.
@@ -97,10 +95,6 @@ type AggregateFunc struct {
 	Config   AggregateFuncConfig
 	Executor AggregateFuncExecutor
 }
-
-// =============================================================================
-// Aggregate Function Context (Phase 1.2)
-// =============================================================================
 
 // AggregateFuncContext provides runtime context with clock for deterministic execution.
 // Matches ScalarFuncContext pattern from scalar_udf.go.
@@ -359,10 +353,6 @@ func (r *aggregateFuncRegistry) IsVolatile(
 	return false
 }
 
-// =============================================================================
-// Group State and Execution Engine (Phase 2)
-// =============================================================================
-
 // GroupState manages state for each group in GROUP BY.
 type GroupState struct {
 	key   []any
@@ -507,10 +497,9 @@ func (s *AggregateExecutionState) CombineWith(
 
 // Finalize produces final results for all groups.
 func (s *AggregateExecutionState) Finalize() ([]GroupResult, error) {
-	_ = s.clock.Now() // Tag: "aggregate", "finalize", "start"
+	// Tag: "aggregate", "finalize", "start"
 
-	var results []GroupResult
-
+	var results = make([]GroupResult, len(s.groups))
 	// Handle ungrouped aggregation first
 	if s.noGroupKey != nil {
 		result, err := s.finalizeGroup(
@@ -540,7 +529,7 @@ func (s *AggregateExecutionState) Finalize() ([]GroupResult, error) {
 		)
 	}
 
-	_ = s.clock.Now() // Tag: "aggregate", "finalize", "end"
+	// Tag: "aggregate", "finalize", "end"
 
 	return results, nil
 }
@@ -592,10 +581,6 @@ func (s *AggregateExecutionState) Cleanup() {
 
 	_ = s.clock.Now() // Tag: "aggregate", "cleanup", "end"
 }
-
-// =============================================================================
-// Group Key Management Helpers (Phase 2.3)
-// =============================================================================
 
 // extractGroupKey extracts the group key from a chunk row.
 func (s *AggregateExecutionState) extractGroupKey(
@@ -685,10 +670,6 @@ func (s *AggregateExecutionState) hasNull(
 
 	return false
 }
-
-// =============================================================================
-// Safe Execution Wrappers (Phase 3)
-// =============================================================================
 
 // safeAggregateUpdate wraps UpdateContextFn with panic recovery.
 func safeAggregateUpdate(
@@ -794,10 +775,6 @@ func safeAggregateDestroy(
 	}()
 	fn(state)
 }
-
-// =============================================================================
-// Public Registration API (Phase 4.2 & 4.3)
-// =============================================================================
 
 // RegisterAggregateUDF registers an aggregate function on a connection.
 // The Conn's clock will be used for deterministic execution in tests.

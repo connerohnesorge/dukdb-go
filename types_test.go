@@ -129,10 +129,6 @@ func TestComposite_Scan_List(t *testing.T) {
 	assert.Equal(t, []int{1, 2, 3, 4, 5}, c.Get())
 }
 
-// ============================================================================
-// Section 6.2: Unit tests for Value methods
-// ============================================================================
-
 func TestUUID_Value(t *testing.T) {
 	u := UUID{
 		0x12,
@@ -322,10 +318,6 @@ func TestDecimal_String(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// Section 6.3: JSON round-trip tests
-// ============================================================================
 
 func TestParseValue_Boolean(t *testing.T) {
 	val, err := ParseValue(
@@ -608,10 +600,6 @@ func TestParseValue_Date(t *testing.T) {
 	assert.Equal(t, 15, tm.Day())
 }
 
-// ============================================================================
-// Section 6.4: Edge case tests
-// ============================================================================
-
 func TestHugeIntConversion(t *testing.T) {
 	// Test round-trip conversion
 	original := hugeInt{
@@ -729,10 +717,6 @@ func TestInferTime(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(3600*1000000), result)
 }
-
-// ============================================================================
-// Section 6.5: API compatibility tests
-// ============================================================================
 
 // TestUUID_ImplementsScanner verifies UUID implements sql.Scanner
 func TestUUID_ImplementsScanner(t *testing.T) {

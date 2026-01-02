@@ -13,10 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ============================================================================
-// Phase D: End-to-End SELECT Tests (Tasks 4.1-4.6)
-// ============================================================================
-
 // TestPhaseD_LiteralSelect tests SELECT with literal values (Task 4.2)
 func TestPhaseD_LiteralSelect(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
