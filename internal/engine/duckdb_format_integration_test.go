@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -102,84 +103,65 @@ func TestIntegrationDuckDBFormatReadWrite(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestIntegrationWALRecovery tests WAL recovery functionality
+// TestIntegrationWALRecovery tests WAL recovery functionality using SQL statements.
 // Task 10.3
-// NOTE: This test uses direct catalog/storage APIs which bypass the SQL executor.
-// The WAL only records SQL operations, so this test is skipped.
-// See wal_ddl_recovery_test.go for SQL-based WAL recovery tests.
+// This test uses SQL statements through the engine connection to properly test WAL recovery.
 func TestIntegrationWALRecovery(t *testing.T) {
-	t.Skip("This test uses direct APIs that bypass SQL and WAL; see wal_ddl_recovery_test.go for WAL tests")
 	t.Parallel()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "wal_test.dukdb")
 
-	// Note: Full WAL recovery (replaying uncommitted transactions) is not yet fully implemented.
-	// This test verifies the foundation for WAL by testing that data persists across sessions.
+	// Phase 1: Create database and write data through SQL
+	{
+		engine := NewEngine()
+		conn, err := engine.Open(dbPath, nil)
+		require.NoError(t, err)
 
-	// Create database and write initial data
-	engine1 := NewEngine()
-	conn1, err := engine1.Open(dbPath, nil)
-	require.NoError(t, err)
-	_ = conn1 // Connection is owned by engine
+		ctx := context.Background()
 
-	tableDef := catalog.NewTableDef(
-		"wal_table",
-		[]*catalog.ColumnDef{
-			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
-			catalog.NewColumnDef("data", dukdb.TYPE_VARCHAR),
-		},
-	)
-	err = engine1.Catalog().CreateTable(tableDef)
-	require.NoError(t, err)
+		// Create table through SQL
+		_, err = conn.Execute(ctx, "CREATE TABLE wal_table (id INTEGER, data VARCHAR)", nil)
+		require.NoError(t, err)
 
-	_, err = engine1.Storage().CreateTable("wal_table", []dukdb.Type{
-		dukdb.TYPE_INTEGER,
-		dukdb.TYPE_VARCHAR,
-	})
-	require.NoError(t, err)
+		// Insert test data through SQL
+		_, err = conn.Execute(ctx, "INSERT INTO wal_table VALUES (1, 'data1')", nil)
+		require.NoError(t, err)
+		_, err = conn.Execute(ctx, "INSERT INTO wal_table VALUES (2, 'data2')", nil)
+		require.NoError(t, err)
+		_, err = conn.Execute(ctx, "INSERT INTO wal_table VALUES (3, 'data3')", nil)
+		require.NoError(t, err)
 
-	table, ok := engine1.Storage().GetTable("wal_table")
-	require.True(t, ok)
+		// Close to persist (simulates "crash" without explicit checkpoint)
+		require.NoError(t, conn.Close())
+		require.NoError(t, engine.Close())
+	}
 
-	// Write all test data in first session
-	err = table.AppendRow([]any{int32(1), "data1"})
-	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(2), "data2"})
-	require.NoError(t, err)
-	err = table.AppendRow([]any{int32(3), "data3"})
-	require.NoError(t, err)
+	// Phase 2: Reopen database and verify data was recovered
+	{
+		engine := NewEngine()
+		conn, err := engine.Open(dbPath, nil)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, conn.Close())
+			require.NoError(t, engine.Close())
+		}()
 
-	// Close to persist
-	err = engine1.Close()
-	require.NoError(t, err)
+		ctx := context.Background()
 
-	// Reopen database and verify data was persisted
-	engine2 := NewEngine()
-	conn2, err := engine2.Open(dbPath, nil)
-	require.NoError(t, err)
-	_ = conn2 // Connection is owned by engine
+		// Query all data and verify
+		rows, cols, err := conn.Query(ctx, "SELECT id, data FROM wal_table ORDER BY id", nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(cols))
+		require.Equal(t, 3, len(rows), "All 3 rows should be persisted")
 
-	table2, ok := engine2.Storage().GetTable("wal_table")
-	require.True(t, ok)
-
-	// Verify all 3 rows were persisted
-	assert.Equal(t, int64(3), table2.RowCount(), "All rows should be persisted")
-
-	scanner := table2.Scan()
-	chunk := scanner.Next()
-	require.NotNil(t, chunk)
-	assert.Equal(t, 3, chunk.Count())
-
-	// Verify data integrity
-	assert.Equal(t, int32(1), chunk.GetValue(0, 0))
-	assert.Equal(t, "data1", chunk.GetValue(0, 1))
-	assert.Equal(t, int32(2), chunk.GetValue(1, 0))
-	assert.Equal(t, "data2", chunk.GetValue(1, 1))
-	assert.Equal(t, int32(3), chunk.GetValue(2, 0))
-	assert.Equal(t, "data3", chunk.GetValue(2, 1))
-
-	err = engine2.Close()
-	require.NoError(t, err)
+		// Verify data integrity
+		assert.Equal(t, int32(1), rows[0]["id"])
+		assert.Equal(t, "data1", rows[0]["data"])
+		assert.Equal(t, int32(2), rows[1]["id"])
+		assert.Equal(t, "data2", rows[1]["data"])
+		assert.Equal(t, int32(3), rows[2]["id"])
+		assert.Equal(t, "data3", rows[2]["data"])
+	}
 }
 
 // TestIntegrationCheckpointRestore tests checkpoint and restore functionality
@@ -410,11 +392,8 @@ func TestIntegrationDuckDBCompatibility(t *testing.T) {
 
 // TestIntegrationLargeDataset tests handling of larger datasets
 // Task 10.7 (scaled down from >1GB to 100K+ rows for CI)
+// Note: This test runs in ~0.1 seconds, so no skip is needed.
 func TestIntegrationLargeDataset(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping large dataset test in short mode")
-	}
-
 	t.Parallel()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "large_test.dukdb")

@@ -17,7 +17,6 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 		name   string
 		sql    string
 		errMsg string
-		skipOK bool // Some parsers are lenient
 	}{
 		{
 			name:   "invalid CREATE TABLE syntax",
@@ -44,14 +43,6 @@ func TestPhaseD_Error_Parser(t *testing.T) {
 				cat,
 				tt.sql,
 			)
-
-			if err == nil && tt.skipOK {
-				t.Skip(
-					"Parser accepts this syntax (lenient parsing)",
-				)
-
-				return
-			}
 
 			require.Error(
 				t,
@@ -406,25 +397,17 @@ func TestPhaseD_Error_DivideByZero(t *testing.T) {
 }
 
 // TestPhaseD_Error_Constraint tests ErrorTypeConstraint for constraint violations.
-// Note: This is only tested if constraints are implemented.
 func TestPhaseD_Error_Constraint(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
-	// Try to create a table with PRIMARY KEY (if supported)
-	// If PRIMARY KEY is not supported yet, this test will be skipped
+	// Create a table with PRIMARY KEY constraint
 	_, err := executeQuery(
 		t,
 		exec,
 		cat,
 		"CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR)",
 	)
-	if err != nil {
-		t.Skip(
-			"PRIMARY KEY constraints not yet implemented",
-		)
-
-		return
-	}
+	require.NoError(t, err, "PRIMARY KEY constraint should be supported")
 
 	// Insert a row
 	_, err = executeQuery(
@@ -435,27 +418,29 @@ func TestPhaseD_Error_Constraint(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Try to insert duplicate primary key
+	// Try to insert duplicate primary key - should fail with constraint error
 	_, err = executeQuery(
 		t,
 		exec,
 		cat,
 		"INSERT INTO users (id, name) VALUES (1, 'Bob')",
 	)
-	if err != nil {
-		var dukErr *dukdb.Error
-		if errors.As(err, &dukErr) {
-			// Should be ErrorTypeConstraint
-			if dukErr.Type == dukdb.ErrorTypeConstraint {
-				t.Log(
-					"Got ErrorTypeConstraint for duplicate key",
-				)
-			} else {
-				t.Logf("Got error type %v for constraint violation (may not be fully implemented)", dukErr.Type)
-			}
-		}
+	require.Error(t, err, "Duplicate primary key should return error")
+
+	var dukErr *dukdb.Error
+	if errors.As(err, &dukErr) {
+		// Should be ErrorTypeConstraint
+		assert.Equal(
+			t,
+			dukdb.ErrorTypeConstraint,
+			dukErr.Type,
+			"should be ErrorTypeConstraint for duplicate primary key",
+		)
+		t.Log("Got ErrorTypeConstraint for duplicate key")
 	} else {
-		t.Skip("Constraint violations not yet enforced")
+		t.Logf("Warning: error is not *dukdb.Error: %T - %v", err, err)
+		// Still verify we got an error
+		assert.Error(t, err)
 	}
 }
 
@@ -467,7 +452,6 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 		name          string
 		sql           string
 		expectedInMsg []string // Strings that should appear in error message
-		skipOK        bool     // Allow skipping if no error
 	}{
 		{
 			name: "missing table name in error",
@@ -503,14 +487,6 @@ func TestPhaseD_Error_Messages(t *testing.T) {
 				cat,
 				tt.sql,
 			)
-
-			if err == nil && tt.skipOK {
-				t.Skip(
-					"Query succeeded (lenient parser)",
-				)
-
-				return
-			}
 
 			require.Error(
 				t,
@@ -559,7 +535,6 @@ func TestPhaseD_Error_TypeClassification(
 		name          string
 		sql           string
 		expectedTypes []dukdb.ErrorType // Acceptable error types
-		skipOK        bool              // Allow skipping if no error
 	}{
 		{
 			name: "parser error",
@@ -594,14 +569,6 @@ func TestPhaseD_Error_TypeClassification(
 				cat,
 				tt.sql,
 			)
-
-			if err == nil && tt.skipOK {
-				t.Skip(
-					"Query succeeded (lenient parser)",
-				)
-
-				return
-			}
 
 			require.Error(
 				t,
