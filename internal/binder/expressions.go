@@ -239,3 +239,14 @@ func (*BoundWindowExpr) boundExprNode() {}
 
 // ResultType returns the result type of the window expression.
 func (w *BoundWindowExpr) ResultType() dukdb.Type { return w.ResType }
+
+// BoundSequenceCall represents a bound sequence function call (NEXTVAL or CURRVAL).
+type BoundSequenceCall struct {
+	FunctionName string // "NEXTVAL" or "CURRVAL"
+	SchemaName   string // Schema containing the sequence
+	SequenceName string // Name of the sequence
+}
+
+func (*BoundSequenceCall) boundExprNode() {}
+
+func (*BoundSequenceCall) ResultType() dukdb.Type { return dukdb.TYPE_BIGINT }

@@ -493,6 +493,142 @@ func (c *PhysicalCopyTo) Children() []PhysicalPlan {
 
 func (*PhysicalCopyTo) OutputColumns() []ColumnBinding { return nil }
 
+// ---------- DDL Physical Plan Nodes ----------
+
+// PhysicalCreateView represents a physical CREATE VIEW operation.
+type PhysicalCreateView struct {
+	Schema      string
+	View        string
+	IfNotExists bool
+	Query       *binder.BoundSelectStmt
+	QueryText   string
+}
+
+func (*PhysicalCreateView) physicalPlanNode() {}
+
+func (*PhysicalCreateView) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateView) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropView represents a physical DROP VIEW operation.
+type PhysicalDropView struct {
+	Schema   string
+	View     string
+	IfExists bool
+}
+
+func (*PhysicalDropView) physicalPlanNode() {}
+
+func (*PhysicalDropView) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropView) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCreateIndex represents a physical CREATE INDEX operation.
+type PhysicalCreateIndex struct {
+	Schema      string
+	Table       string
+	Index       string
+	IfNotExists bool
+	Columns     []string
+	IsUnique    bool
+	TableDef    *catalog.TableDef
+}
+
+func (*PhysicalCreateIndex) physicalPlanNode() {}
+
+func (*PhysicalCreateIndex) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateIndex) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropIndex represents a physical DROP INDEX operation.
+type PhysicalDropIndex struct {
+	Schema   string
+	Index    string
+	IfExists bool
+}
+
+func (*PhysicalDropIndex) physicalPlanNode() {}
+
+func (*PhysicalDropIndex) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropIndex) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCreateSequence represents a physical CREATE SEQUENCE operation.
+type PhysicalCreateSequence struct {
+	Schema      string
+	Sequence    string
+	IfNotExists bool
+	StartWith   int64
+	IncrementBy int64
+	MinValue    *int64
+	MaxValue    *int64
+	IsCycle     bool
+}
+
+func (*PhysicalCreateSequence) physicalPlanNode() {}
+
+func (*PhysicalCreateSequence) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateSequence) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropSequence represents a physical DROP SEQUENCE operation.
+type PhysicalDropSequence struct {
+	Schema   string
+	Sequence string
+	IfExists bool
+}
+
+func (*PhysicalDropSequence) physicalPlanNode() {}
+
+func (*PhysicalDropSequence) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropSequence) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCreateSchema represents a physical CREATE SCHEMA operation.
+type PhysicalCreateSchema struct {
+	Schema      string
+	IfNotExists bool
+}
+
+func (*PhysicalCreateSchema) physicalPlanNode() {}
+
+func (*PhysicalCreateSchema) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateSchema) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropSchema represents a physical DROP SCHEMA operation.
+type PhysicalDropSchema struct {
+	Schema   string
+	IfExists bool
+	Cascade  bool
+}
+
+func (*PhysicalDropSchema) physicalPlanNode() {}
+
+func (*PhysicalDropSchema) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropSchema) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalAlterTable represents a physical ALTER TABLE operation.
+type PhysicalAlterTable struct {
+	Schema       string
+	Table        string
+	TableDef     *catalog.TableDef
+	Operation    int    // AlterTableOp from parser
+	IfExists     bool   // IF EXISTS modifier
+	NewTableName string // RENAME TO
+	OldColumn    string // RENAME COLUMN
+	NewColumn    string // RENAME COLUMN
+	DropColumn   string // DROP COLUMN
+	AddColumn    *catalog.ColumnDef // ADD COLUMN
+}
+
+func (*PhysicalAlterTable) physicalPlanNode() {}
+
+func (*PhysicalAlterTable) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
 // PhysicalVirtualTableScan represents a physical virtual table scan.
 type PhysicalVirtualTableScan struct {
 	Schema       string
@@ -626,6 +762,25 @@ func (p *Planner) createLogicalPlan(
 		return &LogicalRollback{}, nil
 	case *binder.BoundCopyStmt:
 		return p.planCopy(s)
+	// DDL statements
+	case *binder.BoundCreateViewStmt:
+		return p.planCreateView(s)
+	case *binder.BoundDropViewStmt:
+		return p.planDropView(s)
+	case *binder.BoundCreateIndexStmt:
+		return p.planCreateIndex(s)
+	case *binder.BoundDropIndexStmt:
+		return p.planDropIndex(s)
+	case *binder.BoundCreateSequenceStmt:
+		return p.planCreateSequence(s)
+	case *binder.BoundDropSequenceStmt:
+		return p.planDropSequence(s)
+	case *binder.BoundCreateSchemaStmt:
+		return p.planCreateSchema(s)
+	case *binder.BoundDropSchemaStmt:
+		return p.planDropSchema(s)
+	case *binder.BoundAlterTableStmt:
+		return p.planAlterTable(s)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -909,9 +1064,135 @@ func (p *Planner) planCopy(
 	return plan, nil
 }
 
+// DDL planning functions
+
+func (p *Planner) planCreateView(
+	s *binder.BoundCreateViewStmt,
+) (LogicalPlan, error) {
+	return &LogicalCreateView{
+		Schema:      s.Schema,
+		View:        s.View,
+		IfNotExists: s.IfNotExists,
+		Query:       s.Query,
+		QueryText:   s.QueryText,
+	}, nil
+}
+
+func (p *Planner) planDropView(
+	s *binder.BoundDropViewStmt,
+) (LogicalPlan, error) {
+	return &LogicalDropView{
+		Schema:   s.Schema,
+		View:     s.View,
+		IfExists: s.IfExists,
+	}, nil
+}
+
+func (p *Planner) planCreateIndex(
+	s *binder.BoundCreateIndexStmt,
+) (LogicalPlan, error) {
+	return &LogicalCreateIndex{
+		Schema:      s.Schema,
+		Table:       s.Table,
+		Index:       s.Index,
+		IfNotExists: s.IfNotExists,
+		Columns:     s.Columns,
+		IsUnique:    s.IsUnique,
+		TableDef:    s.TableDef,
+	}, nil
+}
+
+func (p *Planner) planDropIndex(
+	s *binder.BoundDropIndexStmt,
+) (LogicalPlan, error) {
+	return &LogicalDropIndex{
+		Schema:   s.Schema,
+		Index:    s.Index,
+		IfExists: s.IfExists,
+	}, nil
+}
+
+func (p *Planner) planCreateSequence(
+	s *binder.BoundCreateSequenceStmt,
+) (LogicalPlan, error) {
+	return &LogicalCreateSequence{
+		Schema:      s.Schema,
+		Sequence:    s.Sequence,
+		IfNotExists: s.IfNotExists,
+		StartWith:   s.StartWith,
+		IncrementBy: s.IncrementBy,
+		MinValue:    s.MinValue,
+		MaxValue:    s.MaxValue,
+		IsCycle:     s.IsCycle,
+	}, nil
+}
+
+func (p *Planner) planDropSequence(
+	s *binder.BoundDropSequenceStmt,
+) (LogicalPlan, error) {
+	return &LogicalDropSequence{
+		Schema:   s.Schema,
+		Sequence: s.Sequence,
+		IfExists: s.IfExists,
+	}, nil
+}
+
+func (p *Planner) planCreateSchema(
+	s *binder.BoundCreateSchemaStmt,
+) (LogicalPlan, error) {
+	return &LogicalCreateSchema{
+		Schema:      s.Schema,
+		IfNotExists: s.IfNotExists,
+	}, nil
+}
+
+func (p *Planner) planDropSchema(
+	s *binder.BoundDropSchemaStmt,
+) (LogicalPlan, error) {
+	return &LogicalDropSchema{
+		Schema:   s.Schema,
+		IfExists: s.IfExists,
+		Cascade:  s.Cascade,
+	}, nil
+}
+
+func (p *Planner) planAlterTable(
+	s *binder.BoundAlterTableStmt,
+) (LogicalPlan, error) {
+	return &LogicalAlterTable{
+		Schema:       s.Schema,
+		Table:        s.Table,
+		TableDef:     s.TableDef,
+		Operation:    int(s.Operation),
+		IfExists:     s.IfExists,
+		NewTableName: s.NewTableName,
+		OldColumn:    s.OldColumn,
+		NewColumn:    s.NewColumn,
+		DropColumn:   s.DropColumn,
+		AddColumn:    s.AddColumn,
+	}, nil
+}
+
 // createScanForBoundTableRef creates a LogicalScan for a bound table reference.
-// This handles regular tables, virtual tables, and table functions.
+// This handles regular tables, virtual tables, table functions, and views.
 func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalPlan {
+	// Handle views by expanding the view query
+	if ref.ViewDef != nil && ref.ViewQuery != nil {
+		// Plan the view's bound query directly
+		// This effectively inlines the view's query into the plan
+		plan, err := p.planSelect(ref.ViewQuery)
+		if err != nil {
+			// If planning fails, fall back to regular scan (will fail later with better error)
+			return &LogicalScan{
+				Schema:    ref.Schema,
+				TableName: ref.TableName,
+				Alias:     ref.Alias,
+				TableDef:  ref.TableDef,
+			}
+		}
+		return plan
+	}
+
 	return &LogicalScan{
 		Schema:        ref.Schema,
 		TableName:     ref.TableName,
@@ -1172,6 +1453,87 @@ func (p *Planner) createPhysicalPlan(
 			FilePath: l.FilePath,
 			Options:  l.Options,
 			Source:   source,
+		}, nil
+
+	// DDL logical to physical mappings
+	case *LogicalCreateView:
+		return &PhysicalCreateView{
+			Schema:      l.Schema,
+			View:        l.View,
+			IfNotExists: l.IfNotExists,
+			Query:       l.Query,
+			QueryText:   l.QueryText,
+		}, nil
+
+	case *LogicalDropView:
+		return &PhysicalDropView{
+			Schema:   l.Schema,
+			View:     l.View,
+			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalCreateIndex:
+		return &PhysicalCreateIndex{
+			Schema:      l.Schema,
+			Table:       l.Table,
+			Index:       l.Index,
+			IfNotExists: l.IfNotExists,
+			Columns:     l.Columns,
+			IsUnique:    l.IsUnique,
+			TableDef:    l.TableDef,
+		}, nil
+
+	case *LogicalDropIndex:
+		return &PhysicalDropIndex{
+			Schema:   l.Schema,
+			Index:    l.Index,
+			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalCreateSequence:
+		return &PhysicalCreateSequence{
+			Schema:      l.Schema,
+			Sequence:    l.Sequence,
+			IfNotExists: l.IfNotExists,
+			StartWith:   l.StartWith,
+			IncrementBy: l.IncrementBy,
+			MinValue:    l.MinValue,
+			MaxValue:    l.MaxValue,
+			IsCycle:     l.IsCycle,
+		}, nil
+
+	case *LogicalDropSequence:
+		return &PhysicalDropSequence{
+			Schema:   l.Schema,
+			Sequence: l.Sequence,
+			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalCreateSchema:
+		return &PhysicalCreateSchema{
+			Schema:      l.Schema,
+			IfNotExists: l.IfNotExists,
+		}, nil
+
+	case *LogicalDropSchema:
+		return &PhysicalDropSchema{
+			Schema:   l.Schema,
+			IfExists: l.IfExists,
+			Cascade:  l.Cascade,
+		}, nil
+
+	case *LogicalAlterTable:
+		return &PhysicalAlterTable{
+			Schema:       l.Schema,
+			Table:        l.Table,
+			TableDef:     l.TableDef,
+			Operation:    l.Operation,
+			IfExists:     l.IfExists,
+			NewTableName: l.NewTableName,
+			OldColumn:    l.OldColumn,
+			NewColumn:    l.NewColumn,
+			DropColumn:   l.DropColumn,
+			AddColumn:    l.AddColumn,
 		}, nil
 
 	default:

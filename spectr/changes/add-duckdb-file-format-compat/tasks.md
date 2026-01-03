@@ -12,12 +12,12 @@
 - [ ] 1.8 Add tests for header read/write with both header blocks
 - [ ] 1.9 Add tests for header corruption detection
 
-## 2. Format Version Upgrade
+## 2. Format Version Implementation
 
 - [ ] 2.1 Define format version constants (DUCKDB_VERSION = 64)
 - [ ] 2.2 Update `internal/persistence/file.go` to use DuckDB version
 - [ ] 2.3 Implement version negotiation in header reader
-- [ ] 2.4 Add support for reading older DuckDB versions (v64+)
+- [ ] 2.4 Add support for reading newer DuckDB versions (v64+)
 - [ ] 2.5 Document version compatibility matrix
 - [ ] 2.6 Add version validation tests
 
@@ -83,49 +83,26 @@
 - [ ] 7.7 Add index persistence tests
 - [ ] 7.8 Document index format compatibility
 
-## 8. Migration Utility
+## 8. Integration Tests
 
-- [ ] 8.1 Create `cmd/dukdb-go-migrate/main.go`
-- [ ] 8.2 Implement detection of old dukdb-go format (DUKDBGO magic)
-- [ ] 8.3 Implement old format catalog deserialization (JSON)
-- [ ] 8.4 Implement old format data deserialization
-- [ ] 8.5 Implement new format catalog serialization
-- [ ] 8.6 Implement new format data serialization
-- [ ] 8.7 Add progress reporting
-- [ ] 8.8 Add dry-run mode
-- [ ] 8.9 Add migration tests with sample databases
+- [ ] 8.1 Create integration tests for reading DuckDB files
+- [ ] 8.2 Create integration tests for writing DuckDB files
+- [ ] 8.3 Create integration tests for WAL recovery
+- [ ] 8.4 Create integration tests for checkpoint/restore
+- [ ] 8.5 Create integration tests with various data types
+- [ ] 8.6 Add compatibility tests against official DuckDB
+- [ ] 8.7 Create large dataset tests (>1GB)
 
-## 9. Compatibility Mode
+## 9. Performance Benchmarks
 
-- [ ] 9.1 Add `?format=legacy` query parameter to connection string
-- [ ] 9.2 Implement format detection in `Engine.Open()`
-- [ ] 9.3 Implement `FormatDetector` interface
-- [ ] 9.4 Add compatibility tests for both formats
-- [ ] 9.5 Update documentation for format migration
+- [ ] 9.1 Create benchmark for header read/write
+- [ ] 9.2 Create benchmark for catalog serialization
+- [ ] 9.3 Create benchmark for data compression
+- [ ] 9.4 Create benchmark for WAL throughput
+- [ ] 9.5 Create benchmark for row group serialization
 
-## 10. Integration Tests
+## 10. Documentation
 
-- [ ] 10.1 Create integration tests for reading DuckDB files
-- [ ] 10.2 Create integration tests for writing DuckDB files
-- [ ] 10.3 Create integration tests for WAL recovery
-- [ ] 10.4 Create integration tests for checkpoint/restore
-- [ ] 10.5 Create integration tests with various data types
-- [ ] 10.6 Add compatibility tests against official DuckDB
-- [ ] 10.7 Create large dataset tests (>1GB)
-
-## 11. Performance Benchmarks
-
-- [ ] 11.1 Create benchmark for header read/write
-- [ ] 11.2 Create benchmark for catalog serialization
-- [ ] 11.3 Create benchmark for data compression
-- [ ] 11.4 Create benchmark for WAL throughput
-- [ ] 11.5 Create benchmark for row group serialization
-- [ ] 11.6 Compare performance with old format (if beneficial)
-
-## 12. Documentation
-
-- [ ] 12.1 Update `docs/file-format.md` with new format specification
-- [ ] 12.2 Add migration guide documentation
-- [ ] 12.3 Add compression options documentation
-- [ ] 12.4 Update `README.md` with format compatibility info
-- [ ] 12.5 Add examples for using migration utility
+- [ ] 10.1 Update `docs/file-format.md` with new format specification
+- [ ] 10.2 Add compression options documentation
+- [ ] 10.3 Update `README.md` with format compatibility info

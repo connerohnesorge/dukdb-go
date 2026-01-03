@@ -123,6 +123,48 @@ func (t *Table) Name() string {
 	return t.name
 }
 
+// Rename updates the table's name.
+func (t *Table) Rename(newName string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.name = newName
+}
+
+// AddColumn adds a new column to the table.
+func (t *Table) AddColumn(columnType dukdb.Type) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.columnTypes = append(t.columnTypes, columnType)
+
+	// Add a new NULL-filled vector to all existing row groups
+	for _, rg := range t.rowGroups {
+		rg.AddColumn(columnType, rg.count)
+	}
+}
+
+// DropColumn removes a column from the table at the given index.
+func (t *Table) DropColumn(columnIndex int) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if columnIndex < 0 || columnIndex >= len(t.columnTypes) {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "column index out of range",
+		}
+	}
+
+	// Remove column type
+	t.columnTypes = append(t.columnTypes[:columnIndex], t.columnTypes[columnIndex+1:]...)
+
+	// Remove data from all row groups
+	for _, rg := range t.rowGroups {
+		rg.DropColumn(columnIndex)
+	}
+
+	return nil
+}
+
 // ColumnCount returns the number of columns.
 func (t *Table) ColumnCount() int {
 	return len(t.columnTypes)
@@ -536,6 +578,28 @@ func (rg *RowGroup) GetColumn(idx int) *Vector {
 	}
 
 	return rg.columns[idx]
+}
+
+// DropColumn removes a column from the row group at the given index.
+func (rg *RowGroup) DropColumn(columnIndex int) {
+	if columnIndex < 0 || columnIndex >= len(rg.columns) {
+		return
+	}
+	rg.columns = append(rg.columns[:columnIndex], rg.columns[columnIndex+1:]...)
+}
+
+// AddColumn adds a new column to the row group with NULL values for existing rows.
+func (rg *RowGroup) AddColumn(columnType dukdb.Type, existingRows int) {
+	// Create a new vector for the column
+	vec := NewVector(columnType, rg.capacity)
+	vec.SetCount(existingRows)
+
+	// Mark all existing rows as NULL for this new column
+	for i := 0; i < existingRows; i++ {
+		vec.SetValue(i, nil)
+	}
+
+	rg.columns = append(rg.columns, vec)
 }
 
 // AppendRow appends a row of values to the row group.

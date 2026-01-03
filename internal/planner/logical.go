@@ -500,3 +500,139 @@ func (c *LogicalCopyTo) Children() []LogicalPlan {
 }
 
 func (*LogicalCopyTo) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- DDL Logical Plan Nodes ----------
+
+// LogicalCreateView represents a CREATE VIEW operation.
+type LogicalCreateView struct {
+	Schema      string
+	View        string
+	IfNotExists bool
+	Query       *binder.BoundSelectStmt
+	QueryText   string
+}
+
+func (*LogicalCreateView) logicalPlanNode() {}
+
+func (*LogicalCreateView) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateView) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropView represents a DROP VIEW operation.
+type LogicalDropView struct {
+	Schema   string
+	View     string
+	IfExists bool
+}
+
+func (*LogicalDropView) logicalPlanNode() {}
+
+func (*LogicalDropView) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropView) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCreateIndex represents a CREATE INDEX operation.
+type LogicalCreateIndex struct {
+	Schema      string
+	Table       string
+	Index       string
+	IfNotExists bool
+	Columns     []string
+	IsUnique    bool
+	TableDef    *catalog.TableDef
+}
+
+func (*LogicalCreateIndex) logicalPlanNode() {}
+
+func (*LogicalCreateIndex) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateIndex) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropIndex represents a DROP INDEX operation.
+type LogicalDropIndex struct {
+	Schema   string
+	Index    string
+	IfExists bool
+}
+
+func (*LogicalDropIndex) logicalPlanNode() {}
+
+func (*LogicalDropIndex) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropIndex) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCreateSequence represents a CREATE SEQUENCE operation.
+type LogicalCreateSequence struct {
+	Schema      string
+	Sequence    string
+	IfNotExists bool
+	StartWith   int64
+	IncrementBy int64
+	MinValue    *int64
+	MaxValue    *int64
+	IsCycle     bool
+}
+
+func (*LogicalCreateSequence) logicalPlanNode() {}
+
+func (*LogicalCreateSequence) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateSequence) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropSequence represents a DROP SEQUENCE operation.
+type LogicalDropSequence struct {
+	Schema   string
+	Sequence string
+	IfExists bool
+}
+
+func (*LogicalDropSequence) logicalPlanNode() {}
+
+func (*LogicalDropSequence) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropSequence) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCreateSchema represents a CREATE SCHEMA operation.
+type LogicalCreateSchema struct {
+	Schema      string
+	IfNotExists bool
+}
+
+func (*LogicalCreateSchema) logicalPlanNode() {}
+
+func (*LogicalCreateSchema) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateSchema) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropSchema represents a DROP SCHEMA operation.
+type LogicalDropSchema struct {
+	Schema   string
+	IfExists bool
+	Cascade  bool
+}
+
+func (*LogicalDropSchema) logicalPlanNode() {}
+
+func (*LogicalDropSchema) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropSchema) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalAlterTable represents an ALTER TABLE operation.
+type LogicalAlterTable struct {
+	Schema       string
+	Table        string
+	TableDef     *catalog.TableDef
+	Operation    int    // AlterTableOp from parser
+	IfExists     bool   // IF EXISTS modifier
+	NewTableName string // RENAME TO
+	OldColumn    string // RENAME COLUMN
+	NewColumn    string // RENAME COLUMN
+	DropColumn   string // DROP COLUMN
+	AddColumn    *catalog.ColumnDef // ADD COLUMN
+}
+
+func (*LogicalAlterTable) logicalPlanNode() {}
+
+func (*LogicalAlterTable) Children() []LogicalPlan { return nil }
+
+func (*LogicalAlterTable) OutputColumns() []ColumnBinding { return nil }

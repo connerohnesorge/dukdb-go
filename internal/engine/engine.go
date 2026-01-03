@@ -2,15 +2,19 @@
 package engine
 
 import (
-	"encoding/base64"
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 
+	"github.com/coder/quartz"
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/persistence"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
 // Engine is the core execution engine implementing the Backend interface.
@@ -20,6 +24,7 @@ type Engine struct {
 	catalog    *catalog.Catalog
 	storage    *storage.Storage
 	txnMgr     *TransactionManager
+	walWriter  *wal.Writer // WAL writer for persistent databases
 	config     *dukdb.Config
 	path       string
 	persistent bool // true if not :memory:
@@ -84,45 +89,25 @@ func (e *Engine) Open(
 	// Handle persistence for non-memory databases
 	if path != "" && path != ":memory:" {
 		e.persistent = true
-		// Check if file exists and load it
-		if _, err := os.Stat(path); err == nil {
-			// Detect file format if not explicitly specified
-			detectedFormat := e.config.Format
-			if detectedFormat == "" || detectedFormat == "duckdb" {
-				// Auto-detect format
-				format, detectErr := persistence.DetectFileFormat(path)
-				if detectErr != nil {
-					return nil, fmt.Errorf(
-						"failed to detect file format: %w",
-						detectErr,
-					)
-				}
 
-				// Handle detected format
-				switch format {
-				case persistence.FormatDuckDB:
-					// DuckDB format - proceed normally
-					detectedFormat = "duckdb"
-				case persistence.FormatLegacy:
-					// Legacy format detected but not requested
-					if e.config.Format == "duckdb" {
-						return nil, fmt.Errorf(
-							"file is in legacy format, but DuckDB format was requested. "+
-							"Use ?format=legacy to open legacy files, or migrate the file first",
-						)
-					}
-					detectedFormat = "legacy"
-				case persistence.FormatUnknown:
-					return nil, fmt.Errorf(
-						"unknown file format: file may be corrupted or not a valid database file",
-					)
-				}
+		// WAL path is database path + ".wal"
+		walPath := path + ".wal"
+
+		// First, load from the database file if it exists
+		// This contains all checkpointed data
+		if _, err := os.Stat(path); err == nil {
+			// Auto-detect format
+			format, detectErr := persistence.DetectFileFormat(path)
+			if detectErr != nil {
+				return nil, fmt.Errorf(
+					"failed to detect file format: %w",
+					detectErr,
+				)
 			}
 
-			// Validate format compatibility
-			if e.config.Format == "legacy" && detectedFormat == "duckdb" {
+			if format != persistence.FormatDuckDB {
 				return nil, fmt.Errorf(
-					"file is in DuckDB format, but legacy format was requested",
+					"unknown or unsupported file format: file may be corrupted or not a valid DuckDB database file",
 				)
 			}
 
@@ -134,6 +119,28 @@ func (e *Engine) Open(
 				)
 			}
 		}
+
+		// Then replay any existing WAL file to recover uncommitted state
+		// (changes that happened after the last checkpoint)
+		if _, err := os.Stat(walPath); err == nil {
+			// WAL file exists - replay it
+			if err := e.replayWAL(walPath); err != nil {
+				return nil, fmt.Errorf(
+					"failed to replay WAL: %w",
+					err,
+				)
+			}
+		}
+
+		// Create/open WAL writer for new operations
+		walWriter, err := wal.NewWriter(walPath, quartz.NewReal())
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create WAL writer: %w",
+				err,
+			)
+		}
+		e.walWriter = walWriter
 	}
 
 	// Create a new connection
@@ -156,6 +163,23 @@ func (e *Engine) Close() error {
 		return nil
 	}
 
+	// Sync and close WAL writer first
+	if e.walWriter != nil {
+		if err := e.walWriter.Sync(); err != nil {
+			return fmt.Errorf(
+				"failed to sync WAL: %w",
+				err,
+			)
+		}
+		if err := e.walWriter.Close(); err != nil {
+			return fmt.Errorf(
+				"failed to close WAL: %w",
+				err,
+			)
+		}
+		e.walWriter = nil
+	}
+
 	// Save to file if persistent
 	if e.persistent && e.path != "" &&
 		e.path != ":memory:" {
@@ -164,6 +188,14 @@ func (e *Engine) Close() error {
 				"failed to save database: %w",
 				err,
 			)
+		}
+
+		// After successful checkpoint, remove the WAL file
+		// since all changes are now persisted to the data file
+		walPath := e.path + ".wal"
+		if err := os.Remove(walPath); err != nil && !os.IsNotExist(err) {
+			// Log but don't fail - WAL removal is not critical
+			// The next open will replay it which is harmless but inefficient
 		}
 	}
 
@@ -268,6 +300,10 @@ func (tm *TransactionManager) Rollback(
 type Transaction struct {
 	id     uint64
 	active bool
+
+	// DDL rollback support: snapshot state at transaction start
+	catalogSnapshot *catalog.Catalog
+	storageSnapshot *storage.Storage
 }
 
 // ID returns the transaction ID.
@@ -287,87 +323,24 @@ func (e *Engine) loadFromFile(path string) error {
 		return err
 	}
 	defer func() {
-		if err := fm.Close(); err != nil {
-			// Log the error but don't propagate it from a defer
-			// This ensures we don't shadow the original error
-		}
+		_ = fm.Close()
 	}()
 
-	// Load catalog
-	catalogData, err := fm.ReadCatalog()
+	// Load combined catalog and storage data
+	data, err := fm.ReadCatalog()
 	if err != nil {
 		return fmt.Errorf(
-			"failed to read catalog: %w",
+			"failed to read data: %w",
 			err,
 		)
 	}
 
-	catalogJSON, err := persistence.UnmarshalCatalog(
-		catalogData,
-	)
-	if err != nil {
+	// Import combined catalog and storage data
+	if err := e.importDatabase(data); err != nil {
 		return fmt.Errorf(
-			"failed to unmarshal catalog: %w",
+			"failed to import database: %w",
 			err,
 		)
-	}
-
-	if err := e.catalog.Import(catalogJSON); err != nil {
-		return fmt.Errorf(
-			"failed to import catalog: %w",
-			err,
-		)
-	}
-
-	// Load table data from catalog JSON
-	if catalogJSON.TableData != nil {
-		for tableName, rowGroupsEncoded := range catalogJSON.TableData {
-			// Get table definition from catalog
-			tableDef, ok := e.catalog.GetTable(tableName)
-			if !ok {
-				return fmt.Errorf(
-					"table %s not found in catalog",
-					tableName,
-				)
-			}
-
-			// Create table in storage
-			table, err := e.storage.CreateTable(
-				tableName,
-				tableDef.ColumnTypes(),
-			)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to create table %s: %w",
-					tableName,
-					err,
-				)
-			}
-
-			// Decode and import each row group
-			for i, encoded := range rowGroupsEncoded {
-				data, err := decodeRowGroup(encoded)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to decode row group %d for table %s: %w",
-						i,
-						tableName,
-						err,
-					)
-				}
-
-				rg, err := table.ImportRowGroup(data)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to import row group %d for table %s: %w",
-						i,
-						tableName,
-						err,
-					)
-				}
-				table.AddRowGroup(rg)
-			}
-		}
 	}
 
 	return nil
@@ -383,79 +356,31 @@ func (e *Engine) saveToFile(path string) error {
 		return err
 	}
 
-	// Export catalog
-	catalogJSON := e.catalog.Export()
-
-	// Add table data to catalog JSON
-	if catalogJSON.TableData == nil {
-		catalogJSON.TableData = make(map[string][]string)
-	}
-
-	// Serialize row groups for each table
-	for tableName, table := range e.storage.Tables() {
-		rowGroups := table.RowGroups()
-		encodedGroups := make([]string, 0, len(rowGroups))
-
-		for i, rg := range rowGroups {
-			data, err := table.ExportRowGroup(rg)
-			if err != nil {
-				if err := fm.Close(); err != nil {
-					// Log error but don't propagate from cleanup
-				}
-				_ = os.Remove(tmpPath)
-
-				return fmt.Errorf(
-					"failed to export row group %d for table %s: %w",
-					i,
-					tableName,
-					err,
-				)
-			}
-
-			// Encode to base64
-			encoded := encodeRowGroup(data)
-			encodedGroups = append(encodedGroups, encoded)
-		}
-
-		if len(encodedGroups) > 0 {
-			catalogJSON.TableData[tableName] = encodedGroups
-		}
-	}
-
-	// Marshal catalog with table data
-	catalogData, err := persistence.MarshalCatalog(
-		catalogJSON,
-	)
+	// Export combined catalog and storage data
+	data, err := e.exportDatabase()
 	if err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
-
 		return fmt.Errorf(
-			"failed to marshal catalog: %w",
+			"failed to export database: %w",
 			err,
 		)
 	}
 
-	// Write catalog
-	if err := fm.WriteCatalog(catalogData); err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+	// Write combined data
+	if err := fm.WriteCatalog(data); err != nil {
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
-			"failed to write catalog: %w",
+			"failed to write data: %w",
 			err,
 		)
 	}
 
 	// Finalize with headers
 	if err := fm.Finalize(); err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
@@ -463,9 +388,7 @@ func (e *Engine) saveToFile(path string) error {
 			err,
 		)
 	}
-	if err := fm.Close(); err != nil {
-		// Log error but don't propagate from cleanup
-	}
+	_ = fm.Close()
 
 	// Verify checksum before rename
 	if err := persistence.VerifyFile(tmpPath); err != nil {
@@ -487,14 +410,36 @@ func (e *Engine) saveToFile(path string) error {
 	return nil
 }
 
-// encodeRowGroup encodes row group data to base64
-func encodeRowGroup(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
+// WAL returns the WAL writer for this engine.
+// Returns nil for in-memory databases.
+func (e *Engine) WAL() *wal.Writer {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.walWriter
 }
 
-// decodeRowGroup decodes row group data from base64
-func decodeRowGroup(encoded string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(encoded)
+// replayWAL replays the WAL file to recover database state.
+func (e *Engine) replayWAL(walPath string) error {
+	reader, err := wal.NewReader(walPath, quartz.NewReal())
+	if err != nil {
+		return fmt.Errorf(
+			"failed to open WAL reader: %w",
+			err,
+		)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	// Use the WAL reader's Recover method to replay entries
+	if err := reader.Recover(e.catalog, e.storage); err != nil {
+		return fmt.Errorf(
+			"failed to recover from WAL: %w",
+			err,
+		)
+	}
+
+	return nil
 }
 
 // Verify that Engine implements Backend interface
@@ -503,4 +448,203 @@ var _ dukdb.Backend = (*Engine)(nil)
 // init registers the Engine as the default backend.
 func init() {
 	dukdb.RegisterBackend(NewEngine())
+}
+
+// exportDatabase exports both catalog and storage data to a single byte slice.
+// The format is:
+//   - Catalog data (binary serialized)
+//   - Storage marker (STRG)
+//   - Number of tables (uint32)
+//   - For each table:
+//     - Table name length (uint32) + name bytes
+//     - Column count (uint16)
+//     - Column types (uint8 each)
+//     - Row group count (uint32)
+//     - For each row group:
+//       - Serialized row group data
+func (e *Engine) exportDatabase() ([]byte, error) {
+	// Export catalog first
+	catalogData, err := e.catalog.Export()
+	if err != nil {
+		return nil, fmt.Errorf("failed to export catalog: %w", err)
+	}
+
+	// Create combined data buffer
+	buf := new(bytes.Buffer)
+
+	// Write catalog data length and data
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(catalogData))); err != nil {
+		return nil, err
+	}
+	if _, err := buf.Write(catalogData); err != nil {
+		return nil, err
+	}
+
+	// Write storage marker
+	if _, err := buf.WriteString("STRG"); err != nil {
+		return nil, err
+	}
+
+	// Get all tables from storage
+	tables := e.storage.Tables()
+
+	// Write table count
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(tables))); err != nil {
+		return nil, err
+	}
+
+	// Write each table's data
+	for name, table := range tables {
+		// Write table name
+		nameBytes := []byte(name)
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(nameBytes))); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(nameBytes); err != nil {
+			return nil, err
+		}
+
+		// Write column types
+		colTypes := table.ColumnTypes()
+		if err := binary.Write(buf, binary.LittleEndian, uint16(len(colTypes))); err != nil {
+			return nil, err
+		}
+		for _, ct := range colTypes {
+			if err := buf.WriteByte(byte(ct)); err != nil {
+				return nil, err
+			}
+		}
+
+		// Get and write row groups
+		rowGroups := table.RowGroups()
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(rowGroups))); err != nil {
+			return nil, err
+		}
+
+		for i, rg := range rowGroups {
+			rgData, err := table.ExportRowGroup(rg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to export row group %d of table %s: %w", i, name, err)
+			}
+
+			// Write row group data length and data
+			if err := binary.Write(buf, binary.LittleEndian, uint32(len(rgData))); err != nil {
+				return nil, err
+			}
+			if _, err := buf.Write(rgData); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// importDatabase imports both catalog and storage data from a byte slice.
+func (e *Engine) importDatabase(data []byte) error {
+	r := bytes.NewReader(data)
+
+	// Read catalog data length
+	var catalogLen uint32
+	if err := binary.Read(r, binary.LittleEndian, &catalogLen); err != nil {
+		return fmt.Errorf("failed to read catalog length: %w", err)
+	}
+
+	// Read catalog data
+	catalogData := make([]byte, catalogLen)
+	if _, err := io.ReadFull(r, catalogData); err != nil {
+		return fmt.Errorf("failed to read catalog data: %w", err)
+	}
+
+	// Import catalog
+	if err := e.catalog.Import(catalogData); err != nil {
+		return fmt.Errorf("failed to import catalog: %w", err)
+	}
+
+	// Read and verify storage marker
+	marker := make([]byte, 4)
+	if _, err := io.ReadFull(r, marker); err != nil {
+		// No storage data (old format), just return
+		return nil
+	}
+	if string(marker) != "STRG" {
+		return fmt.Errorf("invalid storage marker: %s", string(marker))
+	}
+
+	// Read table count
+	var tableCount uint32
+	if err := binary.Read(r, binary.LittleEndian, &tableCount); err != nil {
+		return fmt.Errorf("failed to read table count: %w", err)
+	}
+
+	// Read each table's data
+	for i := uint32(0); i < tableCount; i++ {
+		// Read table name
+		var nameLen uint32
+		if err := binary.Read(r, binary.LittleEndian, &nameLen); err != nil {
+			return fmt.Errorf("failed to read table name length: %w", err)
+		}
+		nameBytes := make([]byte, nameLen)
+		if _, err := io.ReadFull(r, nameBytes); err != nil {
+			return fmt.Errorf("failed to read table name: %w", err)
+		}
+		tableName := string(nameBytes)
+
+		// Read column types
+		var colCount uint16
+		if err := binary.Read(r, binary.LittleEndian, &colCount); err != nil {
+			return fmt.Errorf("failed to read column count: %w", err)
+		}
+		colTypes := make([]dukdb.Type, colCount)
+		for j := uint16(0); j < colCount; j++ {
+			typeByte, err := r.ReadByte()
+			if err != nil {
+				return fmt.Errorf("failed to read column type: %w", err)
+			}
+			colTypes[j] = dukdb.Type(typeByte)
+		}
+
+		// Create or get the storage table
+		table, err := e.storage.CreateTable(tableName, colTypes)
+		if err != nil {
+			// Table might already exist from catalog import
+			existingTable, ok := e.storage.GetTable(tableName)
+			if !ok {
+				return fmt.Errorf("failed to create or get table %s: %w", tableName, err)
+			}
+			table = existingTable
+		}
+
+		// Read row group count
+		var rgCount uint32
+		if err := binary.Read(r, binary.LittleEndian, &rgCount); err != nil {
+			return fmt.Errorf("failed to read row group count: %w", err)
+		}
+
+		// Read and import each row group
+		for j := uint32(0); j < rgCount; j++ {
+			// Read row group data length
+			var rgLen uint32
+			if err := binary.Read(r, binary.LittleEndian, &rgLen); err != nil {
+				return fmt.Errorf("failed to read row group length: %w", err)
+			}
+
+			// Read row group data
+			rgData := make([]byte, rgLen)
+			if _, err := io.ReadFull(r, rgData); err != nil {
+				return fmt.Errorf("failed to read row group data: %w", err)
+			}
+
+			// Import the row group
+			rg, err := table.ImportRowGroup(rgData)
+			if err != nil {
+				return fmt.Errorf("failed to import row group %d of table %s: %w", j, tableName, err)
+			}
+
+			// Add to table
+			table.AddRowGroup(rg)
+		}
+	}
+
+	return nil
 }

@@ -2,36 +2,23 @@
 
 ## Why
 
-Currently, dukdb-go uses a proprietary file format (`DUKDBGO\x00` magic number, version 1) instead of the official DuckDB format (`DUCK` magic number, version 64+). This prevents:
+The system SHALL use the official DuckDB file format for persistent storage, enabling compatibility with the DuckDB ecosystem. This ensures:
 
-1. **Interoperability**: Users cannot read or write `.duckdb` files created by the official DuckDB
-2. **Ecosystem Integration**: Cannot use DuckDB CLI tools, connectors, or UDFs with dukdb-go databases
-3. **Data Portability**: Data created in dukdb-go is locked to the dukdb-go ecosystem
-4. **Cloud/S3 Integration**: Official DuckDB cloud features require the standard file format
-
-The current proprietary format has several limitations:
-- Magic Number: `DUKDBGO\x00` (vs DuckDB's `DUCK`)
-- Format Version: 1 (vs DuckDB's v64+)
-- Catalog Storage: GZIP-compressed JSON (vs DuckDB's binary property-based serialization)
-- Header: 64-byte single header (vs DuckDB's dual 4KB rotating headers)
-- Compression: Basic GZIP (vs DuckDB's ALP, Patas, Chimp, FSST, Zstd)
-- WAL: Custom `DWAL` format with CRC64 (vs DuckDB's WAL format)
+1. **Interoperability**: Users can read or write `.duckdb` files created by the official DuckDB
+2. **Ecosystem Integration**: Can use DuckDB CLI tools, connectors, or UDFs with dukdb-go databases
+3. **Data Portability**: Data created in dukdb-go is portable to the DuckDB ecosystem
+4. **Cloud/S3 Integration**: Official DuckDB cloud features can be supported using the standard file format
 
 ## What Changes
 
-### Breaking Changes
+### Core Features
 
-- **File Format**: All existing dukdb-go database files (`.duckdb`, `.dukdb`) created with the old `DUKDBGO\x00` format will become **incompatible**. A migration utility will be provided.
-- **Magic Number**: Changed from `DUKDBGO\x00` to `DUCK` (0x4455434B)
-- **Format Version**: Upgraded from version 1 to version 64+
-- **Catalog Serialization**: Replaced GZIP-compressed JSON with DuckDB's binary property-based serialization
-- **WAL Format**: Custom `DWAL` replaced with DuckDB's WAL format
-
-### New Features
-
+- **Magic Number**: Uses `DUCK` (0x4455434B)
+- **Format Version**: Supports version 64+
+- **Catalog Serialization**: Uses DuckDB's binary property-based serialization
+- **WAL Format**: Uses DuckDB's WAL format
 - Full read/write support for official DuckDB `.duckdb` files
 - Dual 4KB rotating header blocks for crash safety
-- Complete property-based serialization for catalog storage
 - Support for advanced compression algorithms (FSST, RLE, BitPacking, Chimp, Zstd)
 - ART (Adaptive Radix Tree) index persistence
 - Support for newer types: UNION, BIT, TIME_TZ, TIMESTAMP_TZ
@@ -48,9 +35,9 @@ The current proprietary format has several limitations:
 
 ### Affected Specs
 
-- `persistence`: Complete replacement of WAL and storage formats
+- `persistence`: Implementation of WAL and storage formats
 - `storage`: New row group format with column segment storage
-- `catalog-persistence`: Binary serialization replacing JSON
+- `catalog-persistence`: Binary serialization for catalog
 
 ### Affected Code
 
@@ -68,21 +55,3 @@ The current proprietary format has several limitations:
 
 - This proposal depends on: (none - foundational change)
 - This proposal blocks: S3/Cloud integration (requires compatible file format)
-
-### Compatibility Mode
-
-A compatibility mode will be provided during a transition period:
-
-```go
-// Old format (deprecated, will be removed in v1.0)
-db, _ := sql.Open("duckdb-go", "?format=legacy")
-
-// New format (default)
-db, _ := sql.Open("duckdb-go", "my.db")  // Reads/writes DuckDB format
-```
-
-Migration utility:
-```bash
-# Migrate old dukdb-go database to new format
-dukdb-go migrate --from old.duckdb --to new.duckdb
-```

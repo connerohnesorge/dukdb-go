@@ -163,3 +163,121 @@ type BoundCopyStmt struct {
 func (*BoundCopyStmt) boundStmtNode() {}
 
 func (*BoundCopyStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY }
+
+// ---------- DDL Bound Statement Types ----------
+
+// BoundCreateViewStmt represents a bound CREATE VIEW statement.
+type BoundCreateViewStmt struct {
+	Schema      string
+	View        string
+	IfNotExists bool
+	Query       *BoundSelectStmt // The bound view query
+	QueryText   string           // The original query text for storage
+}
+
+func (*BoundCreateViewStmt) boundStmtNode() {}
+
+func (*BoundCreateViewStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropViewStmt represents a bound DROP VIEW statement.
+type BoundDropViewStmt struct {
+	Schema   string
+	View     string
+	IfExists bool
+}
+
+func (*BoundDropViewStmt) boundStmtNode() {}
+
+func (*BoundDropViewStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundCreateIndexStmt represents a bound CREATE INDEX statement.
+type BoundCreateIndexStmt struct {
+	Schema      string
+	Table       string
+	Index       string
+	IfNotExists bool
+	Columns     []string
+	IsUnique    bool
+	TableDef    *catalog.TableDef // For validation
+}
+
+func (*BoundCreateIndexStmt) boundStmtNode() {}
+
+func (*BoundCreateIndexStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropIndexStmt represents a bound DROP INDEX statement.
+type BoundDropIndexStmt struct {
+	Schema   string
+	Index    string
+	IfExists bool
+}
+
+func (*BoundDropIndexStmt) boundStmtNode() {}
+
+func (*BoundDropIndexStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundCreateSequenceStmt represents a bound CREATE SEQUENCE statement.
+type BoundCreateSequenceStmt struct {
+	Schema      string
+	Sequence    string
+	IfNotExists bool
+	StartWith   int64
+	IncrementBy int64
+	MinValue    *int64
+	MaxValue    *int64
+	IsCycle     bool
+}
+
+func (*BoundCreateSequenceStmt) boundStmtNode() {}
+
+func (*BoundCreateSequenceStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropSequenceStmt represents a bound DROP SEQUENCE statement.
+type BoundDropSequenceStmt struct {
+	Schema   string
+	Sequence string
+	IfExists bool
+}
+
+func (*BoundDropSequenceStmt) boundStmtNode() {}
+
+func (*BoundDropSequenceStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundCreateSchemaStmt represents a bound CREATE SCHEMA statement.
+type BoundCreateSchemaStmt struct {
+	Schema      string
+	IfNotExists bool
+}
+
+func (*BoundCreateSchemaStmt) boundStmtNode() {}
+
+func (*BoundCreateSchemaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropSchemaStmt represents a bound DROP SCHEMA statement.
+type BoundDropSchemaStmt struct {
+	Schema   string
+	IfExists bool
+	Cascade  bool
+}
+
+func (*BoundDropSchemaStmt) boundStmtNode() {}
+
+func (*BoundDropSchemaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundAlterTableStmt represents a bound ALTER TABLE statement.
+type BoundAlterTableStmt struct {
+	Schema       string
+	Table        string
+	TableDef     *catalog.TableDef
+	Operation    parser.AlterTableOp
+	IfExists     bool             // IF EXISTS modifier
+	NewTableName string           // RENAME TO
+	OldColumn    string           // RENAME COLUMN
+	NewColumn    string           // RENAME COLUMN
+	DropColumn   string           // DROP COLUMN
+	AddColumn    *catalog.ColumnDef // ADD COLUMN
+}
+
+func (*BoundAlterTableStmt) boundStmtNode() {}
+
+func (*BoundAlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }

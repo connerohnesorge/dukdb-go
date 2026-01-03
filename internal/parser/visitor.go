@@ -15,4 +15,15 @@ type Visitor interface {
 	VisitCommitStmt(stmt *CommitStmt)
 	VisitRollbackStmt(stmt *RollbackStmt)
 	VisitCopyStmt(stmt *CopyStmt)
+
+	// DDL statement visitors
+	VisitCreateViewStmt(stmt *CreateViewStmt)
+	VisitDropViewStmt(stmt *DropViewStmt)
+	VisitCreateIndexStmt(stmt *CreateIndexStmt)
+	VisitDropIndexStmt(stmt *DropIndexStmt)
+	VisitCreateSequenceStmt(stmt *CreateSequenceStmt)
+	VisitDropSequenceStmt(stmt *DropSequenceStmt)
+	VisitCreateSchemaStmt(stmt *CreateSchemaStmt)
+	VisitDropSchemaStmt(stmt *DropSchemaStmt)
+	VisitAlterTableStmt(stmt *AlterTableStmt)
 }

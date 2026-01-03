@@ -443,11 +443,8 @@ func benchmarkInsertSelectNRows(b *testing.B, numRows int) {
 // TestInsertMemoryUsage verifies that INSERT operations have bounded memory usage.
 // Target: 100K row insert uses <100MB peak memory (Task 2.29 adapted for faster CI)
 // Note: We use 100K rows instead of 1M to keep test time reasonable.
+// This test completes in ~0.15s so no short mode skip needed.
 func TestInsertMemoryUsage(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping memory usage test in short mode")
-	}
-
 	numRows := 100000 // Use 100K rows for reasonable test time
 
 	// Setup: Create executor with fresh catalog and storage
@@ -651,11 +648,8 @@ func BenchmarkInsertVsAppender10000Rows(b *testing.B) {
 
 // TestAppenderComparisonReport generates a comparison report between INSERT and Appender.
 // This is not a benchmark but a test that measures and reports the difference.
+// This test completes in ~0.12s so no short mode skip needed.
 func TestAppenderComparisonReport(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping Appender comparison test in short mode")
-	}
-
 	numRows := 10000
 	iterations := 5
 

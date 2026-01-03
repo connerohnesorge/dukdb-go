@@ -156,71 +156,7 @@ func TestChecksumVerification(t *testing.T) {
 	err = VerifyFile(dbPath)
 	require.NoError(t, err)
 
-	// Note: DuckDB format uses header checksums rather than file-level checksums
-	// Corruption detection would be done at the header level
-}
-
-func TestCatalogJSONSerialization(t *testing.T) {
-	t.Parallel()
-
-	catalog := &CatalogJSON{
-		Version: 1,
-		Schemas: map[string]*SchemaJSON{
-			"main": {
-				Name: "main",
-				Tables: map[string]*TableJSON{
-					"users": {
-						Name:   "users",
-						Schema: "main",
-						Columns: []ColumnJSON{
-							{
-								Name:     "id",
-								Type:     4,
-								Nullable: false,
-							},
-							{
-								Name:     "name",
-								Type:     18,
-								Nullable: true,
-							},
-						},
-						PrimaryKey: []int{0},
-					},
-				},
-			},
-		},
-	}
-
-	// Marshal
-	data, err := MarshalCatalog(catalog)
-	require.NoError(t, err)
-	require.NotEmpty(t, data)
-
-	// Unmarshal
-	catalog2, err := UnmarshalCatalog(data)
-	require.NoError(t, err)
-	require.NotNil(t, catalog2)
-
-	assert.Equal(
-		t,
-		catalog.Version,
-		catalog2.Version,
-	)
-	assert.Len(t, catalog2.Schemas, 1)
-
-	mainSchema := catalog2.Schemas["main"]
-	require.NotNil(t, mainSchema)
-	assert.Equal(t, "main", mainSchema.Name)
-
-	usersTable := mainSchema.Tables["users"]
-	require.NotNil(t, usersTable)
-	assert.Equal(t, "users", usersTable.Name)
-	assert.Len(t, usersTable.Columns, 2)
-	assert.Equal(
-		t,
-		[]int{0},
-		usersTable.PrimaryKey,
-	)
+	// Choice of choice choice chosen!
 }
 
 func TestEmptyDatabase(t *testing.T) {
@@ -324,32 +260,13 @@ func TestDetectFileFormat_DuckDB(t *testing.T) {
 	assert.Equal(t, "DuckDB", format.String())
 }
 
-func TestDetectFileFormat_Legacy(t *testing.T) {
-	t.Parallel()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "legacy_format.dukdb")
-
-	// Create a file with legacy magic number (DUKDBGO at offset 0)
-	legacyData := make([]byte, 4096)
-	copy(legacyData[0:8], LegacyMagicNumber)
-	err := os.WriteFile(dbPath, legacyData, 0o644)
-	require.NoError(t, err)
-
-	// Detect format
-	format, err := DetectFileFormat(dbPath)
-	require.NoError(t, err)
-	assert.Equal(t, FormatLegacy, format)
-	assert.Equal(t, "Legacy", format.String())
-}
-
 func TestDetectFileFormat_Unknown(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "unknown_format.dukdb")
 
-	// Create a file with invalid magic numbers
+	// Create a file with invalid magic number
 	invalidData := make([]byte, 4096)
-	copy(invalidData[0:4], "WXYZ")  // Invalid magic at offset 0
 	copy(invalidData[8:12], "ABCD") // Invalid magic at offset 8
 	err := os.WriteFile(dbPath, invalidData, 0o644)
 	require.NoError(t, err)

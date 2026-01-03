@@ -12,7 +12,7 @@ stop:
       showStdout: false
       showStderr: false
       showCommand: true # Show "Executing command X/Y: npm test" (default: true)
-      message: "Fix the failing tests via delegation."
+      message: "Fix the failing tests via individual delegation."
       maxOutputLines: 100
     # - run: "lint"
     #   showStdout: true

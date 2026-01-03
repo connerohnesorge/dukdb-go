@@ -57,7 +57,6 @@ The system SHALL use the `DUCK` magic number (0x4455434B) for file identificatio
 - GIVEN a file without `DUCK` magic number
 - WHEN opening the file
 - THEN an error indicating unsupported format is returned
-- AND existing dukdb-go proprietary format can be optionally supported via migration
 
 ### Requirement: Dual Header Block System
 
@@ -127,24 +126,13 @@ The system SHALL use DuckDB's binary property-based format for catalog serializa
 - THEN these types are correctly serialized
 - AND deserialization reconstructs the types correctly
 
-### Requirement: Legacy dukdb-go Format Deprecation
-
-The legacy `DUKDBGO\x00` magic number format SHALL be deprecated and replaced with DuckDB format.
-
-**Reason**: Incompatibility with DuckDB ecosystem
-
-#### Migration Path
-- Old databases can be migrated using the `dukdb-go migrate` command
-- Compatibility mode available via `?format=legacy` during transition period
-- Legacy format support removed in v1.0
-
 ## MODIFIED Requirements
 
 ### Requirement: Write-Ahead Log Entry Format
 
 The Write-Ahead Log SHALL use DuckDB's WAL format for compatibility.
 
-**Previous**: Custom `DWAL` format with CRC64 checksums
+**Previous**: Custom binary format with CRC64 checksums
 **Updated**: DuckDB WAL format with version 3 entries
 
 #### Scenario: DuckDB WAL entry structure
@@ -164,7 +152,7 @@ The Write-Ahead Log SHALL use DuckDB's WAL format for compatibility.
 
 Persistent storage SHALL use DuckDB file format.
 
-**Previous**: Custom header with `DUKDBGO\x00` magic number
+**Previous**: Simple block-based storage
 **Updated**: DuckDB header with `DUCK` magic and dual 4KB blocks
 
 #### Scenario: Persistent file structure

@@ -16,18 +16,11 @@ var validAccessModes = map[string]bool{
 	"read_write": true,
 }
 
-// validFormats contains the valid format values.
-var validFormats = map[string]bool{
-	"duckdb": true,
-	"legacy": true,
-}
-
 // validConfigKeys contains the recognized configuration keys.
 var validConfigKeys = map[string]bool{
 	"access_mode": true,
 	"threads":     true,
 	"max_memory":  true,
-	"format":      true,
 }
 
 // minThreads is the minimum number of threads allowed.
@@ -47,14 +40,6 @@ const maxThreads = 128
 //   - access_mode: "automatic", "read_only", "read_write" (default: "automatic")
 //   - threads: number of threads, 1-128 (default: runtime.NumCPU())
 //   - max_memory: memory limit, e.g., "4GB", "1024MB", "80%" (default: "80%")
-//   - format: "duckdb", "legacy" (default: "duckdb")
-//
-// Format migration:
-//   - "duckdb": Use DuckDB-compatible format (default, recommended)
-//   - "legacy": Use legacy dukdb-go format (read-only, deprecated)
-//   - Auto-detection: Files are detected automatically, but legacy files
-//     will be rejected unless ?format=legacy is specified
-//   - Migration: Use cmd/dukdb-go-migrate to convert legacy files
 //
 // Returns an error with ErrorTypeSettings for unknown options.
 func ParseDSN(dsn string) (*Config, error) {
@@ -119,14 +104,12 @@ func ParseDSN(dsn string) (*Config, error) {
 //   - AccessMode: "automatic"
 //   - Threads: runtime.NumCPU()
 //   - MaxMemory: "80%"
-//   - Format: "duckdb"
 func NewConfig() *Config {
 	return &Config{
 		Path:       "",
 		AccessMode: "automatic",
 		Threads:    runtime.NumCPU(),
 		MaxMemory:  "80%",
-		Format:     "duckdb",
 	}
 }
 
@@ -190,12 +173,6 @@ func parseOptions(
 				return err
 			}
 			config.MaxMemory = value
-
-		case "format":
-			if err := validateFormat(value); err != nil {
-				return err
-			}
-			config.Format = value
 		}
 	}
 
@@ -335,21 +312,6 @@ func validateMaxMemory(value string) error {
 	return nil
 }
 
-// validateFormat validates the format option.
-func validateFormat(format string) error {
-	if !validFormats[format] {
-		return &Error{
-			Type: ErrorTypeSettings,
-			Msg: fmt.Sprintf(
-				"invalid format: %s (must be one of: duckdb, legacy)",
-				format,
-			),
-		}
-	}
-
-	return nil
-}
-
 // ResolveMaxMemory resolves a max_memory value to bytes.
 // If the value is a percentage, it returns the percentage of total system memory.
 // Note: For percentage values, this function requires system memory information
@@ -434,13 +396,3 @@ func ResolveMaxMemory(
 
 	return bytes, nil
 }
-
-// Ensure Config struct has Path field - we need to update the Config struct
-// Note: The Config struct is defined in backend.go. If Path is not there,
-// this file won't compile. The Config struct should have:
-//   type Config struct {
-//       Path       string
-//       AccessMode string
-//       Threads    int
-//       MaxMemory  string
-//   }

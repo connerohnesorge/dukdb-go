@@ -21,6 +21,7 @@ type Writer struct {
 	clock        quartz.Clock
 	iteration    uint64
 	bytesWritten uint64
+	nextTxnID    uint64 // Counter for generating unique WAL transaction IDs
 	mu           sync.Mutex
 }
 
@@ -92,6 +93,15 @@ func NewWriter(
 		w.iteration = header.SequenceNumber
 		w.bytesWritten = uint64(stat.Size())
 
+		// Scan existing entries to find maximum txnID
+		// This ensures new transactions get unique IDs
+		maxTxnID, err := scanMaxTxnID(file)
+		if err != nil {
+			_ = file.Close()
+			return nil, fmt.Errorf("failed to scan WAL for max txnID: %w", err)
+		}
+		w.nextTxnID = maxTxnID
+
 		// Seek back to end for appending
 		if _, err := file.Seek(0, io.SeekEnd); err != nil {
 			_ = file.Close()
@@ -101,6 +111,40 @@ func NewWriter(
 	}
 
 	return w, nil
+}
+
+// scanMaxTxnID scans the WAL file to find the maximum transaction ID used.
+func scanMaxTxnID(file *os.File) (uint64, error) {
+	// Header was already read, file position should be at HeaderSize
+	var maxTxnID uint64
+
+	// Create a temporary buffered reader to scan entries
+	bufReader := bufio.NewReader(file)
+	reader := &Reader{
+		file:     file,
+		reader:   bufReader,
+		checksum: CRC64Table,
+	}
+
+	for {
+		entry, err := reader.ReadEntry()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// On error, just stop scanning - we'll use what we found
+			break
+		}
+
+		// Check if this entry has a transaction ID
+		if txnEntry, ok := entry.(TxnEntry); ok {
+			if txnEntry.TxnID() > maxTxnID {
+				maxTxnID = txnEntry.TxnID()
+			}
+		}
+	}
+
+	return maxTxnID, nil
 }
 
 // WriteEntry writes a WAL entry to the file using DuckDB format.
@@ -222,6 +266,20 @@ func (w *Writer) SetIteration(iteration uint64) {
 // Path returns the path to the WAL file.
 func (w *Writer) Path() string {
 	return w.file.Name()
+}
+
+// Clock returns the clock used by the WAL writer.
+func (w *Writer) Clock() quartz.Clock {
+	return w.clock
+}
+
+// NextTxnID returns the next unique transaction ID for WAL entries.
+// This ensures each auto-committed statement gets a unique transaction ID.
+func (w *Writer) NextTxnID() uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.nextTxnID++
+	return w.nextTxnID
 }
 
 // Reset resets the WAL writer by truncating the file and writing a new header.

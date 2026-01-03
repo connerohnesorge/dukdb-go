@@ -266,6 +266,12 @@ func (b *Binder) bindUnaryExpr(
 func (b *Binder) bindFunctionCall(
 	f *parser.FunctionCall,
 ) (BoundExpr, error) {
+	// Handle sequence functions (NEXTVAL, CURRVAL)
+	funcNameUpper := strings.ToUpper(f.Name)
+	if funcNameUpper == "NEXTVAL" || funcNameUpper == "CURRVAL" {
+		return b.bindSequenceCall(f)
+	}
+
 	// Get expected argument types from function signature if available
 	argTypes := getFunctionArgTypes(
 		f.Name,
@@ -838,4 +844,54 @@ func getIntValue(v any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// bindSequenceCall binds a sequence function call (NEXTVAL or CURRVAL).
+func (b *Binder) bindSequenceCall(f *parser.FunctionCall) (*BoundSequenceCall, error) {
+	funcNameUpper := strings.ToUpper(f.Name)
+
+	// Validate argument count: both NEXTVAL and CURRVAL take exactly 1 argument
+	if len(f.Args) != 1 {
+		return nil, b.errorf("%s requires exactly 1 argument (sequence name)", funcNameUpper)
+	}
+
+	// The argument must be a string literal (sequence name)
+	lit, ok := f.Args[0].(*parser.Literal)
+	if !ok || lit.Type != dukdb.TYPE_VARCHAR {
+		return nil, b.errorf("%s argument must be a string literal (sequence name)", funcNameUpper)
+	}
+
+	sequenceName, ok := lit.Value.(string)
+	if !ok {
+		return nil, b.errorf("%s argument must be a string literal (sequence name)", funcNameUpper)
+	}
+
+	// Parse the sequence name (may be qualified as schema.sequence)
+	schemaName := "main"
+	parts := strings.Split(sequenceName, ".")
+	if len(parts) == 2 {
+		schemaName = parts[0]
+		sequenceName = parts[1]
+	} else if len(parts) > 2 {
+		return nil, b.errorf("invalid sequence name: %s", sequenceName)
+	}
+
+	// Validate that the sequence exists in the catalog
+	if b.catalog != nil {
+		schema, ok := b.catalog.GetSchema(schemaName)
+		if !ok {
+			return nil, b.errorf("schema not found: %s", schemaName)
+		}
+
+		_, ok = schema.GetSequence(sequenceName)
+		if !ok {
+			return nil, b.errorf("sequence not found: %s.%s", schemaName, sequenceName)
+		}
+	}
+
+	return &BoundSequenceCall{
+		FunctionName: funcNameUpper,
+		SchemaName:   schemaName,
+		SequenceName: sequenceName,
+	}, nil
 }
