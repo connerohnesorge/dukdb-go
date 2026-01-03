@@ -208,7 +208,7 @@ func (p *parser) scanOperator() {
 	if p.pos+1 < len(p.input) {
 		two := p.input[p.pos : p.pos+2]
 		switch two {
-		case "<= ", ">=", "<>", "!=", "||", "::":
+		case "<=", ">=", "<>", "!=", "||", "::":
 			p.pos += 2
 			p.tokens = append(
 				p.tokens,

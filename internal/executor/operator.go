@@ -1063,9 +1063,22 @@ func (e *Executor) executeInsert(
 		if plan.TableDef != nil && plan.TableDef.Schema != "" {
 			schema = plan.TableDef.Schema
 		}
-		entry := wal.NewInsertEntry(e.txnID, schema, plan.Table, allInsertedValues)
+		// Use unique WAL transaction ID for each auto-committed statement
+		walTxnID := e.wal.NextTxnID()
+		// Write TxnBegin entry
+		beginEntry := wal.NewTxnBeginEntry(walTxnID, e.wal.Clock().Now())
+		if err := e.wal.WriteEntry(beginEntry); err != nil {
+			return nil, fmt.Errorf("WAL TxnBegin append failed: %w", err)
+		}
+		// Write INSERT entry
+		entry := wal.NewInsertEntry(walTxnID, schema, plan.Table, allInsertedValues)
 		if err := e.wal.WriteEntry(entry); err != nil {
 			return nil, fmt.Errorf("WAL append failed: %w", err)
+		}
+		// Write TxnCommit entry
+		commitEntry := wal.NewTxnCommitEntry(walTxnID, e.wal.Clock().Now())
+		if err := e.wal.WriteEntry(commitEntry); err != nil {
+			return nil, fmt.Errorf("WAL TxnCommit append failed: %w", err)
 		}
 	}
 
@@ -1124,6 +1137,29 @@ func (e *Executor) executeCreateTable(
 		return nil, err
 	}
 
+	// Write WAL entry for CREATE TABLE
+	if e.wal != nil {
+		columns := make([]wal.ColumnDef, len(plan.Columns))
+		for i, col := range plan.Columns {
+			columns[i] = wal.ColumnDef{
+				Name:     col.Name,
+				Type:     col.Type,
+				Nullable: col.Nullable,
+			}
+		}
+		entry := &wal.CreateTableEntry{
+			Schema:  plan.Schema,
+			Name:    plan.Table,
+			Columns: columns,
+		}
+		if err := e.wal.WriteEntry(entry); err != nil {
+			// Rollback catalog and storage changes
+			_ = e.catalog.DropTableInSchema(plan.Schema, plan.Table)
+			_ = e.storage.DropTable(plan.Table)
+			return nil, fmt.Errorf("WAL append failed: %w", err)
+		}
+	}
+
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
 
@@ -1173,6 +1209,17 @@ func (e *Executor) executeDropTable(
 	// Drop from catalog
 	if err := e.catalog.DropTableInSchema(plan.Schema, plan.Table); err != nil {
 		return nil, err
+	}
+
+	// Write WAL entry for DROP TABLE
+	if e.wal != nil {
+		entry := &wal.DropTableEntry{
+			Schema: plan.Schema,
+			Name:   plan.Table,
+		}
+		if err := e.wal.WriteEntry(entry); err != nil {
+			return nil, fmt.Errorf("WAL append failed: %w", err)
+		}
 	}
 
 	return &ExecutionResult{RowsAffected: 0}, nil

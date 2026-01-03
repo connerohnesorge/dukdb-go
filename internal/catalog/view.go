@@ -54,3 +54,16 @@ func (v *ViewDef) DependsOnTable(tableName string) bool {
 	}
 	return false
 }
+
+// Clone creates a deep copy of the view definition.
+func (v *ViewDef) Clone() *ViewDef {
+	deps := make([]string, len(v.TableDependencies))
+	copy(deps, v.TableDependencies)
+
+	return &ViewDef{
+		Name:              v.Name,
+		Schema:            v.Schema,
+		Query:             v.Query,
+		TableDependencies: deps,
+	}
+}

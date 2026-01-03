@@ -32,3 +32,18 @@ func NewIndexDef(name, schema, table string, columns []string, isUnique bool) *I
 		IsPrimary: false,
 	}
 }
+
+// Clone creates a deep copy of the index definition.
+func (i *IndexDef) Clone() *IndexDef {
+	columns := make([]string, len(i.Columns))
+	copy(columns, i.Columns)
+
+	return &IndexDef{
+		Name:      i.Name,
+		Schema:    i.Schema,
+		Table:     i.Table,
+		Columns:   columns,
+		IsUnique:  i.IsUnique,
+		IsPrimary: i.IsPrimary,
+	}
+}

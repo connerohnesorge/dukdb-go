@@ -504,6 +504,48 @@ func (e *DropSequenceEntry) Deserialize(
 	return err
 }
 
+// SequenceValueEntry represents a sequence value advance WAL entry.
+// This is logged when nextval() is called to persist the sequence state.
+type SequenceValueEntry struct {
+	Schema     string
+	Name       string
+	CurrentVal int64 // The new current value after the advance
+}
+
+// Type returns the entry type.
+func (e *SequenceValueEntry) Type() EntryType {
+	return EntrySequenceValue
+}
+
+// Serialize writes the entry to the writer.
+func (e *SequenceValueEntry) Serialize(
+	w io.Writer,
+) error {
+	if err := writeString(w, e.Schema); err != nil {
+		return err
+	}
+	if err := writeString(w, e.Name); err != nil {
+		return err
+	}
+
+	return binary.Write(w, binary.LittleEndian, e.CurrentVal)
+}
+
+// Deserialize reads the entry from the reader.
+func (e *SequenceValueEntry) Deserialize(
+	r io.Reader,
+) error {
+	var err error
+	if e.Schema, err = readString(r); err != nil {
+		return err
+	}
+	if e.Name, err = readString(r); err != nil {
+		return err
+	}
+
+	return binary.Read(r, binary.LittleEndian, &e.CurrentVal)
+}
+
 // AlterTableEntry represents an ALTER TABLE WAL entry.
 type AlterTableEntry struct {
 	Schema       string

@@ -141,3 +141,49 @@ func (s *Storage) ImportTable(
 
 	return nil
 }
+
+// Clone creates a deep copy of the storage for transaction rollback support.
+// Note: This clones the table names but NOT the data. For DDL rollback,
+// we only need to track which tables exist, not their data.
+// DML rollback is handled separately by the transaction manager.
+func (s *Storage) Clone() *Storage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	newStorage := &Storage{
+		tables: make(map[string]*Table),
+	}
+
+	// Copy table references - DDL rollback needs to track which tables exist
+	// For full DDL rollback (CREATE TABLE then ROLLBACK), we need the actual table names
+	for key := range s.tables {
+		// We store a nil marker - the actual data is not cloned
+		// On restore, we check what tables should exist vs what do exist
+		newStorage.tables[key] = nil
+	}
+
+	return newStorage
+}
+
+// RestoreFrom restores this storage from a snapshot.
+// This is used for DDL transaction rollback.
+// Tables that were created after the snapshot are dropped.
+// Tables that were dropped after the snapshot are NOT restored (data is lost).
+func (s *Storage) RestoreFrom(snapshot *Storage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	snapshot.mu.RLock()
+	defer snapshot.mu.RUnlock()
+
+	// Find tables that were created after the snapshot and drop them
+	for key := range s.tables {
+		if _, existed := snapshot.tables[key]; !existed {
+			// This table was created after the snapshot, drop it
+			delete(s.tables, key)
+		}
+	}
+	// Note: Tables that were dropped cannot be restored - their data is gone
+	// This is acceptable for DDL rollback as the primary use case is
+	// rolling back newly created tables
+}

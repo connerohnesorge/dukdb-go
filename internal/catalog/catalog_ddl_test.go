@@ -177,8 +177,34 @@ func TestSequenceNextVal(t *testing.T) {
 	assert.Equal(t, int64(2), val)
 
 	// CurrVal returns the last value returned by NextVal (2)
-	currVal := retrieved.CurrVal()
+	currVal, err := retrieved.CurrVal()
+	require.NoError(t, err)
 	assert.Equal(t, int64(2), currVal)
+}
+
+// TestSequenceCurrValBeforeNextVal tests that CurrVal fails before NextVal is called.
+func TestSequenceCurrValBeforeNextVal(t *testing.T) {
+	catalog := NewCatalog()
+
+	// Create sequence
+	seq := NewSequenceDef("my_seq", "main")
+	require.NoError(t, catalog.CreateSequence(seq))
+
+	retrieved, _ := catalog.GetSequence("my_seq")
+
+	// CurrVal before NextVal should fail
+	_, err := retrieved.CurrVal()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not yet defined in this session")
+
+	// After calling NextVal, CurrVal should work
+	val, err := retrieved.NextVal()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), val)
+
+	currVal, err := retrieved.CurrVal()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), currVal)
 }
 
 // TestSequenceCustomIncrement tests sequence with custom increment.

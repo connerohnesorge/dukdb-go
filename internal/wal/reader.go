@@ -238,6 +238,14 @@ func (r *Reader) deserializeEntry(
 
 		return entry, nil
 
+	case EntrySequenceValue:
+		entry := &SequenceValueEntry{}
+		if err := entry.Deserialize(reader); err != nil {
+			return nil, err
+		}
+
+		return entry, nil
+
 	case EntryAlterInfo:
 		entry := &AlterTableEntry{}
 		if err := entry.Deserialize(reader); err != nil {
@@ -368,6 +376,7 @@ func (r *Reader) Recover(
 	activeTxns := make(map[uint64][]Entry)
 	committedTxns := make(map[uint64]bool)
 	var catalogEntries []Entry
+	var deferredAlterEntries []*AlterTableEntry // ALTER TABLE RENAME operations deferred until after data
 
 	// Read all entries
 	for {
@@ -400,9 +409,18 @@ func (r *Reader) Recover(
 				activeTxns[txnID] = append(activeTxns[txnID], entry)
 			}
 
+		case *AlterTableEntry:
+			// Defer RENAME TO operations until after data entries
+			// This ensures INSERT entries can find their tables
+			if e.Operation == 0 { // AlterTableRenameTo
+				deferredAlterEntries = append(deferredAlterEntries, e)
+			} else {
+				catalogEntries = append(catalogEntries, entry)
+			}
+
 		case *CreateTableEntry, *DropTableEntry, *CreateSchemaEntry, *DropSchemaEntry,
 			*CreateViewEntry, *DropViewEntry, *CreateIndexEntry, *DropIndexEntry,
-			*CreateSequenceEntry, *DropSequenceEntry, *AlterTableEntry:
+			*CreateSequenceEntry, *DropSequenceEntry, *SequenceValueEntry:
 			// Catalog entries are applied immediately (not transactional for now)
 			catalogEntries = append(catalogEntries, entry)
 
@@ -415,7 +433,7 @@ func (r *Reader) Recover(
 		}
 	}
 
-	// Replay catalog entries first
+	// Replay catalog entries first (excluding RENAME TO which is deferred)
 	for _, entry := range catalogEntries {
 		if err := r.replayCatalogEntry(entry, cat, store); err != nil {
 			return fmt.Errorf(
@@ -445,6 +463,17 @@ func (r *Reader) Recover(
 					err,
 				)
 			}
+		}
+	}
+
+	// Now replay deferred ALTER TABLE RENAME TO operations
+	// These must come after data entries to ensure data is in the right tables
+	for _, entry := range deferredAlterEntries {
+		if err := r.replayCatalogEntry(entry, cat, store); err != nil {
+			return fmt.Errorf(
+				"failed to replay deferred alter entry: %w",
+				err,
+			)
 		}
 	}
 
@@ -570,6 +599,20 @@ func (r *Reader) replayCatalogEntry(
 		}
 		_ = cat.DropSequenceInSchema(schemaName, e.Name)
 
+	case *SequenceValueEntry:
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		// Get the sequence and update its current value
+		seq, ok := cat.GetSequenceInSchema(schemaName, e.Name)
+		if !ok {
+			// Sequence doesn't exist - skip
+			return nil
+		}
+		// Update the sequence's current value to reflect the WAL state
+		seq.SetCurrentVal(e.CurrentVal)
+
 	case *AlterTableEntry:
 		schemaName := e.Schema
 		if schemaName == "" {
@@ -585,7 +628,7 @@ func (r *Reader) replayCatalogEntry(
 		// Handle different alter operations
 		switch e.Operation {
 		case 0: // AlterTableRenameTo
-			// Rename table: drop old, create with new name
+			// Rename table in catalog: drop old, create with new name
 			if err := cat.DropTableInSchema(schemaName, e.Table); err != nil {
 				return nil
 			}
@@ -593,25 +636,16 @@ func (r *Reader) replayCatalogEntry(
 			if err := cat.CreateTableInSchema(schemaName, tableDef); err != nil {
 				return nil
 			}
+			// Also rename in storage
+			_ = store.RenameTable(e.Table, e.NewTableName)
 
 		case 1: // AlterTableRenameColumn
-			// Rename column
-			for _, col := range tableDef.Columns {
-				if col.Name == e.OldColumn {
-					col.Name = e.NewColumn
-					break
-				}
-			}
+			// Rename column using TableDef method to update columnIndex
+			_ = tableDef.RenameColumn(e.OldColumn, e.NewColumn)
 
 		case 2: // AlterTableDropColumn
-			// Drop column
-			newColumns := make([]*catalog.ColumnDef, 0, len(tableDef.Columns)-1)
-			for _, col := range tableDef.Columns {
-				if col.Name != e.Column {
-					newColumns = append(newColumns, col)
-				}
-			}
-			tableDef.Columns = newColumns
+			// Drop column using TableDef method
+			_ = tableDef.DropColumn(e.Column)
 
 		default:
 			// Unknown operation - skip

@@ -101,6 +101,16 @@ func (c *EngineConn) Execute(
 		return 0, err
 	}
 
+	// Handle transaction statements at connection level for DDL rollback support
+	switch stmt.(type) {
+	case *parser.BeginStmt:
+		return c.handleBegin()
+	case *parser.CommitStmt:
+		return c.handleCommit()
+	case *parser.RollbackStmt:
+		return c.handleRollback()
+	}
+
 	// Bind the statement
 	b := binder.NewBinder(c.engine.catalog)
 	boundStmt, err := b.Bind(stmt)
@@ -120,12 +130,60 @@ func (c *EngineConn) Execute(
 		c.engine.catalog,
 		c.engine.storage,
 	)
+	// Set WAL writer for persistent databases
+	if c.engine.WAL() != nil {
+		exec.SetWAL(c.engine.WAL())
+		if c.txn != nil {
+			exec.SetTxnID(c.txn.ID())
+		}
+	}
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return 0, err
 	}
 
 	return result.RowsAffected, nil
+}
+
+// handleBegin handles the BEGIN statement, capturing catalog and storage snapshots
+// for DDL transaction rollback support.
+func (c *EngineConn) handleBegin() (int64, error) {
+	// Capture catalog and storage snapshots for DDL rollback
+	if c.txn != nil {
+		c.txn.catalogSnapshot = c.engine.catalog.Clone()
+		c.txn.storageSnapshot = c.engine.storage.Clone()
+	}
+
+	return 0, nil
+}
+
+// handleCommit handles the COMMIT statement, clearing any snapshots.
+func (c *EngineConn) handleCommit() (int64, error) {
+	// Clear snapshots - changes are now permanent
+	if c.txn != nil {
+		c.txn.catalogSnapshot = nil
+		c.txn.storageSnapshot = nil
+	}
+
+	return 0, nil
+}
+
+// handleRollback handles the ROLLBACK statement, restoring from snapshots
+// for DDL transaction rollback support.
+func (c *EngineConn) handleRollback() (int64, error) {
+	// Restore from snapshots if available
+	if c.txn != nil {
+		if c.txn.catalogSnapshot != nil {
+			c.engine.catalog.RestoreFrom(c.txn.catalogSnapshot)
+			c.txn.catalogSnapshot = nil
+		}
+		if c.txn.storageSnapshot != nil {
+			c.engine.storage.RestoreFrom(c.txn.storageSnapshot)
+			c.txn.storageSnapshot = nil
+		}
+	}
+
+	return 0, nil
 }
 
 // Query executes a query that returns rows.
@@ -166,6 +224,13 @@ func (c *EngineConn) Query(
 		c.engine.catalog,
 		c.engine.storage,
 	)
+	// Set WAL writer for persistent databases
+	if c.engine.WAL() != nil {
+		exec.SetWAL(c.engine.WAL())
+		if c.txn != nil {
+			exec.SetTxnID(c.txn.ID())
+		}
+	}
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return nil, nil, err

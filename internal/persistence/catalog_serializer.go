@@ -23,9 +23,24 @@ const (
 	PropertyIDMemberName  = 105
 	PropertyIDKeyType     = 106 // MAP key type
 	PropertyIDValueType   = 107 // MAP value type
-	PropertyIDSchemaCount = 200
-	PropertyIDTableCount  = 201
-	PropertyIDColumnCount = 202
+	PropertyIDSchemaCount   = 200
+	PropertyIDTableCount    = 201
+	PropertyIDColumnCount   = 202
+	PropertyIDViewCount     = 203
+	PropertyIDViewQuery     = 204
+	PropertyIDViewDeps      = 205
+	PropertyIDIndexCount    = 206
+	PropertyIDIndexTable    = 207
+	PropertyIDIndexColumns  = 208
+	PropertyIDIndexUnique   = 209
+	PropertyIDIndexPrimary  = 210
+	PropertyIDSequenceCount = 211
+	PropertyIDSequenceStart = 212
+	PropertyIDSequenceIncr  = 213
+	PropertyIDSequenceMin   = 214
+	PropertyIDSequenceMax   = 215
+	PropertyIDSequenceCycle = 216
+	PropertyIDSequenceCurr  = 217
 )
 
 // DuckDB LogicalTypeId constants for serialization

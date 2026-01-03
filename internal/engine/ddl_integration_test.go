@@ -564,7 +564,6 @@ func TestDDLIndexColumnDependencies(t *testing.T) {
 
 // TestDDLComplexWorkflow tests a complex DDL workflow.
 func TestDDLComplexWorkflow(t *testing.T) {
-	t.Skip("Feature not yet implemented: parser support for complex view queries and sequence functions")
 	engine := NewEngine()
 	defer func() {
 		require.NoError(t, engine.Close())
@@ -606,7 +605,8 @@ func TestDDLComplexWorkflow(t *testing.T) {
 	rows, _, err := conn.Query(ctx, "SELECT * FROM app.recent_users", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(rows))
-	require.Equal(t, int64(1000), rows[0]["id"])
+	// Note: id is declared as INTEGER, so it returns int32 even though nextval returns int64
+	require.Equal(t, int32(1000), rows[0]["id"])
 
 	// Clean up in correct order
 	_, err = conn.Execute(ctx, "DROP VIEW app.recent_users", nil)

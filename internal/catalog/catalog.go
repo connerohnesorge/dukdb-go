@@ -846,5 +846,77 @@ func (s *Schema) ListSequences() []*SequenceDef {
 	return sequences
 }
 
+// Clone creates a deep copy of the schema for transaction rollback support.
+func (s *Schema) Clone() *Schema {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	newSchema := &Schema{
+		name:      s.name,
+		tables:    make(map[string]*TableDef),
+		views:     make(map[string]*ViewDef),
+		indexes:   make(map[string]*IndexDef),
+		sequences: make(map[string]*SequenceDef),
+	}
+
+	// Clone tables
+	for key, table := range s.tables {
+		newSchema.tables[key] = table.Clone()
+	}
+
+	// Clone views
+	for key, view := range s.views {
+		newSchema.views[key] = view.Clone()
+	}
+
+	// Clone indexes
+	for key, index := range s.indexes {
+		newSchema.indexes[key] = index.Clone()
+	}
+
+	// Clone sequences
+	for key, seq := range s.sequences {
+		newSchema.sequences[key] = seq.Clone()
+	}
+
+	return newSchema
+}
+
+// Clone creates a deep copy of the catalog for transaction rollback support.
+// This copies all schemas and their objects (tables, views, indexes, sequences).
+// Virtual tables are NOT cloned as they are external references.
+func (c *Catalog) Clone() *Catalog {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	newCatalog := &Catalog{
+		schemas:       make(map[string]*Schema),
+		virtualTables: c.virtualTables, // Share virtual tables (external references)
+	}
+
+	for key, schema := range c.schemas {
+		newCatalog.schemas[key] = schema.Clone()
+	}
+
+	return newCatalog
+}
+
+// RestoreFrom restores this catalog from a snapshot.
+// This is used for DDL transaction rollback.
+func (c *Catalog) RestoreFrom(snapshot *Catalog) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	snapshot.mu.RLock()
+	defer snapshot.mu.RUnlock()
+
+	// Clear current schemas and restore from snapshot
+	c.schemas = make(map[string]*Schema)
+	for key, schema := range snapshot.schemas {
+		c.schemas[key] = schema.Clone()
+	}
+	// Virtual tables are shared, not restored
+}
+
 // Compile-time assertion that Catalog implements dukdb.VirtualTableRegistry
 var _ dukdb.VirtualTableRegistry = (*Catalog)(nil)

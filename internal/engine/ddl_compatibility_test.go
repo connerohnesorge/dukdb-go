@@ -298,7 +298,6 @@ func TestDDLSequenceEdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Sequence with negative increment", func(t *testing.T) {
-		t.Skip("Feature not yet implemented: sequences with negative increment")
 		_, err := conn.Execute(ctx, "CREATE SEQUENCE countdown START WITH 100 INCREMENT BY -1", nil)
 		require.NoError(t, err)
 
@@ -321,14 +320,13 @@ func TestDDLSequenceEdgeCases(t *testing.T) {
 	})
 
 	t.Run("currval before nextval should fail", func(t *testing.T) {
-		t.Skip("Feature not yet implemented: currval() function and sequence state validation")
 		_, err := conn.Execute(ctx, "CREATE SEQUENCE new_seq", nil)
 		require.NoError(t, err)
 
 		// currval before nextval should fail
 		_, _, err = conn.Query(ctx, "SELECT currval('new_seq')", nil)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "not yet called")
+		require.Contains(t, err.Error(), "not yet defined in this session")
 	})
 
 	t.Run("currval after nextval should work", func(t *testing.T) {
@@ -446,17 +444,16 @@ func TestDDLIndexEdgeCases(t *testing.T) {
 	})
 
 	t.Run("Multiple indexes on same table", func(t *testing.T) {
-		t.Skip("Feature not yet implemented: multiple indexes on same table (index naming collision issue)")
 		_, err := conn.Execute(ctx, "CREATE TABLE products (id INTEGER, name VARCHAR, price DOUBLE)", nil)
 		require.NoError(t, err)
 
-		_, err = conn.Execute(ctx, "CREATE INDEX idx_id ON products (id)", nil)
+		_, err = conn.Execute(ctx, "CREATE INDEX idx_products_id ON products (id)", nil)
 		require.NoError(t, err)
 
-		_, err = conn.Execute(ctx, "CREATE INDEX idx_name ON products (name)", nil)
+		_, err = conn.Execute(ctx, "CREATE INDEX idx_products_name ON products (name)", nil)
 		require.NoError(t, err)
 
-		_, err = conn.Execute(ctx, "CREATE INDEX idx_price ON products (price)", nil)
+		_, err = conn.Execute(ctx, "CREATE INDEX idx_products_price ON products (price)", nil)
 		require.NoError(t, err)
 	})
 
@@ -550,7 +547,6 @@ func TestDDLTransactionBehavior(t *testing.T) {
 	})
 
 	t.Run("DDL rollback", func(t *testing.T) {
-		t.Skip("Feature not yet implemented: DDL transaction rollback")
 		// Begin transaction
 		_, err := conn.Execute(ctx, "BEGIN", nil)
 		require.NoError(t, err)
@@ -565,6 +561,42 @@ func TestDDLTransactionBehavior(t *testing.T) {
 
 		// Table should not exist
 		_, _, err = conn.Query(ctx, "SELECT * FROM rollback_table", nil)
+		require.Error(t, err)
+	})
+
+	t.Run("DDL rollback multiple operations", func(t *testing.T) {
+		// Begin transaction
+		_, err := conn.Execute(ctx, "BEGIN", nil)
+		require.NoError(t, err)
+
+		// Create table in transaction
+		_, err = conn.Execute(ctx, "CREATE TABLE multi_table (id INTEGER)", nil)
+		require.NoError(t, err)
+
+		// Create view in transaction
+		_, err = conn.Execute(ctx, "CREATE VIEW multi_view AS SELECT * FROM multi_table", nil)
+		require.NoError(t, err)
+
+		// Create sequence in transaction
+		_, err = conn.Execute(ctx, "CREATE SEQUENCE multi_seq", nil)
+		require.NoError(t, err)
+
+		// All objects should be visible within transaction
+		_, _, err = conn.Query(ctx, "SELECT * FROM multi_table", nil)
+		require.NoError(t, err)
+
+		_, _, err = conn.Query(ctx, "SELECT * FROM multi_view", nil)
+		require.NoError(t, err)
+
+		// Rollback
+		_, err = conn.Execute(ctx, "ROLLBACK", nil)
+		require.NoError(t, err)
+
+		// All objects should not exist
+		_, _, err = conn.Query(ctx, "SELECT * FROM multi_table", nil)
+		require.Error(t, err)
+
+		_, _, err = conn.Query(ctx, "SELECT * FROM multi_view", nil)
 		require.Error(t, err)
 	})
 }

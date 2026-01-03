@@ -99,9 +99,56 @@ func (s *SequenceDef) NextVal() (int64, error) {
 }
 
 // CurrVal returns the last value returned by NextVal.
+// Returns an error if NextVal has not been called yet in this session.
 // This method is thread-safe.
-func (s *SequenceDef) CurrVal() int64 {
+func (s *SequenceDef) CurrVal() (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.LastVal
+
+	if !s.Called {
+		return 0, fmt.Errorf("currval of sequence '%s.%s' is not yet defined in this session", s.Schema, s.Name)
+	}
+	return s.LastVal, nil
+}
+
+// Clone creates a deep copy of the sequence definition.
+func (s *SequenceDef) Clone() *SequenceDef {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return &SequenceDef{
+		Name:        s.Name,
+		Schema:      s.Schema,
+		CurrentVal:  s.CurrentVal,
+		LastVal:     s.LastVal,
+		Called:      s.Called,
+		StartWith:   s.StartWith,
+		IncrementBy: s.IncrementBy,
+		MinValue:    s.MinValue,
+		MaxValue:    s.MaxValue,
+		IsCycle:     s.IsCycle,
+	}
+}
+
+// SetCurrentVal sets the current value of the sequence.
+// This is used during WAL recovery to restore sequence state.
+// This method is thread-safe.
+func (s *SequenceDef) SetCurrentVal(val int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CurrentVal = val
+	// If the value has been set, mark as called and set LastVal
+	// to the value before CurrentVal (what would have been returned)
+	if val != s.StartWith {
+		s.Called = true
+		s.LastVal = val - s.IncrementBy
+	}
+}
+
+// GetCurrentVal returns the current value of the sequence (the next value to be returned).
+// This method is thread-safe.
+func (s *SequenceDef) GetCurrentVal() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.CurrentVal
 }
