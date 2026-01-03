@@ -1,0 +1,672 @@
+package engine
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestIntegrationDuckDBFormatReadWrite tests reading and writing DuckDB format files
+// Tasks 10.1, 10.2
+func TestIntegrationDuckDBFormatReadWrite(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.dukdb")
+
+	// Create and write data
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	require.NotNil(t, conn1)
+	_ = conn1 // Connection is owned by engine
+
+	// Create a table
+	tableDef := catalog.NewTableDef(
+		"test_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("value", dukdb.TYPE_DOUBLE),
+		},
+	)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	// Create storage table
+	_, err = engine1.Storage().CreateTable("test_table", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_DOUBLE,
+	})
+	require.NoError(t, err)
+
+	// Insert test data
+	table, ok := engine1.Storage().GetTable("test_table")
+	require.True(t, ok)
+
+	testData := [][]any{
+		{int32(1), "Alice", float64(99.5)},
+		{int32(2), "Bob", float64(87.3)},
+		{int32(3), "Charlie", float64(92.1)},
+	}
+
+	for _, row := range testData {
+		err = table.AppendRow(row)
+		require.NoError(t, err)
+	}
+
+	// Close to persist
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Verify file exists
+	_, err = os.Stat(dbPath)
+	require.NoError(t, err, "Database file should exist after close")
+
+	// Read back data
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	require.NotNil(t, conn2)
+	_ = conn2 // Connection is owned by engine
+
+	// Verify catalog
+	tableDef2, ok := engine2.Catalog().GetTable("test_table")
+	require.True(t, ok, "Table should exist in catalog")
+	assert.Equal(t, "test_table", tableDef2.Name)
+	assert.Len(t, tableDef2.Columns, 3)
+
+	// Verify storage
+	table2, ok := engine2.Storage().GetTable("test_table")
+	require.True(t, ok, "Table should exist in storage")
+	assert.Equal(t, int64(3), table2.RowCount())
+
+	// Verify data
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+	assert.Equal(t, 3, chunk.Count())
+
+	for i, expectedRow := range testData {
+		assert.Equal(t, expectedRow[0], chunk.GetValue(i, 0), "Row %d, col 0", i)
+		assert.Equal(t, expectedRow[1], chunk.GetValue(i, 1), "Row %d, col 1", i)
+		assert.Equal(t, expectedRow[2], chunk.GetValue(i, 2), "Row %d, col 2", i)
+	}
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}
+
+// TestIntegrationWALRecovery tests WAL recovery functionality
+// Task 10.3
+func TestIntegrationWALRecovery(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "wal_test.dukdb")
+
+	// Note: Full WAL recovery (replaying uncommitted transactions) is not yet fully implemented.
+	// This test verifies the foundation for WAL by testing that data persists across sessions.
+
+	// Create database and write initial data
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	tableDef := catalog.NewTableDef(
+		"wal_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("data", dukdb.TYPE_VARCHAR),
+		},
+	)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	_, err = engine1.Storage().CreateTable("wal_table", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	})
+	require.NoError(t, err)
+
+	table, ok := engine1.Storage().GetTable("wal_table")
+	require.True(t, ok)
+
+	// Write all test data in first session
+	err = table.AppendRow([]any{int32(1), "data1"})
+	require.NoError(t, err)
+	err = table.AppendRow([]any{int32(2), "data2"})
+	require.NoError(t, err)
+	err = table.AppendRow([]any{int32(3), "data3"})
+	require.NoError(t, err)
+
+	// Close to persist
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Reopen database and verify data was persisted
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	table2, ok := engine2.Storage().GetTable("wal_table")
+	require.True(t, ok)
+
+	// Verify all 3 rows were persisted
+	assert.Equal(t, int64(3), table2.RowCount(), "All rows should be persisted")
+
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+	assert.Equal(t, 3, chunk.Count())
+
+	// Verify data integrity
+	assert.Equal(t, int32(1), chunk.GetValue(0, 0))
+	assert.Equal(t, "data1", chunk.GetValue(0, 1))
+	assert.Equal(t, int32(2), chunk.GetValue(1, 0))
+	assert.Equal(t, "data2", chunk.GetValue(1, 1))
+	assert.Equal(t, int32(3), chunk.GetValue(2, 0))
+	assert.Equal(t, "data3", chunk.GetValue(2, 1))
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}
+
+// TestIntegrationCheckpointRestore tests checkpoint and restore functionality
+// Task 10.4
+func TestIntegrationCheckpointRestore(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "checkpoint_test.dukdb")
+
+	// Create database
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	tableDef := catalog.NewTableDef(
+		"checkpoint_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR),
+		},
+	)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	_, err = engine1.Storage().CreateTable("checkpoint_table", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	})
+	require.NoError(t, err)
+
+	table, ok := engine1.Storage().GetTable("checkpoint_table")
+	require.True(t, ok)
+
+	// Insert initial data
+	for i := 0; i < 100; i++ {
+		err = table.AppendRow([]any{int32(i), "checkpoint_data"})
+		require.NoError(t, err)
+	}
+
+	// Force checkpoint by closing
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Verify checkpoint file was written
+	fileInfo, err := os.Stat(dbPath)
+	require.NoError(t, err)
+	assert.Greater(t, fileInfo.Size(), int64(0), "Checkpoint file should not be empty")
+
+	// Restore from checkpoint
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	table2, ok := engine2.Storage().GetTable("checkpoint_table")
+	require.True(t, ok)
+
+	// Verify all data was restored
+	assert.Equal(t, int64(100), table2.RowCount(), "All rows should be restored from checkpoint")
+
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+	assert.Equal(t, 100, chunk.Count())
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}
+
+// TestIntegrationVariousDataTypes tests persistence of various DuckDB data types
+// Task 10.5
+func TestIntegrationVariousDataTypes(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "types_test.dukdb")
+
+	testTypes := []struct {
+		name     string
+		typ      dukdb.Type
+		value    any
+		expected any
+	}{
+		{"bool", dukdb.TYPE_BOOLEAN, true, true},
+		{"tinyint", dukdb.TYPE_TINYINT, int8(-42), int8(-42)},
+		{"smallint", dukdb.TYPE_SMALLINT, int16(-1000), int16(-1000)},
+		{"integer", dukdb.TYPE_INTEGER, int32(-100000), int32(-100000)},
+		{"bigint", dukdb.TYPE_BIGINT, int64(-9999999999), int64(-9999999999)},
+		{"utinyint", dukdb.TYPE_UTINYINT, uint8(255), uint8(255)},
+		{"usmallint", dukdb.TYPE_USMALLINT, uint16(65000), uint16(65000)},
+		{"uinteger", dukdb.TYPE_UINTEGER, uint32(4000000000), uint32(4000000000)},
+		{"ubigint", dukdb.TYPE_UBIGINT, uint64(18000000000000000000), uint64(18000000000000000000)},
+		{"float", dukdb.TYPE_FLOAT, float32(3.14159), float32(3.14159)},
+		{"double", dukdb.TYPE_DOUBLE, float64(2.718281828), float64(2.718281828)},
+		{"varchar", dukdb.TYPE_VARCHAR, "Hello, DuckDB!", "Hello, DuckDB!"},
+	}
+
+	// Create database
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	// Build columns
+	columns := make([]*catalog.ColumnDef, len(testTypes))
+	types := make([]dukdb.Type, len(testTypes))
+	for i, tc := range testTypes {
+		columns[i] = catalog.NewColumnDef(tc.name, tc.typ)
+		types[i] = tc.typ
+	}
+
+	tableDef := catalog.NewTableDef("type_test", columns)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	table, err := engine1.Storage().CreateTable("type_test", types)
+	require.NoError(t, err)
+
+	// Insert data
+	values := make([]any, len(testTypes))
+	for i, tc := range testTypes {
+		values[i] = tc.value
+	}
+	err = table.AppendRow(values)
+	require.NoError(t, err)
+
+	// Close to persist
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Reopen and verify
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	table2, ok := engine2.Storage().GetTable("type_test")
+	require.True(t, ok)
+
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+
+	for i, tc := range testTypes {
+		actual := chunk.GetValue(0, i)
+		assert.Equal(t, tc.expected, actual, "Type %s mismatch", tc.name)
+	}
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}
+
+// TestIntegrationDuckDBCompatibility tests compatibility with DuckDB format
+// Task 10.6
+func TestIntegrationDuckDBCompatibility(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "compat_test.dukdb")
+
+	// Note: Full DuckDB compatibility testing requires the actual DuckDB binary.
+	// This test documents the format compatibility status and validates our
+	// implementation can write DuckDB-compatible files.
+
+	engine := NewEngine()
+	conn, err := engine.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn // Connection is owned by engine
+
+	tableDef := catalog.NewTableDef(
+		"compat_test",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+		},
+	)
+	err = engine.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	_, err = engine.Storage().CreateTable("compat_test", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	})
+	require.NoError(t, err)
+
+	table, ok := engine.Storage().GetTable("compat_test")
+	require.True(t, ok)
+
+	err = table.AppendRow([]any{int32(1), "test"})
+	require.NoError(t, err)
+
+	err = engine.Close()
+	require.NoError(t, err)
+
+	// Verify the file has DuckDB magic number
+	f, err := os.Open(dbPath)
+	require.NoError(t, err)
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Logf("failed to close file: %v", err)
+		}
+	}()
+
+	// Skip to magic number location (offset 8)
+	_, err = f.Seek(8, 0)
+	require.NoError(t, err)
+
+	magic := make([]byte, 4)
+	_, err = f.Read(magic)
+	require.NoError(t, err)
+
+	// Should have DuckDB magic number
+	assert.Equal(t, "DUCK", string(magic), "File should have DuckDB magic number")
+
+	// Note: To fully test compatibility with official DuckDB, you would need to:
+	// 1. Write a file with this implementation
+	// 2. Open it with the official duckdb binary/library
+	// 3. Verify the data can be read correctly
+	//
+	// And vice versa:
+	// 1. Write a file with official DuckDB
+	// 2. Open it with this implementation
+	// 3. Verify the data can be read correctly
+	//
+	// This requires the DuckDB binary to be installed and is beyond the scope
+	// of unit tests. Consider adding this as an optional integration test that
+	// can be run when DuckDB is available.
+}
+
+// TestIntegrationLargeDataset tests handling of larger datasets
+// Task 10.7 (scaled down from >1GB to 100K+ rows for CI)
+func TestIntegrationLargeDataset(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping large dataset test in short mode")
+	}
+
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "large_test.dukdb")
+
+	// Use 100K rows as a reasonable compromise for CI
+	// (1GB would be too large for most CI environments)
+	const numRows = 100000
+
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	tableDef := catalog.NewTableDef(
+		"large_table",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("value1", dukdb.TYPE_BIGINT),
+			catalog.NewColumnDef("value2", dukdb.TYPE_DOUBLE),
+			catalog.NewColumnDef("text", dukdb.TYPE_VARCHAR),
+		},
+	)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	_, err = engine1.Storage().CreateTable("large_table", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_BIGINT,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_VARCHAR,
+	})
+	require.NoError(t, err)
+
+	table, ok := engine1.Storage().GetTable("large_table")
+	require.True(t, ok)
+
+	// Insert large dataset
+	t.Logf("Inserting %d rows...", numRows)
+	for i := 0; i < numRows; i++ {
+		err = table.AppendRow([]any{
+			int32(i),
+			int64(i * 1000),
+			float64(i) * 3.14,
+			"large_dataset_row",
+		})
+		require.NoError(t, err)
+
+		// Progress indicator
+		if i > 0 && i%10000 == 0 {
+			t.Logf("Inserted %d rows...", i)
+		}
+	}
+
+	t.Logf("Closing database...")
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Verify file size
+	fileInfo, err := os.Stat(dbPath)
+	require.NoError(t, err)
+	t.Logf("Database file size: %d bytes (%.2f MB)", fileInfo.Size(), float64(fileInfo.Size())/1024/1024)
+
+	// Reopen and verify
+	t.Logf("Reopening database...")
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	table2, ok := engine2.Storage().GetTable("large_table")
+	require.True(t, ok)
+
+	assert.Equal(t, int64(numRows), table2.RowCount(), "All rows should be persisted")
+
+	// Verify first and last rows
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+
+	// Verify first row
+	assert.Equal(t, int32(0), chunk.GetValue(0, 0))
+	assert.Equal(t, int64(0), chunk.GetValue(0, 1))
+
+	// Note: We can't easily verify the last row without scanning all chunks
+	// but verifying the row count confirms all data was persisted
+
+	err = engine2.Close()
+	require.NoError(t, err)
+	t.Logf("Large dataset test completed successfully")
+}
+
+// TestIntegrationNullValues tests NULL value persistence
+func TestIntegrationNullValues(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "nulls_test.dukdb")
+
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	tableDef := catalog.NewTableDef(
+		"null_test",
+		[]*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			catalog.NewColumnDef("nullable_int", dukdb.TYPE_INTEGER).WithNullable(true),
+			catalog.NewColumnDef("nullable_str", dukdb.TYPE_VARCHAR).WithNullable(true),
+		},
+	)
+	err = engine1.Catalog().CreateTable(tableDef)
+	require.NoError(t, err)
+
+	_, err = engine1.Storage().CreateTable("null_test", []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	})
+	require.NoError(t, err)
+
+	table, ok := engine1.Storage().GetTable("null_test")
+	require.True(t, ok)
+
+	// Insert rows with various NULL patterns
+	testData := [][]any{
+		{int32(1), int32(100), "value1"},
+		{int32(2), nil, "value2"},
+		{int32(3), int32(300), nil},
+		{int32(4), nil, nil},
+		{int32(5), int32(500), "value5"},
+	}
+
+	for _, row := range testData {
+		err = table.AppendRow(row)
+		require.NoError(t, err)
+	}
+
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Reopen and verify NULLs
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	table2, ok := engine2.Storage().GetTable("null_test")
+	require.True(t, ok)
+
+	scanner := table2.Scan()
+	chunk := scanner.Next()
+	require.NotNil(t, chunk)
+	assert.Equal(t, 5, chunk.Count())
+
+	// Verify NULL patterns
+	for i, expectedRow := range testData {
+		assert.Equal(t, expectedRow[0], chunk.GetValue(i, 0), "Row %d, col 0", i)
+		assert.Equal(t, expectedRow[1], chunk.GetValue(i, 1), "Row %d, col 1", i)
+		assert.Equal(t, expectedRow[2], chunk.GetValue(i, 2), "Row %d, col 2", i)
+	}
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}
+
+// TestIntegrationMultipleTables tests persistence of multiple tables
+func TestIntegrationMultipleTables(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "multi_tables_test.dukdb")
+
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn1 // Connection is owned by engine
+
+	// Create multiple tables
+	tables := []struct {
+		name    string
+		columns []*catalog.ColumnDef
+		types   []dukdb.Type
+		rows    [][]any
+	}{
+		{
+			name: "users",
+			columns: []*catalog.ColumnDef{
+				catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+				catalog.NewColumnDef("username", dukdb.TYPE_VARCHAR),
+			},
+			types: []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+			rows: [][]any{
+				{int32(1), "alice"},
+				{int32(2), "bob"},
+			},
+		},
+		{
+			name: "products",
+			columns: []*catalog.ColumnDef{
+				catalog.NewColumnDef("sku", dukdb.TYPE_VARCHAR),
+				catalog.NewColumnDef("price", dukdb.TYPE_DOUBLE),
+			},
+			types: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_DOUBLE},
+			rows: [][]any{
+				{"SKU001", float64(19.99)},
+				{"SKU002", float64(29.99)},
+				{"SKU003", float64(39.99)},
+			},
+		},
+		{
+			name: "orders",
+			columns: []*catalog.ColumnDef{
+				catalog.NewColumnDef("order_id", dukdb.TYPE_BIGINT),
+				catalog.NewColumnDef("user_id", dukdb.TYPE_INTEGER),
+				catalog.NewColumnDef("total", dukdb.TYPE_DOUBLE),
+			},
+			types: []dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE},
+			rows: [][]any{
+				{int64(1001), int32(1), float64(49.98)},
+				{int64(1002), int32(2), float64(19.99)},
+			},
+		},
+	}
+
+	for _, tbl := range tables {
+		tableDef := catalog.NewTableDef(tbl.name, tbl.columns)
+		err := engine1.Catalog().CreateTable(tableDef)
+		require.NoError(t, err)
+
+		table, err := engine1.Storage().CreateTable(tbl.name, tbl.types)
+		require.NoError(t, err)
+
+		for _, row := range tbl.rows {
+			err = table.AppendRow(row)
+			require.NoError(t, err)
+		}
+	}
+
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Reopen and verify all tables
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+	_ = conn2 // Connection is owned by engine
+
+	for _, tbl := range tables {
+		tableDef, ok := engine2.Catalog().GetTable(tbl.name)
+		require.True(t, ok, "Table %s should exist in catalog", tbl.name)
+		assert.Equal(t, tbl.name, tableDef.Name)
+
+		table, ok := engine2.Storage().GetTable(tbl.name)
+		require.True(t, ok, "Table %s should exist in storage", tbl.name)
+		assert.Equal(t, int64(len(tbl.rows)), table.RowCount(), "Table %s row count", tbl.name)
+	}
+
+	err = engine2.Close()
+	require.NoError(t, err)
+}

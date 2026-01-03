@@ -18,14 +18,18 @@ import (
 
 func TestFileHeader(t *testing.T) {
 	header := &FileHeader{
-		Magic:     MagicBytes,
-		Version:   CurrentVersion,
-		Iteration: 42,
+		Magic:          MagicBytes,
+		Version:        CurrentVersion,
+		HeaderSize:     HeaderSize,
+		SequenceNumber: 42,
 	}
 
 	var buf bytes.Buffer
 	err := header.Serialize(&buf)
 	require.NoError(t, err)
+
+	// Verify header size
+	assert.Equal(t, HeaderSize, buf.Len(), "Header should be exactly 24 bytes")
 
 	// Deserialize
 	readHeader := &FileHeader{}
@@ -44,9 +48,139 @@ func TestFileHeader(t *testing.T) {
 	)
 	assert.Equal(
 		t,
-		header.Iteration,
-		readHeader.Iteration,
+		header.HeaderSize,
+		readHeader.HeaderSize,
 	)
+	assert.Equal(
+		t,
+		header.SequenceNumber,
+		readHeader.SequenceNumber,
+	)
+	// Checksum should be calculated and match
+	assert.NotZero(t, readHeader.Checksum, "Checksum should be non-zero")
+}
+
+func TestFileHeaderInvalidMagic(t *testing.T) {
+	header := &FileHeader{
+		Magic:          [4]byte{'B', 'A', 'D', '!'},
+		Version:        CurrentVersion,
+		HeaderSize:     HeaderSize,
+		SequenceNumber: 1,
+	}
+
+	var buf bytes.Buffer
+	err := header.Serialize(&buf)
+	require.NoError(t, err)
+
+	// Try to deserialize with wrong magic
+	readHeader := &FileHeader{}
+	err = readHeader.Deserialize(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid WAL magic")
+}
+
+func TestFileHeaderInvalidVersion(t *testing.T) {
+	header := &FileHeader{
+		Magic:          MagicBytes,
+		Version:        999, // Unsupported version
+		HeaderSize:     HeaderSize,
+		SequenceNumber: 1,
+	}
+
+	var buf bytes.Buffer
+	err := header.Serialize(&buf)
+	require.NoError(t, err)
+
+	// Try to deserialize with unsupported version
+	readHeader := &FileHeader{}
+	err = readHeader.Deserialize(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported WAL version")
+}
+
+func TestFileHeaderInvalidSize(t *testing.T) {
+	header := &FileHeader{
+		Magic:          MagicBytes,
+		Version:        CurrentVersion,
+		HeaderSize:     100, // Wrong size
+		SequenceNumber: 1,
+	}
+
+	var buf bytes.Buffer
+	err := header.Serialize(&buf)
+	require.NoError(t, err)
+
+	// Try to deserialize with wrong header size
+	readHeader := &FileHeader{}
+	err = readHeader.Deserialize(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid WAL header size")
+}
+
+func TestFileHeaderChecksumVerification(t *testing.T) {
+	header := &FileHeader{
+		Magic:          MagicBytes,
+		Version:        CurrentVersion,
+		HeaderSize:     HeaderSize,
+		SequenceNumber: 123,
+	}
+
+	var buf bytes.Buffer
+	err := header.Serialize(&buf)
+	require.NoError(t, err)
+
+	// Corrupt the checksum by modifying the last 4 bytes
+	data := buf.Bytes()
+	data[len(data)-1] ^= 0xFF // Flip bits in last byte of checksum
+
+	// Try to deserialize with corrupted checksum
+	readHeader := &FileHeader{}
+	err = readHeader.Deserialize(bytes.NewReader(data))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "checksum mismatch")
+}
+
+func TestFileHeaderDuckDBFormat(t *testing.T) {
+	// Test that header matches DuckDB format specification
+	header := &FileHeader{
+		Magic:          MagicBytes,
+		Version:        CurrentVersion,
+		HeaderSize:     HeaderSize,
+		SequenceNumber: 0,
+	}
+
+	var buf bytes.Buffer
+	err := header.Serialize(&buf)
+	require.NoError(t, err)
+
+	data := buf.Bytes()
+
+	// Verify magic number "WAL " (0x57414C20)
+	assert.Equal(t, byte('W'), data[0])
+	assert.Equal(t, byte('A'), data[1])
+	assert.Equal(t, byte('L'), data[2])
+	assert.Equal(t, byte(' '), data[3])
+
+	// Verify version = 3 (4 bytes, little-endian)
+	assert.Equal(t, byte(3), data[4])
+	assert.Equal(t, byte(0), data[5])
+	assert.Equal(t, byte(0), data[6])
+	assert.Equal(t, byte(0), data[7])
+
+	// Verify header size = 24 (4 bytes, little-endian)
+	assert.Equal(t, byte(24), data[8])
+	assert.Equal(t, byte(0), data[9])
+	assert.Equal(t, byte(0), data[10])
+	assert.Equal(t, byte(0), data[11])
+
+	// Verify sequence number = 0 (8 bytes, little-endian)
+	for i := 12; i < 20; i++ {
+		assert.Equal(t, byte(0), data[i])
+	}
+
+	// Checksum is last 4 bytes (20-23)
+	// We just verify it's present, not the actual value
+	assert.Equal(t, 24, len(data))
 }
 
 func TestCreateTableEntry(t *testing.T) {

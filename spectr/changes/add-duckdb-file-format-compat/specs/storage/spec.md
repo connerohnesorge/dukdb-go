@@ -1,3 +1,5 @@
+# Storage Specification
+
 ## ADDED Requirements
 
 ### Requirement: DuckDB Row Group Format
@@ -123,14 +125,11 @@ The storage layer SHALL use DuckDB's block storage system for data blocks.
 - THEN block IDs are added to free list
 - AND free list is persisted in file header
 
-## MODIFIED Requirements
-
-### Requirement: Data Chunk Persistence
+### Requirement: Data Chunk Persistence (DuckDB)
 
 Data chunks SHALL be persisted using DuckDB row group format.
 
-**Previous**: Custom chunk format with direct byte serialization
-**Updated**: DuckDB row group with column segments and compression
+**Note**: Replaces legacy custom chunk format with DuckDB row group with column segments and compression.
 
 #### Scenario: Chunk to row group conversion
 - GIVEN a DataChunk with multiple columns
@@ -146,12 +145,11 @@ Data chunks SHALL be persisted using DuckDB row group format.
 - AND compression is decompressed
 - AND DataChunk is reconstructed with original types
 
-### Requirement: Vector Persistence
+### Requirement: Vector Persistence (DuckDB)
 
 Vectors SHALL be persisted using column segment format.
 
-**Previous**: Direct vector serialization
-**Updated**: Vector data stored in column segments with compression
+**Note**: Replaces direct vector serialization with storage in column segments with compression.
 
 #### Scenario: Vector serialization
 - GIVEN a Vector with validity mask and data
@@ -167,12 +165,11 @@ Vectors SHALL be persisted using column segment format.
 - AND validity mask is unpacked
 - AND Vector is reconstructed with correct type
 
-### Requirement: TypeInfo Persistence
+### Requirement: TypeInfo Persistence (DuckDB)
 
 Type information SHALL be persisted using binary property-based serialization.
 
-**Previous**: JSON serialization with GZIP compression
-**Updated**: DuckDB binary property-based format
+**Note**: Replaces JSON serialization with DuckDB binary property-based format.
 
 #### Scenario: Struct type serialization
 - GIVEN a StructType with named children
@@ -194,16 +191,3 @@ Type information SHALL be persisted using binary property-based serialization.
 - THEN both key and value types are serialized
 - AND map type ID is written
 - AND deserialization creates correct MapType
-
-## REMOVED Requirements
-
-### Requirement: Legacy Chunk Format
-
-The custom chunk format SHALL be replaced with DuckDB row group format.
-
-**Reason**: Required for DuckDB compatibility
-
-#### Migration
-- Old chunk data must be migrated to row group format
-- Migration utility handles this conversion
-- Legacy format support removed in v1.0

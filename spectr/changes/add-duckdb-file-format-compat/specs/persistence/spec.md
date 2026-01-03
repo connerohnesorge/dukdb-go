@@ -127,9 +127,20 @@ The system SHALL use DuckDB's binary property-based format for catalog serializa
 - THEN these types are correctly serialized
 - AND deserialization reconstructs the types correctly
 
+### Requirement: Legacy dukdb-go Format Deprecation
+
+The legacy `DUKDBGO\x00` magic number format SHALL be deprecated and replaced with DuckDB format.
+
+**Reason**: Incompatibility with DuckDB ecosystem
+
+#### Migration Path
+- Old databases can be migrated using the `dukdb-go migrate` command
+- Compatibility mode available via `?format=legacy` during transition period
+- Legacy format support removed in v1.0
+
 ## MODIFIED Requirements
 
-### Requirement: WAL Entry Format
+### Requirement: Write-Ahead Log Entry Format
 
 The Write-Ahead Log SHALL use DuckDB's WAL format for compatibility.
 
@@ -153,7 +164,7 @@ The Write-Ahead Log SHALL use DuckDB's WAL format for compatibility.
 
 Persistent storage SHALL use DuckDB file format.
 
-**Previous**: Custom header with `DUKDBGO` magic number
+**Previous**: Custom header with `DUKDBGO\x00` magic number
 **Updated**: DuckDB header with `DUCK` magic and dual 4KB blocks
 
 #### Scenario: Persistent file structure
@@ -170,16 +181,3 @@ Persistent storage SHALL use DuckDB file format.
 - WHEN opening database
 - THEN no file is created
 - AND in-memory behavior is unchanged
-
-## REMOVED Requirements
-
-### Requirement: Legacy dukdb-go Format
-
-The legacy `DUKDBGO\x00` magic number format SHALL be deprecated and replaced with DuckDB format.
-
-**Reason**: Incompatibility with DuckDB ecosystem
-
-#### Migration Path
-- Old databases can be migrated using the `dukdb-go migrate` command
-- Compatibility mode available via `?format=legacy` during transition period
-- Legacy format support removed in v1.0

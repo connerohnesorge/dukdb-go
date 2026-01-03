@@ -2,6 +2,7 @@
 package engine
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"sync"
@@ -85,6 +86,47 @@ func (e *Engine) Open(
 		e.persistent = true
 		// Check if file exists and load it
 		if _, err := os.Stat(path); err == nil {
+			// Detect file format if not explicitly specified
+			detectedFormat := e.config.Format
+			if detectedFormat == "" || detectedFormat == "duckdb" {
+				// Auto-detect format
+				format, detectErr := persistence.DetectFileFormat(path)
+				if detectErr != nil {
+					return nil, fmt.Errorf(
+						"failed to detect file format: %w",
+						detectErr,
+					)
+				}
+
+				// Handle detected format
+				switch format {
+				case persistence.FormatDuckDB:
+					// DuckDB format - proceed normally
+					detectedFormat = "duckdb"
+				case persistence.FormatLegacy:
+					// Legacy format detected but not requested
+					if e.config.Format == "duckdb" {
+						return nil, fmt.Errorf(
+							"file is in legacy format, but DuckDB format was requested. "+
+							"Use ?format=legacy to open legacy files, or migrate the file first",
+						)
+					}
+					detectedFormat = "legacy"
+				case persistence.FormatUnknown:
+					return nil, fmt.Errorf(
+						"unknown file format: file may be corrupted or not a valid database file",
+					)
+				}
+			}
+
+			// Validate format compatibility
+			if e.config.Format == "legacy" && detectedFormat == "duckdb" {
+				return nil, fmt.Errorf(
+					"file is in DuckDB format, but legacy format was requested",
+				)
+			}
+
+			// Load the file
 			if err := e.loadFromFile(path); err != nil {
 				return nil, fmt.Errorf(
 					"failed to load database: %w",
@@ -277,55 +319,55 @@ func (e *Engine) loadFromFile(path string) error {
 		)
 	}
 
-	// Load table data from blocks
-	for _, blockInfo := range fm.DataBlocks() {
-		data, err := fm.ReadBlock(blockInfo)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to read block for table %s: %w",
-				blockInfo.TableName,
-				err,
-			)
-		}
-
-		// Get or create table in storage
-		table, ok := e.storage.GetTable(
-			blockInfo.TableName,
-		)
-		if !ok {
-			// Need to get column types from catalog
-			tableDef, ok := e.catalog.GetTable(
-				blockInfo.TableName,
-			)
+	// Load table data from catalog JSON
+	if catalogJSON.TableData != nil {
+		for tableName, rowGroupsEncoded := range catalogJSON.TableData {
+			// Get table definition from catalog
+			tableDef, ok := e.catalog.GetTable(tableName)
 			if !ok {
 				return fmt.Errorf(
 					"table %s not found in catalog",
-					blockInfo.TableName,
+					tableName,
 				)
 			}
-			table, err = e.storage.CreateTable(
-				blockInfo.TableName,
+
+			// Create table in storage
+			table, err := e.storage.CreateTable(
+				tableName,
 				tableDef.ColumnTypes(),
 			)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to create table %s: %w",
-					blockInfo.TableName,
+					tableName,
 					err,
 				)
 			}
-		}
 
-		// Import row group
-		rg, err := table.ImportRowGroup(data)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to import row group for table %s: %w",
-				blockInfo.TableName,
-				err,
-			)
+			// Decode and import each row group
+			for i, encoded := range rowGroupsEncoded {
+				data, err := decodeRowGroup(encoded)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to decode row group %d for table %s: %w",
+						i,
+						tableName,
+						err,
+					)
+				}
+
+				rg, err := table.ImportRowGroup(data)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to import row group %d for table %s: %w",
+						i,
+						tableName,
+						err,
+					)
+				}
+				table.AddRowGroup(rg)
+			}
 		}
-		table.AddRowGroup(rg)
 	}
 
 	return nil
@@ -341,8 +383,46 @@ func (e *Engine) saveToFile(path string) error {
 		return err
 	}
 
-	// Export and write catalog
+	// Export catalog
 	catalogJSON := e.catalog.Export()
+
+	// Add table data to catalog JSON
+	if catalogJSON.TableData == nil {
+		catalogJSON.TableData = make(map[string][]string)
+	}
+
+	// Serialize row groups for each table
+	for tableName, table := range e.storage.Tables() {
+		rowGroups := table.RowGroups()
+		encodedGroups := make([]string, 0, len(rowGroups))
+
+		for i, rg := range rowGroups {
+			data, err := table.ExportRowGroup(rg)
+			if err != nil {
+				if err := fm.Close(); err != nil {
+					// Log error but don't propagate from cleanup
+				}
+				_ = os.Remove(tmpPath)
+
+				return fmt.Errorf(
+					"failed to export row group %d for table %s: %w",
+					i,
+					tableName,
+					err,
+				)
+			}
+
+			// Encode to base64
+			encoded := encodeRowGroup(data)
+			encodedGroups = append(encodedGroups, encoded)
+		}
+
+		if len(encodedGroups) > 0 {
+			catalogJSON.TableData[tableName] = encodedGroups
+		}
+	}
+
+	// Marshal catalog with table data
 	catalogData, err := persistence.MarshalCatalog(
 		catalogJSON,
 	)
@@ -358,39 +438,7 @@ func (e *Engine) saveToFile(path string) error {
 		)
 	}
 
-	// Write table data blocks first
-	for tableName, table := range e.storage.Tables() {
-		for i, rg := range table.RowGroups() {
-			data, err := table.ExportRowGroup(rg)
-			if err != nil {
-				if err := fm.Close(); err != nil {
-					// Log error but don't propagate from cleanup
-				}
-				_ = os.Remove(tmpPath)
-
-				return fmt.Errorf(
-					"failed to export row group %d for table %s: %w",
-					i,
-					tableName,
-					err,
-				)
-			}
-			if err := fm.WriteBlock(tableName, i, data); err != nil {
-				if err := fm.Close(); err != nil {
-					// Log error but don't propagate from cleanup
-				}
-				_ = os.Remove(tmpPath)
-
-				return fmt.Errorf(
-					"failed to write block for table %s: %w",
-					tableName,
-					err,
-				)
-			}
-		}
-	}
-
-	// Write catalog after blocks
+	// Write catalog
 	if err := fm.WriteCatalog(catalogData); err != nil {
 		if err := fm.Close(); err != nil {
 			// Log error but don't propagate from cleanup
@@ -403,7 +451,7 @@ func (e *Engine) saveToFile(path string) error {
 		)
 	}
 
-	// Finalize with block index and footer
+	// Finalize with headers
 	if err := fm.Finalize(); err != nil {
 		if err := fm.Close(); err != nil {
 			// Log error but don't propagate from cleanup
@@ -437,6 +485,16 @@ func (e *Engine) saveToFile(path string) error {
 	}
 
 	return nil
+}
+
+// encodeRowGroup encodes row group data to base64
+func encodeRowGroup(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// decodeRowGroup decodes row group data from base64
+func decodeRowGroup(encoded string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(encoded)
 }
 
 // Verify that Engine implements Backend interface

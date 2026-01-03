@@ -583,3 +583,145 @@ func TestParseThreads(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDSN_Format(t *testing.T) {
+
+	tests := []struct {
+		name       string
+		dsn        string
+		wantFormat string
+		wantErr    bool
+		errType    ErrorType
+	}{
+		{
+			name:       "default format",
+			dsn:        ":memory:",
+			wantFormat: "duckdb",
+		},
+		{
+			name:       "explicit duckdb format",
+			dsn:        ":memory:?format=duckdb",
+			wantFormat: "duckdb",
+		},
+		{
+			name:       "legacy format",
+			dsn:        ":memory:?format=legacy",
+			wantFormat: "legacy",
+		},
+		{
+			name:       "file path with duckdb format",
+			dsn:        "/path/to/db.dukdb?format=duckdb",
+			wantFormat: "duckdb",
+		},
+		{
+			name:       "file path with legacy format",
+			dsn:        "/path/to/db.dukdb?format=legacy",
+			wantFormat: "legacy",
+		},
+		{
+			name:       "format with other options",
+			dsn:        ":memory:?format=duckdb&threads=4",
+			wantFormat: "duckdb",
+		},
+		{
+			name:    "invalid format",
+			dsn:     ":memory:?format=invalid",
+			wantErr: true,
+			errType: ErrorTypeSettings,
+		},
+		{
+			name:    "format uppercase rejected",
+			dsn:     ":memory:?format=DUCKDB",
+			wantErr: true,
+			errType: ErrorTypeSettings,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config, err := ParseDSN(tt.dsn)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf(
+						"ParseDSN(%q) expected error, got nil",
+						tt.dsn,
+					)
+					return
+				}
+				if dErr, ok := err.(*Error); ok {
+					if dErr.Type != tt.errType {
+						t.Errorf(
+							"ParseDSN(%q) error type = %v, want %v",
+							tt.dsn,
+							dErr.Type,
+							tt.errType,
+						)
+					}
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf(
+					"ParseDSN(%q) unexpected error: %v",
+					tt.dsn,
+					err,
+				)
+				return
+			}
+
+			if config.Format != tt.wantFormat {
+				t.Errorf(
+					"ParseDSN(%q) Format = %q, want %q",
+					tt.dsn,
+					config.Format,
+					tt.wantFormat,
+				)
+			}
+		})
+	}
+}
+
+func TestValidateFormat(t *testing.T) {
+	validFormats := []string{
+		"duckdb",
+		"legacy",
+	}
+	invalidFormats := []string{
+		"DUCKDB",
+		"LEGACY",
+		"invalid",
+		"",
+	}
+
+	for _, format := range validFormats {
+		if err := validateFormat(format); err != nil {
+			t.Errorf(
+				"validateFormat(%q) unexpected error: %v",
+				format,
+				err,
+			)
+		}
+	}
+
+	for _, format := range invalidFormats {
+		if err := validateFormat(format); err == nil {
+			t.Errorf(
+				"validateFormat(%q) expected error, got nil",
+				format,
+			)
+		}
+	}
+}
+
+func TestNewConfig_Format(t *testing.T) {
+	config := NewConfig()
+
+	if config.Format != "duckdb" {
+		t.Errorf(
+			"NewConfig() Format = %q, want \"duckdb\"",
+			config.Format,
+		)
+	}
+}

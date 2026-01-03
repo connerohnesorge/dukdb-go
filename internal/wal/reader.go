@@ -76,84 +76,68 @@ func (r *Reader) Header() *FileHeader {
 	return r.header
 }
 
-// ReadEntry reads the next WAL entry.
+// ReadEntry reads the next WAL entry using DuckDB format.
 func (r *Reader) ReadEntry() (Entry, error) {
-	// Read entry header
-	var size uint64
-	if err := binary.Read(r.reader, binary.LittleEndian, &size); err != nil {
-		if err == io.EOF {
+	// Read DuckDB entry header (16 bytes)
+	var header EntryHeader
+	if err := header.Deserialize(r.reader); err != nil {
+		if errors.Is(err, io.EOF) {
 			return nil, io.EOF
 		}
-
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, ErrTornWrite
+		}
 		return nil, fmt.Errorf(
-			"failed to read entry size: %w",
+			"failed to read entry header: %w",
 			err,
 		)
 	}
 
-	var checksumValue uint64
-	if err := binary.Read(r.reader, binary.LittleEndian, &checksumValue); err != nil {
-		if err == io.EOF ||
-			err == io.ErrUnexpectedEOF {
+	// Read checksum (CRC32, 4 bytes) stored after header, before payload
+	var storedChecksum uint32
+	if err := binary.Read(r.reader, binary.LittleEndian, &storedChecksum); err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
-
 		return nil, fmt.Errorf(
 			"failed to read entry checksum: %w",
 			err,
 		)
 	}
 
-	var entryType EntryType
-	if err := binary.Read(r.reader, binary.LittleEndian, &entryType); err != nil {
-		if err == io.EOF ||
-			err == io.ErrUnexpectedEOF {
+	// Read entry payload
+	payload := make([]byte, header.Length)
+	if _, err := io.ReadFull(r.reader, payload); err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, ErrTornWrite
 		}
-
 		return nil, fmt.Errorf(
-			"failed to read entry type: %w",
+			"failed to read entry payload: %w",
 			err,
 		)
 	}
 
-	// Read entry data
-	data := make([]byte, size)
-	if _, err := io.ReadFull(r.reader, data); err != nil {
-		if err == io.EOF ||
-			err == io.ErrUnexpectedEOF {
-			return nil, ErrTornWrite
+	// Verify checksum if flag is set
+	if header.Flags&EntryFlagChecksum != 0 {
+		calculatedChecksum := header.CalculateChecksum(payload)
+		if calculatedChecksum != storedChecksum {
+			return nil, fmt.Errorf(
+				"%w at position %d: expected 0x%08x, got 0x%08x",
+				ErrChecksumMismatch,
+				r.position,
+				storedChecksum,
+				calculatedChecksum,
+			)
 		}
-
-		return nil, fmt.Errorf(
-			"failed to read entry data: %w",
-			err,
-		)
 	}
 
-	// Verify checksum
-	checksum := crc64.New(r.checksum)
-	_ = binary.Write(
-		checksum,
-		binary.LittleEndian,
-		size,
-	)
-	_, _ = checksum.Write([]byte{byte(entryType)})
-	_, _ = checksum.Write(data)
-	if checksum.Sum64() != checksumValue {
-		return nil, fmt.Errorf(
-			"%w at position %d",
-			ErrChecksumMismatch,
-			r.position,
-		)
-	}
-
-	r.position += EntryHeaderSize + int64(size)
+	// Update position (header + checksum + payload)
+	r.position += int64(EntryHeaderSize + 4 + len(payload))
 
 	// Deserialize entry based on type
 	entry, err := r.deserializeEntry(
-		entryType,
-		data,
+		header.Type,
+		payload,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(

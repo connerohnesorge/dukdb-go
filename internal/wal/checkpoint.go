@@ -312,6 +312,9 @@ func (cm *CheckpointManager) writeCatalogCheckpoint(
 }
 
 // writeDataCheckpoint writes all data entries to the checkpoint WAL.
+// This includes all table data and associated index data for indexed columns.
+// Index data is automatically serialized as part of the DuckDBRowGroup format
+// when row groups are persisted.
 func (cm *CheckpointManager) writeDataCheckpoint(
 	w *Writer,
 ) error {

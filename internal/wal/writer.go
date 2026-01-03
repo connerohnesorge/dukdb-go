@@ -62,9 +62,10 @@ func NewWriter(
 	if stat.Size() == 0 {
 		// Write file header for new WAL
 		header := &FileHeader{
-			Magic:     MagicBytes,
-			Version:   CurrentVersion,
-			Iteration: 0,
+			Magic:          MagicBytes,
+			Version:        CurrentVersion,
+			HeaderSize:     HeaderSize,
+			SequenceNumber: 0,
 		}
 		if err := header.Serialize(w.buffer); err != nil {
 			_ = file.Close()
@@ -76,7 +77,7 @@ func NewWriter(
 		}
 		w.bytesWritten = HeaderSize
 	} else {
-		// Read existing header to get iteration
+		// Read existing header to get sequence number
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			_ = file.Close()
 
@@ -88,7 +89,7 @@ func NewWriter(
 
 			return nil, fmt.Errorf("failed to read WAL header: %w", err)
 		}
-		w.iteration = header.Iteration
+		w.iteration = header.SequenceNumber
 		w.bytesWritten = uint64(stat.Size())
 
 		// Seek back to end for appending
@@ -102,7 +103,7 @@ func NewWriter(
 	return w, nil
 }
 
-// WriteEntry writes a WAL entry to the file.
+// WriteEntry writes a WAL entry to the file using DuckDB format.
 func (w *Writer) WriteEntry(entry Entry) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -115,51 +116,46 @@ func (w *Writer) WriteEntry(entry Entry) error {
 			err,
 		)
 	}
-	data := buf.Bytes()
-	size := uint64(len(data))
+	payload := buf.Bytes()
 
-	// Calculate checksum over Size + Type + Data
-	checksum := crc64.New(w.checksum)
-	_ = binary.Write(
-		checksum,
-		binary.LittleEndian,
-		size,
-	)
-	_, _ = checksum.Write(
-		[]byte{byte(entry.Type())},
-	)
-	_, _ = checksum.Write(data)
-	checksumValue := checksum.Sum64()
+	// Increment sequence number for this entry
+	w.iteration++
 
-	// Write entry header
-	if err := binary.Write(w.buffer, binary.LittleEndian, size); err != nil {
+	// Create DuckDB entry header (16 bytes)
+	header := &EntryHeader{
+		Type:           entry.Type(),
+		Flags:          EntryFlagChecksum, // Always use checksum for durability
+		Length:         uint32(len(payload)),
+		SequenceNumber: uint32(w.iteration),
+	}
+
+	// Serialize entry header (16 bytes)
+	if err := header.Serialize(w.buffer); err != nil {
 		return fmt.Errorf(
-			"failed to write entry size: %w",
+			"failed to write entry header: %w",
 			err,
 		)
 	}
-	if err := binary.Write(w.buffer, binary.LittleEndian, checksumValue); err != nil {
+
+	// Calculate and write checksum (CRC32, 4 bytes) AFTER header, BEFORE payload
+	// This allows the reader to validate before reading the full payload
+	checksum := header.CalculateChecksum(payload)
+	if err := binary.Write(w.buffer, binary.LittleEndian, checksum); err != nil {
 		return fmt.Errorf(
 			"failed to write entry checksum: %w",
 			err,
 		)
 	}
-	if err := binary.Write(w.buffer, binary.LittleEndian, entry.Type()); err != nil {
+
+	// Write entry payload
+	if _, err := w.buffer.Write(payload); err != nil {
 		return fmt.Errorf(
-			"failed to write entry type: %w",
+			"failed to write entry payload: %w",
 			err,
 		)
 	}
 
-	// Write entry data
-	if _, err := w.buffer.Write(data); err != nil {
-		return fmt.Errorf(
-			"failed to write entry data: %w",
-			err,
-		)
-	}
-
-	w.bytesWritten += EntryHeaderSize + size
+	w.bytesWritten += uint64(EntryHeaderSize + 4 + len(payload)) // header + checksum + payload
 
 	return nil
 }
@@ -252,12 +248,13 @@ func (w *Writer) Reset() error {
 	// Reset buffer
 	w.buffer.Reset(w.file)
 
-	// Write new header with incremented iteration
+	// Write new header with incremented sequence number
 	w.iteration++
 	header := &FileHeader{
-		Magic:     MagicBytes,
-		Version:   CurrentVersion,
-		Iteration: w.iteration,
+		Magic:          MagicBytes,
+		Version:        CurrentVersion,
+		HeaderSize:     HeaderSize,
+		SequenceNumber: w.iteration,
 	}
 	if err := header.Serialize(w.buffer); err != nil {
 		return fmt.Errorf(
