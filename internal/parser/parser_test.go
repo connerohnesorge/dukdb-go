@@ -1809,3 +1809,46 @@ func TestParseIntervalLiteral(t *testing.T) {
 		})
 	}
 }
+
+// Test qualified column names (table.column syntax)
+func TestParseQualifiedColumns(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+	}{
+		{
+			name:    "simple qualified column",
+			sql:     "SELECT t.id FROM t",
+			wantErr: false,
+		},
+		{
+			name:    "multiple qualified columns",
+			sql:     "SELECT users.id, users.name FROM users",
+			wantErr: false,
+		},
+		{
+			name:    "mixed qualified and unqualified",
+			sql:     "SELECT users.id, name FROM users",
+			wantErr: false,
+		},
+		{
+			name:    "qualified columns in JOIN",
+			sql:     "SELECT users.name, posts.title FROM users JOIN posts ON users.id = posts.user_id",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && stmt == nil {
+				t.Error("Parse() returned nil statement")
+			}
+		})
+	}
+}

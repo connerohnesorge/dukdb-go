@@ -224,6 +224,11 @@ type Config struct {
 	// Examples: "1GB", "512MB", "80%"
 	// Default is "80%".
 	MaxMemory string
+
+	// Format specifies the database file format.
+	// Valid values are "duckdb" (native format) and "parquet" (column-oriented).
+	// Default is "duckdb".
+	Format string
 }
 
 // Type enum is defined in type_enum.go

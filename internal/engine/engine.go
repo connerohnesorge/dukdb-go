@@ -2,7 +2,6 @@
 package engine
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"sync"
@@ -86,43 +85,18 @@ func (e *Engine) Open(
 		e.persistent = true
 		// Check if file exists and load it
 		if _, err := os.Stat(path); err == nil {
-			// Detect file format if not explicitly specified
-			detectedFormat := e.config.Format
-			if detectedFormat == "" || detectedFormat == "duckdb" {
-				// Auto-detect format
-				format, detectErr := persistence.DetectFileFormat(path)
-				if detectErr != nil {
-					return nil, fmt.Errorf(
-						"failed to detect file format: %w",
-						detectErr,
-					)
-				}
-
-				// Handle detected format
-				switch format {
-				case persistence.FormatDuckDB:
-					// DuckDB format - proceed normally
-					detectedFormat = "duckdb"
-				case persistence.FormatLegacy:
-					// Legacy format detected but not requested
-					if e.config.Format == "duckdb" {
-						return nil, fmt.Errorf(
-							"file is in legacy format, but DuckDB format was requested. "+
-							"Use ?format=legacy to open legacy files, or migrate the file first",
-						)
-					}
-					detectedFormat = "legacy"
-				case persistence.FormatUnknown:
-					return nil, fmt.Errorf(
-						"unknown file format: file may be corrupted or not a valid database file",
-					)
-				}
+			// Auto-detect format
+			format, detectErr := persistence.DetectFileFormat(path)
+			if detectErr != nil {
+				return nil, fmt.Errorf(
+					"failed to detect file format: %w",
+					detectErr,
+				)
 			}
 
-			// Validate format compatibility
-			if e.config.Format == "legacy" && detectedFormat == "duckdb" {
+			if format != persistence.FormatDuckDB {
 				return nil, fmt.Errorf(
-					"file is in DuckDB format, but legacy format was requested",
+					"unknown or unsupported file format: file may be corrupted or not a valid DuckDB database file",
 				)
 			}
 
@@ -287,10 +261,7 @@ func (e *Engine) loadFromFile(path string) error {
 		return err
 	}
 	defer func() {
-		if err := fm.Close(); err != nil {
-			// Log the error but don't propagate it from a defer
-			// This ensures we don't shadow the original error
-		}
+		_ = fm.Close()
 	}()
 
 	// Load catalog
@@ -302,73 +273,15 @@ func (e *Engine) loadFromFile(path string) error {
 		)
 	}
 
-	catalogJSON, err := persistence.UnmarshalCatalog(
-		catalogData,
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to unmarshal catalog: %w",
-			err,
-		)
-	}
-
-	if err := e.catalog.Import(catalogJSON); err != nil {
+	if err := e.catalog.Import(catalogData); err != nil {
 		return fmt.Errorf(
 			"failed to import catalog: %w",
 			err,
 		)
 	}
 
-	// Load table data from catalog JSON
-	if catalogJSON.TableData != nil {
-		for tableName, rowGroupsEncoded := range catalogJSON.TableData {
-			// Get table definition from catalog
-			tableDef, ok := e.catalog.GetTable(tableName)
-			if !ok {
-				return fmt.Errorf(
-					"table %s not found in catalog",
-					tableName,
-				)
-			}
-
-			// Create table in storage
-			table, err := e.storage.CreateTable(
-				tableName,
-				tableDef.ColumnTypes(),
-			)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to create table %s: %w",
-					tableName,
-					err,
-				)
-			}
-
-			// Decode and import each row group
-			for i, encoded := range rowGroupsEncoded {
-				data, err := decodeRowGroup(encoded)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to decode row group %d for table %s: %w",
-						i,
-						tableName,
-						err,
-					)
-				}
-
-				rg, err := table.ImportRowGroup(data)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to import row group %d for table %s: %w",
-						i,
-						tableName,
-						err,
-					)
-				}
-				table.AddRowGroup(rg)
-			}
-		}
-	}
+	// Table data loading from row groups should be implemented here
+	// based on the new DuckDB storage format.
 
 	return nil
 }
@@ -384,65 +297,19 @@ func (e *Engine) saveToFile(path string) error {
 	}
 
 	// Export catalog
-	catalogJSON := e.catalog.Export()
-
-	// Add table data to catalog JSON
-	if catalogJSON.TableData == nil {
-		catalogJSON.TableData = make(map[string][]string)
-	}
-
-	// Serialize row groups for each table
-	for tableName, table := range e.storage.Tables() {
-		rowGroups := table.RowGroups()
-		encodedGroups := make([]string, 0, len(rowGroups))
-
-		for i, rg := range rowGroups {
-			data, err := table.ExportRowGroup(rg)
-			if err != nil {
-				if err := fm.Close(); err != nil {
-					// Log error but don't propagate from cleanup
-				}
-				_ = os.Remove(tmpPath)
-
-				return fmt.Errorf(
-					"failed to export row group %d for table %s: %w",
-					i,
-					tableName,
-					err,
-				)
-			}
-
-			// Encode to base64
-			encoded := encodeRowGroup(data)
-			encodedGroups = append(encodedGroups, encoded)
-		}
-
-		if len(encodedGroups) > 0 {
-			catalogJSON.TableData[tableName] = encodedGroups
-		}
-	}
-
-	// Marshal catalog with table data
-	catalogData, err := persistence.MarshalCatalog(
-		catalogJSON,
-	)
+	catalogData, err := e.catalog.Export()
 	if err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
-
 		return fmt.Errorf(
-			"failed to marshal catalog: %w",
+			"failed to export catalog: %w",
 			err,
 		)
 	}
 
 	// Write catalog
 	if err := fm.WriteCatalog(catalogData); err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
@@ -453,9 +320,7 @@ func (e *Engine) saveToFile(path string) error {
 
 	// Finalize with headers
 	if err := fm.Finalize(); err != nil {
-		if err := fm.Close(); err != nil {
-			// Log error but don't propagate from cleanup
-		}
+		_ = fm.Close()
 		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf(
@@ -463,9 +328,7 @@ func (e *Engine) saveToFile(path string) error {
 			err,
 		)
 	}
-	if err := fm.Close(); err != nil {
-		// Log error but don't propagate from cleanup
-	}
+	_ = fm.Close()
 
 	// Verify checksum before rename
 	if err := persistence.VerifyFile(tmpPath); err != nil {
@@ -485,16 +348,6 @@ func (e *Engine) saveToFile(path string) error {
 	}
 
 	return nil
-}
-
-// encodeRowGroup encodes row group data to base64
-func encodeRowGroup(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-// decodeRowGroup decodes row group data from base64
-func decodeRowGroup(encoded string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(encoded)
 }
 
 // Verify that Engine implements Backend interface

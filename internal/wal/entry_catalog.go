@@ -390,3 +390,186 @@ func (e *DropIndexEntry) Deserialize(
 
 	return err
 }
+
+// CreateSequenceEntry represents a CREATE SEQUENCE WAL entry.
+type CreateSequenceEntry struct {
+	Schema      string
+	Name        string
+	StartWith   int64
+	IncrementBy int64
+	MinValue    int64
+	MaxValue    int64
+	IsCycle     bool
+}
+
+// Type returns the entry type.
+func (e *CreateSequenceEntry) Type() EntryType {
+	return EntryCreateSequence
+}
+
+// Serialize writes the entry to the writer.
+func (e *CreateSequenceEntry) Serialize(
+	w io.Writer,
+) error {
+	if err := writeString(w, e.Schema); err != nil {
+		return err
+	}
+	if err := writeString(w, e.Name); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, e.StartWith); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, e.IncrementBy); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, e.MinValue); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, e.MaxValue); err != nil {
+		return err
+	}
+	var flags uint8
+	if e.IsCycle {
+		flags |= 0x01
+	}
+
+	return binary.Write(w, binary.LittleEndian, flags)
+}
+
+// Deserialize reads the entry from the reader.
+func (e *CreateSequenceEntry) Deserialize(
+	r io.Reader,
+) error {
+	var err error
+	if e.Schema, err = readString(r); err != nil {
+		return err
+	}
+	if e.Name, err = readString(r); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &e.StartWith); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &e.IncrementBy); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &e.MinValue); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &e.MaxValue); err != nil {
+		return err
+	}
+	var flags uint8
+	if err := binary.Read(r, binary.LittleEndian, &flags); err != nil {
+		return err
+	}
+	e.IsCycle = flags&0x01 != 0
+
+	return nil
+}
+
+// DropSequenceEntry represents a DROP SEQUENCE WAL entry.
+type DropSequenceEntry struct {
+	Schema string
+	Name   string
+}
+
+// Type returns the entry type.
+func (e *DropSequenceEntry) Type() EntryType {
+	return EntryDropSequence
+}
+
+// Serialize writes the entry to the writer.
+func (e *DropSequenceEntry) Serialize(
+	w io.Writer,
+) error {
+	if err := writeString(w, e.Schema); err != nil {
+		return err
+	}
+
+	return writeString(w, e.Name)
+}
+
+// Deserialize reads the entry from the reader.
+func (e *DropSequenceEntry) Deserialize(
+	r io.Reader,
+) error {
+	var err error
+	if e.Schema, err = readString(r); err != nil {
+		return err
+	}
+	e.Name, err = readString(r)
+
+	return err
+}
+
+// AlterTableEntry represents an ALTER TABLE WAL entry.
+type AlterTableEntry struct {
+	Schema       string
+	Table        string
+	Operation    uint8 // AlterTableOp encoded as uint8
+	NewTableName string
+	OldColumn    string
+	NewColumn    string
+	Column       string
+}
+
+// Type returns the entry type.
+func (e *AlterTableEntry) Type() EntryType {
+	return EntryAlterInfo
+}
+
+// Serialize writes the entry to the writer.
+func (e *AlterTableEntry) Serialize(
+	w io.Writer,
+) error {
+	if err := writeString(w, e.Schema); err != nil {
+		return err
+	}
+	if err := writeString(w, e.Table); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, e.Operation); err != nil {
+		return err
+	}
+	if err := writeString(w, e.NewTableName); err != nil {
+		return err
+	}
+	if err := writeString(w, e.OldColumn); err != nil {
+		return err
+	}
+	if err := writeString(w, e.NewColumn); err != nil {
+		return err
+	}
+
+	return writeString(w, e.Column)
+}
+
+// Deserialize reads the entry from the reader.
+func (e *AlterTableEntry) Deserialize(
+	r io.Reader,
+) error {
+	var err error
+	if e.Schema, err = readString(r); err != nil {
+		return err
+	}
+	if e.Table, err = readString(r); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &e.Operation); err != nil {
+		return err
+	}
+	if e.NewTableName, err = readString(r); err != nil {
+		return err
+	}
+	if e.OldColumn, err = readString(r); err != nil {
+		return err
+	}
+	if e.NewColumn, err = readString(r); err != nil {
+		return err
+	}
+	e.Column, err = readString(r)
+
+	return err
+}

@@ -109,6 +109,9 @@ func (e *Executor) evaluateExpr(
 		// Window result not found - return nil
 		return nil, nil
 
+	case *binder.BoundSequenceCall:
+		return e.evaluateSequenceCall(ctx, ex)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -620,6 +623,8 @@ func (e *Executor) evaluateFunctionCall(
 
 	default:
 		// For aggregate functions called in scalar context, return NULL
+		// The main fix for aggregate functions in projections is in executeProject
+		// which looks up pre-computed aggregate results by alias
 		switch fn.Name {
 		case "COUNT", "SUM", "AVG", "MIN", "MAX":
 			return nil, nil
@@ -1415,4 +1420,48 @@ func matchLike(
 	}
 
 	return pi == len(pattern)
+}
+
+// evaluateSequenceCall evaluates a sequence function call (NEXTVAL or CURRVAL).
+func (e *Executor) evaluateSequenceCall(
+	ctx *ExecutionContext,
+	call *binder.BoundSequenceCall,
+) (any, error) {
+	// Get the sequence from the catalog
+	seq, ok := e.catalog.GetSequenceInSchema(call.SchemaName, call.SequenceName)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg: fmt.Sprintf(
+				"sequence not found: %s.%s",
+				call.SchemaName,
+				call.SequenceName,
+			),
+		}
+	}
+
+	// Call the appropriate method based on the function name
+	switch call.FunctionName {
+	case "NEXTVAL":
+		val, err := seq.NextVal()
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  err.Error(),
+			}
+		}
+		return val, nil
+
+	case "CURRVAL":
+		return seq.CurrVal(), nil
+
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg: fmt.Sprintf(
+				"unknown sequence function: %s",
+				call.FunctionName,
+			),
+		}
+	}
 }

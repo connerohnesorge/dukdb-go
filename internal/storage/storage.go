@@ -2,10 +2,16 @@
 package storage
 
 import (
+	"strings"
 	"sync"
 
 	dukdb "github.com/dukdb/dukdb-go"
 )
+
+// normalizeTableKey converts a table name to lowercase for case-insensitive lookup.
+func normalizeTableKey(name string) string {
+	return strings.ToLower(name)
+}
 
 // Storage manages all table data in the database.
 type Storage struct {
@@ -20,18 +26,19 @@ func NewStorage() *Storage {
 	}
 }
 
-// GetTable returns a table by name.
+// GetTable returns a table by name (case-insensitive).
 func (s *Storage) GetTable(
 	name string,
 ) (*Table, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	t, ok := s.tables[name]
+	t, ok := s.tables[normalizeTableKey(name)]
 
 	return t, ok
 }
 
 // CreateTable creates a new table in storage.
+// Table names are case-insensitive; the original case is preserved.
 func (s *Storage) CreateTable(
 	name string,
 	columnTypes []dukdb.Type,
@@ -39,26 +46,60 @@ func (s *Storage) CreateTable(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tables[name]; exists {
+	key := normalizeTableKey(name)
+	if _, exists := s.tables[key]; exists {
 		return nil, dukdb.ErrTableAlreadyExists
 	}
 
 	t := NewTable(name, columnTypes)
-	s.tables[name] = t
+	s.tables[key] = t
 
 	return t, nil
 }
 
 // DropTable drops a table from storage.
+// Table name is case-insensitive.
 func (s *Storage) DropTable(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tables[name]; !exists {
+	key := normalizeTableKey(name)
+	if _, exists := s.tables[key]; !exists {
 		return dukdb.ErrTableNotFound
 	}
 
-	delete(s.tables, name)
+	delete(s.tables, key)
+
+	return nil
+}
+
+// RenameTable renames a table in storage.
+// Table names are case-insensitive; the new name's case is preserved.
+func (s *Storage) RenameTable(oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	oldKey := normalizeTableKey(oldName)
+	newKey := normalizeTableKey(newName)
+
+	table, exists := s.tables[oldKey]
+	if !exists {
+		return dukdb.ErrTableNotFound
+	}
+
+	// Check if new name already exists (unless renaming to same case-insensitive name)
+	if oldKey != newKey {
+		if _, exists := s.tables[newKey]; exists {
+			return dukdb.ErrTableAlreadyExists
+		}
+	}
+
+	// Update table's internal name
+	table.Rename(newName)
+
+	// Move table to new key in map
+	delete(s.tables, oldKey)
+	s.tables[newKey] = table
 
 	return nil
 }
@@ -87,7 +128,8 @@ func (s *Storage) Tables() map[string]*Table {
 	return tables
 }
 
-// ImportTable imports a table into storage
+// ImportTable imports a table into storage.
+// Table names are case-insensitive.
 func (s *Storage) ImportTable(
 	name string,
 	table *Table,
@@ -95,7 +137,7 @@ func (s *Storage) ImportTable(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.tables[name] = table
+	s.tables[normalizeTableKey(name)] = table
 
 	return nil
 }

@@ -32,6 +32,8 @@ type BoundTableRef struct {
 	Alias         string
 	TableDef      *catalog.TableDef
 	VirtualTable  *catalog.VirtualTableDef // Set for virtual tables
+	ViewDef       *catalog.ViewDef         // Set for views
+	ViewQuery     *BoundSelectStmt         // Bound query for views (set when ViewDef is set)
 	TableFunction *BoundTableFunctionRef   // Set for table functions (read_csv, etc.)
 	Columns       []*BoundColumn
 }
@@ -100,6 +102,24 @@ func (b *Binder) Bind(
 		return b.bindCreateTable(s)
 	case *parser.DropTableStmt:
 		return b.bindDropTable(s)
+	case *parser.CreateViewStmt:
+		return b.bindCreateView(s)
+	case *parser.DropViewStmt:
+		return b.bindDropView(s)
+	case *parser.CreateIndexStmt:
+		return b.bindCreateIndex(s)
+	case *parser.DropIndexStmt:
+		return b.bindDropIndex(s)
+	case *parser.CreateSequenceStmt:
+		return b.bindCreateSequence(s)
+	case *parser.DropSequenceStmt:
+		return b.bindDropSequence(s)
+	case *parser.CreateSchemaStmt:
+		return b.bindCreateSchema(s)
+	case *parser.DropSchemaStmt:
+		return b.bindDropSchema(s)
+	case *parser.AlterTableStmt:
+		return b.bindAlterTable(s)
 	case *parser.BeginStmt:
 		return &BoundBeginStmt{}, nil
 	case *parser.CommitStmt:

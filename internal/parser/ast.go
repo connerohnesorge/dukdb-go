@@ -226,6 +226,186 @@ func (s *DropTableStmt) Accept(v Visitor) {
 	v.VisitDropTableStmt(s)
 }
 
+// ---------- View DDL Statements ----------
+
+// CreateViewStmt represents a CREATE VIEW statement.
+type CreateViewStmt struct {
+	Schema      string
+	View        string
+	IfNotExists bool
+	Query       *SelectStmt // The view definition
+}
+
+func (*CreateViewStmt) stmtNode() {}
+
+func (*CreateViewStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateViewStmt.
+func (s *CreateViewStmt) Accept(v Visitor) {
+	v.VisitCreateViewStmt(s)
+}
+
+// DropViewStmt represents a DROP VIEW statement.
+type DropViewStmt struct {
+	Schema   string
+	View     string
+	IfExists bool
+}
+
+func (*DropViewStmt) stmtNode() {}
+
+func (*DropViewStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropViewStmt.
+func (s *DropViewStmt) Accept(v Visitor) {
+	v.VisitDropViewStmt(s)
+}
+
+// ---------- Index DDL Statements ----------
+
+// CreateIndexStmt represents a CREATE INDEX statement.
+type CreateIndexStmt struct {
+	Schema      string
+	Table       string
+	Index       string
+	IfNotExists bool
+	Columns     []string
+	IsUnique    bool
+}
+
+func (*CreateIndexStmt) stmtNode() {}
+
+func (*CreateIndexStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateIndexStmt.
+func (s *CreateIndexStmt) Accept(v Visitor) {
+	v.VisitCreateIndexStmt(s)
+}
+
+// DropIndexStmt represents a DROP INDEX statement.
+type DropIndexStmt struct {
+	Schema   string
+	Index    string
+	IfExists bool
+}
+
+func (*DropIndexStmt) stmtNode() {}
+
+func (*DropIndexStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropIndexStmt.
+func (s *DropIndexStmt) Accept(v Visitor) {
+	v.VisitDropIndexStmt(s)
+}
+
+// ---------- Sequence DDL Statements ----------
+
+// CreateSequenceStmt represents a CREATE SEQUENCE statement.
+type CreateSequenceStmt struct {
+	Schema      string
+	Sequence    string
+	IfNotExists bool
+	StartWith   int64
+	IncrementBy int64
+	MinValue    *int64 // nil means NO MINVALUE
+	MaxValue    *int64 // nil means NO MAXVALUE
+	IsCycle     bool
+}
+
+func (*CreateSequenceStmt) stmtNode() {}
+
+func (*CreateSequenceStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateSequenceStmt.
+func (s *CreateSequenceStmt) Accept(v Visitor) {
+	v.VisitCreateSequenceStmt(s)
+}
+
+// DropSequenceStmt represents a DROP SEQUENCE statement.
+type DropSequenceStmt struct {
+	Schema   string
+	Sequence string
+	IfExists bool
+}
+
+func (*DropSequenceStmt) stmtNode() {}
+
+func (*DropSequenceStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropSequenceStmt.
+func (s *DropSequenceStmt) Accept(v Visitor) {
+	v.VisitDropSequenceStmt(s)
+}
+
+// ---------- Schema DDL Statements ----------
+
+// CreateSchemaStmt represents a CREATE SCHEMA statement.
+type CreateSchemaStmt struct {
+	Schema      string
+	IfNotExists bool
+}
+
+func (*CreateSchemaStmt) stmtNode() {}
+
+func (*CreateSchemaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateSchemaStmt.
+func (s *CreateSchemaStmt) Accept(v Visitor) {
+	v.VisitCreateSchemaStmt(s)
+}
+
+// DropSchemaStmt represents a DROP SCHEMA statement.
+type DropSchemaStmt struct {
+	Schema   string
+	IfExists bool
+	Cascade  bool // If true, drop all objects in schema
+}
+
+func (*DropSchemaStmt) stmtNode() {}
+
+func (*DropSchemaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropSchemaStmt.
+func (s *DropSchemaStmt) Accept(v Visitor) {
+	v.VisitDropSchemaStmt(s)
+}
+
+// ---------- ALTER TABLE Statement ----------
+
+// AlterTableOp represents the type of ALTER TABLE operation.
+type AlterTableOp int
+
+const (
+	AlterTableRenameTo AlterTableOp = iota
+	AlterTableRenameColumn
+	AlterTableDropColumn
+	AlterTableAddColumn
+	AlterTableSetOption
+)
+
+// AlterTableStmt represents an ALTER TABLE statement.
+type AlterTableStmt struct {
+	Schema    string
+	Table     string
+	IfExists  bool
+	Operation AlterTableOp
+	// Operation-specific fields:
+	NewTableName string          // RENAME TO
+	OldColumn    string          // RENAME COLUMN
+	NewColumn    string          // RENAME COLUMN
+	DropColumn   string          // DROP COLUMN
+	AddColumn    *ColumnDefClause // ADD COLUMN
+}
+
+func (*AlterTableStmt) stmtNode() {}
+
+func (*AlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// Accept implements the Visitor pattern for AlterTableStmt.
+func (s *AlterTableStmt) Accept(v Visitor) {
+	v.VisitAlterTableStmt(s)
+}
+
 // ---------- Expression Types ----------
 
 // ColumnRef represents a column reference.

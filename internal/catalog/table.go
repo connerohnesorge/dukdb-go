@@ -1,8 +1,15 @@
 package catalog
 
 import (
+	"strings"
+
 	dukdb "github.com/dukdb/dukdb-go"
 )
+
+// normalizeColumnKey converts a column name to lowercase for case-insensitive lookup.
+func normalizeColumnKey(name string) string {
+	return strings.ToLower(name)
+}
 
 // TableDef represents a table definition in the catalog.
 type TableDef struct {
@@ -23,6 +30,7 @@ type TableDef struct {
 }
 
 // NewTableDef creates a new TableDef instance.
+// Column names are stored in their original case but indexed case-insensitively.
 func NewTableDef(
 	name string,
 	columns []*ColumnDef,
@@ -34,17 +42,17 @@ func NewTableDef(
 	}
 
 	for i, col := range columns {
-		t.columnIndex[col.Name] = i
+		t.columnIndex[normalizeColumnKey(col.Name)] = i
 	}
 
 	return t
 }
 
-// GetColumn returns a column by name.
+// GetColumn returns a column by name (case-insensitive).
 func (t *TableDef) GetColumn(
 	name string,
 ) (*ColumnDef, bool) {
-	idx, ok := t.columnIndex[name]
+	idx, ok := t.columnIndex[normalizeColumnKey(name)]
 	if !ok {
 		return nil, false
 	}
@@ -52,11 +60,11 @@ func (t *TableDef) GetColumn(
 	return t.Columns[idx], true
 }
 
-// GetColumnIndex returns the index of a column by name.
+// GetColumnIndex returns the index of a column by name (case-insensitive).
 func (t *TableDef) GetColumnIndex(
 	name string,
 ) (int, bool) {
-	idx, ok := t.columnIndex[name]
+	idx, ok := t.columnIndex[normalizeColumnKey(name)]
 
 	return idx, ok
 }
@@ -99,13 +107,13 @@ func (t *TableDef) ColumnTypeInfos() []dukdb.TypeInfo {
 	return infos
 }
 
-// SetPrimaryKey sets the primary key columns by name.
+// SetPrimaryKey sets the primary key columns by name (case-insensitive).
 func (t *TableDef) SetPrimaryKey(
 	columnNames []string,
 ) error {
 	indices := make([]int, len(columnNames))
 	for i, name := range columnNames {
-		idx, ok := t.columnIndex[name]
+		idx, ok := t.columnIndex[normalizeColumnKey(name)]
 		if !ok {
 			return dukdb.ErrColumnNotFound
 		}
@@ -140,4 +148,98 @@ func (t *TableDef) Clone() *TableDef {
 	}
 
 	return newTable
+}
+
+// RenameColumn renames a column and updates the column index.
+// Column names are case-insensitive for lookup; the new name is stored in its original case.
+func (t *TableDef) RenameColumn(oldName, newName string) error {
+	oldKey := normalizeColumnKey(oldName)
+	newKey := normalizeColumnKey(newName)
+
+	idx, ok := t.columnIndex[oldKey]
+	if !ok {
+		return dukdb.ErrColumnNotFound
+	}
+
+	// Check if new name already exists (unless renaming to same case-insensitive name)
+	if oldKey != newKey {
+		if _, exists := t.columnIndex[newKey]; exists {
+			return &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  "column already exists: " + newName,
+			}
+		}
+	}
+
+	// Update column name
+	t.Columns[idx].Name = newName
+
+	// Update columnIndex map
+	delete(t.columnIndex, oldKey)
+	t.columnIndex[newKey] = idx
+
+	return nil
+}
+
+// DropColumn removes a column and updates the column index.
+// Column name is case-insensitive.
+func (t *TableDef) DropColumn(name string) error {
+	idx, ok := t.columnIndex[normalizeColumnKey(name)]
+	if !ok {
+		return dukdb.ErrColumnNotFound
+	}
+
+	// Cannot drop the last column
+	if len(t.Columns) == 1 {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "cannot drop last column of table",
+		}
+	}
+
+	// Remove column from slice
+	t.Columns = append(t.Columns[:idx], t.Columns[idx+1:]...)
+
+	// Rebuild columnIndex map with normalized keys
+	t.columnIndex = make(map[string]int)
+	for i, col := range t.Columns {
+		t.columnIndex[normalizeColumnKey(col.Name)] = i
+	}
+
+	// Update primary key indices if needed
+	if len(t.PrimaryKey) > 0 {
+		newPK := make([]int, 0, len(t.PrimaryKey))
+		for _, pkIdx := range t.PrimaryKey {
+			if pkIdx < idx {
+				// Index unchanged
+				newPK = append(newPK, pkIdx)
+			} else if pkIdx > idx {
+				// Index shifted down by 1
+				newPK = append(newPK, pkIdx-1)
+			}
+			// If pkIdx == idx, skip (dropping a PK column)
+		}
+		t.PrimaryKey = newPK
+	}
+
+	return nil
+}
+
+// AddColumn adds a column and updates the column index.
+// Column names are case-insensitive for duplicate check; the original case is preserved.
+func (t *TableDef) AddColumn(col *ColumnDef) error {
+	// Check if column already exists (case-insensitive)
+	key := normalizeColumnKey(col.Name)
+	if _, exists := t.columnIndex[key]; exists {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "column already exists: " + col.Name,
+		}
+	}
+
+	// Add column
+	t.Columns = append(t.Columns, col)
+	t.columnIndex[key] = len(t.Columns) - 1
+
+	return nil
 }

@@ -1,9 +1,6 @@
 package persistence
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -271,23 +268,6 @@ func (fm *FileManager) DataBlocks() []BlockInfo {
 
 
 func (fm *FileManager) WriteCatalog(data []byte) error {
-	var buf bytes.Buffer
-	gzWriter, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip writer: %w", err)
-	}
-
-	if _, err := gzWriter.Write(data); err != nil {
-		_ = gzWriter.Close()
-		return fmt.Errorf("failed to write catalog data: %w", err)
-	}
-
-	if err := gzWriter.Close(); err != nil {
-		return fmt.Errorf("failed to close gzip writer: %w", err)
-	}
-
-	catalogData := buf.Bytes()
-
 	// Write catalog to meta block location
 	if fm.metadata.ActiveHeader == nil {
 		return ErrCorruptedFile
@@ -301,11 +281,11 @@ func (fm *FileManager) WriteCatalog(data []byte) error {
 	// Store the catalog offset in MetaBlock
 	fm.metadata.ActiveHeader.MetaBlock = uint64(fm.dataOffset)
 
-	if _, err := fm.file.Write(catalogData); err != nil {
+	if _, err := fm.file.Write(data); err != nil {
 		return fmt.Errorf("failed to write catalog: %w", err)
 	}
 
-	fm.dataOffset += int64(len(catalogData))
+	fm.dataOffset += int64(len(data))
 
 	return nil
 }
@@ -321,7 +301,6 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 	}
 
 	// Read catalog from MetaBlock offset until EOF
-	// The catalog data extends to the end of the file
 	stat, err := fm.file.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file: %w", err)
@@ -333,24 +312,9 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 		return nil, ErrCorruptedFile
 	}
 
-	compressedData := make([]byte, remaining)
-	if _, err := io.ReadFull(fm.file, compressedData); err != nil {
+	data := make([]byte, remaining)
+	if _, err := io.ReadFull(fm.file, data); err != nil {
 		return nil, fmt.Errorf("failed to read catalog: %w", err)
-	}
-
-	gzReader, err := gzip.NewReader(bytes.NewReader(compressedData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer func() {
-		if closeErr := gzReader.Close(); closeErr != nil {
-			err = fmt.Errorf("failed to close gzip reader: %w", closeErr)
-		}
-	}()
-
-	data, readErr := io.ReadAll(gzReader)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to decompress catalog: %w", readErr)
 	}
 
 	return data, nil
@@ -459,54 +423,4 @@ func VerifyFile(path string) error {
 	}
 
 	return nil
-}
-
-type CatalogJSON struct {
-	Version    int                    `json:"version"`
-	Schemas    map[string]*SchemaJSON `json:"schemas"`
-	TableData  map[string][]string    `json:"table_data,omitempty"` // table_name -> base64 encoded row groups
-}
-
-type SchemaJSON struct {
-	Name   string                `json:"name"`
-	Tables map[string]*TableJSON `json:"tables"`
-}
-
-type TableJSON struct {
-	Name       string       `json:"name"`
-	Schema     string       `json:"schema"`
-	Columns    []ColumnJSON `json:"columns"`
-	PrimaryKey []int        `json:"primary_key,omitempty"`
-}
-
-type ColumnJSON struct {
-	Name         string    `json:"name"`
-	Type         int       `json:"type"`
-	Nullable     bool      `json:"nullable"`
-	HasDefault   bool      `json:"has_default"`
-	DefaultValue any       `json:"default_value,omitempty"`
-	TypeInfo     *TypeJSON `json:"type_info,omitempty"`
-}
-
-type TypeJSON struct {
-	Precision   int          `json:"precision,omitempty"`
-	Scale       int          `json:"scale,omitempty"`
-	ElementType *ColumnJSON  `json:"element_type,omitempty"`
-	ArraySize   int          `json:"array_size,omitempty"`
-	Fields      []ColumnJSON `json:"fields,omitempty"`
-	KeyType     *ColumnJSON  `json:"key_type,omitempty"`
-	ValueType   *ColumnJSON  `json:"value_type,omitempty"`
-	EnumValues  []string     `json:"enum_values,omitempty"`
-}
-
-func MarshalCatalog(catalog *CatalogJSON) ([]byte, error) {
-	return json.Marshal(catalog)
-}
-
-func UnmarshalCatalog(data []byte) (*CatalogJSON, error) {
-	var catalog CatalogJSON
-	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, err
-	}
-	return &catalog, nil
 }

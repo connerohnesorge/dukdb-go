@@ -222,6 +222,30 @@ func (r *Reader) deserializeEntry(
 
 		return entry, nil
 
+	case EntryCreateSequence:
+		entry := &CreateSequenceEntry{}
+		if err := entry.Deserialize(reader); err != nil {
+			return nil, err
+		}
+
+		return entry, nil
+
+	case EntryDropSequence:
+		entry := &DropSequenceEntry{}
+		if err := entry.Deserialize(reader); err != nil {
+			return nil, err
+		}
+
+		return entry, nil
+
+	case EntryAlterInfo:
+		entry := &AlterTableEntry{}
+		if err := entry.Deserialize(reader); err != nil {
+			return nil, err
+		}
+
+		return entry, nil
+
 	// Data entries
 	case EntryInsert:
 		entry := &InsertEntry{}
@@ -377,7 +401,8 @@ func (r *Reader) Recover(
 			}
 
 		case *CreateTableEntry, *DropTableEntry, *CreateSchemaEntry, *DropSchemaEntry,
-			*CreateViewEntry, *DropViewEntry, *CreateIndexEntry, *DropIndexEntry:
+			*CreateViewEntry, *DropViewEntry, *CreateIndexEntry, *DropIndexEntry,
+			*CreateSequenceEntry, *DropSequenceEntry, *AlterTableEntry:
 			// Catalog entries are applied immediately (not transactional for now)
 			catalogEntries = append(catalogEntries, entry)
 
@@ -485,20 +510,113 @@ func (r *Reader) replayCatalogEntry(
 		_ = store.DropTable(e.Name)
 
 	case *CreateViewEntry:
-		// Views are not yet implemented in the storage layer
-		return nil
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		viewDef := catalog.NewViewDef(e.Name, schemaName, e.Query)
+		if err := cat.CreateViewInSchema(schemaName, viewDef); err != nil {
+			// View may already exist from previous recovery
+			return nil
+		}
 
 	case *DropViewEntry:
-		// Views are not yet implemented in the storage layer
-		return nil
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		_ = cat.DropViewInSchema(schemaName, e.Name)
 
 	case *CreateIndexEntry:
-		// Indexes are not yet implemented in the storage layer
-		return nil
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		indexDef := catalog.NewIndexDef(e.Name, schemaName, e.Table, e.Columns, e.IsUnique)
+		indexDef.IsPrimary = e.IsPrimary
+		if err := cat.CreateIndexInSchema(schemaName, indexDef); err != nil {
+			// Index may already exist from previous recovery
+			return nil
+		}
 
 	case *DropIndexEntry:
-		// Indexes are not yet implemented in the storage layer
-		return nil
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		_ = cat.DropIndexInSchema(schemaName, e.Name)
+
+	case *CreateSequenceEntry:
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		seqDef := catalog.NewSequenceDef(e.Name, schemaName)
+		seqDef.StartWith = e.StartWith
+		seqDef.IncrementBy = e.IncrementBy
+		seqDef.MinValue = e.MinValue
+		seqDef.MaxValue = e.MaxValue
+		seqDef.IsCycle = e.IsCycle
+		seqDef.CurrentVal = e.StartWith
+		if err := cat.CreateSequenceInSchema(schemaName, seqDef); err != nil {
+			// Sequence may already exist from previous recovery
+			return nil
+		}
+
+	case *DropSequenceEntry:
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		_ = cat.DropSequenceInSchema(schemaName, e.Name)
+
+	case *AlterTableEntry:
+		schemaName := e.Schema
+		if schemaName == "" {
+			schemaName = "main"
+		}
+		// Get the table definition
+		tableDef, ok := cat.GetTableInSchema(schemaName, e.Table)
+		if !ok {
+			// Table doesn't exist - skip this alter
+			return nil
+		}
+
+		// Handle different alter operations
+		switch e.Operation {
+		case 0: // AlterTableRenameTo
+			// Rename table: drop old, create with new name
+			if err := cat.DropTableInSchema(schemaName, e.Table); err != nil {
+				return nil
+			}
+			tableDef.Name = e.NewTableName
+			if err := cat.CreateTableInSchema(schemaName, tableDef); err != nil {
+				return nil
+			}
+
+		case 1: // AlterTableRenameColumn
+			// Rename column
+			for _, col := range tableDef.Columns {
+				if col.Name == e.OldColumn {
+					col.Name = e.NewColumn
+					break
+				}
+			}
+
+		case 2: // AlterTableDropColumn
+			// Drop column
+			newColumns := make([]*catalog.ColumnDef, 0, len(tableDef.Columns)-1)
+			for _, col := range tableDef.Columns {
+				if col.Name != e.Column {
+					newColumns = append(newColumns, col)
+				}
+			}
+			tableDef.Columns = newColumns
+
+		default:
+			// Unknown operation - skip
+			return nil
+		}
 	}
 
 	return nil

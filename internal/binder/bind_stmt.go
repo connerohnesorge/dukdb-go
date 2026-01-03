@@ -85,10 +85,17 @@ func (b *Binder) bindSelect(
 			}
 			alias := col.Alias
 			if alias == "" {
-				// If no explicit alias and the expression is a column reference,
-				// use the column name as the alias
-				if colRef, ok := expr.(*BoundColumnRef); ok {
-					alias = colRef.Column
+				// If no explicit alias, derive alias from expression type
+				switch e := expr.(type) {
+				case *BoundColumnRef:
+					// Use the column name as the alias
+					alias = e.Column
+				case *BoundSequenceCall:
+					// Use the function name (lowercase) as the alias
+					alias = strings.ToLower(e.FunctionName)
+				case *BoundFunctionCall:
+					// Use the function name (lowercase) as the alias
+					alias = strings.ToLower(e.Name)
 				}
 			}
 			bound.Columns = append(bound.Columns, &BoundSelectColumn{
@@ -270,6 +277,11 @@ func (b *Binder) bindTableRef(
 
 			return boundRef, nil
 		}
+	}
+
+	// Check for views (takes precedence over regular tables)
+	if viewDef, ok := b.catalog.GetViewInSchema(schema, ref.TableName); ok {
+		return b.bindViewRef(viewDef, alias)
 	}
 
 	// Fall back to regular table lookup
@@ -1001,6 +1013,56 @@ func (b *Binder) bindCopy(
 	}
 
 	return bound, nil
+}
+
+// bindViewRef binds a view reference by expanding its definition.
+func (b *Binder) bindViewRef(viewDef *catalog.ViewDef, alias string) (*BoundTableRef, error) {
+	// Parse the view's SELECT statement
+	viewStmt, err := parser.Parse(viewDef.Query)
+	if err != nil {
+		return nil, b.errorf("failed to parse view definition: %v", err)
+	}
+
+	// Cast to SelectStmt (views are always SELECT)
+	selectStmt, ok := viewStmt.(*parser.SelectStmt)
+	if !ok {
+		return nil, b.errorf("invalid view definition: expected SELECT statement")
+	}
+
+	// Bind the view's SELECT statement (recursive - handles nested views)
+	boundSelect, err := b.bindSelect(selectStmt)
+	if err != nil {
+		return nil, b.errorf("failed to bind view query: %v", err)
+	}
+
+	// Create bound table reference for the view
+	boundRef := &BoundTableRef{
+		Schema:    viewDef.Schema,
+		TableName: viewDef.Name,
+		Alias:     alias,
+		ViewDef:   viewDef,
+		ViewQuery: boundSelect,
+	}
+
+	// Create columns from the expanded query
+	for i, col := range boundSelect.Columns {
+		colName := col.Alias
+		if colName == "" {
+			colName = fmt.Sprintf("col%d", i)
+		}
+		boundRef.Columns = append(boundRef.Columns, &BoundColumn{
+			Table:      alias,
+			Column:     colName,
+			ColumnIdx:  i,
+			Type:       col.Expr.ResultType(),
+			SourceType: "view",
+		})
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = viewDef.Name
+
+	return boundRef, nil
 }
 
 // validateCopyOptions validates COPY statement options.

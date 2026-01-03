@@ -63,8 +63,8 @@ database/sql API
 
 - **Root package (`dukdb`)**: Public API, driver registration, connection types
 - **`internal/engine/`**: Core execution engine implementing Backend interface
-- **`internal/catalog/`**: Schema and metadata management
-- **`internal/storage/`**: Data persistence layer (DataChunk, Vector, ValidityMask)
+- **`internal/catalog/`**: Schema and metadata management (tables, views, indexes, sequences, schemas)
+- **`internal/storage/`**: Data persistence layer (DataChunk, Vector, ValidityMask, indexes)
 - **`internal/parser/`**: SQL parsing and AST definitions
 - **`internal/planner/`**: Query planning (logical → physical)
 - **`internal/executor/`**: Query execution and table functions
@@ -93,6 +93,38 @@ database/sql API
 - `COPY table FROM 'path' (OPTIONS)` - Import data
 - `COPY table TO 'path' (OPTIONS)` - Export data
 - `COPY (SELECT ...) TO 'path' (OPTIONS)` - Export query results
+
+### DDL Support
+
+**Views**: `internal/catalog/view.go`
+- `CREATE VIEW name AS SELECT ...` - Create named query definition
+- `CREATE OR REPLACE VIEW name AS SELECT ...` - Create or replace view
+- `DROP VIEW name` - Drop view
+- Views expand at query time (not materialized)
+
+**Indexes**: `internal/catalog/index.go`, `internal/storage/index.go`
+- `CREATE INDEX name ON table(columns)` - Create hash index
+- `CREATE UNIQUE INDEX name ON table(columns)` - Create unique index
+- `DROP INDEX name` - Drop index
+- Currently supports simple hash indexes (ART indexes as future work)
+
+**Sequences**: `internal/catalog/sequence.go`
+- `CREATE SEQUENCE name [START WITH n] [INCREMENT BY n] [CYCLE]` - Create sequence
+- `DROP SEQUENCE name` - Drop sequence
+- `NEXTVAL('sequence_name')` - Get next value from sequence
+- `CURRVAL('sequence_name')` - Get current value without incrementing
+- Supports START WITH, INCREMENT BY, MIN VALUE, MAX VALUE, and CYCLE options
+
+**Schemas**: `internal/catalog/schema.go`
+- `CREATE SCHEMA name` - Create namespace for organizing objects
+- `DROP SCHEMA name` - Drop schema
+- Cross-schema table/view resolution with qualified names (schema.table)
+
+**ALTER TABLE**: `internal/executor/ddl.go`
+- `ALTER TABLE table RENAME TO new_name` - Rename table
+- `ALTER TABLE table RENAME COLUMN old TO new` - Rename column
+- `ALTER TABLE table DROP COLUMN name` - Drop column
+- `ALTER TABLE table ADD COLUMN name type` - Add column
 
 ### Query Execution Flow
 

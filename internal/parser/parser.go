@@ -16,313 +16,6 @@ func Parse(sql string) (Statement, error) {
 	return p.parse()
 }
 
-// CountParameters counts the number of parameter placeholders in a statement.
-func CountParameters(stmt Statement) int {
-	counter := &paramCounter{}
-	counter.countStmt(stmt)
-
-	return counter.count
-}
-
-// ParameterInfo contains metadata about a parameter placeholder.
-type ParameterInfo struct {
-	Position int    // 1-based position
-	Name     string // Empty for positional parameters
-}
-
-// CollectParameters collects all parameter placeholders from a statement.
-func CollectParameters(
-	stmt Statement,
-) []ParameterInfo {
-	collector := &paramCollector{
-		params: make(map[int]ParameterInfo),
-	}
-	collector.collectStmt(stmt)
-
-	// Convert map to slice ordered by position
-	result := make(
-		[]ParameterInfo,
-		0,
-		len(collector.params),
-	)
-	for i := 1; i <= len(collector.params); i++ {
-		if p, ok := collector.params[i]; ok {
-			result = append(result, p)
-		}
-	}
-
-	return result
-}
-
-type paramCollector struct {
-	params   map[int]ParameterInfo
-	position int // For positional parameters
-}
-
-func (c *paramCollector) collectStmt(
-	stmt Statement,
-) {
-	switch s := stmt.(type) {
-	case *SelectStmt:
-		for _, col := range s.Columns {
-			c.collectExpr(col.Expr)
-		}
-		if s.Where != nil {
-			c.collectExpr(s.Where)
-		}
-		for _, g := range s.GroupBy {
-			c.collectExpr(g)
-		}
-		if s.Having != nil {
-			c.collectExpr(s.Having)
-		}
-		for _, o := range s.OrderBy {
-			c.collectExpr(o.Expr)
-		}
-		if s.Limit != nil {
-			c.collectExpr(s.Limit)
-		}
-		if s.Offset != nil {
-			c.collectExpr(s.Offset)
-		}
-	case *InsertStmt:
-		for _, row := range s.Values {
-			for _, val := range row {
-				c.collectExpr(val)
-			}
-		}
-		if s.Select != nil {
-			c.collectStmt(s.Select)
-		}
-	case *UpdateStmt:
-		for _, set := range s.Set {
-			c.collectExpr(set.Value)
-		}
-		if s.Where != nil {
-			c.collectExpr(s.Where)
-		}
-	case *DeleteStmt:
-		if s.Where != nil {
-			c.collectExpr(s.Where)
-		}
-	}
-}
-
-func (c *paramCollector) collectExpr(expr Expr) {
-	if expr == nil {
-		return
-	}
-	switch e := expr.(type) {
-	case *Parameter:
-		pos := e.Position
-		if pos == 0 {
-			c.position++
-			pos = c.position
-		}
-		c.params[pos] = ParameterInfo{
-			Position: pos,
-			Name:     e.Name,
-		}
-	case *BinaryExpr:
-		c.collectExpr(e.Left)
-		c.collectExpr(e.Right)
-	case *UnaryExpr:
-		c.collectExpr(e.Expr)
-	case *FunctionCall:
-		for _, arg := range e.Args {
-			c.collectExpr(arg)
-		}
-	case *WindowExpr:
-		// Collect from function arguments
-		for _, arg := range e.Function.Args {
-			c.collectExpr(arg)
-		}
-		// Collect from partition by
-		for _, p := range e.PartitionBy {
-			c.collectExpr(p)
-		}
-		// Collect from order by
-		for _, o := range e.OrderBy {
-			c.collectExpr(o.Expr)
-		}
-		// Collect from frame bounds
-		if e.Frame != nil {
-			c.collectExpr(e.Frame.Start.Offset)
-			c.collectExpr(e.Frame.End.Offset)
-		}
-		// Collect from filter
-		c.collectExpr(e.Filter)
-	case *CastExpr:
-		c.collectExpr(e.Expr)
-	case *CaseExpr:
-		c.collectExpr(e.Operand)
-		for _, w := range e.Whens {
-			c.collectExpr(w.Condition)
-			c.collectExpr(w.Result)
-		}
-		c.collectExpr(e.Else)
-	case *BetweenExpr:
-		c.collectExpr(e.Expr)
-		c.collectExpr(e.Low)
-		c.collectExpr(e.High)
-	case *InListExpr:
-		c.collectExpr(e.Expr)
-		for _, v := range e.Values {
-			c.collectExpr(v)
-		}
-	case *InSubqueryExpr:
-		c.collectExpr(e.Expr)
-		c.collectStmt(e.Subquery)
-	case *ExistsExpr:
-		c.collectStmt(e.Subquery)
-	case *SelectStmt:
-		c.collectStmt(e)
-	}
-}
-
-type paramCounter struct {
-	count int
-}
-
-func (c *paramCounter) countStmt(stmt Statement) {
-	switch s := stmt.(type) {
-	case *SelectStmt:
-		for _, col := range s.Columns {
-			c.countExpr(col.Expr)
-		}
-		if s.Where != nil {
-			c.countExpr(s.Where)
-		}
-		for _, g := range s.GroupBy {
-			c.countExpr(g)
-		}
-		if s.Having != nil {
-			c.countExpr(s.Having)
-		}
-		for _, o := range s.OrderBy {
-			c.countExpr(o.Expr)
-		}
-		if s.Limit != nil {
-			c.countExpr(s.Limit)
-		}
-		if s.Offset != nil {
-			c.countExpr(s.Offset)
-		}
-	case *InsertStmt:
-		for _, row := range s.Values {
-			for _, val := range row {
-				c.countExpr(val)
-			}
-		}
-		if s.Select != nil {
-			c.countStmt(s.Select)
-		}
-	case *UpdateStmt:
-		for _, set := range s.Set {
-			c.countExpr(set.Value)
-		}
-		if s.Where != nil {
-			c.countExpr(s.Where)
-		}
-	case *DeleteStmt:
-		if s.Where != nil {
-			c.countExpr(s.Where)
-		}
-	}
-}
-
-func (c *paramCounter) countExpr(expr Expr) {
-	if expr == nil {
-		return
-	}
-	switch e := expr.(type) {
-	case *Parameter:
-		// For positional ? parameters, Position is 0, so we increment count
-		if e.Position == 0 {
-			c.count++
-		} else if e.Position > c.count {
-			c.count = e.Position
-		}
-	case *BinaryExpr:
-		c.countExpr(e.Left)
-		c.countExpr(e.Right)
-	case *UnaryExpr:
-		c.countExpr(e.Expr)
-	case *FunctionCall:
-		for _, arg := range e.Args {
-			c.countExpr(arg)
-		}
-	case *WindowExpr:
-		// Count from function arguments
-		for _, arg := range e.Function.Args {
-			c.countExpr(arg)
-		}
-		// Count from partition by
-		for _, p := range e.PartitionBy {
-			c.countExpr(p)
-		}
-		// Count from order by
-		for _, o := range e.OrderBy {
-			c.countExpr(o.Expr)
-		}
-		// Count from frame bounds
-		if e.Frame != nil {
-			c.countExpr(e.Frame.Start.Offset)
-			c.countExpr(e.Frame.End.Offset)
-		}
-		// Count from filter
-		c.countExpr(e.Filter)
-	case *CastExpr:
-		c.countExpr(e.Expr)
-	case *CaseExpr:
-		c.countExpr(e.Operand)
-		for _, w := range e.Whens {
-			c.countExpr(w.Condition)
-			c.countExpr(w.Result)
-		}
-		c.countExpr(e.Else)
-	case *BetweenExpr:
-		c.countExpr(e.Expr)
-		c.countExpr(e.Low)
-		c.countExpr(e.High)
-	case *InListExpr:
-		c.countExpr(e.Expr)
-		for _, v := range e.Values {
-			c.countExpr(v)
-		}
-	case *InSubqueryExpr:
-		c.countExpr(e.Expr)
-		c.countStmt(e.Subquery)
-	case *ExistsExpr:
-		c.countStmt(e.Subquery)
-	case *SelectStmt:
-		c.countStmt(e)
-	}
-}
-
-// Token types
-type tokenType int
-
-const (
-	tokenEOF tokenType = iota
-	tokenIdent
-	tokenNumber
-	tokenString
-	tokenOperator
-	tokenLParen
-	tokenRParen
-	tokenComma
-	tokenSemicolon
-	tokenStar
-	tokenDot
-	tokenParameter
-)
-
-type token struct {
-	typ   tokenType
-	value string
-	pos   int
-}
 
 type parser struct {
 	input    string
@@ -339,322 +32,7 @@ func newParser(input string) *parser {
 	return p
 }
 
-func (p *parser) tokenize() {
-	for p.pos < len(p.input) {
-		p.skipWhitespace()
-		if p.pos >= len(p.input) {
-			break
-		}
 
-		ch := p.input[p.pos]
-
-		switch {
-		case ch == '(':
-			p.tokens = append(
-				p.tokens,
-				token{tokenLParen, "(", p.pos},
-			)
-			p.pos++
-		case ch == ')':
-			p.tokens = append(
-				p.tokens,
-				token{tokenRParen, ")", p.pos},
-			)
-			p.pos++
-		case ch == ',':
-			p.tokens = append(
-				p.tokens,
-				token{tokenComma, ",", p.pos},
-			)
-			p.pos++
-		case ch == ';':
-			p.tokens = append(
-				p.tokens,
-				token{tokenSemicolon, ";", p.pos},
-			)
-			p.pos++
-		case ch == '*':
-			p.tokens = append(
-				p.tokens,
-				token{tokenStar, "*", p.pos},
-			)
-			p.pos++
-		case ch == '.':
-			p.tokens = append(
-				p.tokens,
-				token{tokenDot, ".", p.pos},
-			)
-			p.pos++
-		case ch == '$' || ch == '?':
-			p.scanParameter()
-		case ch == '\'' || ch == '"':
-			p.scanString(ch)
-		case isDigit(ch):
-			p.scanNumber()
-		case isLetter(ch) || ch == '_':
-			p.scanIdent()
-		case isOperatorChar(ch):
-			p.scanOperator()
-		default:
-			p.pos++
-		}
-	}
-	p.tokens = append(
-		p.tokens,
-		token{tokenEOF, "", p.pos},
-	)
-}
-
-func (p *parser) skipWhitespace() {
-	for p.pos < len(p.input) {
-		ch := p.input[p.pos]
-		if ch == ' ' || ch == '\t' ||
-			ch == '\n' ||
-			ch == '\r' {
-			p.pos++
-		} else if p.pos+1 < len(p.input) && ch == '-' && p.input[p.pos+1] == '-' {
-			// Line comment
-			for p.pos < len(p.input) && p.input[p.pos] != '\n' {
-				p.pos++
-			}
-		} else if p.pos+1 < len(p.input) && ch == '/' && p.input[p.pos+1] == '*' {
-			// Block comment
-			p.pos += 2
-			for p.pos+1 < len(p.input) {
-				if p.input[p.pos] == '*' && p.input[p.pos+1] == '/' {
-					p.pos += 2
-
-					break
-				}
-				p.pos++
-			}
-		} else {
-			break
-		}
-	}
-}
-
-func (p *parser) scanParameter() {
-	start := p.pos
-	if p.input[p.pos] == '?' {
-		p.pos++
-		p.tokens = append(
-			p.tokens,
-			token{tokenParameter, "?", start},
-		)
-	} else {
-		// $1, $2, etc.
-		p.pos++ // skip $
-		for p.pos < len(p.input) && isDigit(p.input[p.pos]) {
-			p.pos++
-		}
-		p.tokens = append(p.tokens, token{tokenParameter, p.input[start:p.pos], start})
-	}
-}
-
-func (p *parser) scanString(quote byte) {
-	start := p.pos
-	p.pos++ // skip opening quote
-	terminated := false
-	for p.pos < len(p.input) {
-		if p.input[p.pos] == quote {
-			if p.pos+1 < len(p.input) &&
-				p.input[p.pos+1] == quote {
-				// Escaped quote
-				p.pos += 2
-			} else {
-				p.pos++
-				terminated = true
-
-				break
-			}
-		} else {
-			p.pos++
-		}
-	}
-	if !terminated {
-		// Unterminated string literal
-		p.tokenErr = &dukdb.Error{
-			Type: dukdb.ErrorTypeParser,
-			Msg: fmt.Sprintf(
-				"Parser Error: unterminated quoted string at or near %q",
-				p.input[start:p.pos],
-			),
-		}
-	}
-	p.tokens = append(
-		p.tokens,
-		token{
-			tokenString,
-			p.input[start:p.pos],
-			start,
-		},
-	)
-}
-
-func (p *parser) scanNumber() {
-	start := p.pos
-	for p.pos < len(p.input) && (isDigit(p.input[p.pos]) || p.input[p.pos] == '.') {
-		p.pos++
-	}
-	// Handle scientific notation
-	if p.pos < len(p.input) &&
-		(p.input[p.pos] == 'e' || p.input[p.pos] == 'E') {
-		p.pos++
-		if p.pos < len(p.input) &&
-			(p.input[p.pos] == '+' || p.input[p.pos] == '-') {
-			p.pos++
-		}
-		for p.pos < len(p.input) && isDigit(p.input[p.pos]) {
-			p.pos++
-		}
-	}
-	p.tokens = append(
-		p.tokens,
-		token{
-			tokenNumber,
-			p.input[start:p.pos],
-			start,
-		},
-	)
-}
-
-func (p *parser) scanIdent() {
-	start := p.pos
-	for p.pos < len(p.input) && (isLetter(p.input[p.pos]) || isDigit(p.input[p.pos]) || p.input[p.pos] == '_') {
-		p.pos++
-	}
-	p.tokens = append(
-		p.tokens,
-		token{
-			tokenIdent,
-			p.input[start:p.pos],
-			start,
-		},
-	)
-}
-
-func (p *parser) scanOperator() {
-	start := p.pos
-	// Handle multi-character operators
-	if p.pos+1 < len(p.input) {
-		two := p.input[p.pos : p.pos+2]
-		switch two {
-		case "<=", ">=", "<>", "!=", "||", "::":
-			p.pos += 2
-			p.tokens = append(
-				p.tokens,
-				token{tokenOperator, two, start},
-			)
-
-			return
-		}
-	}
-	p.tokens = append(
-		p.tokens,
-		token{
-			tokenOperator,
-			string(p.input[p.pos]),
-			start,
-		},
-	)
-	p.pos++
-}
-
-func isDigit(ch byte) bool {
-	return ch >= '0' && ch <= '9'
-}
-
-func isLetter(ch byte) bool {
-	return (ch >= 'a' && ch <= 'z') ||
-		(ch >= 'A' && ch <= 'Z')
-}
-
-func isOperatorChar(ch byte) bool {
-	return ch == '+' || ch == '-' || ch == '/' || ch == '%' ||
-		ch == '<' || ch == '>' ||
-		ch == '=' ||
-		ch == '!' ||
-		ch == '|' ||
-		ch == ':'
-}
-
-// Parser methods
-
-func (p *parser) current() token {
-	if p.tokPos >= len(p.tokens) {
-		return token{tokenEOF, "", len(p.input)}
-	}
-
-	return p.tokens[p.tokPos]
-}
-
-func (p *parser) peek() token {
-	if p.tokPos+1 >= len(p.tokens) {
-		return token{tokenEOF, "", len(p.input)}
-	}
-
-	return p.tokens[p.tokPos+1]
-}
-
-func (p *parser) advance() token {
-	tok := p.current()
-	p.tokPos++
-
-	return tok
-}
-
-func (p *parser) expect(
-	typ tokenType,
-) (token, error) {
-	tok := p.current()
-	if tok.typ != typ {
-		return tok, p.errorf(
-			"expected %v, got %v",
-			typ,
-			tok.typ,
-		)
-	}
-	p.tokPos++
-
-	return tok, nil
-}
-
-func (p *parser) expectKeyword(
-	keyword string,
-) error {
-	tok := p.current()
-	if tok.typ != tokenIdent ||
-		!strings.EqualFold(tok.value, keyword) {
-		return p.errorf(
-			"expected %s, got %s",
-			keyword,
-			tok.value,
-		)
-	}
-	p.tokPos++
-
-	return nil
-}
-
-func (p *parser) isKeyword(keyword string) bool {
-	tok := p.current()
-
-	return tok.typ == tokenIdent &&
-		strings.EqualFold(tok.value, keyword)
-}
-
-func (p *parser) errorf(
-	format string,
-	args ...any,
-) error {
-	return &dukdb.Error{
-		Type: dukdb.ErrorTypeParser,
-		Msg: fmt.Sprintf(
-			"Parser Error: "+format,
-			args...),
-	}
-}
 
 func (p *parser) parse() (Statement, error) {
 	// Check for tokenization errors first
@@ -684,6 +62,9 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseCreate()
 	case p.isKeyword("DROP"):
 		stmt, err = p.parseDrop()
+	case p.isKeyword("ALTER"):
+		p.advance()
+		stmt, err = p.parseAlterTable()
 	case p.isKeyword("BEGIN"):
 		stmt, err = p.parseBegin()
 	case p.isKeyword("COMMIT"):
@@ -1462,12 +843,26 @@ func (p *parser) parseCreate() (Statement, error) {
 		return nil, err
 	}
 
+	// Check for UNIQUE INDEX (special case)
+	if p.isKeyword("UNIQUE") {
+		return p.parseCreateIndex()
+	}
+
+	// Dispatch based on object type
 	if p.isKeyword("TABLE") {
 		return p.parseCreateTable()
+	} else if p.isKeyword("VIEW") {
+		return p.parseCreateView()
+	} else if p.isKeyword("INDEX") {
+		return p.parseCreateIndex()
+	} else if p.isKeyword("SEQUENCE") {
+		return p.parseCreateSequence()
+	} else if p.isKeyword("SCHEMA") {
+		return p.parseCreateSchema()
 	}
 
 	return nil, p.errorf(
-		"expected TABLE after CREATE",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, or SCHEMA after CREATE",
 	)
 }
 
@@ -1662,12 +1057,21 @@ func (p *parser) parseDrop() (Statement, error) {
 		return nil, err
 	}
 
+	// Dispatch based on object type
 	if p.isKeyword("TABLE") {
 		return p.parseDropTable()
+	} else if p.isKeyword("VIEW") {
+		return p.parseDropView()
+	} else if p.isKeyword("INDEX") {
+		return p.parseDropIndex()
+	} else if p.isKeyword("SEQUENCE") {
+		return p.parseDropSequence()
+	} else if p.isKeyword("SCHEMA") {
+		return p.parseDropSchema()
 	}
 
 	return nil, p.errorf(
-		"expected TABLE after DROP",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, or SCHEMA after DROP",
 	)
 }
 

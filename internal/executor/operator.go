@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
@@ -182,6 +183,25 @@ func (e *Executor) Execute(
 		return e.executeCopyFrom(execCtx, p)
 	case *planner.PhysicalCopyTo:
 		return e.executeCopyTo(execCtx, p)
+	// DDL operations
+	case *planner.PhysicalCreateView:
+		return e.executeCreateView(execCtx, p)
+	case *planner.PhysicalDropView:
+		return e.executeDropView(execCtx, p)
+	case *planner.PhysicalCreateIndex:
+		return e.executeCreateIndex(execCtx, p)
+	case *planner.PhysicalDropIndex:
+		return e.executeDropIndex(execCtx, p)
+	case *planner.PhysicalCreateSequence:
+		return e.executeCreateSequence(execCtx, p)
+	case *planner.PhysicalDropSequence:
+		return e.executeDropSequence(execCtx, p)
+	case *planner.PhysicalCreateSchema:
+		return e.executeCreateSchema(execCtx, p)
+	case *planner.PhysicalDropSchema:
+		return e.executeDropSchema(execCtx, p)
+	case *planner.PhysicalAlterTable:
+		return e.executeAlterTable(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -441,6 +461,21 @@ func (e *Executor) executeProject(
 	for i, row := range childResult.Rows {
 		projectedRow := make(map[string]any)
 		for j, expr := range plan.Expressions {
+			// Check if this is an aggregate function call
+			// If the alias matches a key in the row, use the pre-computed value
+			// This handles the case where aggregates have already been computed
+			// by the aggregate operator and we're just projecting the results
+			if fn, ok := expr.(*binder.BoundFunctionCall); ok {
+				switch fn.Name {
+				case "COUNT", "SUM", "AVG", "MIN", "MAX":
+					alias := columns[j]
+					if val, exists := row[alias]; exists {
+						projectedRow[alias] = val
+						continue
+					}
+				}
+			}
+
 			val, err := e.evaluateExpr(
 				ctx,
 				expr,
@@ -1109,6 +1144,24 @@ func (e *Executor) executeDropTable(
 		}
 
 		return nil, dukdb.ErrTableNotFound
+	}
+
+	// Check if any views depend on this table
+	dependentViews := e.catalog.GetViewsDependingOnTable(plan.Schema, plan.Table)
+	if len(dependentViews) > 0 {
+		// Build list of view names for error message
+		viewNames := make([]string, len(dependentViews))
+		for i, v := range dependentViews {
+			viewNames[i] = v.Name
+		}
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg: fmt.Sprintf(
+				"cannot drop table %s: referenced by view(s) %s",
+				plan.Table,
+				strings.Join(viewNames, ", "),
+			),
+		}
 	}
 
 	// Drop from storage

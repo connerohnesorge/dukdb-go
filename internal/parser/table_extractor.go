@@ -227,6 +227,64 @@ func (te *TableExtractor) VisitCopyStmt(stmt *CopyStmt) {
 	}
 }
 
+// VisitCreateViewStmt extracts table references from CREATE VIEW statements.
+func (te *TableExtractor) VisitCreateViewStmt(stmt *CreateViewStmt) {
+	// Visit the view definition query to extract table references
+	if stmt.Query != nil {
+		te.VisitSelectStmt(stmt.Query)
+	}
+}
+
+// VisitDropViewStmt is a no-op for DROP VIEW statements (no table references).
+func (te *TableExtractor) VisitDropViewStmt(stmt *DropViewStmt) {
+	// No table references in DROP VIEW statements
+}
+
+// VisitCreateIndexStmt extracts table references from CREATE INDEX statements.
+func (te *TableExtractor) VisitCreateIndexStmt(stmt *CreateIndexStmt) {
+	// Extract the table the index is being created on
+	ref := EnhancedTableRef{
+		Schema: stmt.Schema,
+		Table:  stmt.Table,
+	}
+	te.tables[ref] = struct{}{}
+}
+
+// VisitDropIndexStmt is a no-op for DROP INDEX statements (no table references).
+func (te *TableExtractor) VisitDropIndexStmt(stmt *DropIndexStmt) {
+	// No table references in DROP INDEX statements
+}
+
+// VisitCreateSequenceStmt is a no-op for CREATE SEQUENCE statements (no table references).
+func (te *TableExtractor) VisitCreateSequenceStmt(stmt *CreateSequenceStmt) {
+	// No table references in CREATE SEQUENCE statements
+}
+
+// VisitDropSequenceStmt is a no-op for DROP SEQUENCE statements (no table references).
+func (te *TableExtractor) VisitDropSequenceStmt(stmt *DropSequenceStmt) {
+	// No table references in DROP SEQUENCE statements
+}
+
+// VisitCreateSchemaStmt is a no-op for CREATE SCHEMA statements (no table references).
+func (te *TableExtractor) VisitCreateSchemaStmt(stmt *CreateSchemaStmt) {
+	// No table references in CREATE SCHEMA statements
+}
+
+// VisitDropSchemaStmt is a no-op for DROP SCHEMA statements (no table references).
+func (te *TableExtractor) VisitDropSchemaStmt(stmt *DropSchemaStmt) {
+	// No table references in DROP SCHEMA statements
+}
+
+// VisitAlterTableStmt extracts table references from ALTER TABLE statements.
+func (te *TableExtractor) VisitAlterTableStmt(stmt *AlterTableStmt) {
+	// Extract the table being altered
+	ref := EnhancedTableRef{
+		Schema: stmt.Schema,
+		Table:  stmt.Table,
+	}
+	te.tables[ref] = struct{}{}
+}
+
 // visitTableRef extracts table from AST TableRef
 func (te *TableExtractor) visitTableRef(astRef *TableRef) {
 	// Current AST TableRef has: Catalog, Schema, TableName, Alias, Subquery
