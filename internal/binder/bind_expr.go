@@ -70,6 +70,12 @@ func (b *Binder) bindExpr(
 		return b.bindIntervalLiteral(e)
 	case *parser.WindowExpr:
 		return b.bindWindowExpr(e)
+	case *parser.GroupingSetExpr:
+		return b.bindGroupingSetExpr(e)
+	case *parser.RollupExpr:
+		return b.bindRollupExpr(e)
+	case *parser.CubeExpr:
+		return b.bindCubeExpr(e)
 	default:
 		return nil, b.errorf("unsupported expression type: %T", expr)
 	}
@@ -266,10 +272,17 @@ func (b *Binder) bindUnaryExpr(
 func (b *Binder) bindFunctionCall(
 	f *parser.FunctionCall,
 ) (BoundExpr, error) {
-	// Handle sequence functions (NEXTVAL, CURRVAL)
+	// Handle special functions
 	funcNameUpper := strings.ToUpper(f.Name)
+
+	// Handle sequence functions (NEXTVAL, CURRVAL)
 	if funcNameUpper == "NEXTVAL" || funcNameUpper == "CURRVAL" {
 		return b.bindSequenceCall(f)
+	}
+
+	// Handle GROUPING() function for GROUPING SETS/ROLLUP/CUBE
+	if funcNameUpper == "GROUPING" {
+		return b.bindGroupingCall(f)
 	}
 
 	// Get expected argument types from function signature if available
@@ -893,5 +906,150 @@ func (b *Binder) bindSequenceCall(f *parser.FunctionCall) (*BoundSequenceCall, e
 		FunctionName: funcNameUpper,
 		SchemaName:   schemaName,
 		SequenceName: sequenceName,
+	}, nil
+}
+
+// ---------- Grouping Set Binding Functions ----------
+
+// bindGroupingSetExpr binds a GROUPING SETS expression.
+// GROUPING SETS allows explicit specification of multiple grouping levels.
+//
+// Example: GROUP BY GROUPING SETS ((a, b), (a), ())
+func (b *Binder) bindGroupingSetExpr(e *parser.GroupingSetExpr) (*BoundGroupingSetExpr, error) {
+	var boundType BoundGroupingSetType
+	switch e.Type {
+	case parser.GroupingSetSimple:
+		boundType = BoundGroupingSetSimple
+	case parser.GroupingSetRollup:
+		boundType = BoundGroupingSetRollup
+	case parser.GroupingSetCube:
+		boundType = BoundGroupingSetCube
+	}
+
+	// Bind each grouping set
+	boundSets := make([][]BoundExpr, 0, len(e.Exprs))
+	for _, set := range e.Exprs {
+		boundSet := make([]BoundExpr, 0, len(set))
+		for _, expr := range set {
+			boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			boundSet = append(boundSet, boundExpr)
+		}
+		boundSets = append(boundSets, boundSet)
+	}
+
+	return &BoundGroupingSetExpr{
+		Type: boundType,
+		Sets: boundSets,
+	}, nil
+}
+
+// bindRollupExpr binds a ROLLUP expression by expanding it into grouping sets.
+// ROLLUP(a, b, c) expands to: (a, b, c), (a, b), (a), ()
+//
+// This creates a hierarchical set of groupings from left to right,
+// providing subtotals for each level plus a grand total.
+func (b *Binder) bindRollupExpr(e *parser.RollupExpr) (*BoundGroupingSetExpr, error) {
+	// First bind all the expressions
+	boundExprs := make([]BoundExpr, 0, len(e.Exprs))
+	for _, expr := range e.Exprs {
+		boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundExprs = append(boundExprs, boundExpr)
+	}
+
+	// Expand ROLLUP into grouping sets
+	// ROLLUP(a, b, c) -> (a, b, c), (a, b), (a), ()
+	numExprs := len(boundExprs)
+	sets := make([][]BoundExpr, numExprs+1)
+
+	for i := 0; i <= numExprs; i++ {
+		// Create set with first (numExprs - i) expressions
+		setSize := numExprs - i
+		set := make([]BoundExpr, setSize)
+		for j := 0; j < setSize; j++ {
+			set[j] = boundExprs[j]
+		}
+		sets[i] = set
+	}
+
+	return &BoundGroupingSetExpr{
+		Type: BoundGroupingSetRollup,
+		Sets: sets,
+	}, nil
+}
+
+// bindCubeExpr binds a CUBE expression by expanding it into all possible grouping sets.
+// CUBE(a, b) expands to: (a, b), (a), (b), ()
+//
+// For n expressions, CUBE generates 2^n grouping sets representing all
+// possible combinations of the grouping columns.
+func (b *Binder) bindCubeExpr(e *parser.CubeExpr) (*BoundGroupingSetExpr, error) {
+	// First bind all the expressions
+	boundExprs := make([]BoundExpr, 0, len(e.Exprs))
+	for _, expr := range e.Exprs {
+		boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundExprs = append(boundExprs, boundExpr)
+	}
+
+	// Expand CUBE into all possible grouping sets
+	// CUBE(a, b) -> (a, b), (a), (b), ()
+	// Use bitmask to generate all combinations: 2^n sets
+	numExprs := len(boundExprs)
+	numSets := 1 << numExprs // 2^n
+	sets := make([][]BoundExpr, 0, numSets)
+
+	// Generate sets in descending order of size (most columns first)
+	// We iterate from all bits set (full set) down to no bits set (empty set)
+	for mask := numSets - 1; mask >= 0; mask-- {
+		set := make([]BoundExpr, 0)
+		for i := 0; i < numExprs; i++ {
+			// Check if bit i is set (from left to right, MSB first)
+			bitPos := numExprs - 1 - i
+			if (mask & (1 << bitPos)) != 0 {
+				set = append(set, boundExprs[i])
+			}
+		}
+		sets = append(sets, set)
+	}
+
+	return &BoundGroupingSetExpr{
+		Type: BoundGroupingSetCube,
+		Sets: sets,
+	}, nil
+}
+
+// bindGroupingCall binds a GROUPING(col1, col2, ...) function call.
+// The GROUPING function returns a bitmask indicating which columns are
+// aggregated (null) in the current grouping set.
+func (b *Binder) bindGroupingCall(f *parser.FunctionCall) (*BoundGroupingCall, error) {
+	if len(f.Args) == 0 {
+		return nil, b.errorf("GROUPING() requires at least one argument")
+	}
+
+	// All arguments must be column references
+	args := make([]*BoundColumnRef, 0, len(f.Args))
+	for _, arg := range f.Args {
+		colRef, ok := arg.(*parser.ColumnRef)
+		if !ok {
+			return nil, b.errorf("GROUPING() arguments must be column references")
+		}
+
+		boundRef, err := b.bindColumnRef(colRef)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, boundRef)
+	}
+
+	return &BoundGroupingCall{
+		Args: args,
 	}, nil
 }

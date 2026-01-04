@@ -10,16 +10,20 @@ import (
 
 // BoundSelectStmt represents a bound SELECT statement.
 type BoundSelectStmt struct {
-	Distinct bool
-	Columns  []*BoundSelectColumn
-	From     []*BoundTableRef
-	Joins    []*BoundJoin
-	Where    BoundExpr
-	GroupBy  []BoundExpr
-	Having   BoundExpr
-	OrderBy  []*BoundOrderBy
-	Limit    BoundExpr
-	Offset   BoundExpr
+	CTEs       []*BoundCTE         // Common Table Expressions (WITH clause)
+	Distinct   bool
+	DistinctOn []BoundExpr         // DISTINCT ON expressions (select first row per group)
+	Columns    []*BoundSelectColumn
+	From       []*BoundTableRef
+	Joins      []*BoundJoin
+	Where      BoundExpr
+	GroupBy    []BoundExpr
+	Having     BoundExpr
+	Qualify    BoundExpr           // QUALIFY clause (filter after window functions)
+	OrderBy    []*BoundOrderBy
+	Limit      BoundExpr
+	Offset     BoundExpr
+	Sample     *BoundSampleOptions // SAMPLE clause options
 }
 
 func (*BoundSelectStmt) boundStmtNode() {}
@@ -52,12 +56,13 @@ type BoundOrderBy struct {
 
 // BoundInsertStmt represents a bound INSERT statement.
 type BoundInsertStmt struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Columns  []int // Column indices
-	Values   [][]BoundExpr
-	Select   *BoundSelectStmt
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Columns   []int // Column indices
+	Values    [][]BoundExpr
+	Select    *BoundSelectStmt
+	Returning []*BoundSelectColumn // RETURNING clause columns
 }
 
 func (*BoundInsertStmt) boundStmtNode() {}
@@ -66,11 +71,12 @@ func (*BoundInsertStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_INSE
 
 // BoundUpdateStmt represents a bound UPDATE statement.
 type BoundUpdateStmt struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Set      []*BoundSetClause
-	Where    BoundExpr
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Set       []*BoundSetClause
+	Where     BoundExpr
+	Returning []*BoundSelectColumn // RETURNING clause columns
 }
 
 func (*BoundUpdateStmt) boundStmtNode() {}
@@ -85,10 +91,11 @@ type BoundSetClause struct {
 
 // BoundDeleteStmt represents a bound DELETE statement.
 type BoundDeleteStmt struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Where    BoundExpr
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Where     BoundExpr
+	Returning []*BoundSelectColumn // RETURNING clause columns
 }
 
 func (*BoundDeleteStmt) boundStmtNode() {}
@@ -281,3 +288,141 @@ type BoundAlterTableStmt struct {
 func (*BoundAlterTableStmt) boundStmtNode() {}
 
 func (*BoundAlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// ---------- MERGE INTO Bound Statement Types ----------
+
+// BoundMergeActionType represents the type of bound MERGE action.
+type BoundMergeActionType int
+
+const (
+	BoundMergeActionUpdate   BoundMergeActionType = iota // UPDATE existing row
+	BoundMergeActionDelete                               // DELETE matched row
+	BoundMergeActionInsert                               // INSERT new row
+	BoundMergeActionDoNothing                            // DO NOTHING
+)
+
+// BoundMergeAction represents a bound action in a MERGE clause.
+type BoundMergeAction struct {
+	// Type specifies the action type (UPDATE, DELETE, INSERT, DO NOTHING).
+	Type BoundMergeActionType
+	// Cond is an optional additional condition (AND ...) for the action.
+	Cond BoundExpr
+	// Update contains the bound SET clauses for UPDATE actions.
+	Update []*BoundSetClause
+	// InsertColumns contains the column indices for INSERT actions.
+	InsertColumns []int
+	// InsertValues contains the bound expressions for INSERT values.
+	InsertValues []BoundExpr
+}
+
+// BoundMergeStmt represents a bound MERGE INTO statement.
+type BoundMergeStmt struct {
+	// Schema is the schema name for the target table.
+	Schema string
+	// TargetTable is the name of the target table.
+	TargetTable string
+	// TargetTableDef is the table definition for the target.
+	TargetTableDef *catalog.TableDef
+	// TargetAlias is the alias for the target table.
+	TargetAlias string
+	// SourceRef is the bound source table reference.
+	SourceRef *BoundTableRef
+	// OnCondition is the bound join condition.
+	OnCondition BoundExpr
+	// WhenMatched contains bound actions for matched rows.
+	WhenMatched []*BoundMergeAction
+	// WhenNotMatched contains bound actions for non-matched source rows.
+	WhenNotMatched []*BoundMergeAction
+	// WhenNotMatchedBySource contains bound actions for target rows with no source match.
+	WhenNotMatchedBySource []*BoundMergeAction
+	// Returning contains the columns to return (if RETURNING clause is present).
+	Returning []*BoundSelectColumn
+}
+
+func (*BoundMergeStmt) boundStmtNode() {}
+
+func (*BoundMergeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_MERGE_INTO }
+
+// ---------- PIVOT/UNPIVOT Bound Statement Types ----------
+
+// BoundPivotAggregate represents a bound aggregate function in a PIVOT clause.
+type BoundPivotAggregate struct {
+	// Function is the aggregate function name (e.g., "SUM", "COUNT", "AVG").
+	Function string
+	// Expr is the bound expression to aggregate.
+	Expr BoundExpr
+	// Alias is the optional alias for the aggregated column.
+	Alias string
+}
+
+// BoundPivotStmt represents a bound PIVOT statement.
+// PIVOT transforms rows into columns by pivoting unique values from one column
+// into multiple columns in the output, with optional aggregation.
+type BoundPivotStmt struct {
+	// Source is the bound source table reference.
+	Source *BoundTableRef
+	// ForColumn is the bound column reference whose values become column names.
+	ForColumn *BoundColumnRef
+	// InValues contains the literal values to pivot on (become column names).
+	InValues []any
+	// Aggregates contains the bound aggregate functions to apply.
+	Aggregates []*BoundPivotAggregate
+	// GroupBy contains the bound GROUP BY expressions (columns not pivoted or aggregated).
+	GroupBy []BoundExpr
+	// Alias is the optional alias for the pivoted result set.
+	Alias string
+}
+
+func (*BoundPivotStmt) boundStmtNode() {}
+
+func (*BoundPivotStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_PIVOT }
+
+// BoundUnpivotStmt represents a bound UNPIVOT statement.
+// UNPIVOT transforms columns into rows (the inverse of PIVOT).
+type BoundUnpivotStmt struct {
+	// Source is the bound source table reference.
+	Source *BoundTableRef
+	// ValueColumn is the name of the column that will contain the unpivoted values.
+	ValueColumn string
+	// NameColumn is the name of the column that will contain the original column names.
+	NameColumn string
+	// UnpivotColumns contains the column names to unpivot.
+	UnpivotColumns []string
+	// Alias is the optional alias for the unpivoted result set.
+	Alias string
+}
+
+func (*BoundUnpivotStmt) boundStmtNode() {}
+
+func (*BoundUnpivotStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_UNPIVOT }
+
+// ---------- Advanced SELECT Features ----------
+
+// BoundSampleOptions represents bound SAMPLE clause options.
+type BoundSampleOptions struct {
+	Method     parser.SampleMethod // Sampling method (BERNOULLI, SYSTEM, or RESERVOIR)
+	Percentage float64             // For BERNOULLI/SYSTEM - percentage of rows to sample (0-100)
+	Rows       int                 // For RESERVOIR - fixed number of rows to sample
+	Seed       *int64              // Optional seed for reproducible sampling
+}
+
+// ---------- CTE (Common Table Expression) Types ----------
+
+// BoundCTE represents a bound Common Table Expression.
+type BoundCTE struct {
+	// Name is the CTE name used to reference it in the query.
+	Name string
+	// Columns are the optional column aliases for the CTE.
+	Columns []string
+	// Query is the bound SELECT query for the CTE (base case for recursive CTEs).
+	Query *BoundSelectStmt
+	// RecursiveQuery is the bound SELECT query for the recursive part of a recursive CTE.
+	// This is only set when Recursive is true.
+	RecursiveQuery *BoundSelectStmt
+	// Recursive is true if this is a WITH RECURSIVE CTE.
+	Recursive bool
+	// ResultTypes are the inferred types of the CTE columns.
+	ResultTypes []dukdb.Type
+	// ResultNames are the column names (either from aliases or inferred from query).
+	ResultNames []string
+}

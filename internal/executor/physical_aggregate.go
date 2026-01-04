@@ -416,6 +416,145 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 
 		return maxVal, nil
 
+	// Statistical aggregate functions
+	case "MEDIAN":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeMedian(values)
+
+	case "QUANTILE":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Evaluate the quantile position (second argument)
+		qVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+		if err != nil {
+			return nil, err
+		}
+		q := toFloat64Value(qVal)
+		return computeQuantile(values, q)
+
+	case "PERCENTILE_CONT":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Evaluate the percentile position (second argument)
+		pVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+		if err != nil {
+			return nil, err
+		}
+		p := toFloat64Value(pVal)
+		return computePercentileCont(values, p)
+
+	case "PERCENTILE_DISC":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Evaluate the percentile position (second argument)
+		pVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+		if err != nil {
+			return nil, err
+		}
+		p := toFloat64Value(pVal)
+		return computePercentileDisc(values, p)
+
+	case "MODE":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeMode(values)
+
+	case "ENTROPY":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeEntropy(values)
+
+	case "SKEWNESS":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeSkewness(values)
+
+	case "KURTOSIS":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeKurtosis(values)
+
+	case "VAR_POP":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeVarPop(values)
+
+	case "VAR_SAMP", "VARIANCE":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeVarSamp(values)
+
+	case "STDDEV_POP":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeStddevPop(values)
+
+	case "STDDEV_SAMP", "STDDEV":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeStddevSamp(values)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -425,4 +564,21 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 			),
 		}
 	}
+}
+
+// collectValues collects all values from an expression across rows.
+// Returns a slice of values (including NULLs as nil).
+func (op *PhysicalAggregateOperator) collectValues(
+	expr binder.BoundExpr,
+	rows []map[string]any,
+) ([]any, error) {
+	values := make([]any, 0, len(rows))
+	for _, row := range rows {
+		val, err := op.executor.evaluateExpr(op.ctx, expr, row)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, val)
+	}
+	return values, nil
 }

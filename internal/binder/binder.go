@@ -23,6 +23,29 @@ type BindScope struct {
 	aliases    map[string]string // alias -> table name
 	paramCount int
 	params     map[int]dukdb.Type // position -> inferred type
+	ctes       map[string]*CTEBinding // CTE name -> binding info
+}
+
+// CTEBinding represents a CTE that is available for reference in the current scope.
+type CTEBinding struct {
+	// Name is the CTE name.
+	Name string
+	// Columns contains the column information for the CTE.
+	Columns []*BoundColumn
+	// Types contains the result types of the CTE columns.
+	Types []dukdb.Type
+	// Names contains the column names.
+	Names []string
+	// IsSelfReference is true if this is a placeholder binding for recursive self-reference.
+	IsSelfReference bool
+	// Query is the bound CTE query (nil for self-reference placeholder).
+	// For recursive CTEs, this is the base case query.
+	Query *BoundSelectStmt
+	// RecursiveQuery is the bound recursive part of a recursive CTE.
+	// Only set when Recursive is true.
+	RecursiveQuery *BoundSelectStmt
+	// Recursive indicates this is a recursive CTE.
+	Recursive bool
 }
 
 // BoundTableRef represents a bound table reference.
@@ -35,7 +58,13 @@ type BoundTableRef struct {
 	ViewDef       *catalog.ViewDef         // Set for views
 	ViewQuery     *BoundSelectStmt         // Bound query for views (set when ViewDef is set)
 	TableFunction *BoundTableFunctionRef   // Set for table functions (read_csv, etc.)
+	CTERef        *CTEBinding              // Set for CTE references
+	Subquery      *BoundSelectStmt         // Set for subqueries in FROM clause (including LATERAL)
+	PivotStmt     *BoundPivotStmt          // Set for PIVOT table references
+	UnpivotStmt   *BoundUnpivotStmt        // Set for UNPIVOT table references
 	Columns       []*BoundColumn
+	Lateral       bool                     // LATERAL flag (subquery can reference outer scope)
+	IsCTESelfRef  bool                     // True if this is a self-reference within a recursive CTE's recursive part
 }
 
 // BoundTableFunctionRef represents a bound table function call.
@@ -82,7 +111,56 @@ func newBindScope(parent *BindScope) *BindScope {
 		tables:  make(map[string]*BoundTableRef),
 		aliases: make(map[string]string),
 		params:  make(map[int]dukdb.Type),
+		ctes:    make(map[string]*CTEBinding),
 	}
+}
+
+// newLateralScope creates a new scope for LATERAL subqueries that inherits
+// the parent scope's table bindings. This allows LATERAL subqueries to reference
+// columns from tables that appear earlier in the FROM clause.
+func newLateralScope(parent *BindScope) *BindScope {
+	scope := &BindScope{
+		parent:  parent,
+		tables:  make(map[string]*BoundTableRef),
+		aliases: make(map[string]string),
+		params:  make(map[int]dukdb.Type),
+		ctes:    make(map[string]*CTEBinding),
+	}
+
+	// Copy parent's tables into the lateral scope.
+	// This makes preceding tables from the FROM clause visible to the LATERAL subquery.
+	if parent != nil {
+		for name, ref := range parent.tables {
+			scope.tables[name] = ref
+		}
+		for alias, name := range parent.aliases {
+			scope.aliases[alias] = name
+		}
+		// Also inherit CTEs from parent scope
+		for name, cte := range parent.ctes {
+			scope.ctes[name] = cte
+		}
+		// Inherit parameter count
+		scope.paramCount = parent.paramCount
+	}
+
+	return scope
+}
+
+// getCTE looks up a CTE by name in this scope or parent scopes.
+func (s *BindScope) getCTE(name string) *CTEBinding {
+	if cte, ok := s.ctes[name]; ok {
+		return cte
+	}
+	if s.parent != nil {
+		return s.parent.getCTE(name)
+	}
+	return nil
+}
+
+// addCTE adds a CTE binding to the current scope.
+func (s *BindScope) addCTE(cte *CTEBinding) {
+	s.ctes[cte.Name] = cte
 }
 
 // Bind binds a parsed statement to the catalog.
@@ -128,6 +206,12 @@ func (b *Binder) Bind(
 		return &BoundRollbackStmt{}, nil
 	case *parser.CopyStmt:
 		return b.bindCopy(s)
+	case *parser.MergeStmt:
+		return b.bindMerge(s)
+	case *parser.PivotStmt:
+		return b.bindPivot(s)
+	case *parser.UnpivotStmt:
+		return b.bindUnpivot(s)
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}

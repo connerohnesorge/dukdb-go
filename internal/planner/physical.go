@@ -206,6 +206,13 @@ type PhysicalHashAggregate struct {
 	Aggregates []binder.BoundExpr
 	Aliases    []string
 	columns    []ColumnBinding
+	// GroupingSets contains the expanded grouping sets for GROUPING SETS/ROLLUP/CUBE.
+	// Each inner slice is one grouping set - a subset of GROUP BY columns to aggregate on.
+	// Empty slice means regular GROUP BY (no grouping sets).
+	GroupingSets [][]binder.BoundExpr
+	// GroupingCalls contains the GROUPING() function calls in the SELECT list.
+	// These are evaluated during execution to compute the bitmask.
+	GroupingCalls []*binder.BoundGroupingCall
 }
 
 func (*PhysicalHashAggregate) physicalPlanNode() {}
@@ -306,9 +313,11 @@ func (s *PhysicalSort) OutputColumns() []ColumnBinding { return s.Child.OutputCo
 
 // PhysicalLimit represents a physical limit operation.
 type PhysicalLimit struct {
-	Child  PhysicalPlan
-	Limit  int64
-	Offset int64
+	Child      PhysicalPlan
+	Limit      int64            // Static limit value (-1 means use LimitExpr)
+	Offset     int64            // Static offset value (-1 means use OffsetExpr)
+	LimitExpr  binder.BoundExpr // Dynamic limit expression (for LATERAL joins)
+	OffsetExpr binder.BoundExpr // Dynamic offset expression (for LATERAL joins)
 }
 
 func (*PhysicalLimit) physicalPlanNode() {}
@@ -328,14 +337,30 @@ func (d *PhysicalDistinct) Children() []PhysicalPlan { return []PhysicalPlan{d.C
 
 func (d *PhysicalDistinct) OutputColumns() []ColumnBinding { return d.Child.OutputColumns() }
 
+// PhysicalDistinctOn represents a physical DISTINCT ON operation.
+// DISTINCT ON (col1, col2) keeps the first row for each unique combination of specified columns.
+// The implementation sorts by DISTINCT ON columns, then filters to keep only the first row per group.
+type PhysicalDistinctOn struct {
+	Child      PhysicalPlan           // Child plan
+	DistinctOn []binder.BoundExpr     // Expressions to distinct on
+	OrderBy    []*binder.BoundOrderBy // The ORDER BY clause
+}
+
+func (*PhysicalDistinctOn) physicalPlanNode() {}
+
+func (d *PhysicalDistinctOn) Children() []PhysicalPlan { return []PhysicalPlan{d.Child} }
+
+func (d *PhysicalDistinctOn) OutputColumns() []ColumnBinding { return d.Child.OutputColumns() }
+
 // PhysicalInsert represents a physical INSERT operation.
 type PhysicalInsert struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Columns  []int
-	Values   [][]binder.BoundExpr
-	Source   PhysicalPlan
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Columns   []int
+	Values    [][]binder.BoundExpr
+	Source    PhysicalPlan
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*PhysicalInsert) physicalPlanNode() {}
@@ -352,11 +377,12 @@ func (*PhysicalInsert) OutputColumns() []ColumnBinding { return nil }
 
 // PhysicalUpdate represents a physical UPDATE operation.
 type PhysicalUpdate struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Set      []*binder.BoundSetClause
-	Source   PhysicalPlan
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Set       []*binder.BoundSetClause
+	Source    PhysicalPlan
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*PhysicalUpdate) physicalPlanNode() {}
@@ -373,10 +399,11 @@ func (*PhysicalUpdate) OutputColumns() []ColumnBinding { return nil }
 
 // PhysicalDelete represents a physical DELETE operation.
 type PhysicalDelete struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Source   PhysicalPlan
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Source    PhysicalPlan
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*PhysicalDelete) physicalPlanNode() {}
@@ -629,6 +656,88 @@ func (*PhysicalAlterTable) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalAlterTable) OutputColumns() []ColumnBinding { return nil }
 
+// PhysicalMerge represents a physical MERGE INTO operation.
+type PhysicalMerge struct {
+	Schema                 string
+	TargetTable            string
+	TargetTableDef         *catalog.TableDef
+	TargetAlias            string
+	SourcePlan             PhysicalPlan // The source table/subquery plan
+	OnCondition            binder.BoundExpr
+	WhenMatched            []*binder.BoundMergeAction
+	WhenNotMatched         []*binder.BoundMergeAction
+	WhenNotMatchedBySource []*binder.BoundMergeAction
+	Returning              []*binder.BoundSelectColumn
+}
+
+func (*PhysicalMerge) physicalPlanNode() {}
+
+func (m *PhysicalMerge) Children() []PhysicalPlan {
+	if m.SourcePlan != nil {
+		return []PhysicalPlan{m.SourcePlan}
+	}
+	return nil
+}
+
+func (*PhysicalMerge) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalLateralJoin represents a physical LATERAL join operation.
+// LATERAL joins re-evaluate the right side for each row of the left side,
+// allowing the right side to reference columns from the left side.
+type PhysicalLateralJoin struct {
+	Left      PhysicalPlan     // Outer table (scanned once)
+	Right     PhysicalPlan     // Correlated subquery (re-evaluated per left row)
+	JoinType  JoinType         // Join type (CROSS, LEFT, etc.)
+	Condition binder.BoundExpr // Optional join condition
+	columns   []ColumnBinding
+}
+
+func (*PhysicalLateralJoin) physicalPlanNode() {}
+
+func (j *PhysicalLateralJoin) Children() []PhysicalPlan { return []PhysicalPlan{j.Left, j.Right} }
+
+func (j *PhysicalLateralJoin) OutputColumns() []ColumnBinding {
+	if j.columns != nil {
+		return j.columns
+	}
+
+	leftCols := j.Left.OutputColumns()
+	rightCols := j.Right.OutputColumns()
+	j.columns = make(
+		[]ColumnBinding,
+		0,
+		len(leftCols)+len(rightCols),
+	)
+
+	for i, col := range leftCols {
+		j.columns = append(
+			j.columns,
+			ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				TableIdx:  0,
+				ColumnIdx: i,
+			},
+		)
+	}
+
+	for i, col := range rightCols {
+		j.columns = append(
+			j.columns,
+			ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				TableIdx:  1,
+				ColumnIdx: i,
+			},
+		)
+	}
+
+	return j.columns
+}
+
 // PhysicalVirtualTableScan represents a physical virtual table scan.
 type PhysicalVirtualTableScan struct {
 	Schema       string
@@ -715,6 +824,224 @@ func (s *PhysicalTableFunctionScan) OutputColumns() []ColumnBinding {
 	return s.columns
 }
 
+// ---------- Sample Physical Plan Node ----------
+
+// PhysicalSample represents a physical sample operation.
+// Supports BERNOULLI, SYSTEM, and RESERVOIR sampling methods.
+type PhysicalSample struct {
+	Child  PhysicalPlan
+	Sample *binder.BoundSampleOptions
+}
+
+func (*PhysicalSample) physicalPlanNode() {}
+
+func (s *PhysicalSample) Children() []PhysicalPlan { return []PhysicalPlan{s.Child} }
+
+func (s *PhysicalSample) OutputColumns() []ColumnBinding { return s.Child.OutputColumns() }
+
+// ---------- CTE Physical Plan Nodes ----------
+
+// PhysicalRecursiveCTE represents a physical recursive CTE operation.
+// The execution algorithm is:
+// 1. Execute the base plan to produce initial rows (work table)
+// 2. Execute the recursive plan using the work table as input
+// 3. Append new results to the output and replace the work table
+// 4. Repeat until no new rows are produced or max recursion is reached
+type PhysicalRecursiveCTE struct {
+	// CTEName is the name of the CTE for reference
+	CTEName string
+	// BasePlan is the plan for the anchor (non-recursive) part
+	BasePlan PhysicalPlan
+	// RecursivePlan is the plan for the recursive part (references the CTE)
+	RecursivePlan PhysicalPlan
+	// Columns contains the output column information from the CTE
+	Columns []ColumnBinding
+	// MaxRecursion is the maximum number of recursion iterations (default 1000)
+	MaxRecursion int
+}
+
+func (*PhysicalRecursiveCTE) physicalPlanNode() {}
+
+func (r *PhysicalRecursiveCTE) Children() []PhysicalPlan {
+	return []PhysicalPlan{r.BasePlan, r.RecursivePlan}
+}
+
+func (r *PhysicalRecursiveCTE) OutputColumns() []ColumnBinding {
+	return r.Columns
+}
+
+// PhysicalCTEScan represents a physical scan of a CTE.
+// This is used when the main query references a CTE.
+type PhysicalCTEScan struct {
+	// CTEName is the name of the CTE being referenced
+	CTEName string
+	// Alias is the alias for this reference
+	Alias string
+	// Columns contains the column information from the CTE
+	Columns []ColumnBinding
+	// CTEPlan is the plan for the CTE (may be nil for recursive self-reference)
+	CTEPlan PhysicalPlan
+	// IsRecursive indicates if this is a recursive CTE
+	IsRecursive bool
+}
+
+func (*PhysicalCTEScan) physicalPlanNode() {}
+
+func (c *PhysicalCTEScan) Children() []PhysicalPlan {
+	if c.CTEPlan != nil {
+		return []PhysicalPlan{c.CTEPlan}
+	}
+	return nil
+}
+
+func (c *PhysicalCTEScan) OutputColumns() []ColumnBinding {
+	return c.Columns
+}
+
+// ---------- PIVOT/UNPIVOT Physical Plan Nodes ----------
+
+// PhysicalPivot represents a physical PIVOT operation.
+// PIVOT transforms rows into columns using conditional aggregation.
+type PhysicalPivot struct {
+	// Source is the child physical plan.
+	Source PhysicalPlan
+	// ForColumn is the bound column reference whose values determine which pivot column to use.
+	// In "FOR quarter IN ('Q1', 'Q2', ...)", this is the bound reference to "quarter".
+	ForColumn *binder.BoundColumnRef
+	// InValues contains the literal values to pivot on (become column names).
+	InValues []any
+	// Aggregates contains the bound aggregate functions to apply.
+	Aggregates []*binder.BoundPivotAggregate
+	// GroupBy contains the bound GROUP BY expressions.
+	GroupBy []binder.BoundExpr
+	// columns cache for OutputColumns
+	columns []ColumnBinding
+}
+
+func (*PhysicalPivot) physicalPlanNode() {}
+
+func (p *PhysicalPivot) Children() []PhysicalPlan { return []PhysicalPlan{p.Source} }
+
+func (p *PhysicalPivot) OutputColumns() []ColumnBinding {
+	if p.columns != nil {
+		return p.columns
+	}
+
+	// Output columns are: GROUP BY columns + (aggregate_for_each_pivot_value)
+	var cols []ColumnBinding
+
+	// Add GROUP BY columns
+	for i, expr := range p.GroupBy {
+		alias := ""
+		if colRef, ok := expr.(*binder.BoundColumnRef); ok {
+			alias = colRef.Column
+		}
+		cols = append(cols, ColumnBinding{
+			Column:    alias,
+			Type:      expr.ResultType(),
+			ColumnIdx: i,
+		})
+	}
+
+	// Add one column per (aggregate, pivot_value) combination
+	aggIdx := len(p.GroupBy)
+	for _, agg := range p.Aggregates {
+		for _, val := range p.InValues {
+			colName := formatPivotColumnName(agg.Function, agg.Alias, val)
+			cols = append(cols, ColumnBinding{
+				Column:    colName,
+				Type:      agg.Expr.ResultType(),
+				ColumnIdx: aggIdx,
+			})
+			aggIdx++
+		}
+	}
+
+	p.columns = cols
+	return p.columns
+}
+
+// PhysicalUnpivot represents a physical UNPIVOT operation.
+// UNPIVOT transforms columns into rows (the inverse of PIVOT).
+type PhysicalUnpivot struct {
+	// Source is the child physical plan.
+	Source PhysicalPlan
+	// ValueColumn is the name of the column that will contain the unpivoted values.
+	ValueColumn string
+	// NameColumn is the name of the column that will contain the original column names.
+	NameColumn string
+	// UnpivotColumns contains the column names to unpivot.
+	UnpivotColumns []string
+	// columns cache for OutputColumns
+	columns []ColumnBinding
+}
+
+func (*PhysicalUnpivot) physicalPlanNode() {}
+
+func (u *PhysicalUnpivot) Children() []PhysicalPlan { return []PhysicalPlan{u.Source} }
+
+func (u *PhysicalUnpivot) OutputColumns() []ColumnBinding {
+	if u.columns != nil {
+		return u.columns
+	}
+
+	// Output columns are: non-unpivoted columns + name column + value column
+	sourceCols := u.Source.OutputColumns()
+
+	var cols []ColumnBinding
+	idx := 0
+
+	// Add non-unpivoted columns from source
+	for _, col := range sourceCols {
+		isUnpivot := false
+		for _, unpivotCol := range u.UnpivotColumns {
+			if col.Column == unpivotCol {
+				isUnpivot = true
+				break
+			}
+		}
+		if !isUnpivot {
+			cols = append(cols, ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				ColumnIdx: idx,
+			})
+			idx++
+		}
+	}
+
+	// Add name column (VARCHAR)
+	cols = append(cols, ColumnBinding{
+		Column:    u.NameColumn,
+		Type:      dukdb.TYPE_VARCHAR,
+		ColumnIdx: idx,
+	})
+	idx++
+
+	// Add value column (determine type from first unpivot column)
+	valueType := dukdb.TYPE_ANY
+	for _, col := range sourceCols {
+		for _, unpivotCol := range u.UnpivotColumns {
+			if col.Column == unpivotCol {
+				valueType = col.Type
+				break
+			}
+		}
+		if valueType != dukdb.TYPE_ANY {
+			break
+		}
+	}
+	cols = append(cols, ColumnBinding{
+		Column:    u.ValueColumn,
+		Type:      valueType,
+		ColumnIdx: idx,
+	})
+
+	u.columns = cols
+	return u.columns
+}
+
 // Planner converts bound statements to physical plans.
 type Planner struct {
 	catalog *catalog.Catalog
@@ -781,6 +1108,12 @@ func (p *Planner) createLogicalPlan(
 		return p.planDropSchema(s)
 	case *binder.BoundAlterTableStmt:
 		return p.planAlterTable(s)
+	case *binder.BoundMergeStmt:
+		return p.planMerge(s)
+	case *binder.BoundPivotStmt:
+		return p.planPivot(s)
+	case *binder.BoundUnpivotStmt:
+		return p.planUnpivot(s)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -801,11 +1134,22 @@ func (p *Planner) planSelect(
 
 		// Additional tables (implicit cross join)
 		for i := 1; i < len(s.From); i++ {
-			right := p.createScanForBoundTableRef(s.From[i])
-			plan = &LogicalJoin{
-				Left:     plan,
-				Right:    right,
-				JoinType: JoinTypeCross,
+			tableRef := s.From[i]
+			right := p.createScanForBoundTableRef(tableRef)
+
+			// Check if this is a LATERAL join (table ref can reference previous tables)
+			if tableRef.Lateral {
+				plan = &LogicalLateralJoin{
+					Left:     plan,
+					Right:    right,
+					JoinType: JoinTypeCross,
+				}
+			} else {
+				plan = &LogicalJoin{
+					Left:     plan,
+					Right:    right,
+					JoinType: JoinTypeCross,
+				}
 			}
 		}
 
@@ -814,11 +1158,22 @@ func (p *Planner) planSelect(
 			right := p.createScanForBoundTableRef(join.Table)
 
 			joinType := JoinType(join.Type)
-			plan = &LogicalJoin{
-				Left:      plan,
-				Right:     right,
-				JoinType:  joinType,
-				Condition: join.Condition,
+
+			// Check if this is a LATERAL join
+			if join.Table.Lateral {
+				plan = &LogicalLateralJoin{
+					Left:      plan,
+					Right:     right,
+					JoinType:  joinType,
+					Condition: join.Condition,
+				}
+			} else {
+				plan = &LogicalJoin{
+					Left:      plan,
+					Right:     right,
+					JoinType:  joinType,
+					Condition: join.Condition,
+				}
 			}
 		}
 	} else {
@@ -837,15 +1192,22 @@ func (p *Planner) planSelect(
 	// GROUP BY / Aggregates (only non-window aggregates)
 	if len(s.GroupBy) > 0 ||
 		hasNonWindowAggregates(s.Columns) {
-		groupBy := s.GroupBy
+		// Extract grouping sets if present
+		groupingSets, regularGroupBy := extractGroupingSets(s.GroupBy)
+		groupBy := regularGroupBy
 		aggregates := extractNonWindowAggregates(s.Columns)
 		aliases := extractAliases(s.Columns)
 
+		// Extract GROUPING() function calls from the select columns
+		groupingCalls := extractGroupingCalls(s.Columns)
+
 		plan = &LogicalAggregate{
-			Child:      plan,
-			GroupBy:    groupBy,
-			Aggregates: aggregates,
-			Aliases:    aliases,
+			Child:         plan,
+			GroupBy:       groupBy,
+			Aggregates:    aggregates,
+			Aliases:       aliases,
+			GroupingSets:  groupingSets,
+			GroupingCalls: groupingCalls,
 		}
 
 		// HAVING
@@ -867,6 +1229,15 @@ func (p *Planner) planSelect(
 		}
 	}
 
+	// QUALIFY - filter rows after window functions are evaluated
+	// This is specific to DuckDB/Snowflake and allows filtering on window function results
+	if s.Qualify != nil {
+		plan = &LogicalFilter{
+			Child:     plan,
+			Condition: s.Qualify,
+		}
+	}
+
 	// PROJECT
 	expressions := make(
 		[]binder.BoundExpr,
@@ -884,8 +1255,19 @@ func (p *Planner) planSelect(
 		Aliases:     aliases,
 	}
 
-	// DISTINCT
-	if s.Distinct {
+	// DISTINCT ON - keep first row per group of DISTINCT ON columns
+	// This must be applied after projection and before regular DISTINCT
+	// DISTINCT ON requires sorting by the DISTINCT ON columns first
+	if len(s.DistinctOn) > 0 {
+		plan = &LogicalDistinctOn{
+			Child:      plan,
+			DistinctOn: s.DistinctOn,
+			OrderBy:    s.OrderBy, // Use the ORDER BY to determine which row to keep
+		}
+	}
+
+	// DISTINCT (regular DISTINCT, not DISTINCT ON)
+	if s.Distinct && len(s.DistinctOn) == 0 {
 		plan = &LogicalDistinct{Child: plan}
 	}
 
@@ -901,22 +1283,39 @@ func (p *Planner) planSelect(
 	if s.Limit != nil || s.Offset != nil {
 		limit := int64(-1)
 		offset := int64(0)
+		var limitExpr, offsetExpr binder.BoundExpr
 
 		if s.Limit != nil {
 			if lit, ok := s.Limit.(*binder.BoundLiteral); ok {
 				limit = toInt64(lit.Value)
+			} else {
+				// Non-literal limit expression (e.g., correlated column reference)
+				limitExpr = s.Limit
 			}
 		}
 		if s.Offset != nil {
 			if lit, ok := s.Offset.(*binder.BoundLiteral); ok {
 				offset = toInt64(lit.Value)
+			} else {
+				// Non-literal offset expression (e.g., correlated column reference)
+				offsetExpr = s.Offset
 			}
 		}
 
 		plan = &LogicalLimit{
+			Child:      plan,
+			Limit:      limit,
+			Offset:     offset,
+			LimitExpr:  limitExpr,
+			OffsetExpr: offsetExpr,
+		}
+	}
+
+	// SAMPLE - apply sampling after everything else
+	if s.Sample != nil {
+		plan = &LogicalSample{
 			Child:  plan,
-			Limit:  limit,
-			Offset: offset,
+			Sample: s.Sample,
 		}
 	}
 
@@ -937,12 +1336,13 @@ func (p *Planner) planInsert(
 	}
 
 	return &LogicalInsert{
-		Schema:   s.Schema,
-		Table:    s.Table,
-		TableDef: s.TableDef,
-		Columns:  s.Columns,
-		Values:   s.Values,
-		Source:   source,
+		Schema:    s.Schema,
+		Table:     s.Table,
+		TableDef:  s.TableDef,
+		Columns:   s.Columns,
+		Values:    s.Values,
+		Source:    source,
+		Returning: s.Returning,
 	}, nil
 }
 
@@ -968,11 +1368,12 @@ func (p *Planner) planUpdate(
 	}
 
 	return &LogicalUpdate{
-		Schema:   s.Schema,
-		Table:    s.Table,
-		TableDef: s.TableDef,
-		Set:      s.Set,
-		Source:   source,
+		Schema:    s.Schema,
+		Table:     s.Table,
+		TableDef:  s.TableDef,
+		Set:       s.Set,
+		Source:    source,
+		Returning: s.Returning,
 	}, nil
 }
 
@@ -998,10 +1399,11 @@ func (p *Planner) planDelete(
 	}
 
 	return &LogicalDelete{
-		Schema:   s.Schema,
-		Table:    s.Table,
-		TableDef: s.TableDef,
-		Source:   source,
+		Schema:    s.Schema,
+		Table:     s.Table,
+		TableDef:  s.TableDef,
+		Source:    source,
+		Returning: s.Returning,
 	}, nil
 }
 
@@ -1173,9 +1575,163 @@ func (p *Planner) planAlterTable(
 	}, nil
 }
 
+func (p *Planner) planMerge(
+	s *binder.BoundMergeStmt,
+) (LogicalPlan, error) {
+	// Create a plan for the source table/subquery
+	var sourcePlan LogicalPlan
+	if s.SourceRef != nil {
+		sourcePlan = p.createScanForBoundTableRef(s.SourceRef)
+	}
+
+	return &LogicalMerge{
+		Schema:                 s.Schema,
+		TargetTable:            s.TargetTable,
+		TargetTableDef:         s.TargetTableDef,
+		TargetAlias:            s.TargetAlias,
+		SourcePlan:             sourcePlan,
+		OnCondition:            s.OnCondition,
+		WhenMatched:            s.WhenMatched,
+		WhenNotMatched:         s.WhenNotMatched,
+		WhenNotMatchedBySource: s.WhenNotMatchedBySource,
+		Returning:              s.Returning,
+	}, nil
+}
+
+// planPivot creates a logical plan for a PIVOT statement.
+func (p *Planner) planPivot(s *binder.BoundPivotStmt) (LogicalPlan, error) {
+	// Create a plan for the source table
+	var sourcePlan LogicalPlan
+	if s.Source != nil {
+		sourcePlan = p.createScanForBoundTableRef(s.Source)
+	}
+
+	return &LogicalPivot{
+		Source:     sourcePlan,
+		ForColumn:  s.ForColumn,
+		InValues:   s.InValues,
+		Aggregates: s.Aggregates,
+		GroupBy:    s.GroupBy,
+	}, nil
+}
+
+// planUnpivot creates a logical plan for an UNPIVOT statement.
+func (p *Planner) planUnpivot(s *binder.BoundUnpivotStmt) (LogicalPlan, error) {
+	// Create a plan for the source table
+	var sourcePlan LogicalPlan
+	if s.Source != nil {
+		sourcePlan = p.createScanForBoundTableRef(s.Source)
+	}
+
+	return &LogicalUnpivot{
+		Source:         sourcePlan,
+		ValueColumn:    s.ValueColumn,
+		NameColumn:     s.NameColumn,
+		UnpivotColumns: s.UnpivotColumns,
+	}, nil
+}
+
 // createScanForBoundTableRef creates a LogicalScan for a bound table reference.
-// This handles regular tables, virtual tables, table functions, and views.
+// This handles regular tables, virtual tables, table functions, views, and CTEs.
 func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalPlan {
+	// Handle CTE references
+	if ref.CTERef != nil {
+		// Build column bindings for the CTE scan
+		columns := make([]ColumnBinding, len(ref.Columns))
+		for i, col := range ref.Columns {
+			columns[i] = ColumnBinding{
+				Table:     ref.Alias,
+				Column:    col.Column,
+				Type:      col.Type,
+				ColumnIdx: i,
+			}
+		}
+
+		// For self-references within recursive CTEs (the reference inside the recursive part),
+		// return a CTE scan that will be replaced with work table data at execution time.
+		// We check IsCTESelfRef which was captured at bind time.
+		if ref.IsCTESelfRef {
+			return &LogicalCTEScan{
+				CTEName:     ref.CTERef.Name,
+				Alias:       ref.Alias,
+				Columns:     columns,
+				CTEPlan:     nil,
+				IsRecursive: true,
+			}
+		}
+
+		// For recursive CTEs (main query reference, not self-reference), create a LogicalRecursiveCTE node
+		if ref.CTERef.Recursive && ref.CTERef.Query != nil && ref.CTERef.RecursiveQuery != nil {
+			// Plan the base case
+			basePlan, err := p.planSelect(ref.CTERef.Query)
+			if err != nil {
+				// Fall back to CTE scan if planning fails
+				return &LogicalCTEScan{
+					CTEName:     ref.CTERef.Name,
+					Alias:       ref.Alias,
+					Columns:     columns,
+					CTEPlan:     nil,
+					IsRecursive: true,
+				}
+			}
+
+			// Plan the recursive case
+			recursivePlan, err := p.planSelect(ref.CTERef.RecursiveQuery)
+			if err != nil {
+				// Fall back to CTE scan if planning fails
+				return &LogicalCTEScan{
+					CTEName:     ref.CTERef.Name,
+					Alias:       ref.Alias,
+					Columns:     columns,
+					CTEPlan:     basePlan,
+					IsRecursive: true,
+				}
+			}
+
+			return &LogicalRecursiveCTE{
+				CTEName:       ref.CTERef.Name,
+				BasePlan:      basePlan,
+				RecursivePlan: recursivePlan,
+				Columns:       columns,
+			}
+		}
+
+		// For non-recursive CTEs, plan the CTE query
+		var ctePlan LogicalPlan
+		if ref.CTERef.Query != nil {
+			var err error
+			ctePlan, err = p.planSelect(ref.CTERef.Query)
+			if err != nil {
+				// If planning fails, return a CTE scan without the plan
+				// This will be handled at execution time
+				ctePlan = nil
+			}
+		}
+
+		return &LogicalCTEScan{
+			CTEName:     ref.CTERef.Name,
+			Alias:       ref.Alias,
+			Columns:     columns,
+			CTEPlan:     ctePlan,
+			IsRecursive: false,
+		}
+	}
+
+	// Handle subqueries (including LATERAL subqueries)
+	if ref.Subquery != nil {
+		// Plan the subquery
+		plan, err := p.planSelect(ref.Subquery)
+		if err != nil {
+			// If planning fails, return an empty scan (will fail later with better error)
+			return &LogicalScan{
+				Schema:    ref.Schema,
+				TableName: ref.Alias,
+				Alias:     ref.Alias,
+			}
+		}
+		return plan
+	}
+
 	// Handle views by expanding the view query
 	if ref.ViewDef != nil && ref.ViewQuery != nil {
 		// Plan the view's bound query directly
@@ -1191,6 +1747,39 @@ func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalP
 			}
 		}
 		return plan
+	}
+
+	// Handle PIVOT table references
+	if ref.PivotStmt != nil {
+		pivotStmt := ref.PivotStmt
+		// Create a plan for the source table
+		var sourcePlan LogicalPlan
+		if pivotStmt.Source != nil {
+			sourcePlan = p.createScanForBoundTableRef(pivotStmt.Source)
+		}
+		return &LogicalPivot{
+			Source:     sourcePlan,
+			ForColumn:  pivotStmt.ForColumn,
+			InValues:   pivotStmt.InValues,
+			Aggregates: pivotStmt.Aggregates,
+			GroupBy:    pivotStmt.GroupBy,
+		}
+	}
+
+	// Handle UNPIVOT table references
+	if ref.UnpivotStmt != nil {
+		unpivotStmt := ref.UnpivotStmt
+		// Create a plan for the source table
+		var sourcePlan LogicalPlan
+		if unpivotStmt.Source != nil {
+			sourcePlan = p.createScanForBoundTableRef(unpivotStmt.Source)
+		}
+		return &LogicalUnpivot{
+			Source:         sourcePlan,
+			ValueColumn:    unpivotStmt.ValueColumn,
+			NameColumn:     unpivotStmt.NameColumn,
+			UnpivotColumns: unpivotStmt.UnpivotColumns,
+		}
 	}
 
 	return &LogicalScan{
@@ -1289,6 +1878,36 @@ func (p *Planner) createPhysicalPlan(
 			Condition: l.Condition,
 		}, nil
 
+	case *LogicalLateralJoin:
+		left, err := p.createPhysicalPlan(l.Left)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.createPhysicalPlan(l.Right)
+		if err != nil {
+			return nil, err
+		}
+
+		// LATERAL joins always use PhysicalLateralJoin since the right side
+		// needs to be re-evaluated for each row of the left side
+		return &PhysicalLateralJoin{
+			Left:      left,
+			Right:     right,
+			JoinType:  l.JoinType,
+			Condition: l.Condition,
+		}, nil
+
+	case *LogicalSample:
+		child, err := p.createPhysicalPlan(l.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		return &PhysicalSample{
+			Child:  child,
+			Sample: l.Sample,
+		}, nil
+
 	case *LogicalAggregate:
 		child, err := p.createPhysicalPlan(l.Child)
 		if err != nil {
@@ -1296,10 +1915,12 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalHashAggregate{
-			Child:      child,
-			GroupBy:    l.GroupBy,
-			Aggregates: l.Aggregates,
-			Aliases:    l.Aliases,
+			Child:         child,
+			GroupBy:       l.GroupBy,
+			Aggregates:    l.Aggregates,
+			Aliases:       l.Aliases,
+			GroupingSets:  l.GroupingSets,
+			GroupingCalls: l.GroupingCalls,
 		}, nil
 
 	case *LogicalWindow:
@@ -1331,9 +1952,11 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalLimit{
-			Child:  child,
-			Limit:  l.Limit,
-			Offset: l.Offset,
+			Child:      child,
+			Limit:      l.Limit,
+			Offset:     l.Offset,
+			LimitExpr:  l.LimitExpr,
+			OffsetExpr: l.OffsetExpr,
 		}, nil
 
 	case *LogicalDistinct:
@@ -1343,6 +1966,18 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalDistinct{Child: child}, nil
+
+	case *LogicalDistinctOn:
+		child, err := p.createPhysicalPlan(l.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		return &PhysicalDistinctOn{
+			Child:      child,
+			DistinctOn: l.DistinctOn,
+			OrderBy:    l.OrderBy,
+		}, nil
 
 	case *LogicalInsert:
 		var source PhysicalPlan
@@ -1355,12 +1990,13 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalInsert{
-			Schema:   l.Schema,
-			Table:    l.Table,
-			TableDef: l.TableDef,
-			Columns:  l.Columns,
-			Values:   l.Values,
-			Source:   source,
+			Schema:    l.Schema,
+			Table:     l.Table,
+			TableDef:  l.TableDef,
+			Columns:   l.Columns,
+			Values:    l.Values,
+			Source:    source,
+			Returning: l.Returning,
 		}, nil
 
 	case *LogicalUpdate:
@@ -1374,11 +2010,12 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalUpdate{
-			Schema:   l.Schema,
-			Table:    l.Table,
-			TableDef: l.TableDef,
-			Set:      l.Set,
-			Source:   source,
+			Schema:    l.Schema,
+			Table:     l.Table,
+			TableDef:  l.TableDef,
+			Set:       l.Set,
+			Source:    source,
+			Returning: l.Returning,
 		}, nil
 
 	case *LogicalDelete:
@@ -1392,10 +2029,11 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalDelete{
-			Schema:   l.Schema,
-			Table:    l.Table,
-			TableDef: l.TableDef,
-			Source:   source,
+			Schema:    l.Schema,
+			Table:     l.Table,
+			TableDef:  l.TableDef,
+			Source:    source,
+			Returning: l.Returning,
 		}, nil
 
 	case *LogicalCreateTable:
@@ -1534,6 +2172,88 @@ func (p *Planner) createPhysicalPlan(
 			NewColumn:    l.NewColumn,
 			DropColumn:   l.DropColumn,
 			AddColumn:    l.AddColumn,
+		}, nil
+
+	case *LogicalMerge:
+		var sourcePlan PhysicalPlan
+		if l.SourcePlan != nil {
+			var err error
+			sourcePlan, err = p.createPhysicalPlan(l.SourcePlan)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &PhysicalMerge{
+			Schema:                 l.Schema,
+			TargetTable:            l.TargetTable,
+			TargetTableDef:         l.TargetTableDef,
+			TargetAlias:            l.TargetAlias,
+			SourcePlan:             sourcePlan,
+			OnCondition:            l.OnCondition,
+			WhenMatched:            l.WhenMatched,
+			WhenNotMatched:         l.WhenNotMatched,
+			WhenNotMatchedBySource: l.WhenNotMatchedBySource,
+			Returning:              l.Returning,
+		}, nil
+
+	// CTE logical to physical mappings
+	case *LogicalRecursiveCTE:
+		basePlan, err := p.createPhysicalPlan(l.BasePlan)
+		if err != nil {
+			return nil, err
+		}
+		recursivePlan, err := p.createPhysicalPlan(l.RecursivePlan)
+		if err != nil {
+			return nil, err
+		}
+		return &PhysicalRecursiveCTE{
+			CTEName:       l.CTEName,
+			BasePlan:      basePlan,
+			RecursivePlan: recursivePlan,
+			Columns:       l.Columns,
+			MaxRecursion:  1000, // Default max recursion limit
+		}, nil
+
+	case *LogicalCTEScan:
+		var ctePlan PhysicalPlan
+		if l.CTEPlan != nil {
+			var err error
+			ctePlan, err = p.createPhysicalPlan(l.CTEPlan)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &PhysicalCTEScan{
+			CTEName:     l.CTEName,
+			Alias:       l.Alias,
+			Columns:     l.Columns,
+			CTEPlan:     ctePlan,
+			IsRecursive: l.IsRecursive,
+		}, nil
+
+	case *LogicalPivot:
+		source, err := p.createPhysicalPlan(l.Source)
+		if err != nil {
+			return nil, err
+		}
+		return &PhysicalPivot{
+			Source:     source,
+			ForColumn:  l.ForColumn,
+			InValues:   l.InValues,
+			Aggregates: l.Aggregates,
+			GroupBy:    l.GroupBy,
+		}, nil
+
+	case *LogicalUnpivot:
+		source, err := p.createPhysicalPlan(l.Source)
+		if err != nil {
+			return nil, err
+		}
+		return &PhysicalUnpivot{
+			Source:         source,
+			ValueColumn:    l.ValueColumn,
+			NameColumn:     l.NameColumn,
+			UnpivotColumns: l.UnpivotColumns,
 		}, nil
 
 	default:
@@ -1696,12 +2416,16 @@ func extractNonWindowAggregates(
 }
 
 // extractWindowExprs extracts window expressions from SELECT columns.
+// It also copies the column alias to the window expression for QUALIFY clause support.
 func extractWindowExprs(
 	columns []*binder.BoundSelectColumn,
 ) []*binder.BoundWindowExpr {
 	var windowExprs []*binder.BoundWindowExpr
 	for _, col := range columns {
 		if windowExpr, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			// Copy the column alias to the window expression so that QUALIFY
+			// can reference the window result by its alias (e.g., "rn" in "QUALIFY rn <= 2")
+			windowExpr.Alias = col.Alias
 			windowExprs = append(windowExprs, windowExpr)
 		}
 	}
@@ -1718,4 +2442,117 @@ func containsWindowExpr(
 		}
 	}
 	return false
+}
+
+// extractGroupingSets extracts grouping sets from GROUP BY expressions.
+// It returns the expanded grouping sets and the regular GROUP BY columns.
+// If there are no grouping set expressions, it returns nil and the original expressions.
+func extractGroupingSets(
+	groupBy []binder.BoundExpr,
+) ([][]binder.BoundExpr, []binder.BoundExpr) {
+	var groupingSets [][]binder.BoundExpr
+	var regularCols []binder.BoundExpr
+
+	for _, expr := range groupBy {
+		if gsExpr, ok := expr.(*binder.BoundGroupingSetExpr); ok {
+			// Found a grouping set expression - use its expanded sets
+			groupingSets = gsExpr.Sets
+			// The columns for the grouping set are all unique expressions in the sets
+			colMap := make(map[string]binder.BoundExpr)
+			for _, set := range gsExpr.Sets {
+				for _, col := range set {
+					// Use a simple key based on column identity
+					key := getExprKey(col)
+					if _, exists := colMap[key]; !exists {
+						colMap[key] = col
+						regularCols = append(regularCols, col)
+					}
+				}
+			}
+		} else {
+			// Regular GROUP BY expression
+			regularCols = append(regularCols, expr)
+		}
+	}
+
+	return groupingSets, regularCols
+}
+
+// getExprKey returns a unique key for an expression (used for deduplication).
+func getExprKey(expr binder.BoundExpr) string {
+	switch e := expr.(type) {
+	case *binder.BoundColumnRef:
+		if e.Table != "" {
+			return e.Table + "." + e.Column
+		}
+		return e.Column
+	case *binder.BoundLiteral:
+		return formatLiteralKey(e.Value)
+	default:
+		// For other expression types, use pointer-based identity
+		return ""
+	}
+}
+
+// formatLiteralKey formats a literal value as a key.
+func formatLiteralKey(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case string:
+		return "s:" + val
+	case int64:
+		return "i:" + formatInt64(val)
+	case float64:
+		return "f:" + formatFloat64(val)
+	case bool:
+		if val {
+			return "b:true"
+		}
+		return "b:false"
+	default:
+		return ""
+	}
+}
+
+// formatInt64 formats an int64 as a string (without importing strconv).
+func formatInt64(v int64) string {
+	if v == 0 {
+		return "0"
+	}
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	var buf [20]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + v%10)
+		v /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}
+
+// formatFloat64 formats a float64 as a string (simple version).
+func formatFloat64(v float64) string {
+	return formatInt64(int64(v * 1000000))
+}
+
+// extractGroupingCalls extracts GROUPING() function calls from SELECT columns.
+func extractGroupingCalls(
+	columns []*binder.BoundSelectColumn,
+) []*binder.BoundGroupingCall {
+	var calls []*binder.BoundGroupingCall
+	for _, col := range columns {
+		if gc, ok := col.Expr.(*binder.BoundGroupingCall); ok {
+			calls = append(calls, gc)
+		}
+	}
+	return calls
 }

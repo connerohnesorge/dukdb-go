@@ -20,23 +20,27 @@ type Expr interface {
 
 // CTE represents a Common Table Expression (WITH clause).
 type CTE struct {
-	Name    string      // CTE name (e.g., "tmp" in WITH tmp AS ...)
-	Columns []string    // Optional column names
-	Query   *SelectStmt // The CTE query
+	Name      string      // CTE name (e.g., "tmp" in WITH tmp AS ...)
+	Columns   []string    // Optional column names
+	Query     *SelectStmt // The CTE query
+	Recursive bool        // True for WITH RECURSIVE (allows self-referencing in the CTE query)
 }
 
 // SelectStmt represents a SELECT statement.
 type SelectStmt struct {
 	CTEs       []CTE // Common Table Expressions (WITH clause)
 	Distinct   bool
+	DistinctOn []Expr         // DISTINCT ON (col1, col2) expressions - selects first row per distinct group
 	Columns    []SelectColumn
 	From       *FromClause
 	Where      Expr
 	GroupBy    []Expr
 	Having     Expr
+	Qualify    Expr           // QUALIFY clause - filters rows after window function evaluation
 	OrderBy    []OrderByExpr
 	Limit      Expr
 	Offset     Expr
+	Sample     *SampleOptions // SAMPLE clause - for sampling a subset of rows
 	IsSubquery bool
 	SetOp      SetOpType   // Type of set operation (UNION, INTERSECT, EXCEPT)
 	Right      *SelectStmt // Right side of set operation
@@ -74,6 +78,9 @@ type TableRef struct {
 	Alias         string
 	Subquery      *SelectStmt
 	TableFunction *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
+	PivotRef      *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
+	UnpivotRef    *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
+	Lateral       bool              // LATERAL join (subquery can reference columns from outer scope)
 }
 
 // TableFunctionRef represents a table function call in a FROM clause.
@@ -125,12 +132,22 @@ type OrderByExpr struct {
 }
 
 // InsertStmt represents an INSERT statement.
+// Supports the optional RETURNING clause to return values from inserted rows.
+//
+// Example:
+//
+//	INSERT INTO t (a, b) VALUES (1, 2) RETURNING *;
+//	INSERT INTO t (a, b) VALUES (1, 2) RETURNING id, a, b;
 type InsertStmt struct {
 	Schema  string
 	Table   string
 	Columns []string
 	Values  [][]Expr
 	Select  *SelectStmt
+	// Returning specifies columns to return after the insert operation.
+	// If non-empty, the INSERT becomes a query that returns the specified columns
+	// from the newly inserted rows. Use Star=true in SelectColumn for RETURNING *.
+	Returning []SelectColumn
 }
 
 func (*InsertStmt) stmtNode() {}
@@ -143,12 +160,22 @@ func (s *InsertStmt) Accept(v Visitor) {
 }
 
 // UpdateStmt represents an UPDATE statement.
+// Supports the optional RETURNING clause to return values from updated rows.
+//
+// Example:
+//
+//	UPDATE t SET x = 1 WHERE id = 5 RETURNING id, x;
+//	UPDATE t SET x = 1 WHERE id = 5 RETURNING *;
 type UpdateStmt struct {
 	Schema string
 	Table  string
 	Set    []SetClause
 	From   *FromClause // Optional FROM clause for UPDATE...FROM
 	Where  Expr
+	// Returning specifies columns to return after the update operation.
+	// If non-empty, the UPDATE becomes a query that returns the specified columns
+	// from the updated rows. Use Star=true in SelectColumn for RETURNING *.
+	Returning []SelectColumn
 }
 
 func (*UpdateStmt) stmtNode() {}
@@ -167,10 +194,20 @@ type SetClause struct {
 }
 
 // DeleteStmt represents a DELETE statement.
+// Supports the optional RETURNING clause to return values from deleted rows.
+//
+// Example:
+//
+//	DELETE FROM t WHERE id = 5 RETURNING *;
+//	DELETE FROM t WHERE id = 5 RETURNING id, name;
 type DeleteStmt struct {
 	Schema string
 	Table  string
 	Where  Expr
+	// Returning specifies columns to return after the delete operation.
+	// If non-empty, the DELETE becomes a query that returns the specified columns
+	// from the deleted rows. Use Star=true in SelectColumn for RETURNING *.
+	Returning []SelectColumn
 }
 
 func (*DeleteStmt) stmtNode() {}
@@ -731,3 +768,28 @@ const (
 	ExcludeGroup                         // EXCLUDE GROUP (current row's peer group)
 	ExcludeTies                          // EXCLUDE TIES (peers but not current row)
 )
+
+// ---------- Sampling Types ----------
+
+// SampleMethod represents the method used for sampling rows from a table.
+type SampleMethod int
+
+const (
+	SampleBernoulli SampleMethod = iota // BERNOULLI - probabilistic row sampling (each row has independent probability)
+	SampleSystem                        // SYSTEM - block-level sampling (faster, less random)
+	SampleReservoir                     // RESERVOIR - reservoir sampling (fixed row count)
+)
+
+// SampleOptions represents the SAMPLE clause configuration.
+// The SAMPLE clause allows sampling a subset of rows from a table.
+// Examples:
+//   - SELECT * FROM t USING SAMPLE 10%
+//   - SELECT * FROM t USING SAMPLE BERNOULLI(10%)
+//   - SELECT * FROM t USING SAMPLE RESERVOIR(100 ROWS)
+//   - SELECT * FROM t USING SAMPLE 10% (SEED 42)
+type SampleOptions struct {
+	Method     SampleMethod // Sampling method (BERNOULLI, SYSTEM, or RESERVOIR)
+	Percentage float64      // For BERNOULLI/SYSTEM - percentage of rows to sample (0-100)
+	Rows       int          // For RESERVOIR - fixed number of rows to sample
+	Seed       *int64       // Optional seed for reproducible sampling
+}

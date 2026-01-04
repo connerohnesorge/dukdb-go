@@ -114,6 +114,12 @@ func (e *Executor) executeDelete(
 		}
 	}
 
+	// Collect deleted data for RETURNING and WAL
+	deletedData := make([][]any, len(deletedRows))
+	for i, row := range deletedRows {
+		deletedData[i] = row.data
+	}
+
 	// WAL logging: Log DELETE entry AFTER successful deletion
 	// This ensures atomicity - if the delete fails, no WAL entry is written
 	if e.wal != nil && len(deletedRows) > 0 {
@@ -122,12 +128,10 @@ func (e *Executor) executeDelete(
 			schema = plan.TableDef.Schema
 		}
 
-		// Collect row IDs and deleted data for WAL
+		// Collect row IDs for WAL
 		rowIDs := make([]uint64, len(deletedRows))
-		deletedData := make([][]any, len(deletedRows))
 		for i, row := range deletedRows {
 			rowIDs[i] = uint64(row.rowID)
-			deletedData[i] = row.data
 		}
 
 		entry := wal.NewDeleteEntryWithData(
@@ -140,6 +144,11 @@ func (e *Executor) executeDelete(
 		if err := e.wal.WriteEntry(entry); err != nil {
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
+	}
+
+	// Handle RETURNING clause - use the before (deleted) values
+	if len(plan.Returning) > 0 {
+		return e.evaluateReturning(ctx, plan.Returning, deletedData, plan.TableDef)
 	}
 
 	return &ExecutionResult{

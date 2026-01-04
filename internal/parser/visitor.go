@@ -26,4 +26,14 @@ type Visitor interface {
 	VisitCreateSchemaStmt(stmt *CreateSchemaStmt)
 	VisitDropSchemaStmt(stmt *DropSchemaStmt)
 	VisitAlterTableStmt(stmt *AlterTableStmt)
+
+	// PIVOT/UNPIVOT statement visitors
+	VisitPivotStmt(stmt *PivotStmt)
+	VisitUnpivotStmt(stmt *UnpivotStmt)
+
+	// MERGE INTO statement visitor
+	VisitMergeStmt(stmt *MergeStmt)
+
+	// GROUPING SETS/ROLLUP/CUBE expression visitor
+	VisitGroupingSetExpr(expr *GroupingSetExpr)
 }

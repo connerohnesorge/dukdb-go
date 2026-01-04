@@ -17,8 +17,9 @@ import (
 
 // ExecutionContext holds context for query execution.
 type ExecutionContext struct {
-	Context context.Context
-	Args    []driver.NamedValue
+	Context          context.Context
+	Args             []driver.NamedValue
+	CorrelatedValues map[string]any // Values from outer scope for LATERAL/correlated subqueries
 }
 
 // ExecutionResult holds the result of query execution.
@@ -135,7 +136,15 @@ func (e *Executor) Execute(
 		Context: ctx,
 		Args:    args,
 	}
+	return e.executeWithContext(execCtx, plan)
+}
 
+// executeWithContext executes a physical plan with a given execution context.
+// This allows passing correlated values for LATERAL joins.
+func (e *Executor) executeWithContext(
+	execCtx *ExecutionContext,
+	plan planner.PhysicalPlan,
+) (*ExecutionResult, error) {
 	switch p := plan.(type) {
 	case *planner.PhysicalScan:
 		return e.executeScan(execCtx, p)
@@ -159,6 +168,8 @@ func (e *Executor) Execute(
 		return e.executeLimit(execCtx, p)
 	case *planner.PhysicalDistinct:
 		return e.executeDistinct(execCtx, p)
+	case *planner.PhysicalDistinctOn:
+		return e.executeDistinctOn(execCtx, p)
 	case *planner.PhysicalInsert:
 		return e.executeInsert(execCtx, p)
 	case *planner.PhysicalUpdate:
@@ -202,6 +213,22 @@ func (e *Executor) Execute(
 		return e.executeDropSchema(execCtx, p)
 	case *planner.PhysicalAlterTable:
 		return e.executeAlterTable(execCtx, p)
+	case *planner.PhysicalMerge:
+		return e.executeMerge(execCtx, p)
+	case *planner.PhysicalLateralJoin:
+		return e.executeLateralJoin(execCtx, p)
+	case *planner.PhysicalSample:
+		return e.executeSample(execCtx, p)
+	// CTE operations
+	case *planner.PhysicalRecursiveCTE:
+		return e.executeRecursiveCTE(execCtx, p)
+	case *planner.PhysicalCTEScan:
+		return e.executeCTEScan(execCtx, p)
+	// PIVOT/UNPIVOT operations
+	case *planner.PhysicalPivot:
+		return e.executePivotPlan(execCtx, p)
+	case *planner.PhysicalUnpivot:
+		return e.executeUnpivotPlan(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -247,11 +274,15 @@ func (e *Executor) collectResults(
 		// Convert chunk to rows
 		for i := 0; i < chunk.Count(); i++ {
 			row := make(map[string]any)
-			for j := range len(outputCols) {
-				row[result.Columns[j]] = chunk.GetValue(
-					i,
-					j,
-				)
+			for j, col := range outputCols {
+				val := chunk.GetValue(i, j)
+				// Store with unqualified name for backwards compatibility
+				row[result.Columns[j]] = val
+				// Also store with qualified name (table.column) if table is specified
+				// This allows joins to avoid column name conflicts
+				if col.Table != "" {
+					row[col.Table+"."+col.Column] = val
+				}
 			}
 			result.Rows = append(result.Rows, row)
 		}
@@ -358,14 +389,24 @@ func (e *Executor) executeVirtualTableScan(
 		if plan.Projections != nil {
 			for i, idx := range plan.Projections {
 				if idx < len(values) {
-					row[result.Columns[i]] = values[idx]
+					val := values[idx]
+					row[result.Columns[i]] = val
+					// Also store with qualified name if table is specified
+					if outputCols[i].Table != "" {
+						row[outputCols[i].Table+"."+outputCols[i].Column] = val
+					}
 				}
 			}
 		} else {
 			// No projections - use all columns
 			for i := range outputCols {
 				if i < len(values) {
-					row[result.Columns[i]] = values[i]
+					val := values[i]
+					row[result.Columns[i]] = val
+					// Also store with qualified name if table is specified
+					if outputCols[i].Table != "" {
+						row[outputCols[i].Table+"."+outputCols[i].Column] = val
+					}
 				}
 			}
 		}
@@ -390,12 +431,8 @@ func (e *Executor) executeFilter(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalFilter,
 ) (*ExecutionResult, error) {
-	// First execute child
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	// First execute child, preserving correlated values
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -429,12 +466,8 @@ func (e *Executor) executeProject(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalProject,
 ) (*ExecutionResult, error) {
-	// Execute child
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	// Execute child, preserving correlated values
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -499,21 +532,13 @@ func (e *Executor) executeHashJoin(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalHashJoin,
 ) (*ExecutionResult, error) {
-	// Execute left and right children
-	leftResult, err := e.Execute(
-		ctx.Context,
-		plan.Left,
-		ctx.Args,
-	)
+	// Execute left and right children, preserving correlated values
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
 	if err != nil {
 		return nil, err
 	}
 
-	rightResult, err := e.Execute(
-		ctx.Context,
-		plan.Right,
-		ctx.Args,
-	)
+	rightResult, err := e.executeWithContext(ctx, plan.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -533,20 +558,13 @@ func (e *Executor) executeNestedLoopJoin(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalNestedLoopJoin,
 ) (*ExecutionResult, error) {
-	leftResult, err := e.Execute(
-		ctx.Context,
-		plan.Left,
-		ctx.Args,
-	)
+	// Execute left and right children, preserving correlated values
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
 	if err != nil {
 		return nil, err
 	}
 
-	rightResult, err := e.Execute(
-		ctx.Context,
-		plan.Right,
-		ctx.Args,
-	)
+	rightResult, err := e.executeWithContext(ctx, plan.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -558,6 +576,110 @@ func (e *Executor) executeNestedLoopJoin(
 		plan.JoinType,
 		plan.Condition,
 	)
+}
+
+func (e *Executor) executeLateralJoin(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalLateralJoin,
+) (*ExecutionResult, error) {
+	// Execute left side first
+	leftResult, err := e.Execute(
+		ctx.Context,
+		plan.Left,
+		ctx.Args,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get output columns for result building
+	leftCols := plan.Left.OutputColumns()
+	rightCols := plan.Right.OutputColumns()
+
+	// Build column names for result
+	columns := make([]string, 0, len(leftCols)+len(rightCols))
+	for _, col := range leftCols {
+		if col.Column != "" {
+			columns = append(columns, col.Column)
+		} else {
+			columns = append(columns, "col")
+		}
+	}
+	for _, col := range rightCols {
+		if col.Column != "" {
+			columns = append(columns, col.Column)
+		} else {
+			columns = append(columns, "col")
+		}
+	}
+
+	result := &ExecutionResult{
+		Columns: columns,
+		Rows:    make([]map[string]any, 0),
+	}
+
+	// For each row in the left result, execute the right side
+	// LATERAL joins re-evaluate the right side for each left row
+	for _, leftRow := range leftResult.Rows {
+		// Execute the right plan for this left row
+		// The right side can reference columns from the left row through correlation
+		// Create a new context with the left row's values as correlated values
+		lateralCtx := &ExecutionContext{
+			Context:          ctx.Context,
+			Args:             ctx.Args,
+			CorrelatedValues: leftRow, // Pass left row values for correlated column resolution
+		}
+		rightResult, err := e.executeWithContext(lateralCtx, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+
+		matched := false
+		for _, rightRow := range rightResult.Rows {
+			// Combine left and right rows
+			combinedRow := make(map[string]any)
+			for k, v := range leftRow {
+				combinedRow[k] = v
+			}
+			for k, v := range rightRow {
+				combinedRow[k] = v
+			}
+
+			// Check condition if present
+			if plan.Condition != nil {
+				passes, err := e.evaluateExprAsBool(ctx, plan.Condition, combinedRow)
+				if err != nil {
+					return nil, err
+				}
+				if !passes {
+					continue
+				}
+			}
+
+			matched = true
+			result.Rows = append(result.Rows, combinedRow)
+		}
+
+		// Handle LEFT LATERAL: emit left row with NULLs for right if no matches
+		if !matched && plan.JoinType == planner.JoinTypeLeft {
+			combinedRow := make(map[string]any)
+			for k, v := range leftRow {
+				combinedRow[k] = v
+			}
+			// Add NULL values for right columns
+			for _, col := range rightCols {
+				if col.Column != "" {
+					combinedRow[col.Column] = nil
+				}
+				if col.Table != "" && col.Column != "" {
+					combinedRow[col.Table+"."+col.Column] = nil
+				}
+			}
+			result.Rows = append(result.Rows, combinedRow)
+		}
+	}
+
+	return result, nil
 }
 
 func (e *Executor) performJoin(
@@ -652,6 +774,12 @@ func (e *Executor) executeHashAggregate(
 		return nil, err
 	}
 
+	// Check if we have grouping sets (GROUPING SETS/ROLLUP/CUBE)
+	if len(plan.GroupingSets) > 0 {
+		return e.executeHashAggregateWithGroupingSets(ctx, plan, childResult)
+	}
+
+	// Regular GROUP BY execution
 	// Group rows by group-by expressions
 	type groupKey string
 	groups := make(map[groupKey][]map[string]any)
@@ -752,15 +880,181 @@ func (e *Executor) executeHashAggregate(
 	return result, nil
 }
 
+// executeHashAggregateWithGroupingSets handles GROUPING SETS/ROLLUP/CUBE execution.
+// For each grouping set, we:
+// 1. Aggregate the data using only columns in that grouping set
+// 2. Set columns NOT in the grouping set to NULL
+// 3. Compute GROUPING() bitmasks for each row
+// 4. UNION ALL the results from all grouping sets
+func (e *Executor) executeHashAggregateWithGroupingSets(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalHashAggregate,
+	childResult *ExecutionResult,
+) (*ExecutionResult, error) {
+	// Build result columns (same structure as regular aggregate)
+	numGroupBy := len(plan.GroupBy)
+	numAgg := len(plan.Aggregates)
+	numGroupingCalls := len(plan.GroupingCalls)
+	columns := make([]string, numGroupBy+numAgg+numGroupingCalls)
+
+	for i := range plan.GroupBy {
+		if i < len(plan.Aliases) && plan.Aliases[i] != "" {
+			columns[i] = plan.Aliases[i]
+		} else {
+			columns[i] = "col" + string(rune('0'+i))
+		}
+	}
+	for i := range plan.Aggregates {
+		if numGroupBy+i < len(plan.Aliases) && plan.Aliases[numGroupBy+i] != "" {
+			columns[numGroupBy+i] = plan.Aliases[numGroupBy+i]
+		} else {
+			columns[numGroupBy+i] = "col" + string(rune('0'+numGroupBy+i))
+		}
+	}
+	// Add GROUPING() columns
+	for i := range plan.GroupingCalls {
+		columns[numGroupBy+numAgg+i] = "GROUPING"
+	}
+
+	result := &ExecutionResult{
+		Columns: columns,
+		Rows:    make([]map[string]any, 0),
+	}
+
+	// Process each grouping set
+	for _, groupingSet := range plan.GroupingSets {
+		// Build a set of column keys that are in this grouping set
+		inGroupingSet := make(map[string]bool)
+		for _, expr := range groupingSet {
+			key := getGroupByExprKey(expr)
+			inGroupingSet[key] = true
+		}
+
+		// Group rows by only the columns in this grouping set
+		type groupKey string
+		groups := make(map[groupKey][]map[string]any)
+		groupOrder := make([]groupKey, 0)
+
+		for _, row := range childResult.Rows {
+			// Compute group key using only columns in this grouping set
+			keyParts := make([]any, len(groupingSet))
+			for i, expr := range groupingSet {
+				val, err := e.evaluateExpr(ctx, expr, row)
+				if err != nil {
+					return nil, err
+				}
+				keyParts[i] = val
+			}
+			key := groupKey(formatGroupKey(keyParts))
+
+			if _, exists := groups[key]; !exists {
+				groupOrder = append(groupOrder, key)
+			}
+			groups[key] = append(groups[key], row)
+		}
+
+		// If no groups and empty grouping set (grand total), create empty group
+		if len(groups) == 0 && len(groupingSet) == 0 {
+			groupOrder = append(groupOrder, "")
+			groups[""] = childResult.Rows
+		}
+
+		// Compute aggregates for each group in this grouping set
+		for _, key := range groupOrder {
+			groupRows := groups[key]
+			row := make(map[string]any)
+
+			// Add group-by values
+			// For columns NOT in this grouping set, set to NULL
+			if len(groupRows) > 0 {
+				for j, expr := range plan.GroupBy {
+					exprKey := getGroupByExprKey(expr)
+					if inGroupingSet[exprKey] {
+						// Column is in this grouping set - use its value
+						val, _ := e.evaluateExpr(ctx, expr, groupRows[0])
+						row[columns[j]] = val
+					} else {
+						// Column is NOT in this grouping set - set to NULL
+						row[columns[j]] = nil
+					}
+				}
+			} else {
+				// Empty group (grand total case)
+				for j := range plan.GroupBy {
+					row[columns[j]] = nil
+				}
+			}
+
+			// Compute aggregates
+			for j, expr := range plan.Aggregates {
+				val, err := e.computeAggregate(ctx, expr, groupRows)
+				if err != nil {
+					return nil, err
+				}
+				row[columns[numGroupBy+j]] = val
+			}
+
+			// Compute GROUPING() function values
+			for j, gc := range plan.GroupingCalls {
+				bitmask := e.computeGroupingBitmask(gc, plan.GroupBy, inGroupingSet)
+				row[columns[numGroupBy+numAgg+j]] = bitmask
+			}
+
+			result.Rows = append(result.Rows, row)
+		}
+	}
+
+	return result, nil
+}
+
+// getGroupByExprKey returns a unique key for a GROUP BY expression.
+func getGroupByExprKey(expr binder.BoundExpr) string {
+	switch e := expr.(type) {
+	case *binder.BoundColumnRef:
+		if e.Table != "" {
+			return e.Table + "." + e.Column
+		}
+		return e.Column
+	default:
+		return ""
+	}
+}
+
+// computeGroupingBitmask computes the GROUPING() bitmask for a row.
+// For each argument in GROUPING(col1, col2, ...):
+// - If the column is in the current grouping set (not aggregated), bit = 0
+// - If the column is NOT in the current grouping set (aggregated/NULL), bit = 1
+// Bits are ordered with the first argument in the most significant position.
+func (e *Executor) computeGroupingBitmask(
+	gc *binder.BoundGroupingCall,
+	allGroupBy []binder.BoundExpr,
+	inGroupingSet map[string]bool,
+) int64 {
+	var bitmask int64 = 0
+	for i, arg := range gc.Args {
+		// Check if this column is NOT in the current grouping set
+		key := ""
+		if arg.Table != "" {
+			key = arg.Table + "." + arg.Column
+		} else {
+			key = arg.Column
+		}
+
+		if !inGroupingSet[key] {
+			// Column is aggregated (NULL) in this grouping set - bit = 1
+			bitmask |= 1 << (len(gc.Args) - 1 - i)
+		}
+		// else: Column is in grouping set (grouped) - bit = 0
+	}
+	return bitmask
+}
+
 func (e *Executor) executeSort(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalSort,
 ) (*ExecutionResult, error) {
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	// Execute child, preserving correlated values
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -795,30 +1089,52 @@ func (e *Executor) executeLimit(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalLimit,
 ) (*ExecutionResult, error) {
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	// Execute child, preserving correlated values
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
 
 	rows := childResult.Rows
 
+	// Determine offset value (static or dynamic)
+	offset := plan.Offset
+	if plan.OffsetExpr != nil {
+		// Evaluate dynamic offset expression using correlated values
+		val, err := e.evaluateExpr(ctx, plan.OffsetExpr, ctx.CorrelatedValues)
+		if err != nil {
+			return nil, err
+		}
+		if val != nil {
+			offset = toInt64Value(val)
+		}
+	}
+
 	// Apply offset
-	if plan.Offset > 0 {
-		if int(plan.Offset) >= len(rows) {
+	if offset > 0 {
+		if int(offset) >= len(rows) {
 			rows = []map[string]any{}
 		} else {
-			rows = rows[plan.Offset:]
+			rows = rows[offset:]
+		}
+	}
+
+	// Determine limit value (static or dynamic)
+	limit := plan.Limit
+	if plan.LimitExpr != nil {
+		// Evaluate dynamic limit expression using correlated values
+		val, err := e.evaluateExpr(ctx, plan.LimitExpr, ctx.CorrelatedValues)
+		if err != nil {
+			return nil, err
+		}
+		if val != nil {
+			limit = toInt64Value(val)
 		}
 	}
 
 	// Apply limit
-	if plan.Limit >= 0 &&
-		int(plan.Limit) < len(rows) {
-		rows = rows[:plan.Limit]
+	if limit >= 0 && int(limit) < len(rows) {
+		rows = rows[:limit]
 	}
 
 	return &ExecutionResult{
@@ -853,6 +1169,75 @@ func (e *Executor) executeDistinct(
 				distinctRows,
 				row,
 			)
+		}
+	}
+
+	return &ExecutionResult{
+		Rows:    distinctRows,
+		Columns: childResult.Columns,
+	}, nil
+}
+
+// executeDistinctOn implements DISTINCT ON semantics.
+// DISTINCT ON (col1, col2) keeps only the first row for each unique combination
+// of the specified columns. The ORDER BY clause determines which row is "first".
+func (e *Executor) executeDistinctOn(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalDistinctOn,
+) (*ExecutionResult, error) {
+	childResult, err := e.Execute(
+		ctx.Context,
+		plan.Child,
+		ctx.Args,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// If there are no DISTINCT ON expressions, return all rows
+	if len(plan.DistinctOn) == 0 {
+		return childResult, nil
+	}
+
+	// Sort by ORDER BY first (if not already sorted upstream)
+	// The ORDER BY determines which row is "first" for each DISTINCT ON group
+	rows := childResult.Rows
+	if len(plan.OrderBy) > 0 {
+		// Sort rows using the ORDER BY expressions
+		for i := 1; i < len(rows); i++ {
+			for j := i; j > 0; j-- {
+				cmp, err := e.compareRows(ctx, rows[j-1], rows[j], plan.OrderBy)
+				if err != nil {
+					return nil, err
+				}
+				if cmp <= 0 {
+					break
+				}
+				rows[j-1], rows[j] = rows[j], rows[j-1]
+			}
+		}
+	}
+
+	// Use a map to track which DISTINCT ON groups we've seen
+	seen := make(map[string]bool)
+	distinctRows := make([]map[string]any, 0)
+
+	for _, row := range rows {
+		// Build key from DISTINCT ON expressions
+		keyParts := make([]any, len(plan.DistinctOn))
+		for i, expr := range plan.DistinctOn {
+			val, err := e.evaluateExpr(ctx, expr, row)
+			if err != nil {
+				return nil, err
+			}
+			keyParts[i] = val
+		}
+		key := formatGroupKey(keyParts)
+
+		// Keep only the first row for each DISTINCT ON group
+		if !seen[key] {
+			seen[key] = true
+			distinctRows = append(distinctRows, row)
 		}
 	}
 
@@ -926,7 +1311,7 @@ func (e *Executor) executeInsert(
 	// Batch size is StandardVectorSize (2048) for DuckDB compatibility
 	batchSize := storage.StandardVectorSize
 
-	// Collect all inserted values for WAL logging
+	// Collect all inserted values for WAL logging and RETURNING clause
 	var allInsertedValues [][]any
 
 	// Helper function to flush a DataChunk to the table
@@ -967,12 +1352,10 @@ func (e *Executor) executeInsert(
 				return nil, err
 			}
 
-			// Collect values for WAL logging
-			if e.wal != nil {
-				valuesCopy := make([]any, len(values))
-				copy(valuesCopy, values)
-				allInsertedValues = append(allInsertedValues, valuesCopy)
-			}
+			// Collect values for WAL logging and RETURNING
+			valuesCopy := make([]any, len(values))
+			copy(valuesCopy, values)
+			allInsertedValues = append(allInsertedValues, valuesCopy)
 
 			// Append to current chunk
 			currentChunk.AppendRow(values)
@@ -1024,12 +1407,10 @@ func (e *Executor) executeInsert(
 				return nil, err
 			}
 
-			// Collect values for WAL logging
-			if e.wal != nil {
-				valuesCopy := make([]any, len(values))
-				copy(valuesCopy, values)
-				allInsertedValues = append(allInsertedValues, valuesCopy)
-			}
+			// Collect values for WAL logging and RETURNING
+			valuesCopy := make([]any, len(values))
+			copy(valuesCopy, values)
+			allInsertedValues = append(allInsertedValues, valuesCopy)
 
 			// Append to current chunk
 			currentChunk.AppendRow(values)
@@ -1080,6 +1461,11 @@ func (e *Executor) executeInsert(
 		if err := e.wal.WriteEntry(commitEntry); err != nil {
 			return nil, fmt.Errorf("WAL TxnCommit append failed: %w", err)
 		}
+	}
+
+	// Handle RETURNING clause
+	if len(plan.Returning) > 0 {
+		return e.evaluateReturning(ctx, plan.Returning, allInsertedValues, plan.TableDef)
 	}
 
 	return &ExecutionResult{
@@ -1336,6 +1722,16 @@ func (e *Executor) executeWindow(
 			for j := 0; j < len(result.Columns); j++ {
 				row[result.Columns[j]] = chunk.GetValue(i, j)
 			}
+			// Also store window results under their aliases for QUALIFY clause support.
+			// The QUALIFY clause may reference window functions by their alias
+			// (e.g., "QUALIFY rn <= 2" where rn is an alias for ROW_NUMBER()).
+			numChildCols := len(childColumns)
+			for j, windowExpr := range plan.WindowExprs {
+				if windowExpr.Alias != "" && windowExpr.Alias != windowExpr.FunctionName {
+					// Store the window result under the alias as well
+					row[windowExpr.Alias] = chunk.GetValue(i, numChildCols+j)
+				}
+			}
 			result.Rows = append(result.Rows, row)
 		}
 	}
@@ -1546,4 +1942,66 @@ func formatPrimaryKeyDetail(
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// evaluateReturning evaluates the RETURNING clause expressions for affected rows.
+// It takes the RETURNING column expressions, the affected row values, and the table definition.
+// Returns an ExecutionResult with the projected columns from the RETURNING clause.
+func (e *Executor) evaluateReturning(
+	ctx *ExecutionContext,
+	returning []*binder.BoundSelectColumn,
+	affectedRows [][]any,
+	tableDef *catalog.TableDef,
+) (*ExecutionResult, error) {
+	if len(returning) == 0 || len(affectedRows) == 0 {
+		return &ExecutionResult{
+			RowsAffected: int64(len(affectedRows)),
+		}, nil
+	}
+
+	// Build column names for result
+	columns := make([]string, len(returning))
+	for i, col := range returning {
+		if col.Alias != "" {
+			columns[i] = col.Alias
+		} else if colRef, ok := col.Expr.(*binder.BoundColumnRef); ok {
+			columns[i] = colRef.Column
+		} else {
+			columns[i] = fmt.Sprintf("col%d", i)
+		}
+	}
+
+	// Build rows for result
+	resultRows := make([]map[string]any, 0, len(affectedRows))
+
+	for _, rowValues := range affectedRows {
+		// Convert row values to a map for expression evaluation
+		rowMap := make(map[string]any)
+		if tableDef != nil {
+			for j, col := range tableDef.Columns {
+				if j < len(rowValues) {
+					rowMap[col.Name] = rowValues[j]
+					// Also add with table name prefix for qualified references
+					rowMap[tableDef.Name+"."+col.Name] = rowValues[j]
+				}
+			}
+		}
+
+		// Evaluate each RETURNING expression
+		resultRow := make(map[string]any)
+		for i, col := range returning {
+			val, err := e.evaluateExpr(ctx, col.Expr, rowMap)
+			if err != nil {
+				return nil, err
+			}
+			resultRow[columns[i]] = val
+		}
+		resultRows = append(resultRows, resultRow)
+	}
+
+	return &ExecutionResult{
+		Rows:         resultRows,
+		Columns:      columns,
+		RowsAffected: int64(len(resultRows)),
+	}, nil
 }

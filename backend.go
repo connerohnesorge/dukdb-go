@@ -269,6 +269,8 @@ const (
 	STATEMENT_TYPE_MERGE_INTO        StmtType = 28
 	STATEMENT_TYPE_UPDATE_EXTENSIONS StmtType = 29
 	STATEMENT_TYPE_COPY_DATABASE     StmtType = 30
+	STATEMENT_TYPE_PIVOT             StmtType = 31
+	STATEMENT_TYPE_UNPIVOT           StmtType = 32
 )
 
 // StmtReturnType indicates what a statement returns when executed.

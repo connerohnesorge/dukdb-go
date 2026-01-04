@@ -26,17 +26,32 @@ func (e *Executor) evaluateExpr(
 		return ex.Value, nil
 
 	case *binder.BoundColumnRef:
-		if row == nil {
-			return nil, nil
+		// First check the current row
+		if row != nil {
+			// Try with table prefix first to avoid ambiguity when multiple tables have same column name
+			if ex.Table != "" {
+				key := ex.Table + "." + ex.Column
+				if val, ok := row[key]; ok {
+					return val, nil
+				}
+			}
+			// Then try column name directly (for backwards compatibility and simple queries)
+			if val, ok := row[ex.Column]; ok {
+				return val, nil
+			}
 		}
-		// Try column name directly first
-		if val, ok := row[ex.Column]; ok {
-			return val, nil
-		}
-		// Try with table prefix
-		key := ex.Table + "." + ex.Column
-		if val, ok := row[key]; ok {
-			return val, nil
+
+		// Then check correlated values from outer scope (for LATERAL subqueries)
+		if ctx.CorrelatedValues != nil {
+			if ex.Table != "" {
+				key := ex.Table + "." + ex.Column
+				if val, ok := ctx.CorrelatedValues[key]; ok {
+					return val, nil
+				}
+			}
+			if val, ok := ctx.CorrelatedValues[ex.Column]; ok {
+				return val, nil
+			}
 		}
 
 		return nil, nil
@@ -112,6 +127,24 @@ func (e *Executor) evaluateExpr(
 
 	case *binder.BoundSequenceCall:
 		return e.evaluateSequenceCall(ctx, ex)
+
+	case *binder.BoundGroupingCall:
+		// GROUPING() function calls are evaluated during aggregate execution.
+		// If we get here, the GROUPING value should already be in the row.
+		if row == nil {
+			return nil, nil
+		}
+		// Look up the pre-computed GROUPING value in the row
+		if val, ok := row["GROUPING"]; ok {
+			return val, nil
+		}
+		// GROUPING value not found - this shouldn't happen during normal execution
+		return nil, nil
+
+	case *binder.BoundGroupingSetExpr:
+		// Grouping set expressions should not be evaluated directly.
+		// They are handled by the planner/executor for grouping sets.
+		return nil, nil
 
 	default:
 		return nil, &dukdb.Error{

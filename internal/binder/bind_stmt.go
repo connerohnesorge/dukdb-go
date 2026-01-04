@@ -33,6 +33,15 @@ func (b *Binder) bindSelect(
 		b.scope = oldScope
 	}()
 
+	// Bind CTEs (WITH clause) first, before any other references
+	if len(s.CTEs) > 0 {
+		boundCTEs, err := b.bindCTEs(s.CTEs)
+		if err != nil {
+			return nil, err
+		}
+		bound.CTEs = boundCTEs
+	}
+
 	// Bind FROM clause first to establish table bindings
 	if s.From != nil {
 		for _, table := range s.From.Tables {
@@ -50,6 +59,15 @@ func (b *Binder) bindSelect(
 			}
 			bound.Joins = append(bound.Joins, j)
 		}
+	}
+
+	// Bind DISTINCT ON expressions
+	for _, expr := range s.DistinctOn {
+		boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		bound.DistinctOn = append(bound.DistinctOn, boundExpr)
 	}
 
 	// Bind columns
@@ -141,6 +159,16 @@ func (b *Binder) bindSelect(
 		bound.Having = having
 	}
 
+	// Bind QUALIFY clause (filter after window functions)
+	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias)
+	if s.Qualify != nil {
+		qualify, err := b.bindQualifyWithSelectAliases(s.Qualify, bound.Columns)
+		if err != nil {
+			return nil, err
+		}
+		bound.Qualify = qualify
+	}
+
 	// Bind ORDER BY
 	for _, o := range s.OrderBy {
 		expr, err := b.bindExpr(
@@ -183,17 +211,43 @@ func (b *Binder) bindSelect(
 		bound.Offset = offset
 	}
 
+	// Bind SAMPLE clause
+	if s.Sample != nil {
+		bound.Sample = &BoundSampleOptions{
+			Method:     s.Sample.Method,
+			Percentage: s.Sample.Percentage,
+			Rows:       s.Sample.Rows,
+			Seed:       s.Sample.Seed,
+		}
+	}
+
 	return bound, nil
 }
 
 func (b *Binder) bindTableRef(
 	ref parser.TableRef,
 ) (*BoundTableRef, error) {
+	// Check for PIVOT table reference
+	if ref.PivotRef != nil {
+		return b.bindPivotTableRef(ref)
+	}
+
+	// Check for UNPIVOT table reference
+	if ref.UnpivotRef != nil {
+		return b.bindUnpivotTableRef(ref)
+	}
+
 	if ref.Subquery != nil {
-		// Bind subquery
-		subquery, err := b.bindSelect(
-			ref.Subquery,
-		)
+		var subquery *BoundSelectStmt
+		var err error
+
+		if ref.Lateral {
+			// LATERAL subquery: bind with access to outer scope tables
+			subquery, err = b.bindLateralSubquery(ref.Subquery)
+		} else {
+			// Regular subquery: bind in isolated scope
+			subquery, err = b.bindSelect(ref.Subquery)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +258,9 @@ func (b *Binder) bindTableRef(
 		}
 
 		boundRef := &BoundTableRef{
-			Alias: alias,
+			Alias:    alias,
+			Lateral:  ref.Lateral, // Pass through LATERAL flag
+			Subquery: subquery,    // Store bound subquery for planner
 		}
 
 		// Create columns from subquery
@@ -245,6 +301,14 @@ func (b *Binder) bindTableRef(
 	alias := ref.Alias
 	if alias == "" {
 		alias = ref.TableName
+	}
+
+	// Check for CTE reference first (CTEs take precedence over tables/views)
+	// Only check if no schema is specified (CTEs don't have schemas)
+	if ref.Schema == "" {
+		if cteBinding := b.scope.getCTE(ref.TableName); cteBinding != nil {
+			return b.bindCTERef(cteBinding, alias)
+		}
 	}
 
 	// First check for virtual tables (they take precedence in the main schema)
@@ -374,6 +438,7 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 		TableName:     tableFunc.Name,
 		Alias:         alias,
 		TableFunction: boundFunc,
+		Lateral:       ref.Lateral, // Pass through LATERAL flag for table functions
 	}
 
 	// Create bound columns for the table function
@@ -752,6 +817,35 @@ func (b *Binder) bindInsert(
 		bound.Select = sel
 	}
 
+	// Bind RETURNING clause if present
+	if len(s.Returning) > 0 {
+		// Add table to scope for RETURNING clause binding
+		alias := s.Table
+		tableRef := &BoundTableRef{
+			Schema:    schema,
+			TableName: s.Table,
+			Alias:     alias,
+			TableDef:  tableDef,
+		}
+		for i, col := range tableDef.Columns {
+			tableRef.Columns = append(tableRef.Columns, &BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table",
+			})
+		}
+		b.scope.tables[alias] = tableRef
+		b.scope.aliases[alias] = s.Table
+
+		returning, err := b.bindReturningClause(s.Returning, tableRef)
+		if err != nil {
+			return nil, err
+		}
+		bound.Returning = returning
+	}
+
 	return bound, nil
 }
 
@@ -840,6 +934,15 @@ func (b *Binder) bindUpdate(
 		bound.Where = where
 	}
 
+	// Bind RETURNING clause if present
+	if len(s.Returning) > 0 {
+		returning, err := b.bindReturningClause(s.Returning, b.scope.tables[alias])
+		if err != nil {
+			return nil, err
+		}
+		bound.Returning = returning
+	}
+
 	return bound, nil
 }
 
@@ -898,6 +1001,15 @@ func (b *Binder) bindDelete(
 			return nil, err
 		}
 		bound.Where = where
+	}
+
+	// Bind RETURNING clause if present
+	if len(s.Returning) > 0 {
+		returning, err := b.bindReturningClause(s.Returning, b.scope.tables[alias])
+		if err != nil {
+			return nil, err
+		}
+		bound.Returning = returning
 	}
 
 	return bound, nil
@@ -1065,6 +1177,225 @@ func (b *Binder) bindViewRef(viewDef *catalog.ViewDef, alias string) (*BoundTabl
 	return boundRef, nil
 }
 
+// bindMerge binds a MERGE INTO statement.
+func (b *Binder) bindMerge(s *parser.MergeStmt) (*BoundMergeStmt, error) {
+	schema := s.Schema
+	if schema == "" {
+		schema = "main"
+	}
+
+	// Look up the target table
+	targetTableDef, ok := b.catalog.GetTableInSchema(schema, s.Into.TableName)
+	if !ok {
+		return nil, b.errorf("table not found: %s", s.Into.TableName)
+	}
+
+	targetAlias := s.Into.Alias
+	if targetAlias == "" {
+		targetAlias = s.Into.TableName
+	}
+
+	// Push new scope for binding
+	oldScope := b.scope
+	b.scope = newBindScope(oldScope)
+	defer func() { b.scope = oldScope }()
+
+	// Add target table to scope
+	targetRef := &BoundTableRef{
+		Schema:    schema,
+		TableName: s.Into.TableName,
+		Alias:     targetAlias,
+		TableDef:  targetTableDef,
+	}
+	for i, col := range targetTableDef.Columns {
+		targetRef.Columns = append(targetRef.Columns, &BoundColumn{
+			Table:      targetAlias,
+			Column:     col.Name,
+			ColumnIdx:  i,
+			Type:       col.Type,
+			SourceType: "table",
+		})
+	}
+	b.scope.tables[targetAlias] = targetRef
+	b.scope.aliases[targetAlias] = s.Into.TableName
+
+	// Bind the source table reference
+	sourceRef, err := b.bindTableRef(s.Using)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bind the ON condition
+	onCondition, err := b.bindExpr(s.On, dukdb.TYPE_BOOLEAN)
+	if err != nil {
+		return nil, err
+	}
+
+	bound := &BoundMergeStmt{
+		Schema:         schema,
+		TargetTable:    s.Into.TableName,
+		TargetTableDef: targetTableDef,
+		TargetAlias:    targetAlias,
+		SourceRef:      sourceRef,
+		OnCondition:    onCondition,
+	}
+
+	// Bind WHEN MATCHED actions
+	for _, action := range s.WhenMatched {
+		boundAction, err := b.bindMergeAction(action, targetTableDef, true)
+		if err != nil {
+			return nil, err
+		}
+		bound.WhenMatched = append(bound.WhenMatched, boundAction)
+	}
+
+	// Bind WHEN NOT MATCHED actions
+	for _, action := range s.WhenNotMatched {
+		boundAction, err := b.bindMergeAction(action, targetTableDef, false)
+		if err != nil {
+			return nil, err
+		}
+		bound.WhenNotMatched = append(bound.WhenNotMatched, boundAction)
+	}
+
+	// Bind WHEN NOT MATCHED BY SOURCE actions
+	for _, action := range s.WhenNotMatchedBySource {
+		boundAction, err := b.bindMergeAction(action, targetTableDef, true)
+		if err != nil {
+			return nil, err
+		}
+		bound.WhenNotMatchedBySource = append(bound.WhenNotMatchedBySource, boundAction)
+	}
+
+	// Bind RETURNING clause if present
+	if len(s.Returning) > 0 {
+		returning, err := b.bindReturningClause(s.Returning, targetRef)
+		if err != nil {
+			return nil, err
+		}
+		bound.Returning = returning
+	}
+
+	return bound, nil
+}
+
+// bindMergeAction binds a single MERGE action.
+func (b *Binder) bindMergeAction(
+	action parser.MergeAction,
+	targetTableDef *catalog.TableDef,
+	isMatched bool,
+) (*BoundMergeAction, error) {
+	bound := &BoundMergeAction{}
+
+	// Map action type
+	switch action.Type {
+	case parser.MergeActionUpdate:
+		bound.Type = BoundMergeActionUpdate
+	case parser.MergeActionDelete:
+		bound.Type = BoundMergeActionDelete
+	case parser.MergeActionInsert:
+		bound.Type = BoundMergeActionInsert
+	case parser.MergeActionDoNothing:
+		bound.Type = BoundMergeActionDoNothing
+	}
+
+	// Bind optional condition
+	if action.Cond != nil {
+		cond, err := b.bindExpr(action.Cond, dukdb.TYPE_BOOLEAN)
+		if err != nil {
+			return nil, err
+		}
+		bound.Cond = cond
+	}
+
+	// Bind UPDATE SET clauses
+	if action.Type == parser.MergeActionUpdate {
+		for _, set := range action.Update {
+			idx, ok := targetTableDef.GetColumnIndex(set.Column)
+			if !ok {
+				return nil, b.errorf("column not found: %s", set.Column)
+			}
+			colType := targetTableDef.Columns[idx].Type
+			val, err := b.bindExpr(set.Value, colType)
+			if err != nil {
+				return nil, err
+			}
+			bound.Update = append(bound.Update, &BoundSetClause{
+				ColumnIdx: idx,
+				Value:     val,
+			})
+		}
+	}
+
+	// Bind INSERT clauses
+	if action.Type == parser.MergeActionInsert {
+		for _, set := range action.Insert {
+			idx, ok := targetTableDef.GetColumnIndex(set.Column)
+			if !ok {
+				return nil, b.errorf("column not found: %s", set.Column)
+			}
+			colType := targetTableDef.Columns[idx].Type
+			val, err := b.bindExpr(set.Value, colType)
+			if err != nil {
+				return nil, err
+			}
+			bound.InsertColumns = append(bound.InsertColumns, idx)
+			bound.InsertValues = append(bound.InsertValues, val)
+		}
+	}
+
+	return bound, nil
+}
+
+// bindReturningClause binds the RETURNING clause for DML statements.
+func (b *Binder) bindReturningClause(
+	returning []parser.SelectColumn,
+	tableRef *BoundTableRef,
+) ([]*BoundSelectColumn, error) {
+	var result []*BoundSelectColumn
+
+	for _, col := range returning {
+		if col.Star {
+			// RETURNING * - expand to all columns
+			if starExpr, ok := col.Expr.(*parser.StarExpr); ok {
+				boundStar, err := b.bindStarExpr(starExpr)
+				if err != nil {
+					return nil, err
+				}
+				for _, c := range boundStar.Columns {
+					result = append(result, &BoundSelectColumn{
+						Expr: &BoundColumnRef{
+							Table:     c.Table,
+							Column:    c.Column,
+							ColumnIdx: c.ColumnIdx,
+							ColType:   c.Type,
+						},
+						Alias: c.Column,
+					})
+				}
+			}
+		} else {
+			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			alias := col.Alias
+			if alias == "" {
+				// Derive alias from expression
+				if colRef, ok := expr.(*BoundColumnRef); ok {
+					alias = colRef.Column
+				}
+			}
+			result = append(result, &BoundSelectColumn{
+				Expr:  expr,
+				Alias: alias,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // validateCopyOptions validates COPY statement options.
 func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 	// Validate FORMAT option
@@ -1110,4 +1441,945 @@ func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 	}
 
 	return nil
+}
+
+// bindCTEs binds the Common Table Expressions (WITH clause).
+// For recursive CTEs, this creates a placeholder binding before binding the CTE query
+// to allow self-reference.
+func (b *Binder) bindCTEs(ctes []parser.CTE) ([]*BoundCTE, error) {
+	var boundCTEs []*BoundCTE
+
+	for _, cte := range ctes {
+		boundCTE, err := b.bindCTE(cte)
+		if err != nil {
+			return nil, err
+		}
+		boundCTEs = append(boundCTEs, boundCTE)
+	}
+
+	return boundCTEs, nil
+}
+
+// bindCTE binds a single Common Table Expression.
+func (b *Binder) bindCTE(cte parser.CTE) (*BoundCTE, error) {
+	if cte.Recursive {
+		return b.bindRecursiveCTE(cte)
+	}
+	return b.bindNonRecursiveCTE(cte)
+}
+
+// bindNonRecursiveCTE binds a non-recursive CTE.
+func (b *Binder) bindNonRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
+	// Bind the CTE query
+	boundQuery, err := b.bindSelect(cte.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine column names and types
+	var names []string
+	var types []dukdb.Type
+
+	// If column aliases are provided, use them
+	if len(cte.Columns) > 0 {
+		if len(cte.Columns) != len(boundQuery.Columns) {
+			return nil, b.errorf("CTE %s has %d columns but %d column aliases specified",
+				cte.Name, len(boundQuery.Columns), len(cte.Columns))
+		}
+		names = cte.Columns
+	} else {
+		// Derive names from the query
+		for _, col := range boundQuery.Columns {
+			colName := col.Alias
+			if colName == "" {
+				colName = fmt.Sprintf("col%d", len(names))
+			}
+			names = append(names, colName)
+		}
+	}
+
+	// Get types from the query
+	for _, col := range boundQuery.Columns {
+		types = append(types, col.Expr.ResultType())
+	}
+
+	// Create bound columns for the CTE
+	var columns []*BoundColumn
+	for i, name := range names {
+		columns = append(columns, &BoundColumn{
+			Table:      cte.Name,
+			Column:     name,
+			ColumnIdx:  i,
+			Type:       types[i],
+			SourceType: "cte",
+		})
+	}
+
+	// Create and register the CTE binding
+	cteBinding := &CTEBinding{
+		Name:            cte.Name,
+		Columns:         columns,
+		Types:           types,
+		Names:           names,
+		IsSelfReference: false,
+		Query:           boundQuery,
+	}
+	b.scope.addCTE(cteBinding)
+
+	return &BoundCTE{
+		Name:        cte.Name,
+		Columns:     cte.Columns,
+		Query:       boundQuery,
+		Recursive:   false,
+		ResultTypes: types,
+		ResultNames: names,
+	}, nil
+}
+
+// bindRecursiveCTE binds a recursive CTE (WITH RECURSIVE).
+// Recursive CTEs require special handling:
+// 1. Create a placeholder binding for the CTE name to allow self-reference
+// 2. The CTE query must have a UNION ALL structure with base case and recursive case
+// 3. Bind the query with the placeholder, then update with final types
+func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
+	// Validate that the recursive CTE has a UNION ALL structure
+	if cte.Query.SetOp != parser.SetOpUnionAll {
+		return nil, b.errorf("recursive CTE %s must use UNION ALL between base case and recursive case", cte.Name)
+	}
+
+	if cte.Query.Right == nil {
+		return nil, b.errorf("recursive CTE %s must have a UNION ALL with base and recursive parts", cte.Name)
+	}
+
+	// First, bind the base case (left side of UNION ALL) without the CTE binding
+	// The base case cannot reference the CTE itself
+	baseCaseQuery, err := b.bindSelectWithoutSetOp(cte.Query)
+	if err != nil {
+		return nil, b.errorf("failed to bind base case of recursive CTE %s: %v", cte.Name, err)
+	}
+
+	// Determine column names from base case
+	var names []string
+	var types []dukdb.Type
+
+	if len(cte.Columns) > 0 {
+		if len(cte.Columns) != len(baseCaseQuery.Columns) {
+			return nil, b.errorf("CTE %s has %d columns but %d column aliases specified",
+				cte.Name, len(baseCaseQuery.Columns), len(cte.Columns))
+		}
+		names = cte.Columns
+	} else {
+		for _, col := range baseCaseQuery.Columns {
+			colName := col.Alias
+			if colName == "" {
+				colName = fmt.Sprintf("col%d", len(names))
+			}
+			names = append(names, colName)
+		}
+	}
+
+	for _, col := range baseCaseQuery.Columns {
+		types = append(types, col.Expr.ResultType())
+	}
+
+	// Create bound columns for the CTE placeholder
+	var columns []*BoundColumn
+	for i, name := range names {
+		columns = append(columns, &BoundColumn{
+			Table:      cte.Name,
+			Column:     name,
+			ColumnIdx:  i,
+			Type:       types[i],
+			SourceType: "cte",
+		})
+	}
+
+	// Create a placeholder CTE binding for self-reference in the recursive part
+	placeholderBinding := &CTEBinding{
+		Name:            cte.Name,
+		Columns:         columns,
+		Types:           types,
+		Names:           names,
+		IsSelfReference: true, // Mark as self-reference placeholder
+		Query:           nil,  // Query will be set after full binding
+	}
+	b.scope.addCTE(placeholderBinding)
+
+	// Now bind the recursive case (right side of UNION ALL) with the CTE binding available
+	recursiveCaseQuery, err := b.bindSelect(cte.Query.Right)
+	if err != nil {
+		return nil, b.errorf("failed to bind recursive case of CTE %s: %v", cte.Name, err)
+	}
+
+	// Validate that recursive case has same number of columns
+	if len(recursiveCaseQuery.Columns) != len(baseCaseQuery.Columns) {
+		return nil, b.errorf("recursive CTE %s: base case has %d columns but recursive case has %d columns",
+			cte.Name, len(baseCaseQuery.Columns), len(recursiveCaseQuery.Columns))
+	}
+
+	// Update the placeholder binding with both the base and recursive queries
+	placeholderBinding.IsSelfReference = false
+	placeholderBinding.Query = baseCaseQuery
+	placeholderBinding.RecursiveQuery = recursiveCaseQuery
+	placeholderBinding.Recursive = true
+
+	return &BoundCTE{
+		Name:           cte.Name,
+		Columns:        cte.Columns,
+		Query:          baseCaseQuery,
+		RecursiveQuery: recursiveCaseQuery,
+		Recursive:      true,
+		ResultTypes:    types,
+		ResultNames:    names,
+	}, nil
+}
+
+// bindSelectWithoutSetOp binds only the base SELECT part without processing set operations.
+// This is used to bind the left side of a UNION ALL in recursive CTEs.
+func (b *Binder) bindSelectWithoutSetOp(s *parser.SelectStmt) (*BoundSelectStmt, error) {
+	// Create a copy of the select without the set operation to bind just the base case
+	baseSelect := &parser.SelectStmt{
+		Distinct:   s.Distinct,
+		DistinctOn: s.DistinctOn,
+		Columns:    s.Columns,
+		From:       s.From,
+		Where:      s.Where,
+		GroupBy:    s.GroupBy,
+		Having:     s.Having,
+		Qualify:    s.Qualify,
+		OrderBy:    nil, // ORDER BY is applied to the final result, not base case
+		Limit:      nil, // Same for LIMIT
+		Offset:     nil, // Same for OFFSET
+		Sample:     s.Sample,
+		SetOp:      parser.SetOpNone, // No set operation for base case
+		Right:      nil,
+	}
+
+	return b.bindSelect(baseSelect)
+}
+
+// bindCTERef binds a reference to a CTE.
+func (b *Binder) bindCTERef(cteBinding *CTEBinding, alias string) (*BoundTableRef, error) {
+	// Create a copy of the columns with the new alias
+	var columns []*BoundColumn
+	for i, col := range cteBinding.Columns {
+		columns = append(columns, &BoundColumn{
+			Table:      alias,
+			Column:     col.Column,
+			ColumnIdx:  i,
+			Type:       col.Type,
+			SourceType: "cte",
+		})
+	}
+
+	// Capture IsSelfReference at bind time - this is true when we're binding
+	// the recursive part of a recursive CTE and referencing the CTE itself
+	isSelfRef := cteBinding.IsSelfReference
+
+	boundRef := &BoundTableRef{
+		TableName:    cteBinding.Name,
+		Alias:        alias,
+		CTERef:       cteBinding,
+		Columns:      columns,
+		IsCTESelfRef: isSelfRef,
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = cteBinding.Name
+
+	return boundRef, nil
+}
+
+// bindLateralSubquery binds a LATERAL subquery with access to outer scope tables.
+// LATERAL allows the subquery to reference columns from tables that appear earlier
+// in the FROM clause. This is achieved by creating a new scope that inherits the
+// current scope's table bindings, allowing column references to resolve against
+// both the subquery's own tables and the outer scope's preceding tables.
+func (b *Binder) bindLateralSubquery(
+	s *parser.SelectStmt,
+) (*BoundSelectStmt, error) {
+	bound := &BoundSelectStmt{
+		Distinct: s.Distinct,
+	}
+
+	// Create a lateral scope that inherits outer tables.
+	// Unlike regular subquery binding, LATERAL subqueries can see tables
+	// from the enclosing FROM clause that were bound before this subquery.
+	oldScope := b.scope
+	lateralScope := newLateralScope(oldScope)
+	b.scope = lateralScope
+	defer func() {
+		// Merge parameters from lateral scope to outer scope before restoring
+		for pos, typ := range b.scope.params {
+			oldScope.params[pos] = typ
+		}
+		// Also update paramCount
+		oldScope.paramCount = b.scope.paramCount
+		b.scope = oldScope
+	}()
+
+	// Bind CTEs (WITH clause) first, before any other references
+	if len(s.CTEs) > 0 {
+		boundCTEs, err := b.bindCTEs(s.CTEs)
+		if err != nil {
+			return nil, err
+		}
+		bound.CTEs = boundCTEs
+	}
+
+	// Bind FROM clause first to establish table bindings
+	if s.From != nil {
+		for _, table := range s.From.Tables {
+			ref, err := b.bindTableRef(table)
+			if err != nil {
+				return nil, err
+			}
+			bound.From = append(bound.From, ref)
+		}
+
+		for _, join := range s.From.Joins {
+			j, err := b.bindJoin(join)
+			if err != nil {
+				return nil, err
+			}
+			bound.Joins = append(bound.Joins, j)
+		}
+	}
+
+	// Bind DISTINCT ON expressions
+	for _, expr := range s.DistinctOn {
+		boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		bound.DistinctOn = append(bound.DistinctOn, boundExpr)
+	}
+
+	// Bind columns
+	for _, col := range s.Columns {
+		if col.Star {
+			// Expand star to all columns
+			if starExpr, ok := col.Expr.(*parser.StarExpr); ok {
+				boundStar, err := b.bindStarExpr(
+					starExpr,
+				)
+				if err != nil {
+					return nil, err
+				}
+				for _, c := range boundStar.Columns {
+					bound.Columns = append(
+						bound.Columns,
+						&BoundSelectColumn{
+							Expr: &BoundColumnRef{
+								Table:     c.Table,
+								Column:    c.Column,
+								ColumnIdx: c.ColumnIdx,
+								ColType:   c.Type,
+							},
+							Alias: c.Column,
+						},
+					)
+				}
+			}
+		} else {
+			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			alias := col.Alias
+			if alias == "" {
+				// If no explicit alias, derive alias from expression type
+				switch e := expr.(type) {
+				case *BoundColumnRef:
+					// Use the column name as the alias
+					alias = e.Column
+				case *BoundSequenceCall:
+					// Use the function name (lowercase) as the alias
+					alias = strings.ToLower(e.FunctionName)
+				case *BoundFunctionCall:
+					// Use the function name (lowercase) as the alias
+					alias = strings.ToLower(e.Name)
+				}
+			}
+			bound.Columns = append(bound.Columns, &BoundSelectColumn{
+				Expr:  expr,
+				Alias: alias,
+			})
+		}
+	}
+
+	// Bind WHERE
+	if s.Where != nil {
+		where, err := b.bindExpr(
+			s.Where,
+			dukdb.TYPE_BOOLEAN,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bound.Where = where
+	}
+
+	// Bind GROUP BY
+	for _, g := range s.GroupBy {
+		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		bound.GroupBy = append(
+			bound.GroupBy,
+			expr,
+		)
+	}
+
+	// Bind HAVING
+	if s.Having != nil {
+		having, err := b.bindExpr(
+			s.Having,
+			dukdb.TYPE_BOOLEAN,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bound.Having = having
+	}
+
+	// Bind QUALIFY clause (filter after window functions)
+	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias)
+	if s.Qualify != nil {
+		qualify, err := b.bindQualifyWithSelectAliases(s.Qualify, bound.Columns)
+		if err != nil {
+			return nil, err
+		}
+		bound.Qualify = qualify
+	}
+
+	// Bind ORDER BY
+	for _, o := range s.OrderBy {
+		expr, err := b.bindExpr(
+			o.Expr,
+			dukdb.TYPE_ANY,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bound.OrderBy = append(
+			bound.OrderBy,
+			&BoundOrderBy{
+				Expr: expr,
+				Desc: o.Desc,
+			},
+		)
+	}
+
+	// Bind LIMIT
+	if s.Limit != nil {
+		limit, err := b.bindExpr(
+			s.Limit,
+			dukdb.TYPE_BIGINT,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bound.Limit = limit
+	}
+
+	// Bind OFFSET
+	if s.Offset != nil {
+		offset, err := b.bindExpr(
+			s.Offset,
+			dukdb.TYPE_BIGINT,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bound.Offset = offset
+	}
+
+	// Bind SAMPLE clause
+	if s.Sample != nil {
+		bound.Sample = &BoundSampleOptions{
+			Method:     s.Sample.Method,
+			Percentage: s.Sample.Percentage,
+			Rows:       s.Sample.Rows,
+			Seed:       s.Sample.Seed,
+		}
+	}
+
+	return bound, nil
+}
+
+// bindPivot binds a PIVOT statement.
+// PIVOT transforms rows into columns using aggregation and conditional logic.
+func (b *Binder) bindPivot(s *parser.PivotStmt) (*BoundPivotStmt, error) {
+	// Push new scope for binding
+	oldScope := b.scope
+	b.scope = newBindScope(oldScope)
+	defer func() { b.scope = oldScope }()
+
+	// Bind the source table reference
+	sourceRef, err := b.bindTableRef(s.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bind the FOR column (the column whose values become pivot column names)
+	var forColumn *BoundColumnRef
+	if s.ForColumn != "" {
+		// Create a column reference and bind it
+		colRef := &parser.ColumnRef{Column: s.ForColumn}
+		boundExpr, err := b.bindExpr(colRef, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, b.errorf("PIVOT FOR column not found: %s", s.ForColumn)
+		}
+		var ok bool
+		forColumn, ok = boundExpr.(*BoundColumnRef)
+		if !ok {
+			return nil, b.errorf("PIVOT FOR clause must reference a column")
+		}
+	}
+
+	// Validate that we have IN values
+	if len(s.PivotOn) == 0 {
+		return nil, b.errorf("PIVOT requires at least one IN value")
+	}
+
+	// Bind the IN values (these become column names)
+	var inValues []any
+	for _, expr := range s.PivotOn {
+		val, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		// Extract the literal value
+		if lit, ok := val.(*BoundLiteral); ok {
+			inValues = append(inValues, lit.Value)
+		} else {
+			return nil, b.errorf("PIVOT IN values must be literals")
+		}
+	}
+
+	// Bind the aggregates
+	var boundAggregates []*BoundPivotAggregate
+	for _, agg := range s.Using {
+		boundExpr, err := b.bindExpr(agg.Expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundAggregates = append(boundAggregates, &BoundPivotAggregate{
+			Function: agg.Function,
+			Expr:     boundExpr,
+			Alias:    agg.Alias,
+		})
+	}
+
+	// Bind the GROUP BY expressions
+	var groupBy []BoundExpr
+	for _, expr := range s.GroupBy {
+		boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		groupBy = append(groupBy, boundExpr)
+	}
+
+	return &BoundPivotStmt{
+		Source:     sourceRef,
+		ForColumn:  forColumn,
+		InValues:   inValues,
+		Aggregates: boundAggregates,
+		GroupBy:    groupBy,
+		Alias:      s.Alias,
+	}, nil
+}
+
+// bindUnpivot binds an UNPIVOT statement.
+// UNPIVOT transforms columns into rows (the inverse of PIVOT).
+func (b *Binder) bindUnpivot(s *parser.UnpivotStmt) (*BoundUnpivotStmt, error) {
+	// Push new scope for binding
+	oldScope := b.scope
+	b.scope = newBindScope(oldScope)
+	defer func() { b.scope = oldScope }()
+
+	// Bind the source table reference
+	sourceRef, err := b.bindTableRef(s.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that the columns to unpivot exist in the source
+	for _, colName := range s.Using {
+		found := false
+		for _, col := range sourceRef.Columns {
+			if col.Column == colName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, b.errorf("column %s not found in UNPIVOT source", colName)
+		}
+	}
+
+	return &BoundUnpivotStmt{
+		Source:         sourceRef,
+		ValueColumn:    s.Into,
+		NameColumn:     s.For,
+		UnpivotColumns: s.Using,
+		Alias:          s.Alias,
+	}, nil
+}
+
+// bindPivotTableRef binds a PIVOT table reference (PIVOT used in FROM clause).
+// This creates a BoundTableRef with PivotStmt information that the planner
+// will convert to a LogicalPivot operation.
+func (b *Binder) bindPivotTableRef(ref parser.TableRef) (*BoundTableRef, error) {
+	pivotStmt := ref.PivotRef
+
+	// First bind the source table
+	sourceRef, err := b.bindTableRef(pivotStmt.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove the source table from scope after binding (PIVOT becomes the new table)
+	sourceAlias := sourceRef.Alias
+	if sourceAlias == "" {
+		sourceAlias = sourceRef.TableName
+	}
+
+	// Bind the FOR column
+	var forColumn *BoundColumnRef
+	if pivotStmt.ForColumn != "" {
+		colRef := &parser.ColumnRef{Column: pivotStmt.ForColumn}
+		boundExpr, err := b.bindExpr(colRef, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, b.errorf("PIVOT FOR column not found: %s", pivotStmt.ForColumn)
+		}
+		var ok bool
+		forColumn, ok = boundExpr.(*BoundColumnRef)
+		if !ok {
+			return nil, b.errorf("PIVOT FOR clause must reference a column")
+		}
+	}
+
+	// Bind the IN values
+	var inValues []any
+	for _, expr := range pivotStmt.PivotOn {
+		val, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		if lit, ok := val.(*BoundLiteral); ok {
+			inValues = append(inValues, lit.Value)
+		} else {
+			return nil, b.errorf("PIVOT IN values must be literals")
+		}
+	}
+
+	// Bind the aggregates
+	var boundAggregates []*BoundPivotAggregate
+	for _, agg := range pivotStmt.Using {
+		boundExpr, err := b.bindExpr(agg.Expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundAggregates = append(boundAggregates, &BoundPivotAggregate{
+			Function: agg.Function,
+			Expr:     boundExpr,
+			Alias:    agg.Alias,
+		})
+	}
+
+	// Bind the GROUP BY expressions (or infer them from source columns)
+	var groupBy []BoundExpr
+	if len(pivotStmt.GroupBy) > 0 {
+		for _, expr := range pivotStmt.GroupBy {
+			boundExpr, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			groupBy = append(groupBy, boundExpr)
+		}
+	} else {
+		// Infer GROUP BY from source columns that are not:
+		// - The FOR column
+		// - The aggregated column
+		for _, col := range sourceRef.Columns {
+			// Skip the FOR column
+			if forColumn != nil && col.Column == forColumn.Column {
+				continue
+			}
+			// Skip columns used in aggregates
+			isAggCol := false
+			for _, agg := range boundAggregates {
+				if colRef, ok := agg.Expr.(*BoundColumnRef); ok {
+					if col.Column == colRef.Column {
+						isAggCol = true
+						break
+					}
+				}
+			}
+			if !isAggCol {
+				groupBy = append(groupBy, &BoundColumnRef{
+					Table:     col.Table,
+					Column:    col.Column,
+					ColumnIdx: col.ColumnIdx,
+					ColType:   col.Type,
+				})
+			}
+		}
+	}
+
+	// Create the bound PIVOT statement
+	boundPivot := &BoundPivotStmt{
+		Source:     sourceRef,
+		ForColumn:  forColumn,
+		InValues:   inValues,
+		Aggregates: boundAggregates,
+		GroupBy:    groupBy,
+		Alias:      pivotStmt.Alias,
+	}
+
+	// Determine the alias for the pivot result
+	alias := pivotStmt.Alias
+	if alias == "" {
+		alias = "pivot"
+	}
+	if ref.Alias != "" {
+		alias = ref.Alias
+	}
+
+	// Build output columns: GROUP BY columns + pivot value columns
+	var columns []*BoundColumn
+	colIdx := 0
+
+	// Add GROUP BY columns
+	for _, expr := range groupBy {
+		if colRef, ok := expr.(*BoundColumnRef); ok {
+			columns = append(columns, &BoundColumn{
+				Table:      alias,
+				Column:     colRef.Column,
+				ColumnIdx:  colIdx,
+				Type:       colRef.ColType,
+				SourceType: "pivot",
+			})
+			colIdx++
+		}
+	}
+
+	// Add pivot value columns (one per IN value per aggregate)
+	for _, agg := range boundAggregates {
+		for _, val := range inValues {
+			colName := formatPivotColumnName(agg.Alias, val)
+			columns = append(columns, &BoundColumn{
+				Table:      alias,
+				Column:     colName,
+				ColumnIdx:  colIdx,
+				Type:       agg.Expr.ResultType(),
+				SourceType: "pivot",
+			})
+			colIdx++
+		}
+	}
+
+	boundRef := &BoundTableRef{
+		TableName: "pivot",
+		Alias:     alias,
+		Columns:   columns,
+		PivotStmt: boundPivot,
+	}
+
+	// Remove the source table from scope (PIVOT replaces it)
+	delete(b.scope.tables, sourceAlias)
+	delete(b.scope.aliases, sourceAlias)
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = alias
+
+	return boundRef, nil
+}
+
+// bindUnpivotTableRef binds an UNPIVOT table reference (UNPIVOT used in FROM clause).
+func (b *Binder) bindUnpivotTableRef(ref parser.TableRef) (*BoundTableRef, error) {
+	unpivotStmt := ref.UnpivotRef
+
+	// First bind the source table
+	sourceRef, err := b.bindTableRef(unpivotStmt.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	// Capture source alias before we remove it from scope
+	sourceAlias := sourceRef.Alias
+	if sourceAlias == "" {
+		sourceAlias = sourceRef.TableName
+	}
+
+	// Validate that the columns to unpivot exist in the source
+	for _, colName := range unpivotStmt.Using {
+		found := false
+		for _, col := range sourceRef.Columns {
+			if col.Column == colName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, b.errorf("column %s not found in UNPIVOT source", colName)
+		}
+	}
+
+	// Create the bound UNPIVOT statement
+	boundUnpivot := &BoundUnpivotStmt{
+		Source:         sourceRef,
+		ValueColumn:    unpivotStmt.Into,
+		NameColumn:     unpivotStmt.For,
+		UnpivotColumns: unpivotStmt.Using,
+		Alias:          unpivotStmt.Alias,
+	}
+
+	// Determine the alias
+	alias := unpivotStmt.Alias
+	if alias == "" {
+		alias = "unpivot"
+	}
+	if ref.Alias != "" {
+		alias = ref.Alias
+	}
+
+	// Build output columns: non-unpivoted columns + name column + value column
+	var columns []*BoundColumn
+	colIdx := 0
+
+	// Add non-unpivoted columns
+	for _, col := range sourceRef.Columns {
+		isUnpivot := false
+		for _, unpivotCol := range unpivotStmt.Using {
+			if col.Column == unpivotCol {
+				isUnpivot = true
+				break
+			}
+		}
+		if !isUnpivot {
+			columns = append(columns, &BoundColumn{
+				Table:      alias,
+				Column:     col.Column,
+				ColumnIdx:  colIdx,
+				Type:       col.Type,
+				SourceType: "unpivot",
+			})
+			colIdx++
+		}
+	}
+
+	// Add name column (contains original column names)
+	columns = append(columns, &BoundColumn{
+		Table:      alias,
+		Column:     unpivotStmt.For,
+		ColumnIdx:  colIdx,
+		Type:       dukdb.TYPE_VARCHAR,
+		SourceType: "unpivot",
+	})
+	colIdx++
+
+	// Add value column (contains unpivoted values)
+	// Determine the type from the first unpivot column
+	var valueType dukdb.Type = dukdb.TYPE_ANY
+	for _, col := range sourceRef.Columns {
+		for _, unpivotCol := range unpivotStmt.Using {
+			if col.Column == unpivotCol {
+				valueType = col.Type
+				break
+			}
+		}
+		if valueType != dukdb.TYPE_ANY {
+			break
+		}
+	}
+	columns = append(columns, &BoundColumn{
+		Table:      alias,
+		Column:     unpivotStmt.Into,
+		ColumnIdx:  colIdx,
+		Type:       valueType,
+		SourceType: "unpivot",
+	})
+
+	boundRef := &BoundTableRef{
+		TableName:   "unpivot",
+		Alias:       alias,
+		Columns:     columns,
+		UnpivotStmt: boundUnpivot,
+	}
+
+	// Remove the source table from scope (UNPIVOT replaces it)
+	delete(b.scope.tables, sourceAlias)
+	delete(b.scope.aliases, sourceAlias)
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = alias
+
+	return boundRef, nil
+}
+
+// formatPivotColumnName creates a column name for a pivot result column.
+func formatPivotColumnName(alias string, pivotValue any) string {
+	valStr := ""
+	switch v := pivotValue.(type) {
+	case string:
+		valStr = v
+	case int64:
+		valStr = fmt.Sprintf("%d", v)
+	case float64:
+		valStr = fmt.Sprintf("%v", v)
+	case bool:
+		if v {
+			valStr = "true"
+		} else {
+			valStr = "false"
+		}
+	default:
+		valStr = fmt.Sprintf("%v", v)
+	}
+	if alias != "" {
+		return valStr + "_" + alias
+	}
+	return valStr
+}
+
+// bindQualifyWithSelectAliases binds a QUALIFY expression with access to SELECT column aliases.
+// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias).
+// This function temporarily adds SELECT column aliases to the scope before binding QUALIFY.
+func (b *Binder) bindQualifyWithSelectAliases(
+	qualify parser.Expr,
+	boundColumns []*BoundSelectColumn,
+) (BoundExpr, error) {
+	// Add SELECT column aliases to scope temporarily
+	// Create a virtual table reference for SELECT column aliases
+	selectAliasRef := &BoundTableRef{
+		Alias:   "__select_aliases__",
+		Columns: make([]*BoundColumn, 0, len(boundColumns)),
+	}
+	for i, col := range boundColumns {
+		if col.Alias != "" {
+			selectAliasRef.Columns = append(selectAliasRef.Columns, &BoundColumn{
+				Table:      "__select_aliases__",
+				Column:     col.Alias,
+				ColumnIdx:  i,
+				Type:       col.Expr.ResultType(),
+				SourceType: "select_alias",
+			})
+		}
+	}
+	b.scope.tables["__select_aliases__"] = selectAliasRef
+
+	boundQualify, err := b.bindExpr(
+		qualify,
+		dukdb.TYPE_BOOLEAN,
+	)
+
+	// Remove the temporary table
+	delete(b.scope.tables, "__select_aliases__")
+
+	return boundQualify, err
 }

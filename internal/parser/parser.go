@@ -16,7 +16,6 @@ func Parse(sql string) (Statement, error) {
 	return p.parse()
 }
 
-
 type parser struct {
 	input    string
 	pos      int
@@ -75,6 +74,8 @@ func (p *parser) parse() (Statement, error) {
 		p.advance()
 	case p.isKeyword("COPY"):
 		stmt, err = p.parseCopy()
+	case p.isKeyword("MERGE"):
+		stmt, err = p.parseMerge()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",
@@ -99,6 +100,13 @@ func (p *parser) parseWithSelect() (*SelectStmt, error) {
 		return nil, err
 	}
 
+	// Check for RECURSIVE keyword
+	isRecursive := false
+	if p.isKeyword("RECURSIVE") {
+		p.advance()
+		isRecursive = true
+	}
+
 	var ctes []CTE
 
 	// Parse CTEs
@@ -109,7 +117,7 @@ func (p *parser) parseWithSelect() (*SelectStmt, error) {
 		}
 		cteName := p.advance().value
 
-		cte := CTE{Name: cteName}
+		cte := CTE{Name: cteName, Recursive: isRecursive}
 
 		// Optional column list: WITH cte_name(col1, col2) AS (...)
 		if p.current().typ == tokenLParen {
@@ -193,10 +201,26 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 
 	stmt := &SelectStmt{}
 
-	// DISTINCT
+	// DISTINCT or DISTINCT ON (expr, ...)
 	if p.isKeyword("DISTINCT") {
 		p.advance()
 		stmt.Distinct = true
+
+		// Check for DISTINCT ON (expr, ...)
+		if p.isKeyword("ON") {
+			p.advance() // consume ON
+			if _, err := p.expect(tokenLParen); err != nil {
+				return nil, err
+			}
+			distinctOn, err := p.parseExprList()
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+			stmt.DistinctOn = distinctOn
+		}
 	}
 
 	// Columns
@@ -213,6 +237,15 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			return nil, err
 		}
 		stmt.From = from
+
+		// TABLESAMPLE clause (must come after table reference, before WHERE)
+		if p.isKeyword("TABLESAMPLE") {
+			sample, err := p.parseTablesample()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Sample = sample
+		}
 	}
 
 	// WHERE
@@ -231,7 +264,7 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 		if err := p.expectKeyword("BY"); err != nil {
 			return nil, err
 		}
-		groupBy, err := p.parseExprList()
+		groupBy, err := p.parseGroupByList()
 		if err != nil {
 			return nil, err
 		}
@@ -246,6 +279,16 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			}
 			stmt.Having = having
 		}
+	}
+
+	// QUALIFY - filter rows after window function evaluation
+	if p.isKeyword("QUALIFY") {
+		p.advance()
+		qualify, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Qualify = qualify
 	}
 
 	// ORDER BY
@@ -354,10 +397,12 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 			} else if p.current().typ == tokenIdent && !p.isKeyword("FROM") &&
 				!p.isKeyword("WHERE") && !p.isKeyword("GROUP") &&
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
-				!p.isKeyword("HAVING") && !p.isKeyword("INNER") &&
+				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("INNER") &&
 				!p.isKeyword("LEFT") && !p.isKeyword("RIGHT") &&
 				!p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
-				!p.isKeyword("JOIN") && !p.isKeyword("ON") {
+				!p.isKeyword("JOIN") && !p.isKeyword("ON") &&
+				!p.isKeyword("RETURNING") &&
+				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 				col.Alias = p.advance().value
 			}
 
@@ -417,6 +462,16 @@ func (p *parser) parseFrom() (*FromClause, error) {
 func (p *parser) parseTableRef() (TableRef, error) {
 	var ref TableRef
 
+	// Check for LATERAL keyword before subquery
+	if p.isKeyword("LATERAL") {
+		p.advance()
+		ref.Lateral = true
+		// LATERAL must be followed by a subquery in parentheses
+		if p.current().typ != tokenLParen {
+			return ref, p.errorf("expected subquery after LATERAL")
+		}
+	}
+
 	if p.current().typ == tokenLParen {
 		// Subquery
 		p.advance()
@@ -454,6 +509,61 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		return ref, p.errorf("expected table name or subquery")
 	}
 
+	// Check for PIVOT or UNPIVOT transformation
+	if p.isKeyword("PIVOT") {
+		pivot, err := p.parsePivot(ref)
+		if err != nil {
+			return ref, err
+		}
+		// Create a new table ref with the PIVOT
+		newRef := TableRef{
+			PivotRef: pivot,
+		}
+		// Parse optional alias after PIVOT
+		if p.isKeyword("AS") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return newRef, p.errorf("expected alias after AS")
+			}
+			newRef.Alias = p.advance().value
+		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
+			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
+			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
+			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
+			newRef.Alias = p.advance().value
+		}
+		return newRef, nil
+	}
+
+	if p.isKeyword("UNPIVOT") {
+		unpivot, err := p.parseUnpivot(ref)
+		if err != nil {
+			return ref, err
+		}
+		// Create a new table ref with the UNPIVOT
+		newRef := TableRef{
+			UnpivotRef: unpivot,
+		}
+		// Parse optional alias after UNPIVOT
+		if p.isKeyword("AS") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return newRef, p.errorf("expected alias after AS")
+			}
+			newRef.Alias = p.advance().value
+		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
+			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
+			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
+			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
+			newRef.Alias = p.advance().value
+		}
+		return newRef, nil
+	}
+
 	// Alias
 	if p.isKeyword("AS") {
 		p.advance()
@@ -467,12 +577,93 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 		!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
-		!p.isKeyword("ON") && !p.isKeyword("HAVING") &&
-		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
+		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
+		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") {
 		ref.Alias = p.advance().value
 	}
 
 	return ref, nil
+}
+
+// parseTablesample parses a TABLESAMPLE clause.
+// Syntax:
+//   - TABLESAMPLE BERNOULLI(percentage)
+//   - TABLESAMPLE SYSTEM(percentage)
+//   - TABLESAMPLE RESERVOIR(rows)
+//   - TABLESAMPLE method(value) REPEATABLE(seed)
+func (p *parser) parseTablesample() (*SampleOptions, error) {
+	if err := p.expectKeyword("TABLESAMPLE"); err != nil {
+		return nil, err
+	}
+
+	sample := &SampleOptions{}
+
+	// Parse sampling method
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected sampling method (BERNOULLI, SYSTEM, or RESERVOIR)")
+	}
+	methodName := strings.ToUpper(p.advance().value)
+
+	switch methodName {
+	case "BERNOULLI":
+		sample.Method = SampleBernoulli
+	case "SYSTEM":
+		sample.Method = SampleSystem
+	case "RESERVOIR":
+		sample.Method = SampleReservoir
+	default:
+		return nil, p.errorf("unknown sampling method: %s (expected BERNOULLI, SYSTEM, or RESERVOIR)", methodName)
+	}
+
+	// Parse percentage or row count in parentheses
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse the numeric value
+	if p.current().typ != tokenNumber {
+		return nil, p.errorf("expected numeric value for sample size")
+	}
+	valueStr := p.advance().value
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return nil, p.errorf("invalid sample value: %s", valueStr)
+	}
+
+	if sample.Method == SampleReservoir {
+		// RESERVOIR uses row count
+		sample.Rows = int(value)
+	} else {
+		// BERNOULLI and SYSTEM use percentage
+		sample.Percentage = value
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	// Check for REPEATABLE(seed) clause
+	if p.isKeyword("REPEATABLE") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		if p.current().typ != tokenNumber {
+			return nil, p.errorf("expected seed value after REPEATABLE")
+		}
+		seedStr := p.advance().value
+		seed, err := strconv.ParseInt(seedStr, 10, 64)
+		if err != nil {
+			return nil, p.errorf("invalid seed value: %s", seedStr)
+		}
+		sample.Seed = &seed
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	return sample, nil
 }
 
 // parseTableFunction parses a table function call in a FROM clause.
@@ -702,6 +893,15 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 		return nil, p.errorf("expected VALUES or SELECT")
 	}
 
+	// Parse optional RETURNING clause
+	if p.isKeyword("RETURNING") {
+		returning, err := p.parseReturningClause()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Returning = returning
+	}
+
 	return stmt, nil
 }
 
@@ -793,6 +993,15 @@ func (p *parser) parseUpdate() (*UpdateStmt, error) {
 		stmt.Where = where
 	}
 
+	// Parse optional RETURNING clause
+	if p.isKeyword("RETURNING") {
+		returning, err := p.parseReturningClause()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Returning = returning
+	}
+
 	return stmt, nil
 }
 
@@ -835,7 +1044,72 @@ func (p *parser) parseDelete() (*DeleteStmt, error) {
 		stmt.Where = where
 	}
 
+	// Parse optional RETURNING clause
+	if p.isKeyword("RETURNING") {
+		returning, err := p.parseReturningClause()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Returning = returning
+	}
+
 	return stmt, nil
+}
+
+// parseReturningClause parses the RETURNING clause for INSERT, UPDATE, and DELETE statements.
+// The RETURNING keyword has already been checked but not consumed.
+// It supports:
+//   - RETURNING * (returns all columns)
+//   - RETURNING col1, col2 (returns specific columns)
+//   - RETURNING col1 AS alias, col2 (returns columns with aliases)
+//   - RETURNING expr AS alias (returns expressions with aliases)
+func (p *parser) parseReturningClause() ([]SelectColumn, error) {
+	if err := p.expectKeyword("RETURNING"); err != nil {
+		return nil, err
+	}
+
+	var cols []SelectColumn
+
+	for {
+		if p.current().typ == tokenStar {
+			p.advance()
+			cols = append(cols, SelectColumn{
+				Star: true,
+				Expr: &StarExpr{},
+			})
+		} else {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+
+			col := SelectColumn{Expr: expr}
+
+			// Check for AS alias or implicit alias
+			if p.isKeyword("AS") {
+				p.advance()
+				if p.current().typ != tokenIdent {
+					return nil, p.errorf("expected identifier after AS in RETURNING clause")
+				}
+				col.Alias = p.advance().value
+			} else if p.current().typ == tokenIdent &&
+				p.current().typ != tokenComma &&
+				p.current().typ != tokenSemicolon &&
+				p.current().typ != tokenEOF {
+				// Check if it's not a keyword that would end the clause
+				col.Alias = p.advance().value
+			}
+
+			cols = append(cols, col)
+		}
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	return cols, nil
 }
 
 func (p *parser) parseCreate() (Statement, error) {
@@ -1379,6 +1653,272 @@ func (p *parser) parseCopyOptions(stmt *CopyStmt) error {
 	return nil
 }
 
+// parseMerge parses a MERGE INTO statement.
+// Supports the following syntax:
+//
+//	MERGE INTO target_table [AS alias]
+//	USING source_table [AS alias]
+//	ON join_condition
+//	WHEN MATCHED [AND condition] THEN UPDATE SET col = val, ...
+//	WHEN MATCHED [AND condition] THEN DELETE
+//	WHEN NOT MATCHED [AND condition] THEN INSERT (cols) VALUES (vals)
+//	[RETURNING columns]
+func (p *parser) parseMerge() (*MergeStmt, error) {
+	if err := p.expectKeyword("MERGE"); err != nil {
+		return nil, err
+	}
+	if err := p.expectKeyword("INTO"); err != nil {
+		return nil, err
+	}
+
+	stmt := &MergeStmt{}
+
+	// Parse target table reference
+	target, err := p.parseTableRef()
+	if err != nil {
+		return nil, err
+	}
+	stmt.Into = target
+
+	// Parse USING clause
+	if err := p.expectKeyword("USING"); err != nil {
+		return nil, err
+	}
+
+	source, err := p.parseTableRef()
+	if err != nil {
+		return nil, err
+	}
+	stmt.Using = source
+
+	// Parse ON join condition
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	onCond, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	stmt.On = onCond
+
+	// Parse WHEN clauses (at least one required)
+	for p.isKeyword("WHEN") {
+		p.advance() // consume WHEN
+
+		// Determine if MATCHED or NOT MATCHED
+		if p.isKeyword("MATCHED") {
+			p.advance() // consume MATCHED
+
+			action, err := p.parseMergeAction(true)
+			if err != nil {
+				return nil, err
+			}
+			stmt.WhenMatched = append(stmt.WhenMatched, action)
+		} else if p.isKeyword("NOT") {
+			p.advance() // consume NOT
+			if err := p.expectKeyword("MATCHED"); err != nil {
+				return nil, err
+			}
+
+			// Check for BY SOURCE or BY TARGET (optional)
+			bySource := false
+			if p.isKeyword("BY") {
+				p.advance() // consume BY
+				if p.isKeyword("SOURCE") {
+					p.advance()
+					bySource = true
+				} else if p.isKeyword("TARGET") {
+					p.advance()
+					// BY TARGET is the default for NOT MATCHED
+				} else {
+					return nil, p.errorf("expected SOURCE or TARGET after BY")
+				}
+			}
+
+			action, err := p.parseMergeAction(false)
+			if err != nil {
+				return nil, err
+			}
+
+			if bySource {
+				stmt.WhenNotMatchedBySource = append(stmt.WhenNotMatchedBySource, action)
+			} else {
+				stmt.WhenNotMatched = append(stmt.WhenNotMatched, action)
+			}
+		} else {
+			return nil, p.errorf("expected MATCHED or NOT after WHEN")
+		}
+	}
+
+	// Parse optional RETURNING clause
+	if p.isKeyword("RETURNING") {
+		returning, err := p.parseReturningClause()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Returning = returning
+	}
+
+	return stmt, nil
+}
+
+// parseMergeAction parses a single MERGE action (UPDATE, DELETE, INSERT, or DO NOTHING).
+// The isMatched parameter indicates whether this is a WHEN MATCHED or WHEN NOT MATCHED clause.
+func (p *parser) parseMergeAction(isMatched bool) (MergeAction, error) {
+	action := MergeAction{}
+
+	// Parse optional AND condition
+	if p.isKeyword("AND") {
+		p.advance() // consume AND
+		cond, err := p.parseExpr()
+		if err != nil {
+			return action, err
+		}
+		action.Cond = cond
+	}
+
+	// Expect THEN
+	if err := p.expectKeyword("THEN"); err != nil {
+		return action, err
+	}
+
+	// Parse the action type
+	switch {
+	case p.isKeyword("UPDATE"):
+		p.advance() // consume UPDATE
+		if err := p.expectKeyword("SET"); err != nil {
+			return action, err
+		}
+		action.Type = MergeActionUpdate
+
+		// Parse SET clauses
+		setClauses, err := p.parseMergeSetClauses()
+		if err != nil {
+			return action, err
+		}
+		action.Update = setClauses
+
+	case p.isKeyword("DELETE"):
+		p.advance() // consume DELETE
+		action.Type = MergeActionDelete
+
+	case p.isKeyword("INSERT"):
+		p.advance() // consume INSERT
+		action.Type = MergeActionInsert
+
+		// Parse column list (optional)
+		var columns []string
+		if p.current().typ == tokenLParen {
+			p.advance() // consume (
+			for {
+				if p.current().typ != tokenIdent {
+					return action, p.errorf("expected column name")
+				}
+				columns = append(columns, p.advance().value)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance() // consume ,
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return action, err
+			}
+		}
+
+		// Parse VALUES clause
+		if err := p.expectKeyword("VALUES"); err != nil {
+			return action, err
+		}
+		if _, err := p.expect(tokenLParen); err != nil {
+			return action, err
+		}
+
+		values, err := p.parseExprList()
+		if err != nil {
+			return action, err
+		}
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return action, err
+		}
+
+		// Build SetClause pairs for INSERT
+		if len(columns) > 0 && len(columns) != len(values) {
+			return action, p.errorf("column count (%d) does not match value count (%d)", len(columns), len(values))
+		}
+
+		for i, val := range values {
+			col := ""
+			if len(columns) > 0 {
+				col = columns[i]
+			}
+			action.Insert = append(action.Insert, SetClause{Column: col, Value: val})
+		}
+
+	case p.isKeyword("DO"):
+		p.advance() // consume DO
+		if err := p.expectKeyword("NOTHING"); err != nil {
+			return action, err
+		}
+		action.Type = MergeActionDoNothing
+
+	default:
+		if isMatched {
+			return action, p.errorf("expected UPDATE, DELETE, or DO NOTHING in WHEN MATCHED clause")
+		}
+		return action, p.errorf("expected INSERT or DO NOTHING in WHEN NOT MATCHED clause")
+	}
+
+	return action, nil
+}
+
+// parseMergeSetClauses parses SET column = value, ... in a MERGE UPDATE action.
+// Stops when it encounters WHEN, RETURNING, semicolon, or EOF.
+func (p *parser) parseMergeSetClauses() ([]SetClause, error) {
+	var setClauses []SetClause
+
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name")
+		}
+		col := p.advance().value
+
+		if p.current().typ != tokenOperator || p.current().value != "=" {
+			return nil, p.errorf("expected = after column name")
+		}
+		p.advance() // consume =
+
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		setClauses = append(setClauses, SetClause{Column: col, Value: val})
+
+		// Check if we should continue
+		if p.current().typ != tokenComma {
+			break
+		}
+
+		// Look ahead - if next token after comma is WHEN or a terminator, stop
+		next := p.peek()
+		if next.typ == tokenIdent {
+			upperVal := strings.ToUpper(next.value)
+			if upperVal == "WHEN" || upperVal == "RETURNING" {
+				break
+			}
+		}
+		if next.typ == tokenSemicolon || next.typ == tokenEOF {
+			break
+		}
+
+		p.advance() // consume comma
+	}
+
+	return setClauses, nil
+}
+
 func (p *parser) parseExprList() ([]Expr, error) {
 	var exprs []Expr
 
@@ -1396,6 +1936,328 @@ func (p *parser) parseExprList() ([]Expr, error) {
 	}
 
 	return exprs, nil
+}
+
+// parsePivot parses a PIVOT clause.
+// Syntax: PIVOT (aggregate FOR column IN (value1, value2, ...))
+// Example: PIVOT (SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))
+func (p *parser) parsePivot(source TableRef) (*PivotStmt, error) {
+	if err := p.expectKeyword("PIVOT"); err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	pivot := &PivotStmt{
+		Source: source,
+	}
+
+	// Parse aggregate function(s)
+	// Format: SUM(expr) [AS alias], AVG(expr), etc.
+	for {
+		// Parse aggregate function name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected aggregate function name in PIVOT")
+		}
+		funcName := strings.ToUpper(p.advance().value)
+
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+
+		// Parse aggregate expression
+		aggExpr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		agg := PivotAggregate{
+			Function: funcName,
+			Expr:     aggExpr,
+		}
+
+		// Check for optional alias
+		if p.isKeyword("AS") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected alias after AS")
+			}
+			agg.Alias = p.advance().value
+		}
+
+		pivot.Using = append(pivot.Using, agg)
+
+		// Check if there are more aggregates separated by comma
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+
+		// Check if we've reached FOR keyword
+		if p.isKeyword("FOR") {
+			break
+		}
+	}
+
+	// Parse FOR column
+	if err := p.expectKeyword("FOR"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected column name after FOR")
+	}
+	pivot.ForColumn = p.advance().value
+
+	// Parse IN (value1, value2, ...)
+	if err := p.expectKeyword("IN"); err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse pivot values
+	for {
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		pivot.PivotOn = append(pivot.PivotOn, val)
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	// Close PIVOT clause
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return pivot, nil
+}
+
+// parseUnpivot parses an UNPIVOT clause.
+// Syntax: UNPIVOT (value_column FOR name_column IN (col1, col2, ...))
+// Example: UNPIVOT (value FOR month IN (jan, feb, mar))
+func (p *parser) parseUnpivot(source TableRef) (*UnpivotStmt, error) {
+	if err := p.expectKeyword("UNPIVOT"); err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	unpivot := &UnpivotStmt{
+		Source: source,
+	}
+
+	// Parse value column name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected value column name in UNPIVOT")
+	}
+	unpivot.Into = p.advance().value
+
+	// Parse FOR name_column
+	if err := p.expectKeyword("FOR"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected name column after FOR")
+	}
+	unpivot.For = p.advance().value
+
+	// Parse IN (col1, col2, ...)
+	if err := p.expectKeyword("IN"); err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse column names to unpivot
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name in UNPIVOT IN clause")
+		}
+		unpivot.Using = append(unpivot.Using, p.advance().value)
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	// Close UNPIVOT clause
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return unpivot, nil
+}
+
+// parseGroupByList parses a GROUP BY clause, handling special grouping constructs
+// like ROLLUP, CUBE, and GROUPING SETS before falling back to expression parsing.
+func (p *parser) parseGroupByList() ([]Expr, error) {
+	var exprs []Expr
+
+	for {
+		var expr Expr
+		var err error
+
+		// Check for special grouping constructs
+		if p.current().typ == tokenIdent {
+			upperVal := strings.ToUpper(p.current().value)
+			switch upperVal {
+			case "ROLLUP":
+				expr, err = p.parseRollup()
+			case "CUBE":
+				expr, err = p.parseCube()
+			case "GROUPING":
+				// Check if this is "GROUPING SETS" or just a column named "GROUPING"
+				next := p.peek()
+				if next.typ == tokenIdent && strings.ToUpper(next.value) == "SETS" {
+					expr, err = p.parseGroupingSets()
+				} else {
+					expr, err = p.parseExpr()
+				}
+			default:
+				expr, err = p.parseExpr()
+			}
+		} else {
+			expr, err = p.parseExpr()
+		}
+
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	return exprs, nil
+}
+
+// parseRollup parses ROLLUP(expr, expr, ...) and returns a RollupExpr.
+func (p *parser) parseRollup() (*RollupExpr, error) {
+	p.advance() // consume ROLLUP
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	exprs, err := p.parseExprList()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return &RollupExpr{Exprs: exprs}, nil
+}
+
+// parseCube parses CUBE(expr, expr, ...) and returns a CubeExpr.
+func (p *parser) parseCube() (*CubeExpr, error) {
+	p.advance() // consume CUBE
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	exprs, err := p.parseExprList()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return &CubeExpr{Exprs: exprs}, nil
+}
+
+// parseGroupingSets parses GROUPING SETS((...), (...), ...) and returns a GroupingSetExpr.
+func (p *parser) parseGroupingSets() (*GroupingSetExpr, error) {
+	p.advance() // consume GROUPING
+	p.advance() // consume SETS
+
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	var sets [][]Expr
+
+	for {
+		// Each grouping set is either:
+		// - A parenthesized list of expressions: (a, b)
+		// - An empty parenthesized group: ()
+		// - A single column without parens (treated as a single-element set)
+		if p.current().typ == tokenLParen {
+			p.advance() // consume (
+
+			var setExprs []Expr
+			if p.current().typ != tokenRParen {
+				var err error
+				setExprs, err = p.parseExprList()
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+
+			sets = append(sets, setExprs)
+		} else {
+			// Single expression without parens
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			sets = append(sets, []Expr{expr})
+		}
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return &GroupingSetExpr{
+		Type:  GroupingSetSimple,
+		Exprs: sets,
+	}, nil
 }
 
 func (p *parser) parseExpr() (Expr, error) {

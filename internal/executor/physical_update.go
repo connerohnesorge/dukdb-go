@@ -150,6 +150,20 @@ func (e *Executor) executeUpdate(
 		}
 	}
 
+	// Collect after values for RETURNING and WAL
+	allAfterValues := make([][]any, len(updates))
+	for i, update := range updates {
+		// Construct after values by applying updates to before values
+		after := make([]any, len(update.beforeValues))
+		copy(after, update.beforeValues)
+		for colIdx, newVal := range update.columnValues {
+			if colIdx < len(after) {
+				after[colIdx] = newVal
+			}
+		}
+		allAfterValues[i] = after
+	}
+
 	// WAL logging: Log UPDATE entry AFTER successful update
 	// This ensures atomicity - if the update fails, no WAL entry is written
 	if e.wal != nil && len(updates) > 0 {
@@ -169,21 +183,10 @@ func (e *Executor) executeUpdate(
 		// Collect row IDs, before values, and after values for WAL
 		rowIDs := make([]uint64, len(updates))
 		beforeValues := make([][]any, len(updates))
-		afterValues := make([][]any, len(updates))
 
 		for i, update := range updates {
 			rowIDs[i] = uint64(update.rowID)
 			beforeValues[i] = update.beforeValues
-
-			// Construct after values by applying updates to before values
-			after := make([]any, len(update.beforeValues))
-			copy(after, update.beforeValues)
-			for colIdx, newVal := range update.columnValues {
-				if colIdx < len(after) {
-					after[colIdx] = newVal
-				}
-			}
-			afterValues[i] = after
 		}
 
 		entry := wal.NewUpdateEntryWithBeforeValues(
@@ -193,11 +196,16 @@ func (e *Executor) executeUpdate(
 			rowIDs,
 			columnIdxs,
 			beforeValues,
-			afterValues,
+			allAfterValues,
 		)
 		if err := e.wal.WriteEntry(entry); err != nil {
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
+	}
+
+	// Handle RETURNING clause - use the after values
+	if len(plan.Returning) > 0 {
+		return e.evaluateReturning(ctx, plan.Returning, allAfterValues, plan.TableDef)
 	}
 
 	return &ExecutionResult{

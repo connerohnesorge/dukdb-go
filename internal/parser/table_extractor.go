@@ -285,6 +285,96 @@ func (te *TableExtractor) VisitAlterTableStmt(stmt *AlterTableStmt) {
 	te.tables[ref] = struct{}{}
 }
 
+// VisitPivotStmt extracts table references from PIVOT statements.
+func (te *TableExtractor) VisitPivotStmt(stmt *PivotStmt) {
+	// Extract the source table being pivoted
+	te.visitTableRef(&stmt.Source)
+
+	// Visit expressions in PivotOn for any subqueries
+	for _, expr := range stmt.PivotOn {
+		te.visitExpr(expr)
+	}
+
+	// Visit expressions in Using aggregates for any subqueries
+	for _, agg := range stmt.Using {
+		if agg.Expr != nil {
+			te.visitExpr(agg.Expr)
+		}
+	}
+
+	// Visit GroupBy expressions for any subqueries
+	for _, expr := range stmt.GroupBy {
+		te.visitExpr(expr)
+	}
+}
+
+// VisitUnpivotStmt extracts table references from UNPIVOT statements.
+func (te *TableExtractor) VisitUnpivotStmt(stmt *UnpivotStmt) {
+	// Extract the source table being unpivoted
+	te.visitTableRef(&stmt.Source)
+}
+
+// VisitGroupingSetExpr visits GROUPING SETS, ROLLUP, or CUBE expressions.
+// These don't contain table references directly, but their contained expressions might.
+func (te *TableExtractor) VisitGroupingSetExpr(expr *GroupingSetExpr) {
+	// Visit all expressions in each grouping set (Exprs is [][]Expr)
+	for _, exprSet := range expr.Exprs {
+		for _, e := range exprSet {
+			te.visitExpr(e)
+		}
+	}
+}
+
+// VisitMergeStmt extracts table references from MERGE INTO statements.
+func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
+	// Extract the target table (INTO)
+	te.visitTableRef(&stmt.Into)
+
+	// Extract the source table (USING)
+	te.visitTableRef(&stmt.Using)
+
+	// Visit ON condition for any subqueries
+	if stmt.On != nil {
+		te.visitExpr(stmt.On)
+	}
+
+	// Visit WHEN MATCHED action conditions and expressions
+	for _, action := range stmt.WhenMatched {
+		if action.Cond != nil {
+			te.visitExpr(action.Cond)
+		}
+		for _, setClause := range action.Update {
+			if setClause.Value != nil {
+				te.visitExpr(setClause.Value)
+			}
+		}
+	}
+
+	// Visit WHEN NOT MATCHED action conditions and expressions
+	for _, action := range stmt.WhenNotMatched {
+		if action.Cond != nil {
+			te.visitExpr(action.Cond)
+		}
+		for _, setClause := range action.Insert {
+			if setClause.Value != nil {
+				te.visitExpr(setClause.Value)
+			}
+		}
+	}
+
+	// Visit WHEN NOT MATCHED BY SOURCE action conditions and expressions
+	for _, action := range stmt.WhenNotMatchedBySource {
+		if action.Cond != nil {
+			te.visitExpr(action.Cond)
+		}
+		for _, setClause := range action.Update {
+			if setClause.Value != nil {
+				te.visitExpr(setClause.Value)
+			}
+		}
+	}
+}
+
 // visitTableRef extracts table from AST TableRef
 func (te *TableExtractor) visitTableRef(astRef *TableRef) {
 	// Current AST TableRef has: Catalog, Schema, TableName, Alias, Subquery

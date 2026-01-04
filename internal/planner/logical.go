@@ -216,6 +216,13 @@ type LogicalAggregate struct {
 	Aggregates []binder.BoundExpr
 	Aliases    []string
 	columns    []ColumnBinding
+	// GroupingSets contains the expanded grouping sets for GROUPING SETS/ROLLUP/CUBE.
+	// Each inner slice is one grouping set - a subset of GROUP BY columns to aggregate on.
+	// Empty slice means regular GROUP BY (no grouping sets).
+	GroupingSets [][]binder.BoundExpr
+	// GroupingCalls contains the GROUPING() function calls in the SELECT list.
+	// These are evaluated during execution to compute the bitmask.
+	GroupingCalls []*binder.BoundGroupingCall
 }
 
 func (*LogicalAggregate) logicalPlanNode() {}
@@ -316,9 +323,11 @@ func (s *LogicalSort) OutputColumns() []ColumnBinding { return s.Child.OutputCol
 
 // LogicalLimit represents a limit operation (LIMIT/OFFSET).
 type LogicalLimit struct {
-	Child  LogicalPlan
-	Limit  int64
-	Offset int64
+	Child      LogicalPlan
+	Limit      int64            // Static limit value (-1 means use LimitExpr)
+	Offset     int64            // Static offset value (-1 means use OffsetExpr)
+	LimitExpr  binder.BoundExpr // Dynamic limit expression (for LATERAL joins)
+	OffsetExpr binder.BoundExpr // Dynamic offset expression (for LATERAL joins)
 }
 
 func (*LogicalLimit) logicalPlanNode() {}
@@ -338,14 +347,30 @@ func (d *LogicalDistinct) Children() []LogicalPlan { return []LogicalPlan{d.Chil
 
 func (d *LogicalDistinct) OutputColumns() []ColumnBinding { return d.Child.OutputColumns() }
 
+// LogicalDistinctOn represents a DISTINCT ON operation.
+// DISTINCT ON (col1, col2) keeps the first row for each unique combination of specified columns.
+// The query must include an ORDER BY that starts with the DISTINCT ON columns to define "first".
+type LogicalDistinctOn struct {
+	Child      LogicalPlan        // Child plan
+	DistinctOn []binder.BoundExpr // Expressions to distinct on
+	OrderBy    []*binder.BoundOrderBy // The ORDER BY clause (used to determine which row to keep)
+}
+
+func (*LogicalDistinctOn) logicalPlanNode() {}
+
+func (d *LogicalDistinctOn) Children() []LogicalPlan { return []LogicalPlan{d.Child} }
+
+func (d *LogicalDistinctOn) OutputColumns() []ColumnBinding { return d.Child.OutputColumns() }
+
 // LogicalInsert represents an INSERT operation.
 type LogicalInsert struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Columns  []int
-	Values   [][]binder.BoundExpr
-	Source   LogicalPlan // For INSERT ... SELECT
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Columns   []int
+	Values    [][]binder.BoundExpr
+	Source    LogicalPlan                  // For INSERT ... SELECT
+	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
 }
 
 func (*LogicalInsert) logicalPlanNode() {}
@@ -361,11 +386,12 @@ func (*LogicalInsert) OutputColumns() []ColumnBinding { return nil }
 
 // LogicalUpdate represents an UPDATE operation.
 type LogicalUpdate struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Set      []*binder.BoundSetClause
-	Source   LogicalPlan // Scan + Filter
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Set       []*binder.BoundSetClause
+	Source    LogicalPlan                  // Scan + Filter
+	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
 }
 
 func (*LogicalUpdate) logicalPlanNode() {}
@@ -381,10 +407,11 @@ func (*LogicalUpdate) OutputColumns() []ColumnBinding { return nil }
 
 // LogicalDelete represents a DELETE operation.
 type LogicalDelete struct {
-	Schema   string
-	Table    string
-	TableDef *catalog.TableDef
-	Source   LogicalPlan // Scan + Filter
+	Schema    string
+	Table     string
+	TableDef  *catalog.TableDef
+	Source    LogicalPlan                  // Scan + Filter
+	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
 }
 
 func (*LogicalDelete) logicalPlanNode() {}
@@ -636,3 +663,339 @@ func (*LogicalAlterTable) logicalPlanNode() {}
 func (*LogicalAlterTable) Children() []LogicalPlan { return nil }
 
 func (*LogicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalMerge represents a MERGE INTO operation.
+type LogicalMerge struct {
+	Schema                 string
+	TargetTable            string
+	TargetTableDef         *catalog.TableDef
+	TargetAlias            string
+	SourcePlan             LogicalPlan // The source table/subquery plan
+	OnCondition            binder.BoundExpr
+	WhenMatched            []*binder.BoundMergeAction
+	WhenNotMatched         []*binder.BoundMergeAction
+	WhenNotMatchedBySource []*binder.BoundMergeAction
+	Returning              []*binder.BoundSelectColumn
+}
+
+func (*LogicalMerge) logicalPlanNode() {}
+
+func (m *LogicalMerge) Children() []LogicalPlan {
+	if m.SourcePlan != nil {
+		return []LogicalPlan{m.SourcePlan}
+	}
+	return nil
+}
+
+func (*LogicalMerge) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalLateralJoin represents a LATERAL join operation.
+// LATERAL joins allow the right side (subquery) to reference columns from the left side.
+// The right side is re-evaluated for each row of the left side with the correlated values.
+type LogicalLateralJoin struct {
+	Left      LogicalPlan      // Outer table
+	Right     LogicalPlan      // Correlated subquery (re-evaluated per left row)
+	JoinType  JoinType         // Join type (CROSS, LEFT, etc.)
+	Condition binder.BoundExpr // Optional join condition
+	columns   []ColumnBinding
+}
+
+func (*LogicalLateralJoin) logicalPlanNode() {}
+
+func (j *LogicalLateralJoin) Children() []LogicalPlan { return []LogicalPlan{j.Left, j.Right} }
+
+func (j *LogicalLateralJoin) OutputColumns() []ColumnBinding {
+	if j.columns != nil {
+		return j.columns
+	}
+
+	leftCols := j.Left.OutputColumns()
+	rightCols := j.Right.OutputColumns()
+	j.columns = make(
+		[]ColumnBinding,
+		0,
+		len(leftCols)+len(rightCols),
+	)
+
+	for i, col := range leftCols {
+		j.columns = append(
+			j.columns,
+			ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				TableIdx:  0,
+				ColumnIdx: i,
+			},
+		)
+	}
+
+	for i, col := range rightCols {
+		j.columns = append(
+			j.columns,
+			ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				TableIdx:  1,
+				ColumnIdx: i,
+			},
+		)
+	}
+
+	return j.columns
+}
+
+// ---------- Sample Logical Plan Node ----------
+
+// LogicalSample represents a SAMPLE operation that samples a subset of rows.
+// Supports BERNOULLI, SYSTEM, and RESERVOIR sampling methods.
+type LogicalSample struct {
+	Child  LogicalPlan
+	Sample *binder.BoundSampleOptions
+}
+
+func (*LogicalSample) logicalPlanNode() {}
+
+func (s *LogicalSample) Children() []LogicalPlan { return []LogicalPlan{s.Child} }
+
+func (s *LogicalSample) OutputColumns() []ColumnBinding { return s.Child.OutputColumns() }
+
+// ---------- CTE Logical Plan Nodes ----------
+
+// LogicalRecursiveCTE represents a recursive Common Table Expression in the logical plan.
+// A recursive CTE has a base case (anchor) and a recursive case that references the CTE itself.
+// The execution semantics are:
+// 1. Execute the base case to produce initial rows (work table)
+// 2. Execute the recursive case using the work table as input
+// 3. Append new results to the output and replace the work table
+// 4. Repeat until no new rows are produced or max recursion is reached
+type LogicalRecursiveCTE struct {
+	// CTEName is the name of the CTE for reference
+	CTEName string
+	// BasePlan is the plan for the anchor (non-recursive) part
+	BasePlan LogicalPlan
+	// RecursivePlan is the plan for the recursive part (references the CTE)
+	RecursivePlan LogicalPlan
+	// Columns contains the output column information from the CTE
+	Columns []ColumnBinding
+}
+
+func (*LogicalRecursiveCTE) logicalPlanNode() {}
+
+func (r *LogicalRecursiveCTE) Children() []LogicalPlan {
+	return []LogicalPlan{r.BasePlan, r.RecursivePlan}
+}
+
+func (r *LogicalRecursiveCTE) OutputColumns() []ColumnBinding {
+	return r.Columns
+}
+
+// LogicalCTEScan represents a scan of a CTE in the logical plan.
+// This is used when the main query references a CTE.
+type LogicalCTEScan struct {
+	// CTEName is the name of the CTE being referenced
+	CTEName string
+	// Alias is the alias for this reference
+	Alias string
+	// Columns contains the column information from the CTE
+	Columns []ColumnBinding
+	// CTEPlan is the plan for the CTE (may be nil for recursive self-reference)
+	CTEPlan LogicalPlan
+	// IsRecursive indicates if this is a recursive CTE
+	IsRecursive bool
+}
+
+func (*LogicalCTEScan) logicalPlanNode() {}
+
+func (c *LogicalCTEScan) Children() []LogicalPlan {
+	if c.CTEPlan != nil {
+		return []LogicalPlan{c.CTEPlan}
+	}
+	return nil
+}
+
+func (c *LogicalCTEScan) OutputColumns() []ColumnBinding {
+	return c.Columns
+}
+
+// ---------- PIVOT/UNPIVOT Logical Plan Nodes ----------
+
+// LogicalPivot represents a PIVOT operation in the logical plan.
+// PIVOT transforms rows into columns using conditional aggregation.
+type LogicalPivot struct {
+	// Source is the source plan to pivot.
+	Source LogicalPlan
+	// ForColumn is the bound column reference whose values determine which pivot column to use.
+	// In "FOR quarter IN ('Q1', 'Q2', ...)", this is the bound reference to "quarter".
+	ForColumn *binder.BoundColumnRef
+	// InValues contains the literal values to pivot on (become column names).
+	InValues []any
+	// Aggregates contains the bound aggregate functions to apply.
+	Aggregates []*binder.BoundPivotAggregate
+	// GroupBy contains the bound GROUP BY expressions.
+	GroupBy []binder.BoundExpr
+	// columns cache for OutputColumns
+	columns []ColumnBinding
+}
+
+func (*LogicalPivot) logicalPlanNode() {}
+
+func (p *LogicalPivot) Children() []LogicalPlan { return []LogicalPlan{p.Source} }
+
+func (p *LogicalPivot) OutputColumns() []ColumnBinding {
+	if p.columns != nil {
+		return p.columns
+	}
+
+	// Output columns are: GROUP BY columns + (aggregate_for_each_pivot_value)
+	var cols []ColumnBinding
+
+	// Add GROUP BY columns
+	for i, expr := range p.GroupBy {
+		alias := ""
+		if colRef, ok := expr.(*binder.BoundColumnRef); ok {
+			alias = colRef.Column
+		}
+		cols = append(cols, ColumnBinding{
+			Column:    alias,
+			Type:      expr.ResultType(),
+			ColumnIdx: i,
+		})
+	}
+
+	// Add one column per (aggregate, pivot_value) combination
+	aggIdx := len(p.GroupBy)
+	for _, agg := range p.Aggregates {
+		for _, val := range p.InValues {
+			colName := formatPivotColumnName(agg.Function, agg.Alias, val)
+			cols = append(cols, ColumnBinding{
+				Column:    colName,
+				Type:      agg.Expr.ResultType(),
+				ColumnIdx: aggIdx,
+			})
+			aggIdx++
+		}
+	}
+
+	p.columns = cols
+	return p.columns
+}
+
+// formatPivotColumnName creates a column name for a pivot result column.
+func formatPivotColumnName(funcName, alias string, pivotValue any) string {
+	valStr := ""
+	switch v := pivotValue.(type) {
+	case string:
+		valStr = v
+	default:
+		valStr = formatAnyValue(v)
+	}
+	if alias != "" {
+		return valStr + "_" + alias
+	}
+	return valStr
+}
+
+// formatAnyValue formats any value as a string for column naming.
+func formatAnyValue(v any) string {
+	if v == nil {
+		return "null"
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case int64:
+		return formatInt64(val)
+	case float64:
+		return formatFloat64(val)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	default:
+		return "val"
+	}
+}
+
+// LogicalUnpivot represents an UNPIVOT operation in the logical plan.
+// UNPIVOT transforms columns into rows (the inverse of PIVOT).
+type LogicalUnpivot struct {
+	// Source is the source plan to unpivot.
+	Source LogicalPlan
+	// ValueColumn is the name of the column that will contain the unpivoted values.
+	ValueColumn string
+	// NameColumn is the name of the column that will contain the original column names.
+	NameColumn string
+	// UnpivotColumns contains the column names to unpivot.
+	UnpivotColumns []string
+	// columns cache for OutputColumns
+	columns []ColumnBinding
+}
+
+func (*LogicalUnpivot) logicalPlanNode() {}
+
+func (u *LogicalUnpivot) Children() []LogicalPlan { return []LogicalPlan{u.Source} }
+
+func (u *LogicalUnpivot) OutputColumns() []ColumnBinding {
+	if u.columns != nil {
+		return u.columns
+	}
+
+	// Output columns are: non-unpivoted columns + name column + value column
+	sourceCols := u.Source.OutputColumns()
+
+	var cols []ColumnBinding
+	idx := 0
+
+	// Add non-unpivoted columns from source
+	for _, col := range sourceCols {
+		isUnpivot := false
+		for _, unpivotCol := range u.UnpivotColumns {
+			if col.Column == unpivotCol {
+				isUnpivot = true
+				break
+			}
+		}
+		if !isUnpivot {
+			cols = append(cols, ColumnBinding{
+				Table:     col.Table,
+				Column:    col.Column,
+				Type:      col.Type,
+				ColumnIdx: idx,
+			})
+			idx++
+		}
+	}
+
+	// Add name column (VARCHAR)
+	cols = append(cols, ColumnBinding{
+		Column:    u.NameColumn,
+		Type:      dukdb.TYPE_VARCHAR,
+		ColumnIdx: idx,
+	})
+	idx++
+
+	// Add value column (determine type from first unpivot column)
+	valueType := dukdb.TYPE_ANY
+	for _, col := range sourceCols {
+		for _, unpivotCol := range u.UnpivotColumns {
+			if col.Column == unpivotCol {
+				valueType = col.Type
+				break
+			}
+		}
+		if valueType != dukdb.TYPE_ANY {
+			break
+		}
+	}
+	cols = append(cols, ColumnBinding{
+		Column:    u.ValueColumn,
+		Type:      valueType,
+		ColumnIdx: idx,
+	})
+
+	u.columns = cols
+	return u.columns
+}

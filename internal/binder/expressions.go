@@ -233,6 +233,7 @@ type BoundWindowExpr struct {
 	Filter       BoundExpr          // Bound FILTER expression (or nil)
 	Distinct     bool               // DISTINCT modifier for aggregates
 	ResultIndex  int                // Column index in output
+	Alias        string             // Column alias from SELECT (e.g., "rn" in "ROW_NUMBER() OVER (...) as rn")
 }
 
 func (*BoundWindowExpr) boundExprNode() {}
@@ -250,3 +251,58 @@ type BoundSequenceCall struct {
 func (*BoundSequenceCall) boundExprNode() {}
 
 func (*BoundSequenceCall) ResultType() dukdb.Type { return dukdb.TYPE_BIGINT }
+
+// ---------- Grouping Set Types ----------
+
+// BoundGroupingSetType represents the type of grouping set operation.
+type BoundGroupingSetType int
+
+const (
+	// BoundGroupingSetSimple represents explicit GROUPING SETS ((...), (...), ...).
+	BoundGroupingSetSimple BoundGroupingSetType = iota
+	// BoundGroupingSetRollup represents ROLLUP(...) which has been expanded.
+	BoundGroupingSetRollup
+	// BoundGroupingSetCube represents CUBE(...) which has been expanded.
+	BoundGroupingSetCube
+)
+
+// BoundGroupingSetExpr represents a bound GROUPING SETS, ROLLUP, or CUBE expression.
+// After binding, ROLLUP and CUBE are expanded into their full grouping sets.
+//
+// ROLLUP(a, b, c) expands to: (a, b, c), (a, b), (a), ()
+// CUBE(a, b) expands to: (a, b), (a), (b), ()
+type BoundGroupingSetExpr struct {
+	// Type indicates whether this was originally GROUPING SETS, ROLLUP, or CUBE.
+	Type BoundGroupingSetType
+	// Sets contains the expanded grouping sets. Each inner slice is a set of
+	// bound expressions representing one grouping level.
+	Sets [][]BoundExpr
+}
+
+func (*BoundGroupingSetExpr) boundExprNode() {}
+
+// ResultType returns TYPE_ANY since grouping sets are not evaluated as expressions
+// but rather control aggregation behavior.
+func (*BoundGroupingSetExpr) ResultType() dukdb.Type { return dukdb.TYPE_ANY }
+
+// BoundGroupingCall represents a bound GROUPING(col1, col2, ...) function call.
+// GROUPING() returns a bitmask indicating which of its arguments are aggregated
+// (null) in the current grouping set.
+//
+// For each argument:
+//   - If the column is aggregated (null in this grouping set), the bit is 1
+//   - If the column is grouped (not null), the bit is 0
+//
+// Bits are ordered with the first argument in the most significant position.
+//
+// Example: GROUPING(a, b) with grouping set (a) returns 1 (binary: 01)
+// because 'a' is grouped (0) and 'b' is aggregated (1).
+type BoundGroupingCall struct {
+	// Args contains the column references to check.
+	Args []*BoundColumnRef
+}
+
+func (*BoundGroupingCall) boundExprNode() {}
+
+// ResultType returns BIGINT as the bitmask result.
+func (*BoundGroupingCall) ResultType() dukdb.Type { return dukdb.TYPE_BIGINT }
