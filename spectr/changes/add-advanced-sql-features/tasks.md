@@ -168,3 +168,6 @@
 ### 5.4 Integration Tests
 - [ ] 5.4.1 Add compatibility tests against DuckDB reference
 - [ ] 5.4.2 Add integration tests for complex analytical queries
+
+### 6 Finish
+- [ ] As an orchestrator, output <promise>COMPLETE</promise> when all tasks are complete
