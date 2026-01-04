@@ -1852,3 +1852,428 @@ func TestParseQualifiedColumns(t *testing.T) {
 		})
 	}
 }
+
+// ---------- Excel Table Function Parser Tests ----------
+
+// TestParseExcelTableFunctions tests basic parsing success for read_excel and read_excel_auto
+// with various options
+func TestParseExcelTableFunctions(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+	}{
+		{
+			name:    "basic read_excel",
+			sql:     "SELECT * FROM read_excel('file.xlsx')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel_auto basic",
+			sql:     "SELECT * FROM read_excel_auto('file.xlsx')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with sheet name",
+			sql:     "SELECT * FROM read_excel('file.xlsx', sheet='Sales')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with sheet number",
+			sql:     "SELECT * FROM read_excel('file.xlsx', sheet=1)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with range",
+			sql:     "SELECT * FROM read_excel('file.xlsx', range='A1:Z100')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with boolean header option",
+			sql:     "SELECT * FROM read_excel('file.xlsx', header=true)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with header_row option",
+			sql:     "SELECT * FROM read_excel('file.xlsx', header_row=0)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with skip_rows option",
+			sql:     "SELECT * FROM read_excel('file.xlsx', skip_rows=5)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with multiple options combined",
+			sql:     "SELECT * FROM read_excel('file.xlsx', sheet='Sheet1', range='A1:C10', header=true, skip_rows=2)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel_auto with sheet and range",
+			sql:     "SELECT * FROM read_excel_auto('data.xlsx', sheet='Sheet1', range='A1:C10')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with unknown option - should parse without error",
+			sql:     "SELECT * FROM read_excel('file.xlsx', unknown_opt='val')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel_auto with header true",
+			sql:     "SELECT * FROM read_excel_auto('data.xlsx', sheet='Sheet1', range='A1:C10', header=true)",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with columns selection",
+			sql:     "SELECT col1, col2 FROM read_excel('file.xlsx')",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with WHERE clause",
+			sql:     "SELECT * FROM read_excel('file.xlsx') WHERE amount > 100",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with ORDER BY",
+			sql:     "SELECT * FROM read_excel('file.xlsx') ORDER BY date DESC",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with LIMIT",
+			sql:     "SELECT * FROM read_excel('file.xlsx') LIMIT 10",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel with alias",
+			sql:     "SELECT e.* FROM read_excel('file.xlsx') AS e",
+			wantErr: false,
+		},
+		{
+			name:    "read_excel in subquery",
+			sql:     "SELECT * FROM (SELECT * FROM read_excel('file.xlsx')) sub",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && stmt == nil {
+				t.Error("Parse() returned nil statement")
+			}
+		})
+	}
+}
+
+// TestParseExcelTableFunctionAST tests that the AST nodes are correctly populated
+// with function name, positional args, and named args
+func TestParseExcelTableFunctionAST(t *testing.T) {
+	t.Run("basic read_excel AST", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel('data.xlsx')"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		if selectStmt.From == nil || len(selectStmt.From.Tables) != 1 {
+			t.Fatal("Expected 1 table in FROM clause")
+		}
+
+		tableRef := selectStmt.From.Tables[0]
+		if tableRef.TableFunction == nil {
+			t.Fatal("Expected TableFunction in TableRef")
+		}
+
+		tableFunc := tableRef.TableFunction
+		if tableFunc.Name != "read_excel" {
+			t.Errorf("Expected function name 'read_excel', got '%s'", tableFunc.Name)
+		}
+
+		if len(tableFunc.Args) != 1 {
+			t.Fatalf("Expected 1 positional arg, got %d", len(tableFunc.Args))
+		}
+
+		arg, ok := tableFunc.Args[0].(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal arg, got %T", tableFunc.Args[0])
+		}
+		if arg.Value != "data.xlsx" {
+			t.Errorf("Expected arg value 'data.xlsx', got '%v'", arg.Value)
+		}
+	})
+
+	t.Run("read_excel_auto with options AST", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel_auto('data.xlsx', sheet='Sheet1', range='A1:C10')"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableFunc := selectStmt.From.Tables[0].TableFunction
+
+		if tableFunc.Name != "read_excel_auto" {
+			t.Errorf("Expected function name 'read_excel_auto', got '%s'", tableFunc.Name)
+		}
+
+		// Check file path arg
+		if len(tableFunc.Args) != 1 {
+			t.Fatalf("Expected 1 positional arg, got %d", len(tableFunc.Args))
+		}
+
+		// Check named args
+		if tableFunc.NamedArgs == nil {
+			t.Fatal("Expected NamedArgs to be initialized")
+		}
+
+		sheetArg, exists := tableFunc.NamedArgs["sheet"]
+		if !exists {
+			t.Fatal("Expected 'sheet' in NamedArgs")
+		}
+		sheetLit, ok := sheetArg.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for sheet, got %T", sheetArg)
+		}
+		if sheetLit.Value != "Sheet1" {
+			t.Errorf("Expected sheet='Sheet1', got '%v'", sheetLit.Value)
+		}
+
+		rangeArg, exists := tableFunc.NamedArgs["range"]
+		if !exists {
+			t.Fatal("Expected 'range' in NamedArgs")
+		}
+		rangeLit, ok := rangeArg.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for range, got %T", rangeArg)
+		}
+		if rangeLit.Value != "A1:C10" {
+			t.Errorf("Expected range='A1:C10', got '%v'", rangeLit.Value)
+		}
+	})
+
+	t.Run("read_excel with sheet/range/header AST", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel_auto('data.xlsx', sheet='Sheet1', range='A1:C10', header=true)"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableFunc := selectStmt.From.Tables[0].TableFunction
+
+		// Check sheet
+		sheetArg := tableFunc.NamedArgs["sheet"]
+		sheetLit := sheetArg.(*Literal)
+		if sheetLit.Value != "Sheet1" {
+			t.Errorf("Expected sheet='Sheet1', got '%v'", sheetLit.Value)
+		}
+
+		// Check range
+		rangeArg := tableFunc.NamedArgs["range"]
+		rangeLit := rangeArg.(*Literal)
+		if rangeLit.Value != "A1:C10" {
+			t.Errorf("Expected range='A1:C10', got '%v'", rangeLit.Value)
+		}
+
+		// Check header
+		headerArg := tableFunc.NamedArgs["header"]
+		headerLit := headerArg.(*Literal)
+		if headerLit.Value != true {
+			t.Errorf("Expected header=true, got '%v'", headerLit.Value)
+		}
+	})
+
+	t.Run("unknown Excel option stored in NamedArgs", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel('file.xlsx', unknown_opt='val')"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableFunc := selectStmt.From.Tables[0].TableFunction
+
+		unknownArg, exists := tableFunc.NamedArgs["unknown_opt"]
+		if !exists {
+			t.Fatal("Expected 'unknown_opt' in NamedArgs - unknown options should be stored without parse error")
+		}
+		unknownLit, ok := unknownArg.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for unknown_opt, got %T", unknownArg)
+		}
+		if unknownLit.Value != "val" {
+			t.Errorf("Expected unknown_opt='val', got '%v'", unknownLit.Value)
+		}
+	})
+
+	t.Run("read_excel with sheet number", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel('file.xlsx', sheet=1)"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableFunc := selectStmt.From.Tables[0].TableFunction
+
+		sheetArg := tableFunc.NamedArgs["sheet"]
+		sheetLit := sheetArg.(*Literal)
+		// Sheet number should be parsed as integer
+		if sheetLit.Value != int64(1) {
+			t.Errorf("Expected sheet=1 (int64), got '%v' (%T)", sheetLit.Value, sheetLit.Value)
+		}
+	})
+
+	t.Run("read_excel with header_row and skip_rows", func(t *testing.T) {
+		sql := "SELECT * FROM read_excel('file.xlsx', header_row=0, skip_rows=5)"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableFunc := selectStmt.From.Tables[0].TableFunction
+
+		headerRowArg := tableFunc.NamedArgs["header_row"]
+		headerRowLit := headerRowArg.(*Literal)
+		if headerRowLit.Value != int64(0) {
+			t.Errorf("Expected header_row=0, got '%v'", headerRowLit.Value)
+		}
+
+		skipRowsArg := tableFunc.NamedArgs["skip_rows"]
+		skipRowsLit := skipRowsArg.(*Literal)
+		if skipRowsLit.Value != int64(5) {
+			t.Errorf("Expected skip_rows=5, got '%v'", skipRowsLit.Value)
+		}
+	})
+}
+
+// TestTableExtractorExcelFunctions tests that TableExtractor correctly extracts Excel table function
+// names as table references (they appear in table list as the function name is stored in TableName)
+func TestTableExtractorExcelFunctions(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected []string
+	}{
+		{
+			name:     "read_excel extracted as table ref",
+			sql:      "SELECT * FROM read_excel('file.xlsx')",
+			expected: []string{"read_excel"},
+		},
+		{
+			name:     "read_excel_auto extracted as table ref",
+			sql:      "SELECT * FROM read_excel_auto('data.xlsx')",
+			expected: []string{"read_excel_auto"},
+		},
+		{
+			name:     "read_excel with options extracted as table ref",
+			sql:      "SELECT * FROM read_excel('file.xlsx', sheet='Sheet1', header=true)",
+			expected: []string{"read_excel"},
+		},
+		{
+			name:     "mixed: real table with Excel function subquery",
+			sql:      "SELECT * FROM users WHERE id IN (SELECT id FROM read_excel('ids.xlsx'))",
+			expected: []string{"read_excel", "users"},
+		},
+		{
+			name:     "join with Excel function - both tables extracted",
+			sql:      "SELECT u.name FROM users u JOIN read_excel('data.xlsx') e ON u.id = e.id",
+			expected: []string{"read_excel", "users"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			extractor := NewTableExtractor(false)
+			selectStmt.Accept(extractor)
+			tables := extractor.GetTables()
+
+			if len(tables) != len(tt.expected) {
+				t.Errorf("Got %d tables %v, expected %d tables %v",
+					len(tables), tables, len(tt.expected), tt.expected)
+				return
+			}
+
+			for i, expected := range tt.expected {
+				if tables[i] != expected {
+					t.Errorf("Table %d: got %s, expected %s", i, tables[i], expected)
+				}
+			}
+		})
+	}
+}
+
+// TestCountParametersExcelTableFunction tests parameter counting in Excel table function queries
+// Note: Currently the parameter counter does not traverse FROM clause table functions,
+// so parameters inside read_excel() args are not counted. Only WHERE clause params are counted.
+func TestCountParametersExcelTableFunction(t *testing.T) {
+	tests := []struct {
+		name  string
+		sql   string
+		count int
+	}{
+		{
+			name:  "no parameters in read_excel",
+			sql:   "SELECT * FROM read_excel('file.xlsx')",
+			count: 0,
+		},
+		{
+			name:  "parameter in WHERE clause with read_excel",
+			sql:   "SELECT * FROM read_excel('file.xlsx') WHERE amount > $1",
+			count: 1,
+		},
+		{
+			name:  "multiple parameters in WHERE with read_excel",
+			sql:   "SELECT * FROM read_excel('file.xlsx') WHERE col1 = $1 AND col2 = $2",
+			count: 2,
+		},
+		{
+			name:  "dollar parameters in WHERE clause",
+			sql:   "SELECT * FROM read_excel('file.xlsx') WHERE id = $1 AND status = $2 AND amount > $3",
+			count: 3,
+		},
+		{
+			name:  "question mark parameters in WHERE clause",
+			sql:   "SELECT * FROM read_excel('file.xlsx') WHERE value > ?",
+			count: 1,
+		},
+		{
+			name:  "mixed query with read_excel and WHERE params",
+			sql:   "SELECT col1, col2 FROM read_excel('file.xlsx', sheet='Sheet1') WHERE date > $1 ORDER BY col1 LIMIT $2",
+			count: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			count := CountParameters(stmt)
+			if count != tt.count {
+				t.Errorf("CountParameters() = %v, want %v", count, tt.count)
+			}
+		})
+	}
+}

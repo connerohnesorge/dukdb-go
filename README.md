@@ -178,6 +178,7 @@ INSERT INTO transforms VALUES ('(x, y) -> x * y');
 - CSV: `read_csv()`, `read_csv_auto()`
 - JSON: `read_json()`, `read_json_auto()`, `read_ndjson()`
 - Parquet: `read_parquet()` with column projection
+- Excel: `read_excel()`, `read_excel_auto()` (parser support)
 
 ## Cloud Storage
 
