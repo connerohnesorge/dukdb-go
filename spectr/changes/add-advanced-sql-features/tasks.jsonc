@@ -643,6 +643,12 @@
       "section": "Testing",
       "description": "5.4.2 Add integration tests for complex analytical queries",
       "status": "completed"
+    },
+    {
+      "id": "6.1",
+      "section": "Binder Updates",
+      "description": "Update binder to validate and infer return types for all new aggregate functions",
+      "status": "completed"
     }
   ]
 }

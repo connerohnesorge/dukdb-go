@@ -555,6 +555,404 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeStddevSamp(values)
 
+	// Approximate aggregate functions
+	case "APPROX_COUNT_DISTINCT":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeApproxCountDistinct(values)
+
+	case "APPROX_QUANTILE":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Evaluate the quantile position (second argument)
+		qVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+		if err != nil {
+			return nil, err
+		}
+		q := toFloat64Value(qVal)
+		return computeApproxQuantile(values, q)
+
+	case "APPROX_MEDIAN":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeApproxMedian(values)
+
+	// String aggregate functions
+	case "STRING_AGG":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Get delimiter from second argument, default to comma
+		delimiter := ","
+		if len(fn.Args) >= 2 {
+			delimVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+			if err != nil {
+				return nil, err
+			}
+			if delimVal != nil {
+				delimiter = toString(delimVal)
+			}
+		}
+		return computeStringAgg(values, delimiter)
+
+	case "GROUP_CONCAT":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Get delimiter from second argument, default to comma
+		delimiter := ","
+		if len(fn.Args) >= 2 {
+			delimVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], nil)
+			if err != nil {
+				return nil, err
+			}
+			if delimVal != nil {
+				delimiter = toString(delimVal)
+			}
+		}
+		return computeGroupConcat(values, delimiter)
+
+	case "LIST", "ARRAY_AGG":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		// Handle DISTINCT modifier
+		if fn.Distinct {
+			return computeListDistinct(values)
+		}
+		return computeList(values)
+
+	case "LIST_DISTINCT":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeListDistinct(values)
+
+	// Time series aggregate functions
+	case "COUNT_IF":
+		if len(fn.Args) == 0 {
+			return int64(0), nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCountIf(values)
+
+	case "FIRST":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeFirst(values)
+
+	case "LAST":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeLast(values)
+
+	case "ARGMIN", "MIN_BY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		// ARGMIN/MIN_BY takes two arguments: arg (value to return) and val (value to compare)
+		argValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		valValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeArgmin(argValues, valValues)
+
+	case "ARGMAX", "MAX_BY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		// ARGMAX/MAX_BY takes two arguments: arg (value to return) and val (value to compare)
+		argValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		valValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeArgmax(argValues, valValues)
+
+	// Regression and correlation aggregate functions
+	// Note: These functions take (Y, X) where Y is dependent and X is independent
+	case "COVAR_POP":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCovarPop(yValues, xValues)
+
+	case "COVAR_SAMP":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCovarSamp(yValues, xValues)
+
+	case "CORR":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCorr(yValues, xValues)
+
+	case "REGR_SLOPE":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSlope(yValues, xValues)
+
+	case "REGR_INTERCEPT":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrIntercept(yValues, xValues)
+
+	case "REGR_R2":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrR2(yValues, xValues)
+
+	case "REGR_COUNT":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrCount(yValues, xValues)
+
+	case "REGR_AVGX":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrAvgX(yValues, xValues)
+
+	case "REGR_AVGY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrAvgY(yValues, xValues)
+
+	case "REGR_SXX":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSXX(yValues, xValues)
+
+	case "REGR_SYY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSYY(yValues, xValues)
+
+	case "REGR_SXY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSXY(yValues, xValues)
+
+	// Boolean aggregate functions
+	case "BOOL_AND":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBoolAnd(values)
+
+	case "BOOL_OR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBoolOr(values)
+
+	case "EVERY":
+		// EVERY is an alias for BOOL_AND
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBoolAnd(values)
+
+	// Bitwise aggregate functions
+	case "BIT_AND":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitAnd(values)
+
+	case "BIT_OR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitOr(values)
+
+	case "BIT_XOR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitXor(values)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

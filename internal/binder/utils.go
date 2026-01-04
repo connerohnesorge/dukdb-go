@@ -39,11 +39,73 @@ var windowFunctions = map[string]windowFunctionInfo{
 // aggregateFunctions that can be used as window functions.
 // These are marked as WindowFunctionAggregate when used with OVER.
 var aggregateWindowFunctions = map[string]bool{
+	// Basic aggregates
 	"COUNT": true,
 	"SUM":   true,
 	"AVG":   true,
 	"MIN":   true,
 	"MAX":   true,
+
+	// Statistical aggregates
+	"MEDIAN":          true,
+	"QUANTILE":        true,
+	"PERCENTILE_CONT": true,
+	"PERCENTILE_DISC": true,
+	"MODE":            true,
+	"ENTROPY":         true,
+	"SKEWNESS":        true,
+	"KURTOSIS":        true,
+	"VAR_POP":         true,
+	"VAR_SAMP":        true,
+	"VARIANCE":        true,
+	"STDDEV_POP":      true,
+	"STDDEV_SAMP":     true,
+	"STDDEV":          true,
+
+	// Approximate aggregates
+	"APPROX_COUNT_DISTINCT": true,
+	"APPROX_QUANTILE":       true,
+	"APPROX_MEDIAN":         true,
+
+	// String/List aggregates
+	"STRING_AGG":    true,
+	"GROUP_CONCAT":  true,
+	"LIST":          true,
+	"ARRAY_AGG":     true,
+	"LIST_DISTINCT": true,
+
+	// Time series aggregates
+	"COUNT_IF": true,
+	"FIRST":    true,
+	"LAST":     true,
+	"ARGMIN":   true,
+	"ARGMAX":   true,
+	"MIN_BY":   true,
+	"MAX_BY":   true,
+
+	// Regression aggregates
+	"COVAR_POP":      true,
+	"COVAR_SAMP":     true,
+	"CORR":           true,
+	"REGR_SLOPE":     true,
+	"REGR_INTERCEPT": true,
+	"REGR_R2":        true,
+	"REGR_COUNT":     true,
+	"REGR_AVGX":      true,
+	"REGR_AVGY":      true,
+	"REGR_SXX":       true,
+	"REGR_SYY":       true,
+	"REGR_SXY":       true,
+
+	// Boolean aggregates
+	"BOOL_AND": true,
+	"BOOL_OR":  true,
+	"EVERY":    true,
+
+	// Bitwise aggregates
+	"BIT_AND": true,
+	"BIT_OR":  true,
+	"BIT_XOR": true,
 }
 
 // IsWindowFunction returns true if the function name is a window function.
@@ -290,6 +352,72 @@ func inferFunctionResultType(
 	case "TOTAL_YEARS", "TOTAL_MONTHS", "TOTAL_DAYS",
 		"TOTAL_HOURS", "TOTAL_MINUTES", "TOTAL_SECONDS":
 		return dukdb.TYPE_DOUBLE
+
+	// Statistical Aggregates (return DOUBLE)
+	case "MEDIAN", "QUANTILE", "PERCENTILE_CONT", "PERCENTILE_DISC":
+		return dukdb.TYPE_DOUBLE
+	case "ENTROPY", "SKEWNESS", "KURTOSIS":
+		return dukdb.TYPE_DOUBLE
+	case "VAR_POP", "VAR_SAMP", "VARIANCE":
+		return dukdb.TYPE_DOUBLE
+	case "STDDEV_POP", "STDDEV_SAMP", "STDDEV":
+		return dukdb.TYPE_DOUBLE
+	case "MODE":
+		// MODE returns same type as input, or DOUBLE if unknown
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_DOUBLE
+
+	// Approximate Aggregates
+	case "APPROX_COUNT_DISTINCT":
+		return dukdb.TYPE_BIGINT
+	case "APPROX_QUANTILE", "APPROX_MEDIAN":
+		return dukdb.TYPE_DOUBLE
+
+	// String/List Aggregates
+	case "STRING_AGG", "GROUP_CONCAT":
+		return dukdb.TYPE_VARCHAR
+	case "LIST", "ARRAY_AGG", "LIST_DISTINCT":
+		// LIST types return TYPE_ANY for now (no LIST type constant available)
+		return dukdb.TYPE_ANY
+
+	// Time Series Aggregates
+	case "COUNT_IF":
+		return dukdb.TYPE_BIGINT
+	case "FIRST", "LAST":
+		// FIRST/LAST return same type as input
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_ANY
+	case "ARGMIN", "ARGMAX", "MIN_BY", "MAX_BY":
+		// These return the type of the first argument (the value being returned)
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_ANY
+
+	// Regression Aggregates (return DOUBLE)
+	case "COVAR_POP", "COVAR_SAMP":
+		return dukdb.TYPE_DOUBLE
+	case "CORR":
+		return dukdb.TYPE_DOUBLE
+	case "REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2":
+		return dukdb.TYPE_DOUBLE
+	case "REGR_AVGX", "REGR_AVGY", "REGR_SXX", "REGR_SYY", "REGR_SXY":
+		return dukdb.TYPE_DOUBLE
+	case "REGR_COUNT":
+		return dukdb.TYPE_BIGINT
+
+	// Boolean Aggregates
+	case "BOOL_AND", "BOOL_OR", "EVERY":
+		return dukdb.TYPE_BOOLEAN
+
+	// Bitwise Aggregates
+	case "BIT_AND", "BIT_OR", "BIT_XOR":
+		return dukdb.TYPE_BIGINT
+
 	default:
 		return dukdb.TYPE_ANY
 	}
@@ -432,6 +560,81 @@ func getFunctionArgTypes(
 		"TOTAL_HOURS", "TOTAL_MINUTES", "TOTAL_SECONDS":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_INTERVAL}
+		}
+
+	// Statistical aggregate functions - take numeric values
+	case "MEDIAN", "MODE", "ENTROPY", "SKEWNESS", "KURTOSIS",
+		"VAR_POP", "VAR_SAMP", "VARIANCE",
+		"STDDEV_POP", "STDDEV_SAMP", "STDDEV":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "QUANTILE", "PERCENTILE_CONT", "PERCENTILE_DISC",
+		"APPROX_QUANTILE":
+		// Takes (value, quantile)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE}
+		}
+	case "APPROX_MEDIAN":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "APPROX_COUNT_DISTINCT":
+		// Takes any type
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_ANY}
+		}
+
+	// String/List aggregates
+	case "STRING_AGG", "GROUP_CONCAT":
+		// Takes (value, [delimiter])
+		if argCount >= 1 {
+			types := []dukdb.Type{dukdb.TYPE_VARCHAR}
+			if argCount >= 2 {
+				types = append(types, dukdb.TYPE_VARCHAR)
+			}
+			return types
+		}
+	case "LIST", "ARRAY_AGG", "LIST_DISTINCT":
+		// Takes any type
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_ANY}
+		}
+
+	// Time series aggregates
+	case "COUNT_IF":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_BOOLEAN}
+		}
+	case "FIRST", "LAST":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_ANY}
+		}
+	case "ARGMIN", "ARGMAX", "MIN_BY", "MAX_BY":
+		// Takes (return_value, sort_value)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_ANY, dukdb.TYPE_ANY}
+		}
+
+	// Regression aggregates - take two numeric values
+	case "COVAR_POP", "COVAR_SAMP", "CORR",
+		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
+		"REGR_COUNT", "REGR_AVGX", "REGR_AVGY",
+		"REGR_SXX", "REGR_SYY", "REGR_SXY":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE}
+		}
+
+	// Boolean aggregates
+	case "BOOL_AND", "BOOL_OR", "EVERY":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_BOOLEAN}
+		}
+
+	// Bitwise aggregates
+	case "BIT_AND", "BIT_OR", "BIT_XOR":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_BIGINT}
 		}
 	}
 
