@@ -268,12 +268,19 @@ func (t *Table) AppendChunk(
 // This is a wrapper around AppendChunk that provides a row count return value,
 // which is useful for DML operations that need to report RowsAffected.
 func (t *Table) InsertChunk(chunk *DataChunk) (int, error) {
+	t.mu.Lock()
 	rowsBefore := t.totalRows
+	t.mu.Unlock()
+
 	err := t.AppendChunk(chunk)
 	if err != nil {
 		return 0, err
 	}
+
+	t.mu.RLock()
 	rowsInserted := int(t.totalRows - rowsBefore)
+	t.mu.RUnlock()
+
 	return rowsInserted, nil
 }
 
@@ -501,7 +508,7 @@ func (t *Table) NextRowID() uint64 {
 }
 
 // Scan creates a scanner for iterating over the table.
-// It snapshots the row groups to avoid holding locks during iteration.
+// It snapshots the row groups and their counts to avoid holding locks during iteration.
 func (t *Table) Scan() *TableScanner {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -512,6 +519,13 @@ func (t *Table) Scan() *TableScanner {
 		len(t.rowGroups),
 	)
 	copy(rowGroups, t.rowGroups)
+
+	// Snapshot row group counts to provide a consistent view of data
+	// This ensures we only read rows that existed at scan creation time
+	rowGroupCounts := make([]int, len(rowGroups))
+	for i, rg := range rowGroups {
+		rowGroupCounts[i] = rg.count
+	}
 
 	// Create a reverse map from physical location to RowID for tombstone checking
 	locationToRowID := make(map[int]map[int]RowID)
@@ -524,6 +538,7 @@ func (t *Table) Scan() *TableScanner {
 
 	return &TableScanner{
 		rowGroups:       rowGroups,
+		rowGroupCounts:  rowGroupCounts,
 		currentRG:       0,
 		currentRow:      0,
 		columnTypes:     t.columnTypes,
@@ -534,6 +549,7 @@ func (t *Table) Scan() *TableScanner {
 
 // RowGroup represents a group of rows stored in columnar format.
 type RowGroup struct {
+	mu       sync.RWMutex
 	columns  []*Vector
 	count    int
 	capacity int
@@ -558,6 +574,8 @@ func NewRowGroup(
 
 // Count returns the number of rows in the row group.
 func (rg *RowGroup) Count() int {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
 	return rg.count
 }
 
@@ -568,11 +586,15 @@ func (rg *RowGroup) Capacity() int {
 
 // IsFull returns whether the row group is full.
 func (rg *RowGroup) IsFull() bool {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
 	return rg.count >= rg.capacity
 }
 
 // GetColumn returns the column at the given index.
 func (rg *RowGroup) GetColumn(idx int) *Vector {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
 	if idx < 0 || idx >= len(rg.columns) {
 		return nil
 	}
@@ -582,6 +604,8 @@ func (rg *RowGroup) GetColumn(idx int) *Vector {
 
 // DropColumn removes a column from the row group at the given index.
 func (rg *RowGroup) DropColumn(columnIndex int) {
+	rg.mu.Lock()
+	defer rg.mu.Unlock()
 	if columnIndex < 0 || columnIndex >= len(rg.columns) {
 		return
 	}
@@ -590,6 +614,8 @@ func (rg *RowGroup) DropColumn(columnIndex int) {
 
 // AddColumn adds a new column to the row group with NULL values for existing rows.
 func (rg *RowGroup) AddColumn(columnType dukdb.Type, existingRows int) {
+	rg.mu.Lock()
+	defer rg.mu.Unlock()
 	// Create a new vector for the column
 	vec := NewVector(columnType, rg.capacity)
 	vec.SetCount(existingRows)
@@ -604,6 +630,8 @@ func (rg *RowGroup) AddColumn(columnType dukdb.Type, existingRows int) {
 
 // AppendRow appends a row of values to the row group.
 func (rg *RowGroup) AppendRow(values []any) bool {
+	rg.mu.Lock()
+	defer rg.mu.Unlock()
 	if rg.count >= rg.capacity {
 		return false
 	}
@@ -626,6 +654,8 @@ func (rg *RowGroup) AppendRow(values []any) bool {
 
 // GetValue returns the value at the given row and column.
 func (rg *RowGroup) GetValue(row, col int) any {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
 	if col < 0 || col >= len(rg.columns) {
 		return nil
 	}
@@ -637,6 +667,8 @@ func (rg *RowGroup) GetValue(row, col int) any {
 func (rg *RowGroup) GetChunk(
 	startRow, count int,
 ) *DataChunk {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
 	if startRow >= rg.count {
 		return nil
 	}
@@ -671,11 +703,12 @@ func (rg *RowGroup) GetChunk(
 // It uses a snapshot of row groups to avoid holding locks during iteration.
 type TableScanner struct {
 	rowGroups       []*RowGroup // Snapshot of row groups
+	rowGroupCounts  []int       // Snapshotted counts for each row group at scan creation time
 	currentRG       int
 	currentRow      int
 	columnTypes     []dukdb.Type
-	tombstones      *Bitmap                // Tombstone bitmap for filtering deleted rows
-	locationToRowID map[int]map[int]RowID  // Maps physical location to RowID
+	tombstones      *Bitmap               // Tombstone bitmap for filtering deleted rows
+	locationToRowID map[int]map[int]RowID // Maps physical location to RowID
 
 	// Metadata about the last returned chunk for RowID tracking
 	lastChunkRowIDs []RowID // RowIDs of rows in the last returned chunk
@@ -683,16 +716,18 @@ type TableScanner struct {
 
 // Next advances to the next chunk and returns it, skipping tombstoned rows.
 // Returns nil when there are no more chunks.
-// No locks are held during iteration since row groups are snapshotted.
+// Holds a read lock on the row group during iteration for thread safety.
 func (s *TableScanner) Next() *DataChunk {
 	if s.currentRG >= len(s.rowGroups) {
 		return nil
 	}
 
 	rg := s.rowGroups[s.currentRG]
+	// Use snapshotted count to ensure consistent view of data
+	rgCount := s.rowGroupCounts[s.currentRG]
 
 	// Calculate how many rows to read
-	remaining := rg.Count() - s.currentRow
+	remaining := rgCount - s.currentRow
 	if remaining <= 0 {
 		// Move to next row group
 		s.currentRG++
@@ -700,6 +735,9 @@ func (s *TableScanner) Next() *DataChunk {
 
 		return s.Next()
 	}
+
+	// Hold read lock during the entire read operation
+	rg.mu.RLock()
 
 	// Read a chunk, filtering out tombstoned rows
 	types := make([]dukdb.Type, len(rg.columns))
@@ -713,8 +751,9 @@ func (s *TableScanner) Next() *DataChunk {
 	s.lastChunkRowIDs = make([]RowID, 0, StandardVectorSize)
 
 	// Iterate through rows and only add non-tombstoned ones
+	// Use snapshotted count to avoid reading rows added after scan creation
 	rowsAdded := 0
-	for s.currentRow < rg.Count() && rowsAdded < StandardVectorSize {
+	for s.currentRow < rgCount && rowsAdded < StandardVectorSize {
 		// Look up the RowID for this physical location
 		var rowID RowID
 		var hasRowID bool
@@ -747,6 +786,8 @@ func (s *TableScanner) Next() *DataChunk {
 
 		s.currentRow++
 	}
+
+	rg.mu.RUnlock()
 
 	// If we added no rows, move to next row group
 	if rowsAdded == 0 {

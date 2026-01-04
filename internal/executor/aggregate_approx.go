@@ -187,6 +187,133 @@ func countLeadingZeros(x uint64) int {
 }
 
 // ============================================================================
+// HyperLogLog Bit-Packed Implementation (Memory Optimized)
+// ============================================================================
+
+// HyperLogLogPacked uses bit-packed registers for memory efficiency.
+// Each register stores a value 0-64 (leading zeros count + 1), requiring only 6 bits.
+// We pack 10 registers per uint64 (60 bits used out of 64).
+// Memory reduction: ~20% (16,384 bytes → 13,112 bytes at precision 14).
+type HyperLogLogPacked struct {
+	registers []uint64 // Packed registers, 10 per uint64
+	precision uint8
+	m         uint32  // Number of logical registers
+	numWords  int     // Number of uint64 words
+	alpha     float64
+}
+
+const (
+	bitsPerRegister   = 6  // Each register needs 6 bits (max value 64)
+	registersPerWord  = 10 // 10 * 6 = 60 bits per uint64
+	registerMask      = 0x3F // 6 bits = 0b111111
+)
+
+// NewHyperLogLogPacked creates a bit-packed HyperLogLog for memory efficiency.
+func NewHyperLogLogPacked(precision uint8) *HyperLogLogPacked {
+	if precision < 4 {
+		precision = 4
+	}
+	if precision > 18 {
+		precision = 18
+	}
+
+	m := uint32(1) << precision
+	numWords := (int(m) + registersPerWord - 1) / registersPerWord
+
+	// Compute alpha (bias correction constant)
+	var alpha float64
+	switch m {
+	case 16:
+		alpha = 0.673
+	case 32:
+		alpha = 0.697
+	case 64:
+		alpha = 0.709
+	default:
+		alpha = 0.7213 / (1 + 1.079/float64(m))
+	}
+
+	return &HyperLogLogPacked{
+		registers: make([]uint64, numWords),
+		precision: precision,
+		m:         m,
+		numWords:  numWords,
+		alpha:     alpha,
+	}
+}
+
+// getRegister extracts the 6-bit register value at the given index.
+func (hll *HyperLogLogPacked) getRegister(index uint32) uint8 {
+	wordIndex := int(index) / registersPerWord
+	bitOffset := (int(index) % registersPerWord) * bitsPerRegister
+	return uint8((hll.registers[wordIndex] >> bitOffset) & registerMask)
+}
+
+// setRegister sets the 6-bit register value at the given index.
+func (hll *HyperLogLogPacked) setRegister(index uint32, value uint8) {
+	wordIndex := int(index) / registersPerWord
+	bitOffset := (int(index) % registersPerWord) * bitsPerRegister
+
+	// Clear existing bits and set new value
+	mask := ^(uint64(registerMask) << bitOffset)
+	hll.registers[wordIndex] = (hll.registers[wordIndex] & mask) | (uint64(value&registerMask) << bitOffset)
+}
+
+// Add adds a value to the HyperLogLog.
+func (hll *HyperLogLogPacked) Add(value any) {
+	if value == nil {
+		return
+	}
+
+	hash := hashValue(value)
+	index := uint32(hash >> (64 - hll.precision))
+	w := hash << hll.precision
+	leadingZeros := uint8(countLeadingZeros(w) + 1)
+
+	// Update register if new value is larger
+	if leadingZeros > hll.getRegister(index) {
+		hll.setRegister(index, leadingZeros)
+	}
+}
+
+// Estimate returns the estimated cardinality.
+func (hll *HyperLogLogPacked) Estimate() float64 {
+	sum := 0.0
+	for i := uint32(0); i < hll.m; i++ {
+		sum += math.Pow(2, -float64(hll.getRegister(i)))
+	}
+
+	estimate := hll.alpha * float64(hll.m) * float64(hll.m) / sum
+	return hll.applyBiasCorrection(estimate)
+}
+
+// applyBiasCorrection applies corrections for small and large cardinalities.
+func (hll *HyperLogLogPacked) applyBiasCorrection(estimate float64) float64 {
+	m := float64(hll.m)
+
+	// Small range correction using linear counting
+	if estimate <= 2.5*m {
+		zeros := 0
+		for i := uint32(0); i < hll.m; i++ {
+			if hll.getRegister(i) == 0 {
+				zeros++
+			}
+		}
+		if zeros > 0 {
+			return m * math.Log(m/float64(zeros))
+		}
+	}
+
+	// Large range correction
+	const twoTo64 = float64(1 << 63) * 2
+	if estimate > twoTo64/30 {
+		return -twoTo64 * math.Log(1-estimate/twoTo64)
+	}
+
+	return estimate
+}
+
+// ============================================================================
 // T-Digest Implementation
 // ============================================================================
 
@@ -198,13 +325,19 @@ type Centroid struct {
 
 // TDigest implements the T-Digest algorithm for approximate quantile estimation.
 // It provides accurate quantile estimates especially at the tails of the distribution.
+// Uses lazy compression: values are buffered and only compressed when queried.
 type TDigest struct {
-	centroids   []Centroid
-	compression float64 // Compression factor (default 100)
-	totalWeight float64
-	maxSize     int
-	unmerged    []Centroid // Buffer for unmerged centroids
+	centroids        []Centroid
+	compression      float64 // Compression factor (default 100)
+	totalWeight      float64
+	maxSize          int
+	unmerged         []Centroid // Buffer for unmerged centroids
+	needsCompression bool       // Track if compression is needed (lazy compression)
 }
+
+// lazyMaxBufferMultiplier controls when safety compression is triggered.
+// Compression happens when unmerged buffer exceeds maxSize * lazyMaxBufferMultiplier.
+const lazyMaxBufferMultiplier = 4
 
 // NewTDigest creates a new T-Digest with the given compression factor.
 // Higher compression means more accurate estimates but more memory usage.
@@ -232,6 +365,7 @@ func (td *TDigest) Add(value float64) {
 }
 
 // AddWeighted adds a weighted value to the T-Digest.
+// Uses lazy compression: values are buffered and only compressed when queried.
 func (td *TDigest) AddWeighted(value float64, weight float64) {
 	if math.IsNaN(value) || math.IsInf(value, 0) || weight <= 0 {
 		return
@@ -239,9 +373,11 @@ func (td *TDigest) AddWeighted(value float64, weight float64) {
 
 	td.unmerged = append(td.unmerged, Centroid{Mean: value, Weight: weight})
 	td.totalWeight += weight
+	td.needsCompression = true
 
-	// Compress if we have too many unmerged centroids
-	if len(td.unmerged) >= td.maxSize {
+	// Safety check: compress if buffer grows too large (4x maxSize)
+	// This prevents unbounded memory growth while still being lazy
+	if len(td.unmerged) >= td.maxSize*lazyMaxBufferMultiplier {
 		td.Compress()
 	}
 }
@@ -249,6 +385,7 @@ func (td *TDigest) AddWeighted(value float64, weight float64) {
 // Compress merges the centroids to reduce memory usage while maintaining accuracy.
 func (td *TDigest) Compress() {
 	if len(td.unmerged) == 0 && len(td.centroids) <= td.maxSize {
+		td.needsCompression = false
 		return
 	}
 
@@ -304,6 +441,7 @@ func (td *TDigest) Compress() {
 	merged = append(merged, current)
 
 	td.centroids = merged
+	td.needsCompression = false
 }
 
 // kSize returns the maximum size for a centroid at quantile q.
@@ -320,10 +458,14 @@ func (td *TDigest) kSize(q float64) float64 {
 
 // Quantile returns the approximate quantile at position q (0 <= q <= 1).
 // Returns NaN if the digest is empty.
+// Triggers lazy compression if needed.
 func (td *TDigest) Quantile(q float64) float64 {
-	td.Compress()
+	// Lazy compression: only compress when needed
+	if td.needsCompression {
+		td.Compress()
+	}
 
-	if len(td.centroids) == 0 {
+	if len(td.centroids) == 0 && len(td.unmerged) == 0 {
 		return math.NaN()
 	}
 	if q < 0 {
@@ -394,7 +536,8 @@ func (td *TDigest) Quantile(q float64) float64 {
 
 // computeApproxCountDistinct computes approximate count distinct using HyperLogLog.
 // Returns the estimated number of distinct values in the input.
-// Uses HyperLogLog with precision 14 (~16K registers, ~0.8% standard error).
+// Uses bit-packed HyperLogLog with precision 14 (~16K registers, ~0.8% standard error).
+// Memory optimized: uses 13KB instead of 16KB through 6-bit register packing.
 // Returns nil for empty input.
 func computeApproxCountDistinct(values []any) (any, error) {
 	// Filter out NULLs
@@ -409,8 +552,8 @@ func computeApproxCountDistinct(values []any) (any, error) {
 		return nil, nil
 	}
 
-	// Create HyperLogLog with default precision (14)
-	hll := NewHyperLogLog(14)
+	// Create bit-packed HyperLogLog with default precision (14)
+	hll := NewHyperLogLogPacked(14)
 
 	// Add all values
 	for _, v := range nonNull {

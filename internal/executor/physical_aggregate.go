@@ -2,13 +2,19 @@ package executor
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
+	"sync"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
+
+// parallelGroupThreshold is the minimum number of groups needed to use parallel processing.
+// Below this threshold, sequential processing has less overhead.
+const parallelGroupThreshold = 100
 
 // PhysicalAggregateOperator implements the PhysicalOperator interface for aggregation.
 // It consumes all input from the child operator, groups by the GROUP BY expressions,
@@ -212,45 +218,66 @@ func (op *PhysicalAggregateOperator) Next() (*storage.DataChunk, error) {
 		len(groupOrder),
 	)
 
-	// Compute aggregates for each group and add to output
-	for _, key := range groupOrder {
-		groupRows := groups[key]
-		rowValues := make(
-			[]any,
-			numGroupBy+numAgg,
-		)
-
-		// Add GROUP BY column values
-		if len(groupRows) > 0 &&
-			len(op.groupBy) > 0 {
-			for i, expr := range op.groupBy {
-				val, _ := op.executor.evaluateExpr(
-					op.ctx,
-					expr,
-					groupRows[0],
-				)
-				rowValues[i] = val
-			}
-		} else if len(op.groupBy) > 0 {
-			// Empty group - use NULLs for group by columns
-			for i := range op.groupBy {
-				rowValues[i] = nil
-			}
+	// Use parallel processing for large number of groups
+	if len(groupOrder) >= parallelGroupThreshold {
+		// Convert groupKey to string for the parallel function
+		groupOrderStr := make([]string, len(groupOrder))
+		groupsStr := make(map[string][]map[string]any)
+		for i, key := range groupOrder {
+			groupOrderStr[i] = string(key)
+			groupsStr[string(key)] = groups[key]
 		}
 
-		// Compute aggregate values
-		for i, expr := range op.aggregates {
-			val, err := op.computeAggregate(
-				expr,
-				groupRows,
+		results, err := op.computeAggregatesParallel(groupsStr, groupOrderStr, numGroupBy, numAgg)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add results to output chunk in order
+		for _, res := range results {
+			outputChunk.AppendRow(res.rowValues)
+		}
+	} else {
+		// Sequential processing for small number of groups
+		for _, key := range groupOrder {
+			groupRows := groups[key]
+			rowValues := make(
+				[]any,
+				numGroupBy+numAgg,
 			)
-			if err != nil {
-				return nil, err
-			}
-			rowValues[numGroupBy+i] = val
-		}
 
-		outputChunk.AppendRow(rowValues)
+			// Add GROUP BY column values
+			if len(groupRows) > 0 &&
+				len(op.groupBy) > 0 {
+				for i, expr := range op.groupBy {
+					val, _ := op.executor.evaluateExpr(
+						op.ctx,
+						expr,
+						groupRows[0],
+					)
+					rowValues[i] = val
+				}
+			} else if len(op.groupBy) > 0 {
+				// Empty group - use NULLs for group by columns
+				for i := range op.groupBy {
+					rowValues[i] = nil
+				}
+			}
+
+			// Compute aggregate values
+			for i, expr := range op.aggregates {
+				val, err := op.computeAggregate(
+					expr,
+					groupRows,
+				)
+				if err != nil {
+					return nil, err
+				}
+				rowValues[numGroupBy+i] = val
+			}
+
+			outputChunk.AppendRow(rowValues)
+		}
 	}
 
 	op.resultChunk = outputChunk
@@ -1044,4 +1071,104 @@ func (op *PhysicalAggregateOperator) collectValuesWithOrderBy(
 		result[i] = item.value
 	}
 	return result, nil
+}
+
+// aggregateResult holds the result of computing aggregates for one group.
+type aggregateResult struct {
+	index     int     // Original position in groupOrder
+	rowValues []any   // Computed row values (GROUP BY + aggregates)
+	err       error   // Error if computation failed
+}
+
+// computeAggregatesParallel computes aggregates for multiple groups in parallel.
+// It uses a worker pool pattern with configurable concurrency.
+// Returns results in the same order as groupOrder.
+func (op *PhysicalAggregateOperator) computeAggregatesParallel(
+	groups map[string][]map[string]any,
+	groupOrder []string,
+	numGroupBy int,
+	numAgg int,
+) ([]aggregateResult, error) {
+	numGroups := len(groupOrder)
+	numWorkers := runtime.NumCPU()
+	if numWorkers > numGroups {
+		numWorkers = numGroups
+	}
+
+	// Channel for work distribution and results collection
+	jobs := make(chan int, numGroups)
+	results := make(chan aggregateResult, numGroups)
+
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				key := groupOrder[idx]
+				groupRows := groups[key]
+				rowValues := make([]any, numGroupBy+numAgg)
+
+				var err error
+
+				// Add GROUP BY column values
+				if len(groupRows) > 0 && len(op.groupBy) > 0 {
+					for i, expr := range op.groupBy {
+						val, e := op.executor.evaluateExpr(op.ctx, expr, groupRows[0])
+						if e != nil {
+							err = e
+							break
+						}
+						rowValues[i] = val
+					}
+				} else if len(op.groupBy) > 0 {
+					for i := range op.groupBy {
+						rowValues[i] = nil
+					}
+				}
+
+				// Compute aggregate values if no error yet
+				if err == nil {
+					for i, expr := range op.aggregates {
+						val, e := op.computeAggregate(expr, groupRows)
+						if e != nil {
+							err = e
+							break
+						}
+						rowValues[numGroupBy+i] = val
+					}
+				}
+
+				results <- aggregateResult{
+					index:     idx,
+					rowValues: rowValues,
+					err:       err,
+				}
+			}
+		}()
+	}
+
+	// Send jobs to workers
+	for i := range groupOrder {
+		jobs <- i
+	}
+	close(jobs)
+
+	// Wait for all workers to finish in a separate goroutine
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	collected := make([]aggregateResult, numGroups)
+	for res := range results {
+		if res.err != nil {
+			return nil, res.err
+		}
+		collected[res.index] = res
+	}
+
+	return collected, nil
 }

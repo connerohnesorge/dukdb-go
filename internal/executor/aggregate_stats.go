@@ -10,6 +10,76 @@ import (
 // These functions implement statistical aggregate operations for dukdb-go.
 // All functions handle NULL values by skipping them and return nil for edge cases.
 
+// Quickselect algorithm for O(n) median/quantile computation.
+// This is an optimization over O(n log n) sorting for single position selection.
+
+// quickselect finds the k-th smallest element in O(n) average time.
+// It modifies the slice in place using partitioning.
+// Uses median-of-three pivot selection for better average performance.
+func quickselect(slice []float64, k int) float64 {
+	if len(slice) == 0 {
+		return 0
+	}
+	if len(slice) == 1 {
+		return slice[0]
+	}
+
+	left, right := 0, len(slice)-1
+	for {
+		if left == right {
+			return slice[left]
+		}
+
+		// Select pivot using median-of-three
+		pivotIndex := medianOfThreePivot(slice, left, right)
+		pivotIndex = partitionSlice(slice, left, right, pivotIndex)
+
+		if k == pivotIndex {
+			return slice[k]
+		} else if k < pivotIndex {
+			right = pivotIndex - 1
+		} else {
+			left = pivotIndex + 1
+		}
+	}
+}
+
+// medianOfThreePivot selects a pivot using median of first, middle, and last elements.
+// This helps avoid worst-case O(n^2) behavior on sorted or nearly-sorted data.
+func medianOfThreePivot(slice []float64, left, right int) int {
+	mid := left + (right-left)/2
+	// Sort the three elements to find median
+	if slice[right] < slice[left] {
+		slice[left], slice[right] = slice[right], slice[left]
+	}
+	if slice[mid] < slice[left] {
+		slice[mid], slice[left] = slice[left], slice[mid]
+	}
+	if slice[right] < slice[mid] {
+		slice[right], slice[mid] = slice[mid], slice[right]
+	}
+	return mid
+}
+
+// partitionSlice partitions the slice around the pivot and returns new pivot position.
+// All elements < pivot are moved to the left, all elements >= pivot to the right.
+func partitionSlice(slice []float64, left, right, pivotIndex int) int {
+	pivotValue := slice[pivotIndex]
+	// Move pivot to end
+	slice[pivotIndex], slice[right] = slice[right], slice[pivotIndex]
+	storeIndex := left
+
+	for i := left; i < right; i++ {
+		if slice[i] < pivotValue {
+			slice[storeIndex], slice[i] = slice[i], slice[storeIndex]
+			storeIndex++
+		}
+	}
+	// Move pivot to final position
+	slice[storeIndex], slice[right] = slice[right], slice[storeIndex]
+	return storeIndex
+}
+
 // toFloat64ForStats converts a value to float64 for statistical computations.
 // Returns the float64 value and a boolean indicating success.
 // nil values return (0, false) to allow proper NULL handling.
@@ -61,26 +131,41 @@ func collectNonNullFloats(values []any) []float64 {
 // Median is the middle value when values are sorted.
 // For even number of values, returns the average of the two middle values.
 // Returns nil for empty input.
+// Uses quickselect algorithm for O(n) average time complexity.
 func computeMedian(values []any) (any, error) {
 	floats := collectNonNullFloats(values)
 	if len(floats) == 0 {
 		return nil, nil
 	}
 
-	sort.Float64s(floats)
 	n := len(floats)
 
 	if n%2 == 1 {
-		// Odd number of elements - return middle value
-		return floats[n/2], nil
+		// Odd number of elements - use quickselect for middle value
+		return quickselect(floats, n/2), nil
 	}
-	// Even number of elements - return average of two middle values
-	return (floats[n/2-1] + floats[n/2]) / 2, nil
+
+	// Even number of elements - find n/2 position using quickselect
+	// After quickselect(n/2), all elements < n/2 index are smaller than element at n/2
+	// So we just need to find the max of elements [0..n/2-1] for the lower median
+	upper := quickselect(floats, n/2)
+
+	// Find the maximum of the left partition (which is the lower median)
+	// After quickselect, everything at index < n/2 is smaller than floats[n/2]
+	lower := floats[0]
+	for i := 1; i < n/2; i++ {
+		if floats[i] > lower {
+			lower = floats[i]
+		}
+	}
+
+	return (lower + upper) / 2, nil
 }
 
 // computeQuantile calculates the quantile at position q (0 <= q <= 1).
 // Uses linear interpolation between adjacent values.
 // Returns nil for empty input or invalid q.
+// Uses quickselect algorithm for O(n) average time complexity.
 func computeQuantile(values []any, q float64) (any, error) {
 	if q < 0 || q > 1 {
 		return nil, nil
@@ -91,26 +176,37 @@ func computeQuantile(values []any, q float64) (any, error) {
 		return nil, nil
 	}
 
-	sort.Float64s(floats)
 	n := len(floats)
-
 	if n == 1 {
 		return floats[0], nil
 	}
 
-	// Calculate the index for the quantile
-	// Using the R-7 method (default in many systems)
+	// Calculate the index for the quantile using R-7 method
 	index := q * float64(n-1)
 	lower := int(math.Floor(index))
 	upper := int(math.Ceil(index))
 
 	if lower == upper {
-		return floats[lower], nil
+		// Exact index - use quickselect
+		return quickselect(floats, lower), nil
+	}
+
+	// Need interpolation between two adjacent values
+	// After quickselect(upper), everything at index < upper is smaller
+	// So lower value is max of elements [0..upper-1] which includes position 'lower'
+	upperVal := quickselect(floats, upper)
+
+	// Find max of left partition to get the value at position 'lower'
+	lowerVal := floats[0]
+	for i := 1; i < upper; i++ {
+		if floats[i] > lowerVal {
+			lowerVal = floats[i]
+		}
 	}
 
 	// Linear interpolation
 	frac := index - float64(lower)
-	return floats[lower]*(1-frac) + floats[upper]*frac, nil
+	return lowerVal*(1-frac) + upperVal*frac, nil
 }
 
 // computeQuantileArray calculates multiple quantiles at once.
