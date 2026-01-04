@@ -464,3 +464,71 @@ type BoundAlterSecretStmt struct {
 func (*BoundAlterSecretStmt) boundStmtNode() {}
 
 func (*BoundAlterSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// ---------- Database Maintenance Bound Statement Types ----------
+
+// PragmaType represents the category of a PRAGMA statement.
+type PragmaType int
+
+const (
+	// PragmaTypeInfo returns information (database_size, table_info, etc.)
+	PragmaTypeInfo PragmaType = iota
+	// PragmaTypeConfig sets configuration values
+	PragmaTypeConfig
+	// PragmaTypeProfiling controls profiling
+	PragmaTypeProfiling
+)
+
+// BoundPragmaStmt represents a bound PRAGMA statement.
+type BoundPragmaStmt struct {
+	Name       string      // Pragma name (e.g., "database_size")
+	PragmaType PragmaType  // Category of pragma
+	Args       []BoundExpr // Bound arguments
+	Value      BoundExpr   // For SET PRAGMA name = value
+}
+
+func (*BoundPragmaStmt) boundStmtNode() {}
+
+func (*BoundPragmaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_PRAGMA }
+
+// BoundExplainStmt represents a bound EXPLAIN statement.
+type BoundExplainStmt struct {
+	Query   BoundStatement // The bound query to explain
+	Analyze bool           // true for EXPLAIN ANALYZE
+}
+
+func (*BoundExplainStmt) boundStmtNode() {}
+
+func (*BoundExplainStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_EXPLAIN }
+
+// BoundVacuumStmt represents a bound VACUUM statement.
+type BoundVacuumStmt struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for entire database)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*BoundVacuumStmt) boundStmtNode() {}
+
+func (*BoundVacuumStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_VACUUM }
+
+// BoundAnalyzeStmt represents a bound ANALYZE statement.
+type BoundAnalyzeStmt struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for all tables)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*BoundAnalyzeStmt) boundStmtNode() {}
+
+func (*BoundAnalyzeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ANALYZE }
+
+// BoundCheckpointStmt represents a bound CHECKPOINT statement.
+type BoundCheckpointStmt struct {
+	Database string // Optional database name
+	Force    bool   // FORCE flag
+}
+
+func (*BoundCheckpointStmt) boundStmtNode() {}
+
+func (*BoundCheckpointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }

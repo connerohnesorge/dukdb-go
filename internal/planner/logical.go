@@ -1043,3 +1043,82 @@ func (u *LogicalUnpivot) OutputColumns() []ColumnBinding {
 	u.columns = cols
 	return u.columns
 }
+
+// ---------- Database Maintenance Logical Plan Nodes ----------
+
+// LogicalPragma represents a PRAGMA operation.
+type LogicalPragma struct {
+	Name       string             // Pragma name
+	PragmaType binder.PragmaType  // Category of pragma
+	Args       []binder.BoundExpr // Bound arguments
+	Value      binder.BoundExpr   // For SET PRAGMA name = value
+	columns    []ColumnBinding
+}
+
+func (*LogicalPragma) logicalPlanNode() {}
+
+func (*LogicalPragma) Children() []LogicalPlan { return nil }
+
+func (p *LogicalPragma) OutputColumns() []ColumnBinding {
+	if p.columns != nil {
+		return p.columns
+	}
+	// PRAGMA statements return varying columns depending on the pragma
+	// The actual columns are determined at execution time
+	return nil
+}
+
+// LogicalExplain represents an EXPLAIN operation.
+type LogicalExplain struct {
+	Child   LogicalPlan // The plan to explain
+	Analyze bool        // true for EXPLAIN ANALYZE
+}
+
+func (*LogicalExplain) logicalPlanNode() {}
+
+func (e *LogicalExplain) Children() []LogicalPlan { return []LogicalPlan{e.Child} }
+
+func (*LogicalExplain) OutputColumns() []ColumnBinding {
+	// EXPLAIN returns a single column with the plan text
+	return []ColumnBinding{
+		{Column: "explain_plan", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 0},
+	}
+}
+
+// LogicalVacuum represents a VACUUM operation.
+type LogicalVacuum struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for entire database)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*LogicalVacuum) logicalPlanNode() {}
+
+func (*LogicalVacuum) Children() []LogicalPlan { return nil }
+
+func (*LogicalVacuum) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalAnalyze represents an ANALYZE operation.
+type LogicalAnalyze struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for all tables)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*LogicalAnalyze) logicalPlanNode() {}
+
+func (*LogicalAnalyze) Children() []LogicalPlan { return nil }
+
+func (*LogicalAnalyze) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCheckpoint represents a CHECKPOINT operation.
+type LogicalCheckpoint struct {
+	Database string // Optional database name
+	Force    bool   // FORCE flag
+}
+
+func (*LogicalCheckpoint) logicalPlanNode() {}
+
+func (*LogicalCheckpoint) Children() []LogicalPlan { return nil }
+
+func (*LogicalCheckpoint) OutputColumns() []ColumnBinding { return nil }

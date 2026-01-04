@@ -320,6 +320,17 @@ func (e *Executor) executeWithContext(
 		return e.executeDropSecret(execCtx, p)
 	case *planner.PhysicalAlterSecret:
 		return e.executeAlterSecret(execCtx, p)
+	// Database maintenance operations
+	case *planner.PhysicalPragma:
+		return e.executePragma(execCtx, p)
+	case *planner.PhysicalExplain:
+		return e.executeExplain(execCtx, p)
+	case *planner.PhysicalVacuum:
+		return e.executeVacuum(execCtx, p)
+	case *planner.PhysicalAnalyze:
+		return e.executeAnalyze(execCtx, p)
+	case *planner.PhysicalCheckpoint:
+		return e.executeCheckpoint(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

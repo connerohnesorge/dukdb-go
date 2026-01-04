@@ -218,6 +218,16 @@ func (b *Binder) Bind(
 		return b.bindDropSecret(s)
 	case *parser.AlterSecretStmt:
 		return b.bindAlterSecret(s)
+	case *parser.PragmaStmt:
+		return b.bindPragma(s)
+	case *parser.ExplainStmt:
+		return b.bindExplain(s)
+	case *parser.VacuumStmt:
+		return b.bindVacuum(s)
+	case *parser.AnalyzeStmt:
+		return b.bindAnalyze(s)
+	case *parser.CheckpointStmt:
+		return b.bindCheckpoint(s)
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}

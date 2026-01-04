@@ -1167,6 +1167,17 @@ func (p *Planner) createLogicalPlan(
 		return p.planDropSecret(s)
 	case *binder.BoundAlterSecretStmt:
 		return p.planAlterSecret(s)
+	// Database maintenance statements
+	case *binder.BoundPragmaStmt:
+		return p.planPragma(s)
+	case *binder.BoundExplainStmt:
+		return p.planExplain(s)
+	case *binder.BoundVacuumStmt:
+		return p.planVacuum(s)
+	case *binder.BoundAnalyzeStmt:
+		return p.planAnalyze(s)
+	case *binder.BoundCheckpointStmt:
+		return p.planCheckpoint(s)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -1660,6 +1671,56 @@ func (p *Planner) planAlterSecret(
 	return &LogicalAlterSecret{
 		Name:    s.Name,
 		Options: s.Options,
+	}, nil
+}
+
+// planPragma creates a logical plan for a PRAGMA statement.
+func (p *Planner) planPragma(s *binder.BoundPragmaStmt) (LogicalPlan, error) {
+	return &LogicalPragma{
+		Name:       s.Name,
+		PragmaType: s.PragmaType,
+		Args:       s.Args,
+		Value:      s.Value,
+	}, nil
+}
+
+// planExplain creates a logical plan for an EXPLAIN statement.
+func (p *Planner) planExplain(s *binder.BoundExplainStmt) (LogicalPlan, error) {
+	// Create a plan for the underlying query
+	childPlan, err := p.createLogicalPlan(s.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LogicalExplain{
+		Child:   childPlan,
+		Analyze: s.Analyze,
+	}, nil
+}
+
+// planVacuum creates a logical plan for a VACUUM statement.
+func (p *Planner) planVacuum(s *binder.BoundVacuumStmt) (LogicalPlan, error) {
+	return &LogicalVacuum{
+		Schema:    s.Schema,
+		TableName: s.TableName,
+		TableDef:  s.TableDef,
+	}, nil
+}
+
+// planAnalyze creates a logical plan for an ANALYZE statement.
+func (p *Planner) planAnalyze(s *binder.BoundAnalyzeStmt) (LogicalPlan, error) {
+	return &LogicalAnalyze{
+		Schema:    s.Schema,
+		TableName: s.TableName,
+		TableDef:  s.TableDef,
+	}, nil
+}
+
+// planCheckpoint creates a logical plan for a CHECKPOINT statement.
+func (p *Planner) planCheckpoint(s *binder.BoundCheckpointStmt) (LogicalPlan, error) {
+	return &LogicalCheckpoint{
+		Database: s.Database,
+		Force:    s.Force,
 	}, nil
 }
 
@@ -2369,6 +2430,45 @@ func (p *Planner) createPhysicalPlan(
 			UnpivotColumns: l.UnpivotColumns,
 		}, nil
 
+	// Database maintenance logical nodes
+	case *LogicalPragma:
+		return &PhysicalPragma{
+			Name:       l.Name,
+			PragmaType: l.PragmaType,
+			Args:       l.Args,
+			Value:      l.Value,
+		}, nil
+
+	case *LogicalExplain:
+		child, err := p.createPhysicalPlan(l.Child)
+		if err != nil {
+			return nil, err
+		}
+		return &PhysicalExplain{
+			Child:   child,
+			Analyze: l.Analyze,
+		}, nil
+
+	case *LogicalVacuum:
+		return &PhysicalVacuum{
+			Schema:    l.Schema,
+			TableName: l.TableName,
+			TableDef:  l.TableDef,
+		}, nil
+
+	case *LogicalAnalyze:
+		return &PhysicalAnalyze{
+			Schema:    l.Schema,
+			TableName: l.TableName,
+			TableDef:  l.TableDef,
+		}, nil
+
+	case *LogicalCheckpoint:
+		return &PhysicalCheckpoint{
+			Database: l.Database,
+			Force:    l.Force,
+		}, nil
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -2664,3 +2764,78 @@ func extractGroupingCalls(
 	}
 	return calls
 }
+
+// ---------- Database Maintenance Physical Plan Nodes ----------
+
+// PhysicalPragma represents a physical PRAGMA operation.
+type PhysicalPragma struct {
+	Name       string             // Pragma name
+	PragmaType binder.PragmaType  // Category of pragma
+	Args       []binder.BoundExpr // Bound arguments
+	Value      binder.BoundExpr   // For SET PRAGMA name = value
+}
+
+func (*PhysicalPragma) physicalPlanNode() {}
+
+func (*PhysicalPragma) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalPragma) OutputColumns() []ColumnBinding {
+	// PRAGMA statements return varying columns depending on the pragma
+	// The actual columns are determined at execution time
+	return nil
+}
+
+// PhysicalExplain represents a physical EXPLAIN operation.
+type PhysicalExplain struct {
+	Child   PhysicalPlan // The plan to explain
+	Analyze bool         // true for EXPLAIN ANALYZE
+}
+
+func (*PhysicalExplain) physicalPlanNode() {}
+
+func (e *PhysicalExplain) Children() []PhysicalPlan { return []PhysicalPlan{e.Child} }
+
+func (*PhysicalExplain) OutputColumns() []ColumnBinding {
+	// EXPLAIN returns a single column with the plan text
+	return []ColumnBinding{
+		{Column: "explain_plan", Type: dukdb.TYPE_VARCHAR, ColumnIdx: 0},
+	}
+}
+
+// PhysicalVacuum represents a physical VACUUM operation.
+type PhysicalVacuum struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for entire database)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*PhysicalVacuum) physicalPlanNode() {}
+
+func (*PhysicalVacuum) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalVacuum) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalAnalyze represents a physical ANALYZE operation.
+type PhysicalAnalyze struct {
+	Schema    string            // Optional schema name
+	TableName string            // Optional table name (empty for all tables)
+	TableDef  *catalog.TableDef // Table definition if table specified
+}
+
+func (*PhysicalAnalyze) physicalPlanNode() {}
+
+func (*PhysicalAnalyze) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalAnalyze) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCheckpoint represents a physical CHECKPOINT operation.
+type PhysicalCheckpoint struct {
+	Database string // Optional database name
+	Force    bool   // FORCE flag
+}
+
+func (*PhysicalCheckpoint) physicalPlanNode() {}
+
+func (*PhysicalCheckpoint) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCheckpoint) OutputColumns() []ColumnBinding { return nil }
