@@ -43,15 +43,17 @@ const (
 	TYPE_TIMESTAMP_TZ Type = 33 // Timestamp with time zone
 	TYPE_ANY          Type = 34 // Any type (for UDFs)
 	TYPE_BIGNUM       Type = 35 // Variable-width decimal (internal)
-	TYPE_SQLNULL      Type = 36 // SQL NULL type
+	TYPE_SQLNULL      Type = 36  // SQL NULL type
+	TYPE_JSON         Type = 37  // JSON data type
+	TYPE_GEOMETRY     Type = 60  // Geometry type (spatial)
+	TYPE_LAMBDA       Type = 106 // Lambda function type
+	TYPE_VARIANT      Type = 109 // Variant type (dynamic)
 )
 
 // unsupportedTypeToStringMap lists types not yet fully supported.
-// These types cannot be used with NewTypeInfo() except for TYPE_ANY.
+// These types cannot be used with NewTypeInfo().
 var unsupportedTypeToStringMap = map[Type]string{
 	TYPE_INVALID: "INVALID",
-	TYPE_ANY:     "ANY",
-	TYPE_BIGNUM:  "BIGNUM",
 }
 
 // typeToStringMap maps Type values to their string representations.
@@ -94,6 +96,10 @@ var typeToStringMap = map[Type]string{
 	TYPE_ANY:          "ANY",
 	TYPE_BIGNUM:       "BIGNUM",
 	TYPE_SQLNULL:      "SQLNULL",
+	TYPE_JSON:         "JSON",
+	TYPE_GEOMETRY:     "GEOMETRY",
+	TYPE_LAMBDA:       "LAMBDA",
+	TYPE_VARIANT:      "VARIANT",
 }
 
 // String returns the string representation of the type.
@@ -132,7 +138,7 @@ func (t Type) Category() string {
 		return "temporal"
 
 	// String types
-	case TYPE_VARCHAR, TYPE_BLOB, TYPE_BIT:
+	case TYPE_VARCHAR, TYPE_BLOB, TYPE_BIT, TYPE_JSON:
 		return "string"
 
 	// Nested types

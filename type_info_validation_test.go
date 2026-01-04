@@ -44,7 +44,6 @@ func TestTypeInfoValidation(t *testing.T) {
 		func(t *testing.T) {
 			unsupportedTypes := []Type{
 				TYPE_INVALID,
-				TYPE_BIGNUM,
 				TYPE_SQLNULL,
 			}
 

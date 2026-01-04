@@ -2,12 +2,13 @@ package dukdb
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"time"
 	"unsafe"
+
+	"github.com/dukdb/dukdb-go/internal/io/geometry"
 )
 
 // VectorSize is the default number of values in a vector (matching DuckDB's VECTOR_SIZE).
@@ -145,7 +146,7 @@ func (vec *vector) init(
 
 	// Check for unsupported types.
 	switch t {
-	case TYPE_INVALID, TYPE_ANY, TYPE_BIGNUM:
+	case TYPE_INVALID, TYPE_ANY:
 		return fmt.Errorf(
 			"column index %d: unsupported type %s",
 			colIdx,
@@ -216,8 +217,18 @@ func (vec *vector) init(
 		vec.initBit()
 	case TYPE_UUID:
 		vec.initUUID()
+	case TYPE_JSON:
+		vec.initJSON()
 	case TYPE_SQLNULL:
 		vec.initSQLNull()
+	case TYPE_BIGNUM:
+		vec.initBignum()
+	case TYPE_GEOMETRY:
+		vec.initGeometry()
+	case TYPE_VARIANT:
+		vec.initVariant()
+	case TYPE_LAMBDA:
+		vec.initLambda()
 	default:
 		return fmt.Errorf(
 			"column index %d: unknown type %s",
@@ -839,8 +850,8 @@ func setBlob(
 	}
 }
 
-// initJSON initializes a JSON vector (VARCHAR with JSON parsing).
-// Currently unused but reserved for JSON alias type support.
+// initJSON initializes a JSON vector.
+// Stores JSON data as strings with lazy parsing on get.
 func (vec *vector) initJSON() {
 	vec.dataSlice = make([]string, vec.capacity)
 	vec.getFn = func(vec *vector, rowIdx int) any {
@@ -864,14 +875,11 @@ func (vec *vector) initJSON() {
 
 		return setJSON(vec, rowIdx, val)
 	}
-	vec.Type = TYPE_VARCHAR
+	vec.Type = TYPE_JSON
 }
 
-// Suppress unused warnings for JSON support functions.
-var (
-	_ = (*vector).initJSON
-	_ = setJSON
-)
+// Suppress unused warning for setJSON (used indirectly via initJSON).
+var _ = setJSON
 
 func setJSON(
 	vec *vector,
@@ -1769,15 +1777,202 @@ func setUUID(
 
 // SQLNULL type initialization.
 func (vec *vector) initSQLNull() {
+	vec.dataSlice = nil // No data storage needed for SQLNULL.
 	vec.getFn = func(vec *vector, rowIdx int) any {
-		return nil
+		return nil // Always returns nil for SQLNULL.
 	}
 	vec.setFn = func(vec *vector, rowIdx int, val any) error {
-		return errors.New(
-			"cannot set value for SQLNULL type",
-		)
+		// Always mark as NULL in validity bitmap.
+		vec.setNull(rowIdx)
+		return nil
 	}
 	vec.Type = TYPE_SQLNULL
+}
+
+// initBignum initializes a BIGNUM vector.
+func (vec *vector) initBignum() {
+	vec.dataSlice = make([]*big.Int, vec.capacity)
+	vec.getFn = func(vec *vector, rowIdx int) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return getPrimitive[*big.Int](vec, rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx int, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setBignum(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_BIGNUM
+}
+
+func setBignum(vec *vector, rowIdx int, val any) error {
+	var b *big.Int
+	switch v := val.(type) {
+	case *big.Int:
+		b = v
+	case big.Int:
+		b = &v
+	case int64:
+		b = big.NewInt(v)
+	case int:
+		b = big.NewInt(int64(v))
+	case string:
+		var ok bool
+		b, ok = new(big.Int).SetString(v, 10)
+		if !ok {
+			return fmt.Errorf("cannot parse %q as BIGNUM", v)
+		}
+	default:
+		return fmt.Errorf("cannot convert %T to BIGNUM", val)
+	}
+	vec.setValid(rowIdx)
+	setPrimitive(vec, rowIdx, b)
+	return nil
+}
+
+// initGeometry initializes a GEOMETRY vector.
+func (vec *vector) initGeometry() {
+	vec.dataSlice = make([]*geometry.Geometry, vec.capacity)
+	vec.getFn = func(vec *vector, rowIdx int) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return getPrimitive[*geometry.Geometry](vec, rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx int, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setGeometry(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_GEOMETRY
+}
+
+func setGeometry(vec *vector, rowIdx int, val any) error {
+	var g *geometry.Geometry
+	switch v := val.(type) {
+	case *geometry.Geometry:
+		g = v
+	case geometry.Geometry:
+		g = &v
+	case []byte:
+		var err error
+		g, err = geometry.ParseWKB(v)
+		if err != nil {
+			return err
+		}
+	case string:
+		var err error
+		g, err = geometry.ParseWKT(v)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("cannot convert %T to Geometry", val)
+	}
+	vec.setValid(rowIdx)
+	setPrimitive(vec, rowIdx, g)
+	return nil
+}
+
+// initVariant initializes a VARIANT vector.
+// VARIANT stores any value serialized as JSON string.
+func (vec *vector) initVariant() {
+	vec.dataSlice = make([]string, vec.capacity)
+	vec.getFn = func(vec *vector, rowIdx int) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		s := getPrimitive[string](vec, rowIdx)
+		var result any
+		if err := json.Unmarshal([]byte(s), &result); err != nil {
+			return s // Return raw string on parse failure.
+		}
+		return result
+	}
+	vec.setFn = func(vec *vector, rowIdx int, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setVariant(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_VARIANT
+}
+
+func setVariant(vec *vector, rowIdx int, val any) error {
+	var s string
+	switch v := val.(type) {
+	case string:
+		// Check if already JSON.
+		if json.Valid([]byte(v)) {
+			s = v
+		} else {
+			// Marshal as JSON string.
+			b, err := json.Marshal(v)
+			if err != nil {
+				return fmt.Errorf("cannot marshal %T to JSON: %w", val, err)
+			}
+			s = string(b)
+		}
+	case []byte:
+		if json.Valid(v) {
+			s = string(v)
+		} else {
+			b, err := json.Marshal(string(v))
+			if err != nil {
+				return fmt.Errorf("cannot marshal %T to JSON: %w", val, err)
+			}
+			s = string(b)
+		}
+	default:
+		// Marshal any value to JSON.
+		b, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Errorf("cannot marshal %T to JSON: %w", val, err)
+		}
+		s = string(b)
+	}
+	vec.setValid(rowIdx)
+	setPrimitive(vec, rowIdx, s)
+	return nil
+}
+
+// initLambda initializes a LAMBDA vector.
+// LAMBDA stores lambda expressions as strings.
+func (vec *vector) initLambda() {
+	vec.dataSlice = make([]string, vec.capacity)
+	vec.getFn = func(vec *vector, rowIdx int) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return getPrimitive[string](vec, rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx int, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setLambda(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_LAMBDA
+}
+
+func setLambda(vec *vector, rowIdx int, val any) error {
+	var s string
+	switch v := val.(type) {
+	case string:
+		s = v
+	default:
+		return fmt.Errorf("cannot convert %T to LAMBDA expression", val)
+	}
+	vec.setValid(rowIdx)
+	setPrimitive(vec, rowIdx, s)
+	return nil
 }
 
 // Reset clears the vector's data to zero values and marks all entries as valid.
@@ -1855,6 +2050,14 @@ func (vec *vector) Reset() {
 	case []Bit:
 		for i := range data {
 			data[i] = Bit{}
+		}
+	case []*big.Int:
+		for i := range data {
+			data[i] = nil
+		}
+	case []*geometry.Geometry:
+		for i := range data {
+			data[i] = nil
 		}
 	}
 

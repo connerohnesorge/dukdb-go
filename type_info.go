@@ -111,6 +111,40 @@ type UnionDetails struct {
 
 func (u *UnionDetails) isTypeDetails() {}
 
+// JSONDetails provides JSON type information.
+type JSONDetails struct{}
+
+func (j *JSONDetails) isTypeDetails() {}
+
+// BignumDetails provides BIGNUM type information.
+type BignumDetails struct {
+	Scale uint8
+}
+
+func (b *BignumDetails) isTypeDetails() {}
+
+// GeometryDetails provides GEOMETRY type information.
+type GeometryDetails struct {
+	Srid int32
+}
+
+func (g *GeometryDetails) isTypeDetails() {}
+
+// VariantDetails provides VARIANT type information.
+// VARIANT is a dynamic type that can hold any value, stored as JSON string internally.
+type VariantDetails struct{}
+
+func (v *VariantDetails) isTypeDetails() {}
+
+// LambdaDetails provides LAMBDA type information.
+// LAMBDA is used for higher-order function support, stored as expression strings.
+type LambdaDetails struct {
+	InputTypes []TypeInfo
+	ReturnType TypeInfo
+}
+
+func (l *LambdaDetails) isTypeDetails() {}
+
 // TypeInfo is an interface for a DuckDB type.
 type TypeInfo interface {
 	// InternalType returns the Type.
@@ -206,6 +240,16 @@ func (info *typeInfo) Details() TypeDetails {
 		return &UnionDetails{
 			Members: members,
 		}
+	case TYPE_JSON:
+		return &JSONDetails{}
+	case TYPE_BIGNUM:
+		return &BignumDetails{}
+	case TYPE_GEOMETRY:
+		return &GeometryDetails{}
+	case TYPE_VARIANT:
+		return &VariantDetails{}
+	case TYPE_LAMBDA:
+		return &LambdaDetails{}
 	default:
 		return nil
 	}
@@ -249,6 +293,16 @@ func (info *typeInfo) SQLType() string {
 		return "UUID"
 	case TYPE_BIT:
 		return "BIT"
+	case TYPE_JSON:
+		return "JSON"
+	case TYPE_BIGNUM:
+		return "BIGNUM"
+	case TYPE_GEOMETRY:
+		return "GEOMETRY"
+	case TYPE_VARIANT:
+		return "VARIANT"
+	case TYPE_LAMBDA:
+		return "LAMBDA"
 
 	// Temporal types
 	case TYPE_DATE:
@@ -727,5 +781,47 @@ func NewUnionInfo(
 		typ:   TYPE_UNION,
 		types: memberTypes,
 		names: memberNames,
+	}, nil
+}
+
+// NewJSONInfo returns JSON type information.
+func NewJSONInfo() (TypeInfo, error) {
+	return &typeInfo{
+		typ:   TYPE_JSON,
+		types: []TypeInfo{},
+	}, nil
+}
+
+// NewBignumInfo returns BIGNUM type information.
+func NewBignumInfo() (TypeInfo, error) {
+	return &typeInfo{
+		typ:   TYPE_BIGNUM,
+		types: []TypeInfo{},
+	}, nil
+}
+
+// NewGeometryInfo returns GEOMETRY type information.
+func NewGeometryInfo() (TypeInfo, error) {
+	return &typeInfo{
+		typ:   TYPE_GEOMETRY,
+		types: []TypeInfo{},
+	}, nil
+}
+
+// NewVariantInfo returns VARIANT type information.
+// VARIANT is a dynamic type that can hold any value, stored as JSON string internally.
+func NewVariantInfo() (TypeInfo, error) {
+	return &typeInfo{
+		typ:   TYPE_VARIANT,
+		types: []TypeInfo{},
+	}, nil
+}
+
+// NewLambdaInfo returns LAMBDA type information.
+// LAMBDA is used for higher-order function support, stored as expression strings.
+func NewLambdaInfo() (TypeInfo, error) {
+	return &typeInfo{
+		typ:   TYPE_LAMBDA,
+		types: []TypeInfo{},
 	}, nil
 }
