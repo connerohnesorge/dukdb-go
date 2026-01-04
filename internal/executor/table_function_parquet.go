@@ -8,6 +8,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 	"github.com/dukdb/dukdb-go/internal/io/parquet"
 	"github.com/dukdb/dukdb-go/internal/planner"
 )
@@ -41,12 +42,27 @@ func (e *Executor) executeReadParquet(
 		}
 	}
 
-	// Create the Parquet reader from path
-	reader, err := parquet.NewReaderFromPath(plan.Path, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create Parquet reader: %v", err),
+	// Create the Parquet reader - use filesystem for cloud URLs, local file for local paths
+	var reader *parquet.Reader
+	var err error
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		reader, err = e.createCloudParquetReader(ctx, plan.Path, opts)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create Parquet reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		reader, err = parquet.NewReaderFromPath(plan.Path, opts)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create Parquet reader: %v", err),
+			}
 		}
 	}
 	defer func() { _ = reader.Close() }()
@@ -116,4 +132,41 @@ func (e *Executor) executeReadParquet(
 	}
 
 	return result, nil
+}
+
+// createCloudParquetReader creates a Parquet reader for cloud URLs.
+// Parquet requires a ReaderAtSeeker, so for non-seekable cloud streams,
+// we read the entire file into memory first.
+func (e *Executor) createCloudParquetReader(
+	ctx *ExecutionContext,
+	path string,
+	opts *parquet.ReaderOptions,
+) (*parquet.Reader, error) {
+	file, err := e.openFileForReading(ctx.Context, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the file supports ReaderAt (needed for Parquet)
+	if ras, ok := file.(parquet.ReaderAtSeeker); ok {
+		// Get file size
+		info, err := file.Stat()
+		if err != nil {
+			_ = file.Close()
+			return nil, fmt.Errorf("failed to get file size: %w", err)
+		}
+		// Create reader with the seekable file - the Reader will close it
+		return parquet.NewReader(ras, info.Size(), opts)
+	}
+
+	// Fallback: read entire file into memory for non-seekable streams
+	data, err := io.ReadAll(file)
+	_ = file.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read parquet data: %w", err)
+	}
+
+	// Create a bytes reader that implements ReaderAtSeeker
+	br := &bytesReaderAt{data: data}
+	return parquet.NewReader(br, int64(len(data)), opts)
 }

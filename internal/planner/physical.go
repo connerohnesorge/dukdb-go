@@ -658,6 +658,50 @@ func (*PhysicalAlterTable) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalAlterTable) OutputColumns() []ColumnBinding { return nil }
 
+// ---------- Secret DDL Physical Plan Nodes ----------
+
+// PhysicalCreateSecret represents a physical CREATE SECRET operation.
+type PhysicalCreateSecret struct {
+	Name        string            // Secret name
+	IfNotExists bool              // IF NOT EXISTS clause
+	OrReplace   bool              // OR REPLACE clause
+	Persistent  bool              // PERSISTENT vs TEMPORARY
+	SecretType  string            // Type of secret (S3, GCS, AZURE, HTTP, HUGGINGFACE)
+	Provider    string            // Provider type (CONFIG, ENV, CREDENTIAL_CHAIN, IAM)
+	Scope       string            // Optional scope path
+	Options     map[string]string // Key-value options
+}
+
+func (*PhysicalCreateSecret) physicalPlanNode() {}
+
+func (*PhysicalCreateSecret) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateSecret) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropSecret represents a physical DROP SECRET operation.
+type PhysicalDropSecret struct {
+	Name     string // Secret name
+	IfExists bool   // IF EXISTS clause
+}
+
+func (*PhysicalDropSecret) physicalPlanNode() {}
+
+func (*PhysicalDropSecret) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropSecret) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalAlterSecret represents a physical ALTER SECRET operation.
+type PhysicalAlterSecret struct {
+	Name    string            // Secret name
+	Options map[string]string // Options to update
+}
+
+func (*PhysicalAlterSecret) physicalPlanNode() {}
+
+func (*PhysicalAlterSecret) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalAlterSecret) OutputColumns() []ColumnBinding { return nil }
+
 // PhysicalMerge represents a physical MERGE INTO operation.
 type PhysicalMerge struct {
 	Schema                 string
@@ -1116,6 +1160,13 @@ func (p *Planner) createLogicalPlan(
 		return p.planPivot(s)
 	case *binder.BoundUnpivotStmt:
 		return p.planUnpivot(s)
+	// Secret DDL statements
+	case *binder.BoundCreateSecretStmt:
+		return p.planCreateSecret(s)
+	case *binder.BoundDropSecretStmt:
+		return p.planDropSecret(s)
+	case *binder.BoundAlterSecretStmt:
+		return p.planAlterSecret(s)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
@@ -1574,6 +1625,41 @@ func (p *Planner) planAlterTable(
 		NewColumn:    s.NewColumn,
 		DropColumn:   s.DropColumn,
 		AddColumn:    s.AddColumn,
+	}, nil
+}
+
+// ---------- Secret DDL Planning Functions ----------
+
+func (p *Planner) planCreateSecret(
+	s *binder.BoundCreateSecretStmt,
+) (LogicalPlan, error) {
+	return &LogicalCreateSecret{
+		Name:        s.Name,
+		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
+		Persistent:  s.Persistent,
+		SecretType:  s.SecretType,
+		Provider:    s.Provider,
+		Scope:       s.Scope,
+		Options:     s.Options,
+	}, nil
+}
+
+func (p *Planner) planDropSecret(
+	s *binder.BoundDropSecretStmt,
+) (LogicalPlan, error) {
+	return &LogicalDropSecret{
+		Name:     s.Name,
+		IfExists: s.IfExists,
+	}, nil
+}
+
+func (p *Planner) planAlterSecret(
+	s *binder.BoundAlterSecretStmt,
+) (LogicalPlan, error) {
+	return &LogicalAlterSecret{
+		Name:    s.Name,
+		Options: s.Options,
 	}, nil
 }
 
@@ -2174,6 +2260,31 @@ func (p *Planner) createPhysicalPlan(
 			NewColumn:    l.NewColumn,
 			DropColumn:   l.DropColumn,
 			AddColumn:    l.AddColumn,
+		}, nil
+
+	// Secret DDL logical to physical mappings
+	case *LogicalCreateSecret:
+		return &PhysicalCreateSecret{
+			Name:        l.Name,
+			IfNotExists: l.IfNotExists,
+			OrReplace:   l.OrReplace,
+			Persistent:  l.Persistent,
+			SecretType:  l.SecretType,
+			Provider:    l.Provider,
+			Scope:       l.Scope,
+			Options:     l.Options,
+		}, nil
+
+	case *LogicalDropSecret:
+		return &PhysicalDropSecret{
+			Name:     l.Name,
+			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalAlterSecret:
+		return &PhysicalAlterSecret{
+			Name:    l.Name,
+			Options: l.Options,
 		}, nil
 
 	case *LogicalMerge:

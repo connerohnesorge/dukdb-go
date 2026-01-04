@@ -141,15 +141,26 @@ type UndoRecorder interface {
 	RecordUndo(op UndoOperation)
 }
 
+// SecretManager is an interface for managing secrets.
+// This allows the executor to work with secrets without importing the secret package directly.
+type SecretManager interface {
+	Create(ctx context.Context, name string, secretType string, provider string, scope string, persistent bool, options map[string]string) error
+	Delete(ctx context.Context, name string) error
+	Update(ctx context.Context, name string, options map[string]string) error
+	Get(ctx context.Context, name string) (interface{}, error)
+	Exists(ctx context.Context, name string) bool
+}
+
 // Executor executes physical plans.
 type Executor struct {
-	catalog      *catalog.Catalog
-	storage      *storage.Storage
-	planner      *planner.Planner
-	wal          *wal.Writer   // WAL writer for logging DML operations (optional, may be nil)
-	txnID        uint64        // Current transaction ID for WAL entries
-	undoRecorder UndoRecorder  // Undo recorder for transaction rollback (optional, may be nil)
-	inTxn        bool          // Whether we're in an explicit transaction (BEGIN was called)
+	catalog       *catalog.Catalog
+	storage       *storage.Storage
+	planner       *planner.Planner
+	wal           *wal.Writer    // WAL writer for logging DML operations (optional, may be nil)
+	txnID         uint64         // Current transaction ID for WAL entries
+	undoRecorder  UndoRecorder   // Undo recorder for transaction rollback (optional, may be nil)
+	inTxn         bool           // Whether we're in an explicit transaction (BEGIN was called)
+	secretManager SecretManager  // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
 }
 
 // NewExecutor creates a new Executor.
@@ -184,6 +195,12 @@ func (e *Executor) SetUndoRecorder(recorder UndoRecorder) {
 // SetInTransaction sets whether we're in an explicit transaction.
 func (e *Executor) SetInTransaction(inTxn bool) {
 	e.inTxn = inTxn
+}
+
+// SetSecretManager sets the secret manager for handling CREATE/DROP/ALTER SECRET operations.
+// If set to nil, secret operations will return an error.
+func (e *Executor) SetSecretManager(mgr SecretManager) {
+	e.secretManager = mgr
 }
 
 // recordUndo records an undo operation if we're in a transaction.
@@ -296,6 +313,13 @@ func (e *Executor) executeWithContext(
 		return e.executePivotPlan(execCtx, p)
 	case *planner.PhysicalUnpivot:
 		return e.executeUnpivotPlan(execCtx, p)
+	// Secret DDL operations
+	case *planner.PhysicalCreateSecret:
+		return e.executeCreateSecret(execCtx, p)
+	case *planner.PhysicalDropSecret:
+		return e.executeDropSecret(execCtx, p)
+	case *planner.PhysicalAlterSecret:
+		return e.executeAlterSecret(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

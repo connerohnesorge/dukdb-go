@@ -543,3 +543,125 @@ func (e *Executor) executeAlterTable(
 
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
+
+// ---------- Secret DDL Execution Functions ----------
+
+// executeCreateSecret executes a CREATE SECRET statement.
+func (e *Executor) executeCreateSecret(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalCreateSecret,
+) (*ExecutionResult, error) {
+	// Check if secret manager is available
+	if e.secretManager == nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "secret manager not configured",
+		}
+	}
+
+	// Check if secret already exists
+	if e.secretManager.Exists(ctx.Context, plan.Name) {
+		if plan.IfNotExists {
+			return &ExecutionResult{RowsAffected: 0}, nil
+		}
+		if plan.OrReplace {
+			// Delete the existing secret first
+			if err := e.secretManager.Delete(ctx.Context, plan.Name); err != nil {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeCatalog,
+					Msg:  fmt.Sprintf("failed to replace secret %s: %v", plan.Name, err),
+				}
+			}
+		} else {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("secret %s already exists", plan.Name),
+			}
+		}
+	}
+
+	// Create the secret
+	if err := e.secretManager.Create(
+		ctx.Context,
+		plan.Name,
+		plan.SecretType,
+		plan.Provider,
+		plan.Scope,
+		plan.Persistent,
+		plan.Options,
+	); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  fmt.Sprintf("failed to create secret %s: %v", plan.Name, err),
+		}
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// executeDropSecret executes a DROP SECRET statement.
+func (e *Executor) executeDropSecret(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalDropSecret,
+) (*ExecutionResult, error) {
+	// Check if secret manager is available
+	if e.secretManager == nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "secret manager not configured",
+		}
+	}
+
+	// Check if secret exists
+	if !e.secretManager.Exists(ctx.Context, plan.Name) {
+		if plan.IfExists {
+			return &ExecutionResult{RowsAffected: 0}, nil
+		}
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  fmt.Sprintf("secret %s does not exist", plan.Name),
+		}
+	}
+
+	// Delete the secret
+	if err := e.secretManager.Delete(ctx.Context, plan.Name); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  fmt.Sprintf("failed to drop secret %s: %v", plan.Name, err),
+		}
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// executeAlterSecret executes an ALTER SECRET statement.
+func (e *Executor) executeAlterSecret(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalAlterSecret,
+) (*ExecutionResult, error) {
+	// Check if secret manager is available
+	if e.secretManager == nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "secret manager not configured",
+		}
+	}
+
+	// Check if secret exists
+	if !e.secretManager.Exists(ctx.Context, plan.Name) {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  fmt.Sprintf("secret %s does not exist", plan.Name),
+		}
+	}
+
+	// Update the secret
+	if err := e.secretManager.Update(ctx.Context, plan.Name, plan.Options); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  fmt.Sprintf("failed to alter secret %s: %v", plan.Name, err),
+		}
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
+}

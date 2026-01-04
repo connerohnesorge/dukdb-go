@@ -776,6 +776,69 @@ const (
 
 // ---------- Sampling Types ----------
 
+// ---------- Secret DDL Statements ----------
+
+// CreateSecretStmt represents a CREATE SECRET statement.
+// DuckDB syntax:
+//
+//	CREATE [OR REPLACE] [PERSISTENT | TEMPORARY] SECRET [IF NOT EXISTS] name (
+//	    TYPE secret_type,
+//	    [PROVIDER provider_type,]
+//	    [SCOPE scope_path,]
+//	    option_name option_value, ...
+//	)
+type CreateSecretStmt struct {
+	Name        string            // Secret name
+	IfNotExists bool              // IF NOT EXISTS clause
+	OrReplace   bool              // OR REPLACE clause
+	Persistent  bool              // PERSISTENT (survives restarts) vs TEMPORARY
+	SecretType  string            // Type of secret (S3, GCS, AZURE, HTTP, HUGGINGFACE)
+	Provider    string            // Provider type (CONFIG, ENV, CREDENTIAL_CHAIN, IAM)
+	Scope       string            // Optional scope path (e.g., s3://bucket/path)
+	Options     map[string]string // Key-value options (key_id, secret, region, etc.)
+}
+
+func (*CreateSecretStmt) stmtNode() {}
+
+func (*CreateSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateSecretStmt.
+func (s *CreateSecretStmt) Accept(v Visitor) {
+	v.VisitCreateSecretStmt(s)
+}
+
+// DropSecretStmt represents a DROP SECRET statement.
+// Syntax: DROP SECRET [IF EXISTS] name
+type DropSecretStmt struct {
+	Name     string // Secret name
+	IfExists bool   // IF EXISTS clause
+}
+
+func (*DropSecretStmt) stmtNode() {}
+
+func (*DropSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropSecretStmt.
+func (s *DropSecretStmt) Accept(v Visitor) {
+	v.VisitDropSecretStmt(s)
+}
+
+// AlterSecretStmt represents an ALTER SECRET statement.
+// Syntax: ALTER SECRET name (option_name option_value, ...)
+type AlterSecretStmt struct {
+	Name    string            // Secret name
+	Options map[string]string // Options to update
+}
+
+func (*AlterSecretStmt) stmtNode() {}
+
+func (*AlterSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// Accept implements the Visitor pattern for AlterSecretStmt.
+func (s *AlterSecretStmt) Accept(v Visitor) {
+	v.VisitAlterSecretStmt(s)
+}
+
 // SampleMethod represents the method used for sampling rows from a table.
 type SampleMethod int
 

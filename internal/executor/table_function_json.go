@@ -9,6 +9,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 	"github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/planner"
 )
@@ -18,16 +19,6 @@ func (e *Executor) executeReadJSON(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Open the file
-	file, err := os.Open(plan.Path)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
-		}
-	}
-	defer func() { _ = file.Close() }()
-
 	// Build reader options from plan options
 	opts := json.DefaultReaderOptions()
 
@@ -74,15 +65,55 @@ func (e *Executor) executeReadJSON(
 		}
 	}
 
-	// Create the JSON reader
-	reader, err := json.NewReader(file, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+	// Create the JSON reader - use filesystem for cloud URLs, local file for local paths
+	var reader *json.Reader
+	var closer io.Closer
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		file, err := e.openFileForReading(ctx.Context, plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		file, err := os.Open(plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+			}
 		}
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() {
+		_ = reader.Close()
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}()
 
 	// Get the schema (column names)
 	columns, err := reader.Schema()
@@ -157,30 +188,60 @@ func (e *Executor) executeReadJSONAuto(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Open the file
-	file, err := os.Open(plan.Path)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
-		}
-	}
-	defer func() { _ = file.Close() }()
-
 	// Use default reader options which enable auto-detection:
 	// - Format: "auto" (auto-detect array vs NDJSON)
 	// - Type inference is automatically performed
 	opts := json.DefaultReaderOptions()
 
-	// Create the JSON reader with auto-detection
-	reader, err := json.NewReader(file, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+	// Create the JSON reader - use filesystem for cloud URLs, local file for local paths
+	var reader *json.Reader
+	var closer io.Closer
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		file, err := e.openFileForReading(ctx.Context, plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		file, err := os.Open(plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open JSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create JSON reader: %v", err),
+			}
 		}
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() {
+		_ = reader.Close()
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}()
 
 	// Get the schema (column names)
 	columns, err := reader.Schema()
@@ -255,16 +316,6 @@ func (e *Executor) executeReadNDJSON(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Open the file
-	file, err := os.Open(plan.Path)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to open NDJSON file: %v", err),
-		}
-	}
-	defer func() { _ = file.Close() }()
-
 	// Build reader options with NDJSON format
 	opts := json.DefaultReaderOptions()
 	opts.Format = json.FormatNDJSON
@@ -301,15 +352,55 @@ func (e *Executor) executeReadNDJSON(
 		}
 	}
 
-	// Create the JSON reader
-	reader, err := json.NewReader(file, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create NDJSON reader: %v", err),
+	// Create the JSON reader - use filesystem for cloud URLs, local file for local paths
+	var reader *json.Reader
+	var closer io.Closer
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		file, err := e.openFileForReading(ctx.Context, plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open NDJSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create NDJSON reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		file, err := os.Open(plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open NDJSON file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = json.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create NDJSON reader: %v", err),
+			}
 		}
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() {
+		_ = reader.Close()
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}()
 
 	// Get the schema (column names)
 	columns, err := reader.Schema()

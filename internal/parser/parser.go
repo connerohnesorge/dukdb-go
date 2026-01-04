@@ -60,7 +60,7 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseDrop()
 	case p.isKeyword("ALTER"):
 		p.advance()
-		stmt, err = p.parseAlterTable()
+		stmt, err = p.parseAlter()
 	case p.isKeyword("BEGIN"):
 		stmt, err = p.parseBegin()
 	case p.isKeyword("COMMIT"):
@@ -1118,6 +1118,27 @@ func (p *parser) parseCreate() (Statement, error) {
 		return nil, err
 	}
 
+	// Check for OR REPLACE
+	orReplace := false
+	if p.isKeyword("OR") {
+		p.advance()
+		if err := p.expectKeyword("REPLACE"); err != nil {
+			return nil, err
+		}
+		orReplace = true
+	}
+
+	// Check for PERSISTENT or TEMPORARY (for SECRET)
+	persistent := false
+	temporary := false
+	if p.isKeyword("PERSISTENT") {
+		p.advance()
+		persistent = true
+	} else if p.isKeyword("TEMPORARY") || p.isKeyword("TEMP") {
+		p.advance()
+		temporary = true
+	}
+
 	// Check for UNIQUE INDEX (special case)
 	if p.isKeyword("UNIQUE") {
 		return p.parseCreateIndex()
@@ -1134,10 +1155,12 @@ func (p *parser) parseCreate() (Statement, error) {
 		return p.parseCreateSequence()
 	} else if p.isKeyword("SCHEMA") {
 		return p.parseCreateSchema()
+	} else if p.isKeyword("SECRET") {
+		return p.parseCreateSecret(orReplace, persistent, temporary)
 	}
 
 	return nil, p.errorf(
-		"expected TABLE, VIEW, INDEX, SEQUENCE, or SCHEMA after CREATE",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, or SECRET after CREATE",
 	)
 }
 
@@ -1343,10 +1366,12 @@ func (p *parser) parseDrop() (Statement, error) {
 		return p.parseDropSequence()
 	} else if p.isKeyword("SCHEMA") {
 		return p.parseDropSchema()
+	} else if p.isKeyword("SECRET") {
+		return p.parseDropSecret()
 	}
 
 	return nil, p.errorf(
-		"expected TABLE, VIEW, INDEX, SEQUENCE, or SCHEMA after DROP",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, or SECRET after DROP",
 	)
 }
 
@@ -1383,6 +1408,215 @@ func (p *parser) parseDropTable() (*DropTableStmt, error) {
 			)
 		}
 		stmt.Table = p.advance().value
+	}
+
+	return stmt, nil
+}
+
+// parseAlter dispatches to the appropriate ALTER statement parser.
+func (p *parser) parseAlter() (Statement, error) {
+	if p.isKeyword("TABLE") {
+		return p.parseAlterTable()
+	} else if p.isKeyword("SECRET") {
+		return p.parseAlterSecret()
+	}
+
+	return nil, p.errorf("expected TABLE or SECRET after ALTER")
+}
+
+// parseCreateSecret parses a CREATE SECRET statement.
+// Syntax: CREATE [OR REPLACE] [PERSISTENT | TEMPORARY] SECRET [IF NOT EXISTS] name (
+//
+//	TYPE secret_type,
+//	[PROVIDER provider_type,]
+//	[SCOPE scope_path,]
+//	option_name option_value, ...
+//
+// )
+func (p *parser) parseCreateSecret(orReplace, persistent, temporary bool) (*CreateSecretStmt, error) {
+	if err := p.expectKeyword("SECRET"); err != nil {
+		return nil, err
+	}
+
+	stmt := &CreateSecretStmt{
+		OrReplace:  orReplace,
+		Persistent: persistent && !temporary, // PERSISTENT unless TEMPORARY is specified
+		Options:    make(map[string]string),
+	}
+
+	// IF NOT EXISTS
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("NOT"); err != nil {
+			return nil, err
+		}
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		stmt.IfNotExists = true
+	}
+
+	// Secret name (optional in DuckDB, but we require it)
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected secret name")
+	}
+	stmt.Name = p.advance().value
+
+	// Options in parentheses
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse options
+	for {
+		if p.current().typ == tokenRParen {
+			break
+		}
+
+		// Option name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected option name")
+		}
+		optName := strings.ToUpper(p.advance().value)
+
+		// Option value (can be string literal or identifier)
+		var optValue string
+		if p.current().typ == tokenString {
+			tok := p.advance()
+			// Remove quotes from string value
+			optValue = tok.value[1 : len(tok.value)-1]
+			// Unescape doubled quotes
+			optValue = strings.ReplaceAll(optValue, "''", "'")
+		} else if p.current().typ == tokenIdent {
+			optValue = p.advance().value
+		} else if p.current().typ == tokenNumber {
+			optValue = p.advance().value
+		} else {
+			return nil, p.errorf("expected option value for %s", optName)
+		}
+
+		// Handle special options
+		switch optName {
+		case "TYPE":
+			stmt.SecretType = strings.ToUpper(optValue)
+		case "PROVIDER":
+			stmt.Provider = strings.ToUpper(optValue)
+		case "SCOPE":
+			stmt.Scope = optValue
+		default:
+			// Store as general option with lowercase key for consistency
+			stmt.Options[strings.ToLower(optName)] = optValue
+		}
+
+		// Check for comma or end
+		if p.current().typ == tokenComma {
+			p.advance()
+		} else if p.current().typ != tokenRParen {
+			return nil, p.errorf("expected comma or ) in secret options")
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	// Validate required fields
+	if stmt.SecretType == "" {
+		return nil, p.errorf("TYPE is required for CREATE SECRET")
+	}
+
+	return stmt, nil
+}
+
+// parseDropSecret parses a DROP SECRET statement.
+// Syntax: DROP SECRET [IF EXISTS] name
+func (p *parser) parseDropSecret() (*DropSecretStmt, error) {
+	if err := p.expectKeyword("SECRET"); err != nil {
+		return nil, err
+	}
+
+	stmt := &DropSecretStmt{}
+
+	// IF EXISTS
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		stmt.IfExists = true
+	}
+
+	// Secret name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected secret name")
+	}
+	stmt.Name = p.advance().value
+
+	return stmt, nil
+}
+
+// parseAlterSecret parses an ALTER SECRET statement.
+// Syntax: ALTER SECRET name (option_name option_value, ...)
+func (p *parser) parseAlterSecret() (*AlterSecretStmt, error) {
+	if err := p.expectKeyword("SECRET"); err != nil {
+		return nil, err
+	}
+
+	stmt := &AlterSecretStmt{
+		Options: make(map[string]string),
+	}
+
+	// Secret name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected secret name")
+	}
+	stmt.Name = p.advance().value
+
+	// Options in parentheses
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse options
+	for {
+		if p.current().typ == tokenRParen {
+			break
+		}
+
+		// Option name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected option name")
+		}
+		optName := strings.ToLower(p.advance().value)
+
+		// Option value
+		var optValue string
+		if p.current().typ == tokenString {
+			tok := p.advance()
+			// Remove quotes from string value
+			optValue = tok.value[1 : len(tok.value)-1]
+			// Unescape doubled quotes
+			optValue = strings.ReplaceAll(optValue, "''", "'")
+		} else if p.current().typ == tokenIdent {
+			optValue = p.advance().value
+		} else if p.current().typ == tokenNumber {
+			optValue = p.advance().value
+		} else {
+			return nil, p.errorf("expected option value for %s", optName)
+		}
+
+		stmt.Options[optName] = optValue
+
+		// Check for comma or end
+		if p.current().typ == tokenComma {
+			p.advance()
+		} else if p.current().typ != tokenRParen {
+			return nil, p.errorf("expected comma or ) in alter secret options")
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
 	}
 
 	return stmt, nil

@@ -6,6 +6,7 @@ Pure Go implementation of a DuckDB-compatible database driver.
 
 - **Pure Go** - Zero CGO dependencies, compiles anywhere Go compiles
 - **database/sql Compatible** - Standard Go database interface
+- **Cloud Storage** - Native support for S3, GCS, Azure, and HTTP/HTTPS
 - **Extended Type Support** - JSON, GEOMETRY, BIGNUM, VARIANT, LAMBDA types
 - **Spatial Functions** - 30+ ST_* functions for GIS operations
 - **JSON Operators** - Path extraction with `->` and `->>` operators
@@ -178,6 +179,63 @@ INSERT INTO transforms VALUES ('(x, y) -> x * y');
 - JSON: `read_json()`, `read_json_auto()`, `read_ndjson()`
 - Parquet: `read_parquet()` with column projection
 
+## Cloud Storage
+
+dukdb-go supports reading and writing data from cloud storage providers. See [docs/cloud-storage.md](docs/cloud-storage.md) for comprehensive documentation.
+
+### Supported Providers
+
+| Provider | URL Schemes |
+|----------|-------------|
+| Amazon S3 | `s3://`, `s3a://`, `s3n://` |
+| Google Cloud Storage | `gs://`, `gcs://` |
+| Azure Blob Storage | `azure://`, `az://` |
+| HTTP/HTTPS | `http://`, `https://` |
+
+### Quick Example
+
+```sql
+-- Create credentials
+CREATE SECRET my_s3 (
+    TYPE S3,
+    KEY_ID 'AKIAIOSFODNN7EXAMPLE',
+    SECRET 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    REGION 'us-east-1'
+);
+
+-- Read from S3
+SELECT * FROM read_parquet('s3://my-bucket/data.parquet');
+
+-- Write to S3
+COPY my_table TO 's3://my-bucket/exports/data.csv' (FORMAT CSV);
+
+-- Read from public URL
+SELECT * FROM read_csv('https://example.com/data.csv');
+```
+
+### Secrets Management
+
+Manage cloud credentials with the secrets system:
+
+```sql
+-- Create a secret
+CREATE SECRET gcs_creds (
+    TYPE GCS,
+    SERVICE_ACCOUNT_JSON '/path/to/service-account.json'
+);
+
+-- List all secrets
+SELECT * FROM duckdb_secrets();
+
+-- Find matching secret for a URL
+SELECT * FROM which_secret('s3://bucket/file.csv', 'S3');
+
+-- Drop a secret
+DROP SECRET my_s3;
+```
+
+See [docs/secrets.md](docs/secrets.md) for detailed secrets management documentation.
+
 ## Running Tests
 
 ```bash
@@ -226,6 +284,16 @@ database/sql API
       +-- Executor (plan execution)
       +-- Storage (columnar data storage)
 ```
+
+## WebAssembly Support
+
+dukdb-go compiles to WebAssembly for use in browsers:
+
+```bash
+GOOS=js GOARCH=wasm go build -o dukdb.wasm ./cmd/wasm/
+```
+
+In WASM, the HTTP filesystem is fully supported. For S3/GCS/Azure access, use pre-signed URLs via the HTTP filesystem. See [docs/wasm.md](docs/wasm.md) for comprehensive WASM documentation.
 
 ## Comparison with go-duckdb
 

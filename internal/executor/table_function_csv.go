@@ -2,6 +2,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
+	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 	"github.com/dukdb/dukdb-go/internal/planner"
 )
 
@@ -31,6 +33,11 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeReadNDJSON(ctx, plan)
 	case "read_parquet":
 		return e.executeReadParquet(ctx, plan)
+	// Secret system functions
+	case "which_secret":
+		return e.executeWhichSecret(ctx, plan)
+	case "duckdb_secrets":
+		return e.executeDuckDBSecrets(ctx, plan)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -44,16 +51,6 @@ func (e *Executor) executeReadCSV(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Open the file
-	file, err := os.Open(plan.Path)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
-		}
-	}
-	defer func() { _ = file.Close() }()
-
 	// Build reader options from plan options
 	opts := csv.DefaultReaderOptions()
 
@@ -90,15 +87,55 @@ func (e *Executor) executeReadCSV(
 		}
 	}
 
-	// Create the CSV reader
-	reader, err := csv.NewReader(file, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+	// Create the CSV reader - use filesystem for cloud URLs, local file for local paths
+	var reader *csv.Reader
+	var closer io.Closer
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		file, err := e.openFileForReading(ctx.Context, plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = csv.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		file, err := os.Open(plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = csv.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+			}
 		}
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() {
+		_ = reader.Close()
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}()
 
 	// Get the schema (column names)
 	columns, err := reader.Schema()
@@ -167,22 +204,30 @@ func (e *Executor) executeReadCSV(
 	return result, nil
 }
 
+// openFileForReading opens a file for reading using the filesystem provider.
+// This supports both local and cloud URLs (S3, GCS, Azure, HTTP/HTTPS).
+func (e *Executor) openFileForReading(ctx context.Context, path string) (filesystem.File, error) {
+	provider := NewFileSystemProvider(e.getSecretManager())
+
+	fs, err := provider.GetFileSystem(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filesystem: %w", err)
+	}
+
+	// For cloud filesystems with context support, use OpenContext
+	if ctxFS, ok := fs.(filesystem.ContextFileSystem); ok {
+		return ctxFS.OpenContext(ctx, path)
+	}
+
+	return fs.Open(path)
+}
+
 // executeReadCSVAuto executes a read_csv_auto table function with automatic format detection.
 // This function uses auto-detection for delimiter, quote character, header row, and column types.
 func (e *Executor) executeReadCSVAuto(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Open the file
-	file, err := os.Open(plan.Path)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
-		}
-	}
-	defer func() { _ = file.Close() }()
-
 	// Use default reader options which enable auto-detection:
 	// - Delimiter: 0 (auto-detect comma, tab, semicolon, pipe)
 	// - Header: true (first row is header)
@@ -190,15 +235,55 @@ func (e *Executor) executeReadCSVAuto(
 	// Type inference is also automatically performed
 	opts := csv.DefaultReaderOptions()
 
-	// Create the CSV reader with auto-detection
-	reader, err := csv.NewReader(file, opts)
-	if err != nil {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+	// Create the CSV reader - use filesystem for cloud URLs, local file for local paths
+	var reader *csv.Reader
+	var closer io.Closer
+
+	if filesystem.IsCloudURL(plan.Path) {
+		// Use FileSystemProvider for cloud URLs
+		file, err := e.openFileForReading(ctx.Context, plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = csv.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+			}
+		}
+	} else {
+		// Use local file for local paths
+		file, err := os.Open(plan.Path)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+			}
+		}
+		closer = file
+
+		reader, err = csv.NewReader(file, opts)
+		if err != nil {
+			_ = file.Close()
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+			}
 		}
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() {
+		_ = reader.Close()
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}()
 
 	// Get the schema (column names)
 	columns, err := reader.Schema()

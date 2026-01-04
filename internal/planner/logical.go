@@ -664,6 +664,50 @@ func (*LogicalAlterTable) Children() []LogicalPlan { return nil }
 
 func (*LogicalAlterTable) OutputColumns() []ColumnBinding { return nil }
 
+// ---------- Secret DDL Logical Plan Nodes ----------
+
+// LogicalCreateSecret represents a CREATE SECRET operation.
+type LogicalCreateSecret struct {
+	Name        string            // Secret name
+	IfNotExists bool              // IF NOT EXISTS clause
+	OrReplace   bool              // OR REPLACE clause
+	Persistent  bool              // PERSISTENT vs TEMPORARY
+	SecretType  string            // Type of secret (S3, GCS, AZURE, HTTP, HUGGINGFACE)
+	Provider    string            // Provider type (CONFIG, ENV, CREDENTIAL_CHAIN, IAM)
+	Scope       string            // Optional scope path
+	Options     map[string]string // Key-value options
+}
+
+func (*LogicalCreateSecret) logicalPlanNode() {}
+
+func (*LogicalCreateSecret) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateSecret) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropSecret represents a DROP SECRET operation.
+type LogicalDropSecret struct {
+	Name     string // Secret name
+	IfExists bool   // IF EXISTS clause
+}
+
+func (*LogicalDropSecret) logicalPlanNode() {}
+
+func (*LogicalDropSecret) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropSecret) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalAlterSecret represents an ALTER SECRET operation.
+type LogicalAlterSecret struct {
+	Name    string            // Secret name
+	Options map[string]string // Options to update
+}
+
+func (*LogicalAlterSecret) logicalPlanNode() {}
+
+func (*LogicalAlterSecret) Children() []LogicalPlan { return nil }
+
+func (*LogicalAlterSecret) OutputColumns() []ColumnBinding { return nil }
+
 // LogicalMerge represents a MERGE INTO operation.
 type LogicalMerge struct {
 	Schema                 string

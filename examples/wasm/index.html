@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dukdb-go WASM Cloud Storage Test</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-color: #eaeaea;
+            --accent-color: #0f3460;
+            --success-color: #00b894;
+            --error-color: #d63031;
+            --warning-color: #fdcb6e;
+            --border-color: #2d3a4f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #9ca3af;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+
+        .status-loading {
+            background-color: var(--warning-color);
+            color: #1a1a2e;
+        }
+
+        .status-ready {
+            background-color: var(--success-color);
+            color: #fff;
+        }
+
+        .status-error {
+            background-color: var(--error-color);
+            color: #fff;
+        }
+
+        .section {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .test-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background-color: var(--accent-color);
+            color: var(--text-color);
+            font-size: 0.95rem;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--success-color);
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #2563eb;
+        }
+
+        .btn-secondary {
+            background-color: var(--accent-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #1a4570;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #00a388;
+        }
+
+        .results {
+            margin-top: 15px;
+        }
+
+        .result-item {
+            background-color: var(--accent-color);
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--border-color);
+        }
+
+        .result-item.success {
+            border-left-color: var(--success-color);
+        }
+
+        .result-item.error {
+            border-left-color: var(--error-color);
+        }
+
+        .result-item.pending {
+            border-left-color: var(--warning-color);
+        }
+
+        .result-item h4 {
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .result-item pre {
+            background-color: #0a0e17;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .console-output {
+            background-color: #0a0e17;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .console-output .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+
+        .console-output .log-entry.info {
+            color: #60a5fa;
+        }
+
+        .console-output .log-entry.success {
+            color: #34d399;
+        }
+
+        .console-output .log-entry.error {
+            color: #f87171;
+        }
+
+        .console-output .log-entry.warn {
+            color: #fbbf24;
+        }
+
+        .compatibility-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .compat-item {
+            background-color: var(--accent-color);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .compat-item.supported {
+            border: 2px solid var(--success-color);
+        }
+
+        .compat-item.unsupported {
+            border: 2px solid var(--error-color);
+            opacity: 0.7;
+        }
+
+        .compat-item .scheme {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .compat-item .status {
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>dukdb-go WASM Cloud Storage Test</h1>
+            <p>Test the pure Go DuckDB driver's cloud filesystem functionality in the browser</p>
+            <span id="wasm-status" class="status-badge status-loading">Loading WASM...</span>
+        </header>
+
+        <div class="section">
+            <h2>WASM Compatibility</h2>
+            <p style="margin-bottom: 15px; color: #9ca3af;">
+                In WASM environments, only HTTP/HTTPS filesystems are fully supported.
+                S3, GCS, and Azure require pre-signed URLs accessed via HTTP.
+            </p>
+            <div id="compatibility-grid" class="compatibility-grid">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Test Configuration</h2>
+            <div class="test-controls">
+                <div class="input-group">
+                    <label for="test-url">Test URL (HTTP/HTTPS)</label>
+                    <input type="text" id="test-url"
+                           value="https://raw.githubusercontent.com/duckdb/duckdb/main/README.md"
+                           placeholder="Enter a URL to test">
+                </div>
+            </div>
+            <div class="button-group">
+                <button id="btn-run-all" class="btn-success" onclick="runAllTests()" disabled>
+                    Run All Tests
+                </button>
+                <button id="btn-clear" class="btn-secondary" onclick="clearResults()">
+                    Clear Results
+                </button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Individual Tests</h2>
+            <div class="button-group">
+                <button id="btn-http-read" class="btn-primary" onclick="testHTTPRead()" disabled>
+                    Test HTTP Read
+                </button>
+                <button id="btn-http-stat" class="btn-primary" onclick="testHTTPStat()" disabled>
+                    Test HTTP Stat
+                </button>
+                <button id="btn-fetch" class="btn-primary" onclick="testFetch()" disabled>
+                    Test Fetch API
+                </button>
+                <button id="btn-filesystem" class="btn-primary" onclick="testFileSystem()" disabled>
+                    Test FileSystem Factory
+                </button>
+                <button id="btn-range" class="btn-primary" onclick="testRangeRead()" disabled>
+                    Test Range Read
+                </button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Test Results</h2>
+            <div id="results" class="results">
+                <p style="color: #6b7280;">Run tests to see results...</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Console Output</h2>
+            <div id="console" class="console-output">
+                <div class="log-entry info">[Init] Loading WASM module...</div>
+            </div>
+        </div>
+
+        <footer>
+            <p>dukdb-go - A pure Go implementation of a DuckDB database driver</p>
+            <p>No CGO required - works in WASM, TinyGo, and other pure Go environments</p>
+        </footer>
+    </div>
+
+    <script src="wasm_exec.js"></script>
+    <script src="test.js"></script>
+</body>
+</html>

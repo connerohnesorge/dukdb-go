@@ -426,3 +426,41 @@ type BoundCTE struct {
 	// ResultNames are the column names (either from aliases or inferred from query).
 	ResultNames []string
 }
+
+// ---------- Secret Bound Statement Types ----------
+
+// BoundCreateSecretStmt represents a bound CREATE SECRET statement.
+type BoundCreateSecretStmt struct {
+	Name        string            // Secret name
+	IfNotExists bool              // IF NOT EXISTS clause
+	OrReplace   bool              // OR REPLACE clause
+	Persistent  bool              // PERSISTENT vs TEMPORARY
+	SecretType  string            // Type of secret (S3, GCS, AZURE, HTTP, HUGGINGFACE)
+	Provider    string            // Provider type (CONFIG, ENV, CREDENTIAL_CHAIN, IAM)
+	Scope       string            // Optional scope path (e.g., s3://bucket/path)
+	Options     map[string]string // Key-value options
+}
+
+func (*BoundCreateSecretStmt) boundStmtNode() {}
+
+func (*BoundCreateSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropSecretStmt represents a bound DROP SECRET statement.
+type BoundDropSecretStmt struct {
+	Name     string // Secret name
+	IfExists bool   // IF EXISTS clause
+}
+
+func (*BoundDropSecretStmt) boundStmtNode() {}
+
+func (*BoundDropSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundAlterSecretStmt represents a bound ALTER SECRET statement.
+type BoundAlterSecretStmt struct {
+	Name    string            // Secret name
+	Options map[string]string // Options to update
+}
+
+func (*BoundAlterSecretStmt) boundStmtNode() {}
+
+func (*BoundAlterSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }

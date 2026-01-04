@@ -2,6 +2,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	jsonio "github.com/dukdb/dukdb-go/internal/io/json"
 	parquetio "github.com/dukdb/dukdb-go/internal/io/parquet"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/secret"
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
 
@@ -38,8 +40,17 @@ func (e *Executor) executeCopyFrom(
 	// Determine file format from options or file extension
 	format := detectFormat(plan.FilePath, plan.Options)
 
-	// Create appropriate reader
-	reader, err := createFileReader(plan.FilePath, format, plan.Options)
+	// Create appropriate reader - use cloud filesystem for cloud URLs
+	var reader fileio.FileReader
+	var err error
+
+	if IsCloudURL(plan.FilePath) {
+		// Use filesystem provider for cloud URLs
+		reader, err = e.createCloudFileReader(ctx.Context, plan.FilePath, format, plan.Options)
+	} else {
+		// Use local file reader for local paths
+		reader, err = createFileReader(plan.FilePath, format, plan.Options)
+	}
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
@@ -109,8 +120,17 @@ func (e *Executor) executeCopyTo(
 	// Determine file format from options or file extension
 	format := detectFormat(plan.FilePath, plan.Options)
 
-	// Create appropriate writer
-	writer, err := createFileWriter(plan.FilePath, format, plan.Options)
+	// Create appropriate writer - use cloud filesystem for cloud URLs
+	var writer fileio.FileWriter
+	var err error
+
+	if IsCloudURL(plan.FilePath) {
+		// Use filesystem provider for cloud URLs
+		writer, err = e.createCloudFileWriter(ctx.Context, plan.FilePath, format, plan.Options)
+	} else {
+		// Use local file writer for local paths
+		writer, err = createFileWriter(plan.FilePath, format, plan.Options)
+	}
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
@@ -462,4 +482,43 @@ func parseCompression(comp string) fileio.Compression {
 	default:
 		return fileio.CompressionNone
 	}
+}
+
+// getSecretManager returns a secret.Manager from the executor's SecretManager interface.
+// Returns nil if the secret manager is not set or doesn't implement secret.Manager.
+func (e *Executor) getSecretManager() secret.Manager {
+	if e.secretManager == nil {
+		return nil
+	}
+	// Try to cast to secret.Manager
+	if mgr, ok := e.secretManager.(secret.Manager); ok {
+		return mgr
+	}
+	return nil
+}
+
+// createCloudFileReader creates a file reader for cloud URLs using the FileSystemProvider.
+func (e *Executor) createCloudFileReader(
+	ctx context.Context,
+	path string,
+	format fileio.Format,
+	options map[string]any,
+) (fileio.FileReader, error) {
+	// Create filesystem provider with secret manager
+	provider := NewFileSystemProvider(e.getSecretManager())
+
+	return createFileReaderFromFS(ctx, provider, path, format, options)
+}
+
+// createCloudFileWriter creates a file writer for cloud URLs using the FileSystemProvider.
+func (e *Executor) createCloudFileWriter(
+	ctx context.Context,
+	path string,
+	format fileio.Format,
+	options map[string]any,
+) (fileio.FileWriter, error) {
+	// Create filesystem provider with secret manager
+	provider := NewFileSystemProvider(e.getSecretManager())
+
+	return createFileWriterFromFS(ctx, provider, path, format, options)
 }

@@ -892,3 +892,67 @@ func serializeWindowExpr(e *parser.WindowExpr) string {
 	sql += ")"
 	return sql
 }
+
+// ---------- Secret DDL Binder Methods ----------
+
+// bindCreateSecret binds a CREATE SECRET statement.
+func (b *Binder) bindCreateSecret(
+	s *parser.CreateSecretStmt,
+) (*BoundCreateSecretStmt, error) {
+	// Validate secret name
+	if s.Name == "" {
+		return nil, b.errorf("secret name is required")
+	}
+
+	// Validate secret type
+	if s.SecretType == "" {
+		return nil, b.errorf("TYPE is required for CREATE SECRET")
+	}
+
+	// Create bound statement
+	return &BoundCreateSecretStmt{
+		Name:        s.Name,
+		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
+		Persistent:  s.Persistent,
+		SecretType:  s.SecretType,
+		Provider:    s.Provider,
+		Scope:       s.Scope,
+		Options:     s.Options,
+	}, nil
+}
+
+// bindDropSecret binds a DROP SECRET statement.
+func (b *Binder) bindDropSecret(
+	s *parser.DropSecretStmt,
+) (*BoundDropSecretStmt, error) {
+	// Validate secret name
+	if s.Name == "" {
+		return nil, b.errorf("secret name is required")
+	}
+
+	return &BoundDropSecretStmt{
+		Name:     s.Name,
+		IfExists: s.IfExists,
+	}, nil
+}
+
+// bindAlterSecret binds an ALTER SECRET statement.
+func (b *Binder) bindAlterSecret(
+	s *parser.AlterSecretStmt,
+) (*BoundAlterSecretStmt, error) {
+	// Validate secret name
+	if s.Name == "" {
+		return nil, b.errorf("secret name is required")
+	}
+
+	// Validate that at least one option is provided
+	if len(s.Options) == 0 {
+		return nil, b.errorf("at least one option must be specified for ALTER SECRET")
+	}
+
+	return &BoundAlterSecretStmt{
+		Name:    s.Name,
+		Options: s.Options,
+	}, nil
+}

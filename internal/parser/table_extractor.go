@@ -325,6 +325,21 @@ func (te *TableExtractor) VisitGroupingSetExpr(expr *GroupingSetExpr) {
 	}
 }
 
+// VisitCreateSecretStmt is a no-op for CREATE SECRET statements (no table references).
+func (te *TableExtractor) VisitCreateSecretStmt(stmt *CreateSecretStmt) {
+	// No table references in CREATE SECRET statements
+}
+
+// VisitDropSecretStmt is a no-op for DROP SECRET statements (no table references).
+func (te *TableExtractor) VisitDropSecretStmt(stmt *DropSecretStmt) {
+	// No table references in DROP SECRET statements
+}
+
+// VisitAlterSecretStmt is a no-op for ALTER SECRET statements (no table references).
+func (te *TableExtractor) VisitAlterSecretStmt(stmt *AlterSecretStmt) {
+	// No table references in ALTER SECRET statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)

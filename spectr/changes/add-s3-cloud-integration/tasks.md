@@ -44,7 +44,7 @@
 
 ## 5. S3 Filesystem Implementation
 
-- [ ] 5.1 Add `github.com/aws/aws-sdk-go-v2` dependency
+- [ ] 5.1 Add `go get github.com/minio/minio-go/v7` dependency
 - [ ] 5.2 Create `internal/io/filesystem/s3.go`
 - [ ] 5.3 Implement S3FileSystem struct with S3Config
 - [ ] 5.4 Implement Open for S3 objects

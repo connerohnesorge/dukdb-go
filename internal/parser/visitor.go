@@ -36,4 +36,9 @@ type Visitor interface {
 
 	// GROUPING SETS/ROLLUP/CUBE expression visitor
 	VisitGroupingSetExpr(expr *GroupingSetExpr)
+
+	// Secret statement visitors
+	VisitCreateSecretStmt(stmt *CreateSecretStmt)
+	VisitDropSecretStmt(stmt *DropSecretStmt)
+	VisitAlterSecretStmt(stmt *AlterSecretStmt)
 }

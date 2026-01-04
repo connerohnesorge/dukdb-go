@@ -212,6 +212,12 @@ func (b *Binder) Bind(
 		return b.bindPivot(s)
 	case *parser.UnpivotStmt:
 		return b.bindUnpivot(s)
+	case *parser.CreateSecretStmt:
+		return b.bindCreateSecret(s)
+	case *parser.DropSecretStmt:
+		return b.bindDropSecret(s)
+	case *parser.AlterSecretStmt:
+		return b.bindAlterSecret(s)
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}

@@ -395,6 +395,12 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 		alias = tableFunc.Name
 	}
 
+	// Check for secret system functions first
+	funcNameLower := strings.ToLower(tableFunc.Name)
+	if funcNameLower == "which_secret" || funcNameLower == "duckdb_secrets" {
+		return b.bindSecretSystemFunction(ref)
+	}
+
 	// Extract the file path from the first positional argument
 	if len(tableFunc.Args) == 0 {
 		return nil, b.errorf("table function %s requires a file path argument", tableFunc.Name)
@@ -439,6 +445,100 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 		Alias:         alias,
 		TableFunction: boundFunc,
 		Lateral:       ref.Lateral, // Pass through LATERAL flag for table functions
+	}
+
+	// Create bound columns for the table function
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = tableFunc.Name
+
+	return boundRef, nil
+}
+
+// bindSecretSystemFunction binds secret system functions (which_secret, duckdb_secrets).
+func (b *Binder) bindSecretSystemFunction(ref parser.TableRef) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	funcNameLower := strings.ToLower(tableFunc.Name)
+
+	alias := ref.Alias
+	if alias == "" {
+		alias = tableFunc.Name
+	}
+
+	// Build options map from positional and named arguments
+	options := make(map[string]any)
+
+	// Add positional arguments as arg0, arg1, etc.
+	for i, argExpr := range tableFunc.Args {
+		lit, ok := argExpr.(*parser.Literal)
+		if !ok {
+			return nil, b.errorf("table function %s argument %d must be a literal value", tableFunc.Name, i)
+		}
+		options[fmt.Sprintf("arg%d", i)] = lit.Value
+	}
+
+	// Add named arguments
+	for name, expr := range tableFunc.NamedArgs {
+		lit, ok := expr.(*parser.Literal)
+		if !ok {
+			return nil, b.errorf("table function option %s must be a literal value", name)
+		}
+		options[name] = lit.Value
+	}
+
+	// Determine columns based on function
+	var columns []*catalog.ColumnDef
+	switch funcNameLower {
+	case "which_secret":
+		// Validate arguments: which_secret(path, type)
+		if len(tableFunc.Args) < 2 {
+			return nil, b.errorf("which_secret requires 2 arguments: path and type")
+		}
+		columns = []*catalog.ColumnDef{
+			catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("persistent", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("storage", dukdb.TYPE_VARCHAR),
+		}
+	case "duckdb_secrets":
+		// duckdb_secrets() takes no required arguments
+		columns = []*catalog.ColumnDef{
+			catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("type", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("provider", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("persistent", dukdb.TYPE_BOOLEAN),
+			catalog.NewColumnDef("storage", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("scope", dukdb.TYPE_VARCHAR),
+			catalog.NewColumnDef("secret_string", dukdb.TYPE_VARCHAR),
+		}
+	default:
+		return nil, b.errorf("unknown secret system function: %s", tableFunc.Name)
+	}
+
+	// Create bound table function reference
+	boundFunc := &BoundTableFunctionRef{
+		Name:    tableFunc.Name,
+		Path:    "", // No path for system functions
+		Options: options,
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     tableFunc.Name,
+		Alias:         alias,
+		TableFunction: boundFunc,
+		Lateral:       ref.Lateral,
 	}
 
 	// Create bound columns for the table function
