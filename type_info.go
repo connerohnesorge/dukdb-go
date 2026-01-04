@@ -250,9 +250,15 @@ func (info *typeInfo) Details() TypeDetails {
 		return &VariantDetails{}
 	case TYPE_LAMBDA:
 		return &LambdaDetails{}
-	default:
+	case TYPE_INVALID, TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER,
+		TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT,
+		TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_DATE, TYPE_TIME, TYPE_INTERVAL,
+		TYPE_HUGEINT, TYPE_UHUGEINT, TYPE_VARCHAR, TYPE_BLOB, TYPE_TIMESTAMP_S,
+		TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_UUID, TYPE_BIT, TYPE_TIME_TZ,
+		TYPE_TIMESTAMP_TZ, TYPE_ANY, TYPE_SQLNULL:
 		return nil
 	}
+	return nil
 }
 
 // SQLType returns the SQL type string for use in CREATE TABLE statements.
@@ -442,10 +448,10 @@ func (info *typeInfo) SQLType() string {
 		return "ANY"
 	case TYPE_SQLNULL:
 		return "NULL"
-
-	default:
-		return "VARCHAR" // Safe default fallback
+	case TYPE_INVALID:
+		return "INVALID"
 	}
+	return "VARCHAR" // Safe default fallback
 }
 
 // NewTypeInfo returns type information for DuckDB's primitive types.
@@ -521,6 +527,14 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 				typeToStringMap[t],
 			),
 		)
+	case TYPE_INVALID, TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER,
+		TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT,
+		TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_DATE, TYPE_TIME, TYPE_INTERVAL,
+		TYPE_HUGEINT, TYPE_UHUGEINT, TYPE_VARCHAR, TYPE_BLOB, TYPE_TIMESTAMP_S,
+		TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_UUID, TYPE_BIT, TYPE_TIME_TZ,
+		TYPE_TIMESTAMP_TZ, TYPE_ANY, TYPE_BIGNUM, TYPE_JSON, TYPE_GEOMETRY,
+		TYPE_LAMBDA, TYPE_VARIANT:
+		// Fall through to getCachedPrimitiveTypeInfo
 	}
 
 	// Use cache for primitive types to reduce allocations

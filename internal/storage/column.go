@@ -229,7 +229,14 @@ func NewVector(
 		data = make([]string, capacity)
 	case dukdb.TYPE_BLOB:
 		data = make([][]byte, capacity)
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME,
+		dukdb.TYPE_INTERVAL, dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT, dukdb.TYPE_DECIMAL,
+		dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT, dukdb.TYPE_MAP,
+		dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION, dukdb.TYPE_BIT,
+		dukdb.TYPE_TIME_TZ, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM,
+		dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA,
+		dukdb.TYPE_VARIANT:
 		// For other types, use interface{} slice
 		data = make([]any, capacity)
 	}

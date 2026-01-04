@@ -320,9 +320,15 @@ func mapTypeToLogicalTypeID(t dukdb.Type) compression.LogicalTypeID {
 		return compression.LogicalTypeBlob
 	case dukdb.TYPE_DECIMAL:
 		return compression.LogicalTypeDecimal
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT, dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_ENUM, dukdb.TYPE_LIST,
+		dukdb.TYPE_STRUCT, dukdb.TYPE_MAP, dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION,
+		dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY,
+		dukdb.TYPE_BIGNUM, dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY,
+		dukdb.TYPE_LAMBDA, dukdb.TYPE_VARIANT:
 		return compression.LogicalTypeInvalid
 	}
+	return compression.LogicalTypeInvalid
 }
 
 // mapLogicalTypeIDToType maps a compression.LogicalTypeID to a dukdb.Type.

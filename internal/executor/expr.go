@@ -1741,9 +1741,18 @@ func castValue(
 		return toFloat64Value(v), nil
 	case dukdb.TYPE_VARCHAR:
 		return toString(v), nil
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_TINYINT, dukdb.TYPE_SMALLINT, dukdb.TYPE_UTINYINT,
+		dukdb.TYPE_USMALLINT, dukdb.TYPE_UINTEGER, dukdb.TYPE_UBIGINT, dukdb.TYPE_FLOAT,
+		dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME, dukdb.TYPE_INTERVAL,
+		dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT, dukdb.TYPE_BLOB, dukdb.TYPE_DECIMAL,
+		dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT, dukdb.TYPE_MAP, dukdb.TYPE_ARRAY,
+		dukdb.TYPE_UUID, dukdb.TYPE_UNION, dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ,
+		dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM, dukdb.TYPE_SQLNULL,
+		dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA, dukdb.TYPE_VARIANT:
 		return v, nil
 	}
+	return v, nil
 }
 
 // evaluateExtractExpr evaluates an EXTRACT(part FROM source) expression.

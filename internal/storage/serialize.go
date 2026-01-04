@@ -238,7 +238,12 @@ func writeVector(
 			vec.data.([]int64),
 			vec.count,
 		)
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_INTERVAL, dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT,
+		dukdb.TYPE_DECIMAL, dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT,
+		dukdb.TYPE_MAP, dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION,
+		dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM,
+		dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA,
+		dukdb.TYPE_VARIANT:
 		// For other types, use generic any slice handling
 		return writeAnyArray(
 			buf,
@@ -246,6 +251,12 @@ func writeVector(
 			vec.count,
 		)
 	}
+	// Fallback for any remaining types
+	return writeAnyArray(
+		buf,
+		vec.data.([]any),
+		vec.count,
+	)
 }
 
 // readVector reads a vector from a byte reader
@@ -373,7 +384,12 @@ func readVector(
 			return nil, err
 		}
 		vec.data = data
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_INTERVAL, dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT,
+		dukdb.TYPE_DECIMAL, dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT,
+		dukdb.TYPE_MAP, dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION,
+		dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM,
+		dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA,
+		dukdb.TYPE_VARIANT:
 		// For other types, use generic any slice handling
 		data, err := readAnyArray(r, count)
 		if err != nil {

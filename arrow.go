@@ -612,6 +612,11 @@ func duckdbTypeToArrow(
 		), nil
 	case TYPE_SQLNULL:
 		return arrow.Null, nil
+	case TYPE_INVALID, TYPE_ANY, TYPE_BIGNUM, TYPE_JSON, TYPE_GEOMETRY, TYPE_LAMBDA, TYPE_VARIANT:
+		return nil, fmt.Errorf(
+			"unsupported type for Arrow conversion: %s",
+			t.String(),
+		)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported type: %s",
@@ -990,6 +995,11 @@ func appendToBuilder(
 		}
 	case TYPE_SQLNULL:
 		builder.AppendNull()
+	case TYPE_INVALID, TYPE_ANY, TYPE_BIGNUM, TYPE_JSON, TYPE_GEOMETRY, TYPE_LAMBDA, TYPE_VARIANT:
+		return fmt.Errorf(
+			"unsupported type for Arrow conversion: %s",
+			t.String(),
+		)
 	default:
 		return fmt.Errorf(
 			"unsupported type for Arrow conversion: %s",

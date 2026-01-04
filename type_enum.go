@@ -150,7 +150,9 @@ func (t Type) Category() string {
 		return "nested"
 
 	// Other types
-	default:
+	case TYPE_INVALID, TYPE_ENUM, TYPE_UUID, TYPE_ANY, TYPE_SQLNULL,
+		TYPE_GEOMETRY, TYPE_LAMBDA, TYPE_VARIANT:
 		return "other"
 	}
+	return "other"
 }

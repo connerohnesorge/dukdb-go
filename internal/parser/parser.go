@@ -3709,6 +3709,8 @@ func parseTypeName(name string) dukdb.Type {
 // GetTypeName returns the SQL type name for a Type.
 func GetTypeName(t dukdb.Type) string {
 	switch t {
+	case dukdb.TYPE_INVALID:
+		return "INVALID"
 	case dukdb.TYPE_BOOLEAN:
 		return "BOOLEAN"
 	case dukdb.TYPE_TINYINT:
@@ -3739,8 +3741,18 @@ func GetTypeName(t dukdb.Type) string {
 		return "DATE"
 	case dukdb.TYPE_TIME:
 		return "TIME"
+	case dukdb.TYPE_TIME_TZ:
+		return "TIME WITH TIME ZONE"
 	case dukdb.TYPE_TIMESTAMP:
 		return "TIMESTAMP"
+	case dukdb.TYPE_TIMESTAMP_S:
+		return "TIMESTAMP_S"
+	case dukdb.TYPE_TIMESTAMP_MS:
+		return "TIMESTAMP_MS"
+	case dukdb.TYPE_TIMESTAMP_NS:
+		return "TIMESTAMP_NS"
+	case dukdb.TYPE_TIMESTAMP_TZ:
+		return "TIMESTAMP WITH TIME ZONE"
 	case dukdb.TYPE_INTERVAL:
 		return "INTERVAL"
 	case dukdb.TYPE_DECIMAL:
@@ -3751,7 +3763,34 @@ func GetTypeName(t dukdb.Type) string {
 		return "HUGEINT"
 	case dukdb.TYPE_UHUGEINT:
 		return "UHUGEINT"
-	default:
-		return "UNKNOWN"
+	case dukdb.TYPE_ENUM:
+		return "ENUM"
+	case dukdb.TYPE_LIST:
+		return "LIST"
+	case dukdb.TYPE_STRUCT:
+		return "STRUCT"
+	case dukdb.TYPE_MAP:
+		return "MAP"
+	case dukdb.TYPE_ARRAY:
+		return "ARRAY"
+	case dukdb.TYPE_UNION:
+		return "UNION"
+	case dukdb.TYPE_BIT:
+		return "BIT"
+	case dukdb.TYPE_ANY:
+		return "ANY"
+	case dukdb.TYPE_BIGNUM:
+		return "BIGNUM"
+	case dukdb.TYPE_SQLNULL:
+		return "NULL"
+	case dukdb.TYPE_JSON:
+		return "JSON"
+	case dukdb.TYPE_GEOMETRY:
+		return "GEOMETRY"
+	case dukdb.TYPE_LAMBDA:
+		return "LAMBDA"
+	case dukdb.TYPE_VARIANT:
+		return "VARIANT"
 	}
+	return "UNKNOWN"
 }

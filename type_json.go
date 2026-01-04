@@ -338,12 +338,12 @@ func ParseValue(
 	case TYPE_SQLNULL, TYPE_ANY, TYPE_INVALID:
 		return nil, nil
 
-	default:
-		// For unknown types, try to parse as generic JSON
+	case TYPE_JSON, TYPE_GEOMETRY, TYPE_LAMBDA, TYPE_VARIANT:
+		// For these types, try to parse as generic JSON
 		var v any
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, fmt.Errorf(
-				"parsing unknown type %s: %w",
+				"parsing %s: %w",
 				typ.String(),
 				err,
 			)
@@ -351,6 +351,18 @@ func ParseValue(
 
 		return v, nil
 	}
+
+	// For any remaining types, try to parse as generic JSON
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf(
+			"parsing unknown type %s: %w",
+			typ.String(),
+			err,
+		)
+	}
+
+	return v, nil
 }
 
 // parseFloat handles special float values that DuckDB outputs as strings:

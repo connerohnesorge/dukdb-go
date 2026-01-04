@@ -180,9 +180,18 @@ func (r *Rows) ColumnTypeScanType(
 		return reflectTypeMap
 	case TYPE_UNION:
 		return reflectTypeUnion
-	default:
+	case TYPE_BIGNUM:
+		return reflectTypeBigInt
+	case TYPE_JSON, TYPE_VARIANT:
+		return reflectTypeAny
+	case TYPE_GEOMETRY:
+		return reflectTypeBytes
+	case TYPE_LAMBDA:
+		return reflectTypeString
+	case TYPE_INVALID, TYPE_BIT, TYPE_ANY, TYPE_SQLNULL:
 		return reflectTypeAny
 	}
+	return reflectTypeAny
 }
 
 // ColumnTypeDatabaseTypeName returns the DuckDB type name for the

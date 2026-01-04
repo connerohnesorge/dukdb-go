@@ -210,6 +210,15 @@ func isIntegerType(t dukdb.Type) bool {
 		dukdb.TYPE_HUGEINT,
 		dukdb.TYPE_UHUGEINT:
 		return true
+	case dukdb.TYPE_INVALID, dukdb.TYPE_BOOLEAN, dukdb.TYPE_FLOAT, dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME, dukdb.TYPE_INTERVAL,
+		dukdb.TYPE_VARCHAR, dukdb.TYPE_BLOB, dukdb.TYPE_DECIMAL, dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_ENUM, dukdb.TYPE_LIST,
+		dukdb.TYPE_STRUCT, dukdb.TYPE_MAP, dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION,
+		dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY,
+		dukdb.TYPE_BIGNUM, dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY,
+		dukdb.TYPE_LAMBDA, dukdb.TYPE_VARIANT:
+		return false
 	}
 
 	return false
@@ -233,9 +242,17 @@ func typeSize(t dukdb.Type) int {
 		return 8
 	case dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT:
 		return 16
-	default:
+	case dukdb.TYPE_INVALID, dukdb.TYPE_BOOLEAN, dukdb.TYPE_FLOAT, dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME, dukdb.TYPE_INTERVAL,
+		dukdb.TYPE_VARCHAR, dukdb.TYPE_BLOB, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT,
+		dukdb.TYPE_MAP, dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION, dukdb.TYPE_BIT,
+		dukdb.TYPE_TIME_TZ, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM,
+		dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA,
+		dukdb.TYPE_VARIANT, dukdb.TYPE_DECIMAL:
 		return 0
 	}
+	return 0
 }
 
 func inferFunctionResultType(
@@ -259,6 +276,17 @@ func inferFunctionResultType(
 				return dukdb.TYPE_DOUBLE
 			case dukdb.TYPE_DECIMAL:
 				return dukdb.TYPE_DECIMAL
+			case dukdb.TYPE_INVALID, dukdb.TYPE_BOOLEAN, dukdb.TYPE_UTINYINT,
+				dukdb.TYPE_USMALLINT, dukdb.TYPE_UINTEGER, dukdb.TYPE_UBIGINT,
+				dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME, dukdb.TYPE_INTERVAL,
+				dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT, dukdb.TYPE_VARCHAR, dukdb.TYPE_BLOB,
+				dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS,
+				dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT, dukdb.TYPE_MAP,
+				dukdb.TYPE_ARRAY, dukdb.TYPE_UUID, dukdb.TYPE_UNION, dukdb.TYPE_BIT,
+				dukdb.TYPE_TIME_TZ, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM,
+				dukdb.TYPE_SQLNULL, dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA,
+				dukdb.TYPE_VARIANT:
+				return dukdb.TYPE_BIGINT
 			}
 		}
 
