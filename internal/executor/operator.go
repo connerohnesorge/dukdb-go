@@ -45,6 +45,28 @@ type PhysicalOperator interface {
 	GetTypes() []dukdb.TypeInfo
 }
 
+// isAggregateFunc checks if a function name is an aggregate function.
+// This is used by executeProject to detect pre-computed aggregate values.
+// This list should match the functions implemented in expr.go computeAggregate.
+func isAggregateFunc(name string) bool {
+	switch name {
+	case "COUNT", "SUM", "AVG", "MIN", "MAX",
+		// Statistical aggregates
+		"MEDIAN", "MODE", "QUANTILE", "PERCENTILE_CONT", "PERCENTILE_DISC",
+		"ENTROPY", "SKEWNESS", "KURTOSIS",
+		"VAR_POP", "VAR_SAMP", "VARIANCE", "STDDEV_POP", "STDDEV_SAMP", "STDDEV",
+		// Approximate aggregates
+		"APPROX_COUNT_DISTINCT", "APPROX_MEDIAN", "APPROX_QUANTILE",
+		// String/list aggregates
+		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
+		// Regression aggregates
+		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
+		"CORR", "COVAR_POP", "COVAR_SAMP":
+		return true
+	}
+	return false
+}
+
 // Source produces data chunks.
 type Source interface {
 	GetData(
@@ -499,8 +521,7 @@ func (e *Executor) executeProject(
 			// This handles the case where aggregates have already been computed
 			// by the aggregate operator and we're just projecting the results
 			if fn, ok := expr.(*binder.BoundFunctionCall); ok {
-				switch fn.Name {
-				case "COUNT", "SUM", "AVG", "MIN", "MAX":
+				if isAggregateFunc(fn.Name) {
 					alias := columns[j]
 					if val, exists := row[alias]; exists {
 						projectedRow[alias] = val

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"sort"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -602,7 +603,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
-		values, err := op.collectValues(fn.Args[0], rows)
+		values, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -623,7 +624,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
-		values, err := op.collectValues(fn.Args[0], rows)
+		values, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -644,7 +645,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
-		values, err := op.collectValues(fn.Args[0], rows)
+		values, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -658,7 +659,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
-		values, err := op.collectValues(fn.Args[0], rows)
+		values, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -984,4 +985,63 @@ func (op *PhysicalAggregateOperator) collectValues(
 		values = append(values, val)
 	}
 	return values, nil
+}
+
+// collectValuesWithOrderBy collects values along with their ORDER BY sorting keys.
+// Returns the values sorted according to the ORDER BY clause.
+func (op *PhysicalAggregateOperator) collectValuesWithOrderBy(
+	valueExpr binder.BoundExpr,
+	orderBy []binder.BoundOrderByExpr,
+	rows []map[string]any,
+) ([]any, error) {
+	if len(orderBy) == 0 {
+		return op.collectValues(valueExpr, rows)
+	}
+
+	// Collect values with their sorting keys
+	type valueWithKey struct {
+		value    any
+		orderKey []any
+	}
+	items := make([]valueWithKey, 0, len(rows))
+
+	for _, row := range rows {
+		val, err := op.executor.evaluateExpr(op.ctx, valueExpr, row)
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect ORDER BY key values
+		keys := make([]any, len(orderBy))
+		for i, ob := range orderBy {
+			keyVal, err := op.executor.evaluateExpr(op.ctx, ob.Expr, row)
+			if err != nil {
+				return nil, err
+			}
+			keys[i] = keyVal
+		}
+
+		items = append(items, valueWithKey{value: val, orderKey: keys})
+	}
+
+	// Sort items based on ORDER BY keys
+	sort.SliceStable(items, func(i, j int) bool {
+		for k, ob := range orderBy {
+			cmp := compareValues(items[i].orderKey[k], items[j].orderKey[k])
+			if cmp != 0 {
+				if ob.Desc {
+					return cmp > 0 // descending
+				}
+				return cmp < 0 // ascending
+			}
+		}
+		return false // equal, preserve order
+	})
+
+	// Extract sorted values
+	result := make([]any, len(items))
+	for i, item := range items {
+		result[i] = item.value
+	}
+	return result, nil
 }

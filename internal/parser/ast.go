@@ -539,8 +539,9 @@ const (
 type FunctionCall struct {
 	Name     string
 	Args     []Expr
-	Distinct bool // for aggregate functions like COUNT(DISTINCT x)
-	Star     bool // for COUNT(*)
+	Distinct bool           // for aggregate functions like COUNT(DISTINCT x)
+	Star     bool           // for COUNT(*)
+	OrderBy  []OrderByExpr  // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
 }
 
 func (*FunctionCall) exprNode() {}

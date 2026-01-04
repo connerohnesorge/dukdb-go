@@ -66,7 +66,14 @@ type BoundFunctionCall struct {
 	Args     []BoundExpr
 	Distinct bool
 	Star     bool
+	OrderBy  []BoundOrderByExpr // ORDER BY within aggregate functions
 	ResType  dukdb.Type
+}
+
+// BoundOrderByExpr represents a bound ORDER BY expression within an aggregate function.
+type BoundOrderByExpr struct {
+	Expr BoundExpr
+	Desc bool
 }
 
 func (*BoundFunctionCall) boundExprNode() {}

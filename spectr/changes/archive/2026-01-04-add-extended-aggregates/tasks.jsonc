@@ -413,7 +413,7 @@
     {
       "id": "4.7",
       "section": "String and List Aggregate Implementation",
-      "description": "4.1.7 Handle ORDER BY within aggregate if specified (DEFERRED: requires parser enhancement - FunctionCall AST lacks OrderBy field, see aggregate_string.go for details)",
+      "description": "4.1.7 Handle ORDER BY within aggregate if specified",
       "status": "completed"
     },
     {
@@ -455,7 +455,7 @@
     {
       "id": "4.14",
       "section": "String and List Aggregate Implementation",
-      "description": "4.2.6 Handle ORDER BY for list aggregation (DEFERRED: requires parser enhancement - FunctionCall AST lacks OrderBy field, see aggregate_string.go for details)",
+      "description": "4.2.6 Handle ORDER BY for list aggregation",
       "status": "completed"
     },
     {

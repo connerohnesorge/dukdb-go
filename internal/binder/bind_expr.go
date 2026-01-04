@@ -365,11 +365,25 @@ func (b *Binder) bindFunctionCall(
 		args,
 	)
 
+	// Bind ORDER BY expressions within aggregate function
+	var boundOrderBy []BoundOrderByExpr
+	for _, ob := range f.OrderBy {
+		boundExpr, err := b.bindExpr(ob.Expr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, fmt.Errorf("binding ORDER BY in %s: %w", f.Name, err)
+		}
+		boundOrderBy = append(boundOrderBy, BoundOrderByExpr{
+			Expr: boundExpr,
+			Desc: ob.Desc,
+		})
+	}
+
 	return &BoundFunctionCall{
 		Name:     f.Name,
 		Args:     args,
 		Distinct: f.Distinct,
 		Star:     f.Star,
+		OrderBy:  boundOrderBy,
 		ResType:  resType,
 	}, nil
 }

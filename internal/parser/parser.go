@@ -2908,12 +2908,27 @@ func (p *parser) parseFunctionCall(
 	}
 
 	// Parse arguments
-	if p.current().typ != tokenRParen {
-		args, err := p.parseExprList()
+	if p.current().typ != tokenRParen && !p.isKeyword("ORDER") {
+		args, err := p.parseFunctionArgs()
 		if err != nil {
 			return nil, err
 		}
 		fn.Args = args
+	}
+
+	// Check for ORDER BY within aggregate function
+	// Syntax: STRING_AGG(expr, delimiter ORDER BY expr [ASC|DESC])
+	//         LIST(expr ORDER BY expr [ASC|DESC])
+	if p.isKeyword("ORDER") {
+		p.advance() // consume ORDER
+		if err := p.expectKeyword("BY"); err != nil {
+			return nil, err
+		}
+		orderBy, err := p.parseOrderBy()
+		if err != nil {
+			return nil, err
+		}
+		fn.OrderBy = orderBy
 	}
 
 	if _, err := p.expect(tokenRParen); err != nil {
@@ -2922,6 +2937,37 @@ func (p *parser) parseFunctionCall(
 
 	// Check for window function OVER clause
 	return p.maybeParseWindowExpr(fn)
+}
+
+// parseFunctionArgs parses function arguments, stopping at ORDER BY or closing paren.
+// This is different from parseExprList because it needs to handle ORDER BY within aggregates.
+func (p *parser) parseFunctionArgs() ([]Expr, error) {
+	var exprs []Expr
+
+	for {
+		expr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+
+		// Stop if we see closing paren or ORDER BY
+		if p.current().typ != tokenComma {
+			break
+		}
+
+		// Peek ahead: if the next token after comma is ORDER, stop here
+		// This handles: STRING_AGG(name, ',' ORDER BY name)
+		p.advance() // consume comma
+
+		// If after consuming comma we see ORDER, we need to put comma back conceptually
+		// Actually, the comma was already consumed, so if next is ORDER, we're done with args
+		if p.isKeyword("ORDER") {
+			break
+		}
+	}
+
+	return exprs, nil
 }
 
 // maybeParseWindowExpr checks for IGNORE/RESPECT NULLS, FILTER, and OVER clauses

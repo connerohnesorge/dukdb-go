@@ -1043,3 +1043,233 @@ func TestAggregateIntegration_Window_UnboundedFrame(t *testing.T) {
 			row["id"], row["category"], row["amount"], row["SUM(amount)"])
 	}
 }
+
+// ---------- 4.1.7 & 4.2.6 ORDER BY within aggregate functions ----------
+// These tests verify ORDER BY support within STRING_AGG and LIST aggregates.
+// Syntax: STRING_AGG(expr, delimiter ORDER BY expr [ASC|DESC])
+//         LIST(expr ORDER BY expr [ASC|DESC])
+
+func TestAggregateIntegration_StringAgg_OrderBy(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	// Create a table with names to aggregate
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE employees (
+			id INTEGER,
+			department TEXT,
+			name TEXT
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert some test data
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO employees VALUES
+		(1, 'Engineering', 'Charlie'),
+		(2, 'Engineering', 'Alice'),
+		(3, 'Engineering', 'Bob'),
+		(4, 'Sales', 'Zara'),
+		(5, 'Sales', 'Mike')
+	`)
+	require.NoError(t, err)
+
+	// Test STRING_AGG with ORDER BY ascending
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT department, STRING_AGG(name, ', ' ORDER BY name ASC) as names
+		FROM employees
+		GROUP BY department
+		ORDER BY department
+	`)
+	require.NoError(t, err, "STRING_AGG with ORDER BY should parse and execute")
+
+	require.Len(t, result.Rows, 2)
+
+	// Engineering: Alice, Bob, Charlie (alphabetically ordered)
+	engRow := result.Rows[0]
+	assert.Equal(t, "Engineering", engRow["department"])
+	assert.Equal(t, "Alice, Bob, Charlie", engRow["names"])
+
+	// Sales: Mike, Zara (alphabetically ordered)
+	salesRow := result.Rows[1]
+	assert.Equal(t, "Sales", salesRow["department"])
+	assert.Equal(t, "Mike, Zara", salesRow["names"])
+}
+
+func TestAggregateIntegration_StringAgg_OrderByDesc(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE employees (
+			id INTEGER,
+			department TEXT,
+			name TEXT
+		)
+	`)
+	require.NoError(t, err)
+
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO employees VALUES
+		(1, 'Engineering', 'Charlie'),
+		(2, 'Engineering', 'Alice'),
+		(3, 'Engineering', 'Bob')
+	`)
+	require.NoError(t, err)
+
+	// Test STRING_AGG with ORDER BY descending
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT STRING_AGG(name, '-' ORDER BY name DESC) as names
+		FROM employees
+	`)
+	require.NoError(t, err, "STRING_AGG with ORDER BY DESC should parse and execute")
+
+	require.Len(t, result.Rows, 1)
+	// Charlie, Bob, Alice (reverse alphabetical)
+	assert.Equal(t, "Charlie-Bob-Alice", result.Rows[0]["names"])
+}
+
+func TestAggregateIntegration_StringAgg_OrderByDifferentColumn(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE employees (
+			id INTEGER,
+			name TEXT,
+			salary INTEGER
+		)
+	`)
+	require.NoError(t, err)
+
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO employees VALUES
+		(1, 'Alice', 50000),
+		(2, 'Bob', 75000),
+		(3, 'Charlie', 60000)
+	`)
+	require.NoError(t, err)
+
+	// Order names by salary (ascending)
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT STRING_AGG(name, ', ' ORDER BY salary ASC) as names_by_salary
+		FROM employees
+	`)
+	require.NoError(t, err, "STRING_AGG with ORDER BY different column should work")
+
+	require.Len(t, result.Rows, 1)
+	// Alice (50k), Charlie (60k), Bob (75k)
+	assert.Equal(t, "Alice, Charlie, Bob", result.Rows[0]["names_by_salary"])
+}
+
+func TestAggregateIntegration_List_OrderBy(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE scores (
+			id INTEGER,
+			category TEXT,
+			score INTEGER
+		)
+	`)
+	require.NoError(t, err)
+
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO scores VALUES
+		(1, 'A', 30),
+		(2, 'A', 10),
+		(3, 'A', 20),
+		(4, 'B', 5),
+		(5, 'B', 15)
+	`)
+	require.NoError(t, err)
+
+	// Test LIST with ORDER BY ascending
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT category, LIST(score ORDER BY score ASC) as sorted_scores
+		FROM scores
+		GROUP BY category
+		ORDER BY category
+	`)
+	require.NoError(t, err, "LIST with ORDER BY should parse and execute")
+
+	require.Len(t, result.Rows, 2)
+
+	// Category A: [10, 20, 30] (sorted ascending)
+	aRow := result.Rows[0]
+	assert.Equal(t, "A", aRow["category"])
+	sortedScores, ok := aRow["sorted_scores"].([]any)
+	require.True(t, ok, "should return a list")
+	require.Len(t, sortedScores, 3)
+	assert.EqualValues(t, 10, sortedScores[0])
+	assert.EqualValues(t, 20, sortedScores[1])
+	assert.EqualValues(t, 30, sortedScores[2])
+
+	// Category B: [5, 15] (sorted ascending)
+	bRow := result.Rows[1]
+	assert.Equal(t, "B", bRow["category"])
+	bScores, ok := bRow["sorted_scores"].([]any)
+	require.True(t, ok)
+	require.Len(t, bScores, 2)
+	assert.EqualValues(t, 5, bScores[0])
+	assert.EqualValues(t, 15, bScores[1])
+}
+
+func TestAggregateIntegration_List_OrderByDesc(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE values_table (value INTEGER)
+	`)
+	require.NoError(t, err)
+
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO values_table VALUES (3), (1), (4), (1), (5)
+	`)
+	require.NoError(t, err)
+
+	// Test LIST with ORDER BY descending
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT LIST(value ORDER BY value DESC) as desc_values
+		FROM values_table
+	`)
+	require.NoError(t, err, "LIST with ORDER BY DESC should parse and execute")
+
+	require.Len(t, result.Rows, 1)
+	values, ok := result.Rows[0]["desc_values"].([]any)
+	require.True(t, ok)
+	// [5, 4, 3, 1, 1] descending order
+	require.Len(t, values, 5)
+	assert.EqualValues(t, 5, values[0])
+	assert.EqualValues(t, 4, values[1])
+	assert.EqualValues(t, 3, values[2])
+	assert.EqualValues(t, 1, values[3])
+	assert.EqualValues(t, 1, values[4])
+}
+
+func TestAggregateIntegration_ArrayAgg_OrderBy(t *testing.T) {
+	exec, cat, _ := setupAggregateIntegrationTestExecutor()
+
+	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		CREATE TABLE items (name TEXT, priority INTEGER)
+	`)
+	require.NoError(t, err)
+
+	_, err = executeAggregateIntegrationQuery(t, exec, cat, `
+		INSERT INTO items VALUES ('low', 3), ('high', 1), ('medium', 2)
+	`)
+	require.NoError(t, err)
+
+	// Test ARRAY_AGG with ORDER BY
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
+		SELECT ARRAY_AGG(name ORDER BY priority ASC) as ordered_names
+		FROM items
+	`)
+	require.NoError(t, err, "ARRAY_AGG with ORDER BY should parse and execute")
+
+	require.Len(t, result.Rows, 1)
+	names, ok := result.Rows[0]["ordered_names"].([]any)
+	require.True(t, ok)
+	require.Len(t, names, 3)
+	// Ordered by priority: high(1), medium(2), low(3)
+	assert.Equal(t, "high", names[0])
+	assert.Equal(t, "medium", names[1])
+	assert.Equal(t, "low", names[2])
+}

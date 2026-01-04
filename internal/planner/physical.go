@@ -2280,16 +2280,33 @@ func hasAggregates(
 	return false
 }
 
+// isAggregateFunction checks if the function name is an aggregate function.
+// This list should match the functions implemented in executor/expr.go computeAggregate.
+func isAggregateFunction(name string) bool {
+	switch name {
+	case "COUNT", "SUM", "AVG", "MIN", "MAX",
+		// Statistical aggregates
+		"MEDIAN", "MODE", "QUANTILE", "PERCENTILE_CONT", "PERCENTILE_DISC",
+		"ENTROPY", "SKEWNESS", "KURTOSIS",
+		"VAR_POP", "VAR_SAMP", "VARIANCE", "STDDEV_POP", "STDDEV_SAMP", "STDDEV",
+		// Approximate aggregates
+		"APPROX_COUNT_DISTINCT", "APPROX_MEDIAN", "APPROX_QUANTILE",
+		// String/list aggregates
+		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
+		// Regression aggregates
+		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
+		"CORR", "COVAR_POP", "COVAR_SAMP":
+		return true
+	}
+	return false
+}
+
 func containsAggregate(
 	expr binder.BoundExpr,
 ) bool {
 	switch e := expr.(type) {
 	case *binder.BoundFunctionCall:
-		name := e.Name
-		switch name {
-		case "COUNT", "SUM", "AVG", "MIN", "MAX":
-			return true
-		}
+		return isAggregateFunction(e.Name)
 	}
 
 	return false
@@ -2301,12 +2318,7 @@ func extractAggregates(
 	var aggs []binder.BoundExpr
 	for _, col := range columns {
 		if fn, ok := col.Expr.(*binder.BoundFunctionCall); ok {
-			switch fn.Name {
-			case "COUNT",
-				"SUM",
-				"AVG",
-				"MIN",
-				"MAX":
+			if isAggregateFunction(fn.Name) {
 				aggs = append(aggs, col.Expr)
 			}
 		}
@@ -2388,11 +2400,7 @@ func containsNonWindowAggregate(
 	}
 	switch e := expr.(type) {
 	case *binder.BoundFunctionCall:
-		name := e.Name
-		switch name {
-		case "COUNT", "SUM", "AVG", "MIN", "MAX":
-			return true
-		}
+		return isAggregateFunction(e.Name)
 	}
 	return false
 }
@@ -2408,8 +2416,7 @@ func extractNonWindowAggregates(
 			continue
 		}
 		if fn, ok := col.Expr.(*binder.BoundFunctionCall); ok {
-			switch fn.Name {
-			case "COUNT", "SUM", "AVG", "MIN", "MAX":
+			if isAggregateFunction(fn.Name) {
 				aggs = append(aggs, col.Expr)
 			}
 		}
