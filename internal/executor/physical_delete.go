@@ -112,6 +112,18 @@ func (e *Executor) executeDelete(
 		if err := table.DeleteRows(deletedRowIDs); err != nil {
 			return nil, err
 		}
+
+		// Record undo operation for transaction rollback
+		// Convert storage.RowID to uint64 for undo operation
+		undoRowIDs := make([]uint64, len(deletedRowIDs))
+		for i, rid := range deletedRowIDs {
+			undoRowIDs[i] = uint64(rid)
+		}
+		e.recordUndo(UndoOperation{
+			TableName: plan.Table,
+			OpType:    UndoDelete,
+			RowIDs:    undoRowIDs,
+		})
 	}
 
 	// Collect deleted data for RETURNING and WAL

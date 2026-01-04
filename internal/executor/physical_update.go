@@ -150,6 +150,45 @@ func (e *Executor) executeUpdate(
 		}
 	}
 
+	// Record undo operation for transaction rollback
+	if len(updates) > 0 {
+		// Build the before-image for all updated rows
+		// Map column index -> slice of before values (one per row)
+		beforeImage := make(map[int][]any)
+
+		// First, collect all column indices that were updated
+		columnIndices := make(map[int]bool)
+		for _, update := range updates {
+			for colIdx := range update.columnValues {
+				columnIndices[colIdx] = true
+			}
+		}
+
+		// Initialize slices for each column
+		for colIdx := range columnIndices {
+			beforeImage[colIdx] = make([]any, len(updates))
+		}
+
+		// Collect RowIDs and before values
+		undoRowIDs := make([]uint64, len(updates))
+		for i, update := range updates {
+			undoRowIDs[i] = uint64(update.rowID)
+			// For each updated column, store the before value
+			for colIdx := range columnIndices {
+				if colIdx < len(update.beforeValues) {
+					beforeImage[colIdx][i] = update.beforeValues[colIdx]
+				}
+			}
+		}
+
+		e.recordUndo(UndoOperation{
+			TableName:   plan.Table,
+			OpType:      UndoUpdate,
+			RowIDs:      undoRowIDs,
+			BeforeImage: beforeImage,
+		})
+	}
+
 	// Collect after values for RETURNING and WAL
 	allAfterValues := make([][]any, len(updates))
 	for i, update := range updates {

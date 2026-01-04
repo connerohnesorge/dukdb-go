@@ -8,6 +8,8 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	geomutil "github.com/dukdb/dukdb-go/internal/io/geometry"
+	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
@@ -310,6 +312,12 @@ func (e *Executor) evaluateBinaryExpr(
 		) + toString(
 			right,
 		), nil
+
+	// JSON operators
+	case parser.OpJSONExtract:
+		return extractJSONValue(left, right, false)
+	case parser.OpJSONText:
+		return extractJSONValue(left, right, true)
 
 	default:
 		return nil, &dukdb.Error{
@@ -655,6 +663,106 @@ func (e *Executor) evaluateFunctionCall(
 
 	case "TOTAL_SECONDS":
 		return evalTotalSeconds(args)
+
+	// JSON functions
+	case "JSON_EXTRACT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_EXTRACT requires 2 arguments",
+			}
+		}
+		return extractJSONValue(args[0], args[1], false)
+
+	case "JSON_EXTRACT_STRING", "JSON_EXTRACT_TEXT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fn.Name + " requires 2 arguments",
+			}
+		}
+		return extractJSONValue(args[0], args[1], true)
+
+	case "JSON_VALID":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_VALID requires 1 argument",
+			}
+		}
+		return isValidJSON(args[0])
+
+	// Geometry functions
+	case "ST_GEOMFROMTEXT", "ST_GEOMETRYFROMTEXT":
+		return executeSTGeomFromText(args)
+	case "ST_ASTEXT", "ST_ASWKT":
+		return executeSTAsText(args)
+	case "ST_ASBINARY", "ST_ASWKB":
+		return executeSTAsBinary(args)
+	case "ST_GEOMETRYTYPE":
+		return executeSTGeometryType(args)
+	case "ST_X":
+		return executeSTX(args)
+	case "ST_Y":
+		return executeSTY(args)
+	case "ST_Z":
+		return executeSTZ(args)
+	case "ST_SRID":
+		return executeSTSRID(args)
+	case "ST_SETSRID":
+		return executeSTSetSRID(args)
+	case "ST_POINT":
+		return executeSTPoint(args)
+	case "ST_MAKELINE":
+		return executeSTMakeLine(args)
+
+	// Spatial distance functions
+	case "ST_DISTANCE":
+		return executeSTDistance(args)
+	case "ST_DISTANCE_SPHERE":
+		return executeSTDistanceSphere(args)
+
+	// Spatial predicate functions
+	case "ST_CONTAINS":
+		return executeSTContains(args)
+	case "ST_WITHIN":
+		return executeSTWithin(args)
+	case "ST_INTERSECTS":
+		return executeSTIntersects(args)
+	case "ST_DISJOINT":
+		return executeSTDisjoint(args)
+	case "ST_TOUCHES":
+		return executeSTTouches(args)
+	case "ST_CROSSES":
+		return executeSTCrosses(args)
+	case "ST_OVERLAPS":
+		return executeSTOverlaps(args)
+	case "ST_EQUALS":
+		return executeSTEquals(args)
+
+	// Spatial analysis functions
+	case "ST_ENVELOPE":
+		return executeSTEnvelope(args)
+
+	// Geometric analysis functions (Phase 4)
+	case "ST_AREA":
+		return executeSTArea(args)
+	case "ST_LENGTH", "ST_PERIMETER":
+		return executeSTLength(args)
+	case "ST_CENTROID":
+		return executeSTCentroid(args)
+
+	// Set operations (Phase 5)
+	case "ST_UNION":
+		return executeSTUnion(args)
+	case "ST_INTERSECTION":
+		return executeSTIntersection(args)
+	case "ST_DIFFERENCE":
+		return executeSTDifference(args)
+	case "ST_BUFFER":
+		return executeSTBuffer(args)
+	case "ST_MAKEPOLYGON":
+		return executeSTMakePolygon(args)
 
 	default:
 		// For aggregate functions called in scalar context, return NULL
@@ -1885,4 +1993,1075 @@ func (e *Executor) evaluateSequenceCall(
 			),
 		}
 	}
+}
+
+// extractJSONValue extracts a value from JSON data using a key or index.
+// If asText is true, returns the value as a string (for ->> operator).
+// If asText is false, returns the value as JSON (for -> operator).
+func extractJSONValue(left any, right any, asText bool) (any, error) {
+	if left == nil || right == nil {
+		return nil, nil
+	}
+
+	// Convert left operand to JSON string
+	jsonStr := toString(left)
+	if jsonStr == "" {
+		return nil, nil
+	}
+
+	var result any
+	var err error
+
+	// Right operand can be a string key or an integer index
+	switch r := right.(type) {
+	case string:
+		// Key access
+		result, err = jsonutil.ExtractByKey(jsonStr, r)
+	case int64:
+		// Array index access
+		result, err = jsonutil.ExtractByIndex(jsonStr, int(r))
+	case int:
+		// Array index access
+		result, err = jsonutil.ExtractByIndex(jsonStr, r)
+	case int32:
+		// Array index access
+		result, err = jsonutil.ExtractByIndex(jsonStr, int(r))
+	case float64:
+		// Integer-like float as array index
+		result, err = jsonutil.ExtractByIndex(jsonStr, int(r))
+	default:
+		// Try as string key
+		result, err = jsonutil.ExtractByKey(jsonStr, toString(right))
+	}
+
+	if err != nil {
+		return nil, nil // Return nil on error, not an error
+	}
+
+	if result == nil {
+		return nil, nil
+	}
+
+	if asText {
+		// ->> operator: return as text
+		return jsonutil.ValueToJSON(result)
+	}
+
+	// -> operator: return as JSON string
+	jsonResult, err := jsonutil.ValueToJSON(result)
+	if err != nil {
+		return nil, nil
+	}
+	return jsonResult, nil
+}
+
+// isValidJSON checks if a string is valid JSON.
+func isValidJSON(v any) (bool, error) {
+	if v == nil {
+		return false, nil
+	}
+	return jsonutil.IsValidJSON(toString(v)), nil
+}
+
+// Geometry function implementations
+
+// executeSTGeomFromText parses WKT text into a geometry.
+func executeSTGeomFromText(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_GeomFromText requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	wkt := toString(args[0])
+	geom, err := geomutil.ParseWKT(wkt)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_GeomFromText: %v", err),
+		}
+	}
+	return geom, nil
+}
+
+// executeSTAsText converts a geometry to WKT.
+func executeSTAsText(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_AsText requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_AsText: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	wkt, err := geomutil.FormatWKT(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_AsText: %v", err),
+		}
+	}
+	return wkt, nil
+}
+
+// executeSTAsBinary returns the WKB representation of a geometry.
+func executeSTAsBinary(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_AsBinary requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_AsBinary: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	return geom.WKB(), nil
+}
+
+// executeSTGeometryType returns the type name of a geometry.
+func executeSTGeometryType(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_GeometryType requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_GeometryType: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	return geom.String(), nil
+}
+
+// executeSTX returns the X coordinate of a POINT geometry.
+func executeSTX(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_X requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_X: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	x, err := geom.X()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_X: %v", err),
+		}
+	}
+	return x, nil
+}
+
+// executeSTY returns the Y coordinate of a POINT geometry.
+func executeSTY(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Y requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Y: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	y, err := geom.Y()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Y: %v", err),
+		}
+	}
+	return y, nil
+}
+
+// executeSTZ returns the Z coordinate of a POINT geometry (if 3D).
+func executeSTZ(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Z requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Z: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	z, err := geom.Z()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Z: %v", err),
+		}
+	}
+	return z, nil
+}
+
+// executeSTSRID returns the SRID of a geometry.
+func executeSTSRID(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_SRID requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_SRID: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	return int64(geom.GetSRID()), nil
+}
+
+// executeSTSetSRID returns a new geometry with the specified SRID.
+func executeSTSetSRID(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_SetSRID requires 2 arguments",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_SetSRID: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	srid := int32(toInt64Value(args[1]))
+	return geom.WithSRID(srid), nil
+}
+
+// executeSTPoint creates a POINT geometry from X and Y coordinates.
+func executeSTPoint(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Point requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	x := toFloat64Value(args[0])
+	y := toFloat64Value(args[1])
+
+	wkt := fmt.Sprintf("POINT(%v %v)", x, y)
+	return geomutil.ParseWKT(wkt)
+}
+
+// executeSTMakeLine creates a LINESTRING from two POINT geometries.
+func executeSTMakeLine(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_MakeLine requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	// Get coordinates from both points
+	x1, err := geom1.X()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: first argument: %v", err),
+		}
+	}
+	y1, err := geom1.Y()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: first argument: %v", err),
+		}
+	}
+	x2, err := geom2.X()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: second argument: %v", err),
+		}
+	}
+	y2, err := geom2.Y()
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakeLine: second argument: %v", err),
+		}
+	}
+
+	wkt := fmt.Sprintf("LINESTRING(%v %v, %v %v)", x1, y1, x2, y2)
+	return geomutil.ParseWKT(wkt)
+}
+
+// executeSTDistance calculates the Euclidean distance between two geometries.
+func executeSTDistance(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Distance requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	dist, err := geomutil.Distance(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance: %v", err),
+		}
+	}
+	return dist, nil
+}
+
+// executeSTDistanceSphere calculates the great-circle distance using Haversine formula.
+func executeSTDistanceSphere(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Distance_Sphere requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance_Sphere: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance_Sphere: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	dist, err := geomutil.DistanceSphere(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Distance_Sphere: %v", err),
+		}
+	}
+	return dist, nil
+}
+
+// executeSTContains checks if the first geometry contains the second.
+func executeSTContains(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Contains requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Contains: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Contains: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	contains, err := geomutil.Contains(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Contains: %v", err),
+		}
+	}
+	return contains, nil
+}
+
+// executeSTWithin checks if the first geometry is within the second.
+func executeSTWithin(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Within requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Within: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Within: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	within, err := geomutil.Within(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Within: %v", err),
+		}
+	}
+	return within, nil
+}
+
+// executeSTIntersects checks if geometries intersect.
+func executeSTIntersects(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Intersects requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersects: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersects: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	intersects, err := geomutil.Intersects(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersects: %v", err),
+		}
+	}
+	return intersects, nil
+}
+
+// executeSTDisjoint checks if geometries are disjoint.
+func executeSTDisjoint(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Disjoint requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Disjoint: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Disjoint: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	disjoint, err := geomutil.Disjoint(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Disjoint: %v", err),
+		}
+	}
+	return disjoint, nil
+}
+
+// executeSTTouches checks if geometries touch.
+func executeSTTouches(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Touches requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Touches: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Touches: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	touches, err := geomutil.Touches(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Touches: %v", err),
+		}
+	}
+	return touches, nil
+}
+
+// executeSTCrosses checks if geometries cross.
+func executeSTCrosses(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Crosses requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Crosses: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Crosses: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	crosses, err := geomutil.Crosses(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Crosses: %v", err),
+		}
+	}
+	return crosses, nil
+}
+
+// executeSTOverlaps checks if geometries overlap.
+func executeSTOverlaps(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Overlaps requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Overlaps: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Overlaps: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	overlaps, err := geomutil.Overlaps(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Overlaps: %v", err),
+		}
+	}
+	return overlaps, nil
+}
+
+// executeSTEquals checks if geometries are spatially equal.
+func executeSTEquals(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Equals requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Equals: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Equals: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	equals, err := geomutil.Equals(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Equals: %v", err),
+		}
+	}
+	return equals, nil
+}
+
+// executeSTEnvelope returns the bounding box as a polygon.
+func executeSTEnvelope(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Envelope requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Envelope: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	envelope, err := geomutil.Envelope(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Envelope: %v", err),
+		}
+	}
+	return envelope, nil
+}
+
+// executeSTArea calculates the area of a geometry.
+func executeSTArea(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Area requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Area: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	area, err := geomutil.Area(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Area: %v", err),
+		}
+	}
+	return area, nil
+}
+
+// executeSTLength calculates the length/perimeter of a geometry.
+func executeSTLength(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Length requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Length: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	length, err := geomutil.Length(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Length: %v", err),
+		}
+	}
+	return length, nil
+}
+
+// executeSTCentroid calculates the geometric center of a geometry.
+func executeSTCentroid(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Centroid requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Centroid: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	centroid, err := geomutil.Centroid(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Centroid: %v", err),
+		}
+	}
+	return centroid, nil
+}
+
+// Phase 5: Set Operations
+
+// executeSTUnion combines two geometries into one.
+func executeSTUnion(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Union requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Union: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Union: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	result, err := geomutil.Union(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Union: %v", err),
+		}
+	}
+	return result, nil
+}
+
+// executeSTIntersection returns the shared area between two geometries.
+func executeSTIntersection(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Intersection requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersection: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersection: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	result, err := geomutil.Intersection(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Intersection: %v", err),
+		}
+	}
+	if result == nil {
+		return nil, nil // Return untyped nil for SQL NULL
+	}
+	return result, nil
+}
+
+// executeSTDifference returns g1 minus g2.
+func executeSTDifference(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Difference requires 2 arguments",
+		}
+	}
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
+
+	geom1, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Difference: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	geom2, ok := args[1].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Difference: expected Geometry, got %T", args[1]),
+		}
+	}
+
+	result, err := geomutil.Difference(geom1, geom2)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Difference: %v", err),
+		}
+	}
+	if result == nil {
+		return nil, nil // Return untyped nil for SQL NULL
+	}
+	return result, nil
+}
+
+// executeSTBuffer creates a buffer zone around a geometry.
+func executeSTBuffer(args []any) (any, error) {
+	if len(args) < 2 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_Buffer requires 2 arguments",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Buffer: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	distance := toFloat64Value(args[1])
+
+	result, err := geomutil.Buffer(geom, distance)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_Buffer: %v", err),
+		}
+	}
+	return result, nil
+}
+
+// executeSTMakePolygon creates a polygon from a closed linestring.
+func executeSTMakePolygon(args []any) (any, error) {
+	if len(args) < 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "ST_MakePolygon requires 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	geom, ok := args[0].(*geomutil.Geometry)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakePolygon: expected Geometry, got %T", args[0]),
+		}
+	}
+
+	result, err := geomutil.MakePolygon(geom)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("ST_MakePolygon: %v", err),
+		}
+	}
+	return result, nil
 }

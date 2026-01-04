@@ -446,6 +446,39 @@ func inferFunctionResultType(
 	case "BIT_AND", "BIT_OR", "BIT_XOR":
 		return dukdb.TYPE_BIGINT
 
+	// JSON functions
+	case "JSON_EXTRACT":
+		return dukdb.TYPE_JSON
+	case "JSON_EXTRACT_STRING", "JSON_EXTRACT_TEXT":
+		return dukdb.TYPE_VARCHAR
+	case "JSON_VALID":
+		return dukdb.TYPE_BOOLEAN
+
+	// Geometry functions
+	case "ST_GEOMFROMTEXT", "ST_GEOMETRYFROMTEXT", "ST_POINT", "ST_MAKELINE", "ST_SETSRID", "ST_ENVELOPE":
+		return dukdb.TYPE_GEOMETRY
+	case "ST_ASTEXT", "ST_ASWKT", "ST_GEOMETRYTYPE":
+		return dukdb.TYPE_VARCHAR
+	case "ST_ASBINARY", "ST_ASWKB":
+		return dukdb.TYPE_BLOB
+	case "ST_X", "ST_Y", "ST_Z", "ST_DISTANCE", "ST_DISTANCE_SPHERE":
+		return dukdb.TYPE_DOUBLE
+	case "ST_SRID":
+		return dukdb.TYPE_INTEGER
+	case "ST_CONTAINS", "ST_WITHIN", "ST_INTERSECTS", "ST_DISJOINT",
+		"ST_TOUCHES", "ST_CROSSES", "ST_OVERLAPS", "ST_EQUALS":
+		return dukdb.TYPE_BOOLEAN
+
+	// Geometric analysis functions (Phase 4)
+	case "ST_AREA", "ST_LENGTH", "ST_PERIMETER":
+		return dukdb.TYPE_DOUBLE
+	case "ST_CENTROID":
+		return dukdb.TYPE_GEOMETRY
+
+	// Set operations (Phase 5)
+	case "ST_UNION", "ST_INTERSECTION", "ST_DIFFERENCE", "ST_BUFFER", "ST_MAKEPOLYGON":
+		return dukdb.TYPE_GEOMETRY
+
 	default:
 		return dukdb.TYPE_ANY
 	}
@@ -663,6 +696,68 @@ func getFunctionArgTypes(
 	case "BIT_AND", "BIT_OR", "BIT_XOR":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_BIGINT}
+		}
+
+	// JSON functions
+	case "JSON_EXTRACT", "JSON_EXTRACT_STRING", "JSON_EXTRACT_TEXT":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "JSON_VALID":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+
+	// Geometry functions
+	case "ST_GEOMFROMTEXT", "ST_GEOMETRYFROMTEXT":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "ST_ASTEXT", "ST_ASWKT", "ST_ASBINARY", "ST_ASWKB", "ST_GEOMETRYTYPE", "ST_X", "ST_Y", "ST_Z", "ST_SRID":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
+		}
+	case "ST_POINT":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE}
+		}
+	case "ST_MAKELINE":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY, dukdb.TYPE_GEOMETRY}
+		}
+	case "ST_SETSRID":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY, dukdb.TYPE_INTEGER}
+		}
+	case "ST_DISTANCE", "ST_DISTANCE_SPHERE", "ST_CONTAINS", "ST_WITHIN",
+		"ST_INTERSECTS", "ST_DISJOINT", "ST_TOUCHES", "ST_CROSSES",
+		"ST_OVERLAPS", "ST_EQUALS":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY, dukdb.TYPE_GEOMETRY}
+		}
+	case "ST_ENVELOPE":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
+		}
+
+	// Geometric analysis functions (Phase 4)
+	case "ST_AREA", "ST_LENGTH", "ST_PERIMETER", "ST_CENTROID":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
+		}
+
+	// Set operations (Phase 5)
+	case "ST_UNION", "ST_INTERSECTION", "ST_DIFFERENCE":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY, dukdb.TYPE_GEOMETRY}
+		}
+	case "ST_BUFFER":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY, dukdb.TYPE_DOUBLE}
+		}
+	case "ST_MAKEPOLYGON":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
 		}
 	}
 

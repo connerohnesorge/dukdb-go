@@ -514,6 +514,10 @@ const (
 	OpIs
 	OpIsNot
 	OpConcat
+
+	// JSON operators
+	OpJSONExtract // -> (JSON extract, returns JSON)
+	OpJSONText    // ->> (JSON extract as text, returns VARCHAR)
 )
 
 // UnaryExpr represents a unary expression (op a).

@@ -227,6 +227,12 @@ func (b *Binder) bindBinaryExpr(
 		resType = dukdb.TYPE_BOOLEAN
 	case parser.OpConcat:
 		resType = dukdb.TYPE_VARCHAR
+	case parser.OpJSONExtract:
+		// -> returns JSON
+		resType = dukdb.TYPE_JSON
+	case parser.OpJSONText:
+		// ->> returns VARCHAR
+		resType = dukdb.TYPE_VARCHAR
 	default:
 		// For arithmetic, use the more precise type
 		resType = promoteType(

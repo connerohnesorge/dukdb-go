@@ -116,13 +116,40 @@ type Sink interface {
 	) LocalOperatorState
 }
 
+// UndoOpType represents the type of DML operation that can be undone.
+type UndoOpType int
+
+const (
+	// UndoInsert - to undo: delete these rows
+	UndoInsert UndoOpType = iota
+	// UndoDelete - to undo: undelete (clear tombstones)
+	UndoDelete
+	// UndoUpdate - to undo: restore before-image
+	UndoUpdate
+)
+
+// UndoOperation represents a single DML operation that can be undone.
+type UndoOperation struct {
+	TableName   string
+	OpType      UndoOpType
+	RowIDs      []uint64
+	BeforeImage map[int][]any // Column index -> values (for UPDATE)
+}
+
+// UndoRecorder is an interface for recording undo operations for transaction rollback.
+type UndoRecorder interface {
+	RecordUndo(op UndoOperation)
+}
+
 // Executor executes physical plans.
 type Executor struct {
-	catalog *catalog.Catalog
-	storage *storage.Storage
-	planner *planner.Planner
-	wal     *wal.Writer // WAL writer for logging DML operations (optional, may be nil)
-	txnID   uint64      // Current transaction ID for WAL entries
+	catalog      *catalog.Catalog
+	storage      *storage.Storage
+	planner      *planner.Planner
+	wal          *wal.Writer   // WAL writer for logging DML operations (optional, may be nil)
+	txnID        uint64        // Current transaction ID for WAL entries
+	undoRecorder UndoRecorder  // Undo recorder for transaction rollback (optional, may be nil)
+	inTxn        bool          // Whether we're in an explicit transaction (BEGIN was called)
 }
 
 // NewExecutor creates a new Executor.
@@ -146,6 +173,24 @@ func (e *Executor) SetWAL(w *wal.Writer) {
 // SetTxnID sets the current transaction ID for WAL entries.
 func (e *Executor) SetTxnID(txnID uint64) {
 	e.txnID = txnID
+}
+
+// SetUndoRecorder sets the undo recorder for transaction rollback.
+// If set to nil, undo recording is disabled (auto-commit mode).
+func (e *Executor) SetUndoRecorder(recorder UndoRecorder) {
+	e.undoRecorder = recorder
+}
+
+// SetInTransaction sets whether we're in an explicit transaction.
+func (e *Executor) SetInTransaction(inTxn bool) {
+	e.inTxn = inTxn
+}
+
+// recordUndo records an undo operation if we're in a transaction.
+func (e *Executor) recordUndo(op UndoOperation) {
+	if e.undoRecorder != nil && e.inTxn {
+		e.undoRecorder.RecordUndo(op)
+	}
 }
 
 // Execute executes a physical plan and returns the result.
@@ -1335,6 +1380,9 @@ func (e *Executor) executeInsert(
 	// Collect all inserted values for WAL logging and RETURNING clause
 	var allInsertedValues [][]any
 
+	// Track RowIDs for undo support - capture the starting RowID before insert
+	startRowID := table.NextRowID()
+
 	// Helper function to flush a DataChunk to the table
 	flushChunk := func(chunk *storage.DataChunk) (int, error) {
 		if chunk.Count() == 0 {
@@ -1456,6 +1504,20 @@ func (e *Executor) executeInsert(
 			}
 			rowsAffected += int64(count)
 		}
+	}
+
+	// Record undo operation for transaction rollback
+	// Calculate the RowIDs that were inserted (from startRowID to current nextRowID)
+	if rowsAffected > 0 {
+		insertedRowIDs := make([]uint64, rowsAffected)
+		for i := int64(0); i < rowsAffected; i++ {
+			insertedRowIDs[i] = startRowID + uint64(i)
+		}
+		e.recordUndo(UndoOperation{
+			TableName: plan.Table,
+			OpType:    UndoInsert,
+			RowIDs:    insertedRowIDs,
+		})
 	}
 
 	// WAL logging: Log INSERT entry AFTER successful insertion

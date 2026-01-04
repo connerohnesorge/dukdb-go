@@ -80,6 +80,25 @@ type EngineConn struct {
 	engine *Engine
 	txn    *Transaction
 	closed bool
+	inTxn  bool // Whether BEGIN was explicitly called (explicit transaction mode)
+}
+
+// undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
+// This allows the executor to record undo operations without knowing about the engine package.
+type undoRecorderAdapter struct {
+	txn *Transaction
+}
+
+// RecordUndo implements executor.UndoRecorder by converting and forwarding to Transaction.
+func (a *undoRecorderAdapter) RecordUndo(op executor.UndoOperation) {
+	// Convert executor.UndoOperation to engine.UndoOperation
+	engineOp := UndoOperation{
+		TableName:   op.TableName,
+		OpType:      UndoOpType(op.OpType), // Same values, just different packages
+		RowIDs:      op.RowIDs,
+		BeforeImage: op.BeforeImage,
+	}
+	a.txn.RecordUndo(engineOp)
 }
 
 // Execute executes a query that doesn't return rows.
@@ -137,6 +156,11 @@ func (c *EngineConn) Execute(
 			exec.SetTxnID(c.txn.ID())
 		}
 	}
+	// Set up undo recorder for DML rollback support
+	if c.txn != nil && c.inTxn {
+		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
+		exec.SetInTransaction(true)
+	}
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return 0, err
@@ -146,33 +170,74 @@ func (c *EngineConn) Execute(
 }
 
 // handleBegin handles the BEGIN statement, capturing catalog and storage snapshots
-// for DDL transaction rollback support.
+// for DDL transaction rollback support and enabling DML undo logging.
 func (c *EngineConn) handleBegin() (int64, error) {
+	// Mark that we're in an explicit transaction
+	c.inTxn = true
+
 	// Capture catalog and storage snapshots for DDL rollback
 	if c.txn != nil {
 		c.txn.catalogSnapshot = c.engine.catalog.Clone()
 		c.txn.storageSnapshot = c.engine.storage.Clone()
+		// Clear any existing undo log from previous transactions
+		c.txn.ClearUndoLog()
 	}
 
 	return 0, nil
 }
 
-// handleCommit handles the COMMIT statement, clearing any snapshots.
+// handleCommit handles the COMMIT statement, clearing any snapshots and undo log.
 func (c *EngineConn) handleCommit() (int64, error) {
-	// Clear snapshots - changes are now permanent
+	// Clear snapshots and undo log - changes are now permanent
 	if c.txn != nil {
 		c.txn.catalogSnapshot = nil
 		c.txn.storageSnapshot = nil
+		c.txn.ClearUndoLog()
 	}
+
+	// Exit explicit transaction mode
+	c.inTxn = false
 
 	return 0, nil
 }
 
 // handleRollback handles the ROLLBACK statement, restoring from snapshots
-// for DDL transaction rollback support.
+// for DDL transaction rollback and executing DML undo operations.
 func (c *EngineConn) handleRollback() (int64, error) {
-	// Restore from snapshots if available
 	if c.txn != nil {
+		// First, execute DML undo operations in reverse order (LIFO)
+		undoLog := c.txn.GetUndoLog()
+		for i := len(undoLog) - 1; i >= 0; i-- {
+			op := undoLog[i]
+			table, ok := c.engine.storage.GetTable(op.TableName)
+			if !ok {
+				// Table might have been dropped, skip this undo operation
+				continue
+			}
+
+			switch op.OpType {
+			case UndoInsert:
+				// Undo INSERT: Delete the inserted rows by setting tombstones
+				table.HardDeleteRows(op.RowIDs)
+
+			case UndoDelete:
+				// Undo DELETE: Clear tombstones (un-delete)
+				rowIDs := make([]storage.RowID, len(op.RowIDs))
+				for j, id := range op.RowIDs {
+					rowIDs[j] = storage.RowID(id)
+				}
+				table.ClearTombstones(rowIDs)
+
+			case UndoUpdate:
+				// Undo UPDATE: Restore before-image values
+				_ = table.RestoreRows(op.RowIDs, op.BeforeImage)
+			}
+		}
+
+		// Clear the undo log
+		c.txn.ClearUndoLog()
+
+		// Then, restore DDL snapshots if available
 		if c.txn.catalogSnapshot != nil {
 			c.engine.catalog.RestoreFrom(c.txn.catalogSnapshot)
 			c.txn.catalogSnapshot = nil
@@ -182,6 +247,9 @@ func (c *EngineConn) handleRollback() (int64, error) {
 			c.txn.storageSnapshot = nil
 		}
 	}
+
+	// Exit explicit transaction mode
+	c.inTxn = false
 
 	return 0, nil
 }
@@ -230,6 +298,11 @@ func (c *EngineConn) Query(
 		if c.txn != nil {
 			exec.SetTxnID(c.txn.ID())
 		}
+	}
+	// Set up undo recorder for DML rollback support
+	if c.txn != nil && c.inTxn {
+		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
+		exec.SetInTransaction(true)
 	}
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {

@@ -507,6 +507,68 @@ func (t *Table) NextRowID() uint64 {
 	return t.nextRowID
 }
 
+// ClearTombstone marks a row as not deleted (undo delete).
+// This is used for transaction rollback of DELETE operations.
+func (t *Table) ClearTombstone(rowID RowID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.tombstones.Set(rowID, false)
+}
+
+// ClearTombstones marks multiple rows as not deleted (undo delete).
+// This is used for transaction rollback of DELETE operations.
+func (t *Table) ClearTombstones(rowIDs []RowID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, rowID := range rowIDs {
+		t.tombstones.Set(rowID, false)
+	}
+}
+
+// RestoreRows restores rows to their before-image values.
+// This is used for transaction rollback of UPDATE operations.
+// The beforeImage maps column index to a slice of values (one per rowID).
+func (t *Table) RestoreRows(rowIDs []uint64, beforeImage map[int][]any) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for i, rowID := range rowIDs {
+		loc, ok := t.rowIDMap[RowID(rowID)]
+		if !ok {
+			continue
+		}
+
+		if loc.rowGroupIdx >= len(t.rowGroups) {
+			continue
+		}
+
+		rg := t.rowGroups[loc.rowGroupIdx]
+
+		for colIdx, values := range beforeImage {
+			if colIdx >= 0 && colIdx < len(rg.columns) && i < len(values) {
+				rg.columns[colIdx].SetValue(loc.rowIdx, values[i])
+			}
+		}
+	}
+	return nil
+}
+
+// HardDeleteRows removes rows by setting tombstones for them.
+// This is used for transaction rollback of INSERT operations.
+// Unlike DeleteRows which validates existence, this silently ignores missing rows.
+func (t *Table) HardDeleteRows(rowIDs []uint64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for _, id := range rowIDs {
+		rowID := RowID(id)
+		// Only mark as deleted if the row exists
+		if _, exists := t.rowIDMap[rowID]; exists {
+			t.tombstones.Set(rowID, true)
+		}
+	}
+}
+
 // Scan creates a scanner for iterating over the table.
 // It snapshots the row groups and their counts to avoid holding locks during iteration.
 func (t *Table) Scan() *TableScanner {

@@ -4,6 +4,7 @@ package geometry
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 // GeometryType represents the type of geometry.
@@ -51,13 +52,7 @@ func ParseWKB(data []byte) (*Geometry, error) {
 	}, nil
 }
 
-// ParseWKT parses Well-Known Text into a Geometry.
-// This is a simplified implementation that creates POINT geometries.
-func ParseWKT(s string) (*Geometry, error) {
-	// For now, return an error - full WKT parsing is complex
-	// In a real implementation, you'd parse "POINT(x y)" etc.
-	return nil, fmt.Errorf("WKT parsing not yet implemented: %s", s)
-}
+// ParseWKT is defined in wkt.go
 
 // String returns a string representation of the geometry type.
 func (g *Geometry) String() string {
@@ -79,4 +74,79 @@ func (g *Geometry) String() string {
 // WKB returns the WKB bytes of the geometry.
 func (g *Geometry) WKB() []byte {
 	return g.Data
+}
+
+// X returns the X coordinate of a POINT geometry.
+func (g *Geometry) X() (float64, error) {
+	if g.Type != GeometryPoint {
+		return 0, fmt.Errorf("X() is only valid for POINT geometry, got %s", g.String())
+	}
+	if len(g.Data) < 21 {
+		return 0, fmt.Errorf("POINT WKB data too short")
+	}
+
+	var order binary.ByteOrder
+	if g.Data[0] == 0 {
+		order = binary.BigEndian
+	} else {
+		order = binary.LittleEndian
+	}
+
+	x := order.Uint64(g.Data[5:13])
+	return math.Float64frombits(x), nil
+}
+
+// Y returns the Y coordinate of a POINT geometry.
+func (g *Geometry) Y() (float64, error) {
+	if g.Type != GeometryPoint {
+		return 0, fmt.Errorf("Y() is only valid for POINT geometry, got %s", g.String())
+	}
+	if len(g.Data) < 21 {
+		return 0, fmt.Errorf("POINT WKB data too short")
+	}
+
+	var order binary.ByteOrder
+	if g.Data[0] == 0 {
+		order = binary.BigEndian
+	} else {
+		order = binary.LittleEndian
+	}
+
+	y := order.Uint64(g.Data[13:21])
+	return math.Float64frombits(y), nil
+}
+
+// Z returns the Z coordinate of a POINT geometry (if 3D).
+// Returns an error if the geometry is not a 3D POINT.
+func (g *Geometry) Z() (float64, error) {
+	if g.Type != GeometryPoint {
+		return 0, fmt.Errorf("Z() is only valid for POINT geometry, got %s", g.String())
+	}
+	if len(g.Data) < 29 {
+		return 0, fmt.Errorf("POINT does not have Z coordinate (not 3D)")
+	}
+
+	var order binary.ByteOrder
+	if g.Data[0] == 0 {
+		order = binary.BigEndian
+	} else {
+		order = binary.LittleEndian
+	}
+
+	z := order.Uint64(g.Data[21:29])
+	return math.Float64frombits(z), nil
+}
+
+// GetSRID returns the Spatial Reference ID.
+func (g *Geometry) GetSRID() int32 {
+	return g.Srid
+}
+
+// WithSRID returns a new geometry with the specified SRID.
+func (g *Geometry) WithSRID(srid int32) *Geometry {
+	return &Geometry{
+		Type: g.Type,
+		Data: g.Data,
+		Srid: srid,
+	}
 }

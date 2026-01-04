@@ -205,10 +205,21 @@ func (p *parser) scanIdent() {
 func (p *parser) scanOperator() {
 	start := p.pos
 	// Handle multi-character operators
+	if p.pos+2 < len(p.input) {
+		three := p.input[p.pos : p.pos+3]
+		if three == "->>" {
+			p.pos += 3
+			p.tokens = append(
+				p.tokens,
+				token{tokenOperator, "->>", start},
+			)
+			return
+		}
+	}
 	if p.pos+1 < len(p.input) {
 		two := p.input[p.pos : p.pos+2]
 		switch two {
-		case "<=", ">=", "<>", "!=", "||", "::":
+		case "<=", ">=", "<>", "!=", "||", "::", "->":
 			p.pos += 2
 			p.tokens = append(
 				p.tokens,

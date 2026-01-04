@@ -2552,7 +2552,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 }
 
 func (p *parser) parseAddExpr() (Expr, error) {
-	left, err := p.parseMulExpr()
+	left, err := p.parseJSONExpr()
 	if err != nil {
 		return nil, err
 	}
@@ -2566,6 +2566,40 @@ func (p *parser) parseAddExpr() (Expr, error) {
 			op = OpSub
 		case "||":
 			op = OpConcat
+		default:
+			return left, nil
+		}
+		p.advance()
+		right, err := p.parseJSONExpr()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{
+			Left:  left,
+			Op:    op,
+			Right: right,
+		}
+	}
+
+	return left, nil
+}
+
+// parseJSONExpr parses JSON extraction operators (-> and ->>).
+// These have higher precedence than arithmetic operators.
+// Syntax: expr -> key, expr ->> key, expr -> index, expr ->> index
+func (p *parser) parseJSONExpr() (Expr, error) {
+	left, err := p.parseMulExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().typ == tokenOperator {
+		var op BinaryOp
+		switch p.current().value {
+		case "->":
+			op = OpJSONExtract
+		case "->>":
+			op = OpJSONText
 		default:
 			return left, nil
 		}
@@ -3701,6 +3735,16 @@ func parseTypeName(name string) dukdb.Type {
 		return dukdb.TYPE_HUGEINT
 	case "UHUGEINT":
 		return dukdb.TYPE_UHUGEINT
+	case "BIGNUM":
+		return dukdb.TYPE_BIGNUM
+	case "JSON":
+		return dukdb.TYPE_JSON
+	case "GEOMETRY":
+		return dukdb.TYPE_GEOMETRY
+	case "VARIANT":
+		return dukdb.TYPE_VARIANT
+	case "LAMBDA":
+		return dukdb.TYPE_LAMBDA
 	default:
 		return dukdb.TYPE_VARCHAR // Default to VARCHAR for unknown types
 	}

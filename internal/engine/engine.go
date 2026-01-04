@@ -296,6 +296,26 @@ func (tm *TransactionManager) Rollback(
 	return nil
 }
 
+// UndoOpType represents the type of DML operation that can be undone.
+type UndoOpType int
+
+const (
+	// UndoInsert - to undo: delete these rows
+	UndoInsert UndoOpType = iota
+	// UndoDelete - to undo: undelete (clear tombstones)
+	UndoDelete
+	// UndoUpdate - to undo: restore before-image
+	UndoUpdate
+)
+
+// UndoOperation represents a single DML operation that can be undone.
+type UndoOperation struct {
+	TableName   string
+	OpType      UndoOpType
+	RowIDs      []uint64
+	BeforeImage map[int][]any // Column index -> values (for UPDATE)
+}
+
 // Transaction represents a database transaction.
 type Transaction struct {
 	id     uint64
@@ -304,6 +324,32 @@ type Transaction struct {
 	// DDL rollback support: snapshot state at transaction start
 	catalogSnapshot *catalog.Catalog
 	storageSnapshot *storage.Storage
+
+	// DML rollback support: undo log for INSERT/UPDATE/DELETE operations
+	undoLog []UndoOperation
+	mu      sync.Mutex // protects undoLog
+}
+
+// RecordUndo adds an undo operation to the transaction's undo log.
+// Operations are added in order and will be applied in reverse on rollback.
+func (t *Transaction) RecordUndo(op UndoOperation) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.undoLog = append(t.undoLog, op)
+}
+
+// GetUndoLog returns the undo log for rollback processing.
+func (t *Transaction) GetUndoLog() []UndoOperation {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.undoLog
+}
+
+// ClearUndoLog clears the undo log (called on commit).
+func (t *Transaction) ClearUndoLog() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.undoLog = nil
 }
 
 // ID returns the transaction ID.
