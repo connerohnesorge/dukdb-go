@@ -340,6 +340,57 @@ func (te *TableExtractor) VisitAlterSecretStmt(stmt *AlterSecretStmt) {
 	// No table references in ALTER SECRET statements
 }
 
+// VisitPragmaStmt is a no-op for PRAGMA statements (no table references).
+func (te *TableExtractor) VisitPragmaStmt(stmt *PragmaStmt) {
+	// No table references in PRAGMA statements
+}
+
+// VisitExplainStmt extracts table references from EXPLAIN statements.
+func (te *TableExtractor) VisitExplainStmt(stmt *ExplainStmt) {
+	// Visit the underlying query to extract table references
+	if stmt.Query != nil {
+		switch q := stmt.Query.(type) {
+		case *SelectStmt:
+			te.VisitSelectStmt(q)
+		case *InsertStmt:
+			te.VisitInsertStmt(q)
+		case *UpdateStmt:
+			te.VisitUpdateStmt(q)
+		case *DeleteStmt:
+			te.VisitDeleteStmt(q)
+		}
+	}
+}
+
+// VisitVacuumStmt extracts table references from VACUUM statements.
+func (te *TableExtractor) VisitVacuumStmt(stmt *VacuumStmt) {
+	// Extract the table being vacuumed (if specified)
+	if stmt.TableName != "" {
+		ref := EnhancedTableRef{
+			Schema: stmt.Schema,
+			Table:  stmt.TableName,
+		}
+		te.tables[ref] = struct{}{}
+	}
+}
+
+// VisitAnalyzeStmt extracts table references from ANALYZE statements.
+func (te *TableExtractor) VisitAnalyzeStmt(stmt *AnalyzeStmt) {
+	// Extract the table being analyzed (if specified)
+	if stmt.TableName != "" {
+		ref := EnhancedTableRef{
+			Schema: stmt.Schema,
+			Table:  stmt.TableName,
+		}
+		te.tables[ref] = struct{}{}
+	}
+}
+
+// VisitCheckpointStmt is a no-op for CHECKPOINT statements (no table references).
+func (te *TableExtractor) VisitCheckpointStmt(stmt *CheckpointStmt) {
+	// No table references in CHECKPOINT statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)

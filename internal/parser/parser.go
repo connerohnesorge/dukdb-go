@@ -73,6 +73,16 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseCopy()
 	case p.isKeyword("MERGE"):
 		stmt, err = p.parseMerge()
+	case p.isKeyword("PRAGMA"):
+		stmt, err = p.parsePragma()
+	case p.isKeyword("EXPLAIN"):
+		stmt, err = p.parseExplain()
+	case p.isKeyword("VACUUM"):
+		stmt, err = p.parseVacuum()
+	case p.isKeyword("ANALYZE"):
+		stmt, err = p.parseAnalyze()
+	case p.isKeyword("CHECKPOINT"):
+		stmt, err = p.parseCheckpoint()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",

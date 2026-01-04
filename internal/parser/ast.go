@@ -861,3 +861,89 @@ type SampleOptions struct {
 	Rows       int          // For RESERVOIR - fixed number of rows to sample
 	Seed       *int64       // Optional seed for reproducible sampling
 }
+
+// ---------- Database Maintenance Statements ----------
+
+// PragmaStmt represents a PRAGMA statement.
+// Supports various syntaxes:
+//   - PRAGMA pragma_name
+//   - PRAGMA pragma_name(arg1, arg2, ...)
+//   - PRAGMA pragma_name = value
+type PragmaStmt struct {
+	Name  string // Pragma name (e.g., "database_size", "table_info")
+	Args  []Expr // Pragma arguments for function-style syntax
+	Value Expr   // For SET PRAGMA name = value
+}
+
+func (*PragmaStmt) stmtNode() {}
+
+func (*PragmaStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_PRAGMA }
+
+// Accept implements the Visitor pattern for PragmaStmt.
+func (s *PragmaStmt) Accept(v Visitor) {
+	v.VisitPragmaStmt(s)
+}
+
+// ExplainStmt represents an EXPLAIN or EXPLAIN ANALYZE statement.
+// Wraps another statement to show its execution plan.
+type ExplainStmt struct {
+	Query   Statement // The statement to explain (typically SelectStmt)
+	Analyze bool      // true for EXPLAIN ANALYZE (execute and show actual metrics)
+}
+
+func (*ExplainStmt) stmtNode() {}
+
+func (*ExplainStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_EXPLAIN }
+
+// Accept implements the Visitor pattern for ExplainStmt.
+func (s *ExplainStmt) Accept(v Visitor) {
+	v.VisitExplainStmt(s)
+}
+
+// VacuumStmt represents a VACUUM statement.
+// Reclaims space from deleted rows and optimizes storage.
+type VacuumStmt struct {
+	Schema    string // Optional schema name
+	TableName string // Optional table name (empty for entire database)
+}
+
+func (*VacuumStmt) stmtNode() {}
+
+func (*VacuumStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_VACUUM }
+
+// Accept implements the Visitor pattern for VacuumStmt.
+func (s *VacuumStmt) Accept(v Visitor) {
+	v.VisitVacuumStmt(s)
+}
+
+// AnalyzeStmt represents an ANALYZE statement.
+// Collects statistics about table columns for query optimization.
+type AnalyzeStmt struct {
+	Schema    string // Optional schema name
+	TableName string // Optional table name (empty for all tables)
+}
+
+func (*AnalyzeStmt) stmtNode() {}
+
+func (*AnalyzeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ANALYZE }
+
+// Accept implements the Visitor pattern for AnalyzeStmt.
+func (s *AnalyzeStmt) Accept(v Visitor) {
+	v.VisitAnalyzeStmt(s)
+}
+
+// CheckpointStmt represents a CHECKPOINT statement.
+// Forces a database checkpoint, writing pending changes to disk.
+type CheckpointStmt struct {
+	Database string // Optional database name
+	Force    bool   // FORCE flag to force checkpoint even if not needed
+}
+
+func (*CheckpointStmt) stmtNode() {}
+
+func (*CheckpointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// Accept implements the Visitor pattern for CheckpointStmt.
+func (s *CheckpointStmt) Accept(v Visitor) {
+	v.VisitCheckpointStmt(s)
+}

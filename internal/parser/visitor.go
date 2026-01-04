@@ -41,4 +41,11 @@ type Visitor interface {
 	VisitCreateSecretStmt(stmt *CreateSecretStmt)
 	VisitDropSecretStmt(stmt *DropSecretStmt)
 	VisitAlterSecretStmt(stmt *AlterSecretStmt)
+
+	// Database maintenance statement visitors
+	VisitPragmaStmt(stmt *PragmaStmt)
+	VisitExplainStmt(stmt *ExplainStmt)
+	VisitVacuumStmt(stmt *VacuumStmt)
+	VisitAnalyzeStmt(stmt *AnalyzeStmt)
+	VisitCheckpointStmt(stmt *CheckpointStmt)
 }
