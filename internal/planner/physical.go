@@ -9,7 +9,9 @@ import (
 // PhysicalPlan represents a node in the physical query plan.
 type PhysicalPlan interface {
 	physicalPlanNode()
+	// Children returns the child nodes of this plan.
 	Children() []PhysicalPlan
+	// OutputColumns returns the columns that this plan produces.
 	OutputColumns() []ColumnBinding
 }
 
@@ -641,12 +643,12 @@ type PhysicalAlterTable struct {
 	Schema       string
 	Table        string
 	TableDef     *catalog.TableDef
-	Operation    int    // AlterTableOp from parser
-	IfExists     bool   // IF EXISTS modifier
-	NewTableName string // RENAME TO
-	OldColumn    string // RENAME COLUMN
-	NewColumn    string // RENAME COLUMN
-	DropColumn   string // DROP COLUMN
+	Operation    int                // AlterTableOp from parser
+	IfExists     bool               // IF EXISTS modifier
+	NewTableName string             // RENAME TO
+	OldColumn    string             // RENAME COLUMN
+	NewColumn    string             // RENAME COLUMN
+	DropColumn   string             // DROP COLUMN
 	AddColumn    *catalog.ColumnDef // ADD COLUMN
 }
 
@@ -2430,18 +2432,6 @@ func extractWindowExprs(
 		}
 	}
 	return windowExprs
-}
-
-// containsWindowExpr checks if any column contains a window expression.
-func containsWindowExpr(
-	columns []*binder.BoundSelectColumn,
-) bool {
-	for _, col := range columns {
-		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
-			return true
-		}
-	}
-	return false
 }
 
 // extractGroupingSets extracts grouping sets from GROUP BY expressions.

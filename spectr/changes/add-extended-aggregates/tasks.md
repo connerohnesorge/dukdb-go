@@ -182,9 +182,9 @@
 - [ ] 8.2.6 Test all regression functions against DuckDB
 
 ### 8.3 Integration Tests
-- [ ] 8.3.1 Test aggregates in GROUP BY context
-- [ ] 8.3.2 Test with ORDER BY on aggregates
-- [ ] 8.3.3 Test with HAVING clause
+- [x] 8.3.1 Test aggregates in GROUP BY context
+- [x] 8.3.2 Test with ORDER BY on aggregates
+- [x] 8.3.3 Test with HAVING clause
 - [ ] 8.3.4 Test in subqueries
 - [ ] 8.3.5 Test with window functions
 

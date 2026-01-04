@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
 	dukdb "github.com/dukdb/dukdb-go"
 )
@@ -30,8 +29,6 @@ func newParser(input string) *parser {
 
 	return p
 }
-
-
 
 func (p *parser) parse() (Statement, error) {
 	// Check for tokenization errors first
@@ -419,7 +416,8 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 }
 
 func (p *parser) parseFrom() (*FromClause, error) {
-	if err := p.expectKeyword("FROM"); err != nil {
+	err := p.expectKeyword("FROM")
+	if err != nil {
 		return nil, err
 	}
 
@@ -593,7 +591,8 @@ func (p *parser) parseTableRef() (TableRef, error) {
 //   - TABLESAMPLE RESERVOIR(rows)
 //   - TABLESAMPLE method(value) REPEATABLE(seed)
 func (p *parser) parseTablesample() (*SampleOptions, error) {
-	if err := p.expectKeyword("TABLESAMPLE"); err != nil {
+	err := p.expectKeyword("TABLESAMPLE")
+	if err != nil {
 		return nil, err
 	}
 
@@ -670,7 +669,8 @@ func (p *parser) parseTablesample() (*SampleOptions, error) {
 // The function name has already been consumed.
 // Example: read_csv('file.csv', delimiter=',', header=true)
 func (p *parser) parseTableFunction(name string) (*TableFunctionRef, error) {
-	if _, err := p.expect(tokenLParen); err != nil {
+	_, err := p.expect(tokenLParen)
+	if err != nil {
 		return nil, err
 	}
 
@@ -709,7 +709,8 @@ func (p *parser) parseTableFunction(name string) (*TableFunctionRef, error) {
 		}
 	}
 
-	if _, err := p.expect(tokenRParen); err != nil {
+	_, err = p.expect(tokenRParen)
+	if err != nil {
 		return nil, err
 	}
 
@@ -3708,6 +3709,3 @@ func GetTypeName(t dukdb.Type) string {
 		return "UNKNOWN"
 	}
 }
-
-// make unicode package used
-var _ = unicode.IsSpace

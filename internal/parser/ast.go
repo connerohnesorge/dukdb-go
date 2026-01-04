@@ -30,13 +30,13 @@ type CTE struct {
 type SelectStmt struct {
 	CTEs       []CTE // Common Table Expressions (WITH clause)
 	Distinct   bool
-	DistinctOn []Expr         // DISTINCT ON (col1, col2) expressions - selects first row per distinct group
+	DistinctOn []Expr // DISTINCT ON (col1, col2) expressions - selects first row per distinct group
 	Columns    []SelectColumn
 	From       *FromClause
 	Where      Expr
 	GroupBy    []Expr
 	Having     Expr
-	Qualify    Expr           // QUALIFY clause - filters rows after window function evaluation
+	Qualify    Expr // QUALIFY clause - filters rows after window function evaluation
 	OrderBy    []OrderByExpr
 	Limit      Expr
 	Offset     Expr
@@ -427,10 +427,10 @@ type AlterTableStmt struct {
 	IfExists  bool
 	Operation AlterTableOp
 	// Operation-specific fields:
-	NewTableName string          // RENAME TO
-	OldColumn    string          // RENAME COLUMN
-	NewColumn    string          // RENAME COLUMN
-	DropColumn   string          // DROP COLUMN
+	NewTableName string           // RENAME TO
+	OldColumn    string           // RENAME COLUMN
+	NewColumn    string           // RENAME COLUMN
+	DropColumn   string           // DROP COLUMN
 	AddColumn    *ColumnDefClause // ADD COLUMN
 }
 

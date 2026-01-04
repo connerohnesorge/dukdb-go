@@ -1396,6 +1396,52 @@ func toFloat64Value(v any) float64 {
 	}
 }
 
+// toFloat64Slice converts a slice of any type to []float64.
+// Returns the converted slice and true if the input is a slice with convertible elements.
+// Returns nil and false if the input is not a slice or contains non-numeric elements.
+func toFloat64Slice(v any) ([]float64, bool) {
+	if v == nil {
+		return nil, false
+	}
+	switch val := v.(type) {
+	case []float64:
+		return val, true
+	case []any:
+		result := make([]float64, len(val))
+		for i, elem := range val {
+			f := toFloat64Value(elem)
+			result[i] = f
+		}
+		return result, true
+	case []float32:
+		result := make([]float64, len(val))
+		for i, elem := range val {
+			result[i] = float64(elem)
+		}
+		return result, true
+	case []int64:
+		result := make([]float64, len(val))
+		for i, elem := range val {
+			result[i] = float64(elem)
+		}
+		return result, true
+	case []int:
+		result := make([]float64, len(val))
+		for i, elem := range val {
+			result[i] = float64(elem)
+		}
+		return result, true
+	case []int32:
+		result := make([]float64, len(val))
+		for i, elem := range val {
+			result[i] = float64(elem)
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
 func compareValues(a, b any) int {
 	if a == nil && b == nil {
 		return 0

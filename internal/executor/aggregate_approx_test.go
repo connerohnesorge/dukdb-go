@@ -428,6 +428,104 @@ func TestHyperLogLogPrecision(t *testing.T) {
 	}
 }
 
+// TestHyperLogLogAccuracyAtScale tests HLL accuracy at various data sizes.
+// HyperLogLog with precision 14 has a standard error of ~0.8%.
+// We test that the error is within 5% for reasonable confidence.
+func TestHyperLogLogAccuracyAtScale(t *testing.T) {
+	tests := []struct {
+		name         string
+		uniqueCount  int
+		maxErrorPct  float64 // Maximum allowed error percentage
+	}{
+		{
+			name:        "1K unique values",
+			uniqueCount: 1_000,
+			maxErrorPct: 5.0,
+		},
+		{
+			name:        "10K unique values",
+			uniqueCount: 10_000,
+			maxErrorPct: 5.0,
+		},
+		{
+			name:        "100K unique values",
+			uniqueCount: 100_000,
+			maxErrorPct: 5.0,
+		},
+		{
+			name:        "1M unique values",
+			uniqueCount: 1_000_000,
+			maxErrorPct: 5.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hll := NewHyperLogLog(14) // Precision 14 is the default, ~0.8% standard error
+
+			// Generate unique values and add to HLL
+			for i := 0; i < tt.uniqueCount; i++ {
+				hll.Add(i)
+			}
+
+			estimate := hll.Estimate()
+			exactCount := float64(tt.uniqueCount)
+			errorPct := math.Abs(estimate-exactCount) / exactCount * 100
+
+			t.Logf("Exact count: %d, HLL estimate: %.0f, Error: %.2f%%",
+				tt.uniqueCount, estimate, errorPct)
+
+			if errorPct > tt.maxErrorPct {
+				t.Errorf("HLL error %.2f%% exceeds maximum allowed %.2f%% for %d unique values",
+					errorPct, tt.maxErrorPct, tt.uniqueCount)
+			}
+		})
+	}
+}
+
+// TestHyperLogLogAccuracyWithStrings tests HLL accuracy with string values at scale.
+func TestHyperLogLogAccuracyWithStrings(t *testing.T) {
+	tests := []struct {
+		name         string
+		uniqueCount  int
+		maxErrorPct  float64
+	}{
+		{
+			name:        "10K unique strings",
+			uniqueCount: 10_000,
+			maxErrorPct: 5.0,
+		},
+		{
+			name:        "100K unique strings",
+			uniqueCount: 100_000,
+			maxErrorPct: 5.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hll := NewHyperLogLog(14)
+
+			// Generate unique string values
+			for i := 0; i < tt.uniqueCount; i++ {
+				hll.Add("unique_string_" + string(rune(i/65536)) + string(rune(i%65536)))
+			}
+
+			estimate := hll.Estimate()
+			exactCount := float64(tt.uniqueCount)
+			errorPct := math.Abs(estimate-exactCount) / exactCount * 100
+
+			t.Logf("Exact count: %d, HLL estimate: %.0f, Error: %.2f%%",
+				tt.uniqueCount, estimate, errorPct)
+
+			if errorPct > tt.maxErrorPct {
+				t.Errorf("HLL error %.2f%% exceeds maximum allowed %.2f%% for %d unique strings",
+					errorPct, tt.maxErrorPct, tt.uniqueCount)
+			}
+		})
+	}
+}
+
 // generateIntValues generates a slice of distinct integer values.
 func generateIntValues(n int) []any {
 	values := make([]any, n)

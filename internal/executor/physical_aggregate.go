@@ -440,6 +440,11 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		if err != nil {
 			return nil, err
 		}
+		// Check if the quantile argument is an array/slice
+		if qSlice, ok := toFloat64Slice(qVal); ok {
+			return computeQuantileArray(values, qSlice)
+		}
+		// Single quantile value
 		q := toFloat64Value(qVal)
 		return computeQuantile(values, q)
 

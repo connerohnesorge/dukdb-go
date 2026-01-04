@@ -113,6 +113,57 @@ func computeQuantile(values []any, q float64) (any, error) {
 	return floats[lower]*(1-frac) + floats[upper]*frac, nil
 }
 
+// computeQuantileArray calculates multiple quantiles at once.
+// Takes a slice of quantile positions (e.g., [0.25, 0.5, 0.75]).
+// Returns a slice of the computed quantiles.
+// Returns nil for empty input or if any quantile is invalid.
+func computeQuantileArray(values []any, quantiles []float64) (any, error) {
+	// Validate all quantile values first
+	for _, q := range quantiles {
+		if q < 0 || q > 1 {
+			return nil, nil
+		}
+	}
+
+	floats := collectNonNullFloats(values)
+	if len(floats) == 0 {
+		return nil, nil
+	}
+
+	sort.Float64s(floats)
+	n := len(floats)
+
+	results := make([]float64, len(quantiles))
+
+	for i, q := range quantiles {
+		if n == 1 {
+			results[i] = floats[0]
+			continue
+		}
+
+		// Calculate the index for the quantile
+		// Using the R-7 method (default in many systems)
+		index := q * float64(n-1)
+		lower := int(math.Floor(index))
+		upper := int(math.Ceil(index))
+
+		if lower == upper {
+			results[i] = floats[lower]
+		} else {
+			// Linear interpolation
+			frac := index - float64(lower)
+			results[i] = floats[lower]*(1-frac) + floats[upper]*frac
+		}
+	}
+
+	// Convert to []any for consistent return type
+	result := make([]any, len(results))
+	for i, r := range results {
+		result[i] = r
+	}
+	return result, nil
+}
+
 // computePercentileCont calculates the continuous percentile with interpolation.
 // This is equivalent to computeQuantile with p/100.
 // Percentile should be between 0 and 1 (representing 0% to 100%).
@@ -394,4 +445,88 @@ func computeStddevSamp(values []any) (any, error) {
 	}
 
 	return math.Sqrt(variance.(float64)), nil
+}
+
+// VarianceState implements Welford's online algorithm for streaming variance computation.
+// This allows computing variance, standard deviation, and related statistics
+// in a single pass without storing all values in memory.
+//
+// The algorithm maintains:
+//   - count: number of values seen
+//   - mean: running mean
+//   - m2: sum of squared differences from the mean
+//
+// Reference: Welford, B. P. (1962). "Note on a method for calculating corrected sums
+// of squares and products". Technometrics. 4 (3): 419-420.
+type VarianceState struct {
+	count int64   // number of values seen
+	mean  float64 // running mean
+	m2    float64 // sum of squared differences from the mean
+}
+
+// NewVarianceState creates a new VarianceState initialized to zero.
+func NewVarianceState() *VarianceState {
+	return &VarianceState{
+		count: 0,
+		mean:  0.0,
+		m2:    0.0,
+	}
+}
+
+// Update adds a new value to the running variance computation using Welford's algorithm.
+// This method implements the online update formula:
+//
+//	count++
+//	delta := value - mean
+//	mean += delta / count
+//	delta2 := value - mean
+//	m2 += delta * delta2
+func (vs *VarianceState) Update(value float64) {
+	vs.count++
+	delta := value - vs.mean
+	vs.mean += delta / float64(vs.count)
+	delta2 := value - vs.mean
+	vs.m2 += delta * delta2
+}
+
+// Count returns the number of values that have been added.
+func (vs *VarianceState) Count() int64 {
+	return vs.count
+}
+
+// Mean returns the running mean of all values added.
+func (vs *VarianceState) Mean() float64 {
+	return vs.mean
+}
+
+// VariancePop returns the population variance.
+// Population variance = M2 / N
+// Returns 0 if no values have been added.
+func (vs *VarianceState) VariancePop() float64 {
+	if vs.count == 0 {
+		return 0.0
+	}
+	return vs.m2 / float64(vs.count)
+}
+
+// VarianceSamp returns the sample variance (with Bessel's correction).
+// Sample variance = M2 / (N - 1)
+// Returns 0 if fewer than 2 values have been added.
+func (vs *VarianceState) VarianceSamp() float64 {
+	if vs.count < 2 {
+		return 0.0
+	}
+	return vs.m2 / float64(vs.count-1)
+}
+
+// StdDevPop returns the population standard deviation.
+// Population stddev = sqrt(VariancePop)
+func (vs *VarianceState) StdDevPop() float64 {
+	return math.Sqrt(vs.VariancePop())
+}
+
+// StdDevSamp returns the sample standard deviation.
+// Sample stddev = sqrt(VarianceSamp)
+func (vs *VarianceState) StdDevSamp() float64 {
+	return math.Sqrt(vs.VarianceSamp())
 }
