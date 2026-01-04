@@ -42,73 +42,73 @@
       "id": "1.1",
       "section": "Lexer Updates",
       "description": "Add tokens: FUNCTION, RETURNS, LANGUAGE, IMMUTABLE/STABLE/VOLATILE, STRICT, LEAKPROOF, PARALLEL SAFE/UNSAFE",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.1",
       "section": "Parser",
       "description": "Implement parseCreateFunction after CREATE FUNCTION",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Parser",
       "description": "Parse param list: ident TypeName [, ...]",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Parser",
       "description": "RETURNS TypeName",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Parser",
       "description": "Optional LANGUAGE ident, AS 'string' or $$multi-line$$",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.5",
       "section": "Parser",
       "description": "Attr list (IMMUTABLE etc.)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.1",
       "section": "AST",
       "description": "CreateFunctionStmt{Name, Params[]FuncParam{Name string, Type dukdb.Type}, Returns dukdb.Type, Lang string, Body string, Attrs[]string}",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "AST",
       "description": "Update Visitor.VisitCreateFunctionStmt",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.1",
       "section": "Tests",
       "description": "Simple UDF, multi-param, $$body$$, all attrs",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "Tests",
       "description": "Param counting, TableExtractor no tables",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.1",
       "section": "Validate",
       "description": "spectr validate",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Validate",
       "description": "Archive",
-      "status": "pending"
+      "status": "completed"
     }
   ]
 }

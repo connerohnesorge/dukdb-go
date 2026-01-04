@@ -1167,10 +1167,12 @@ func (p *parser) parseCreate() (Statement, error) {
 		return p.parseCreateSchema()
 	} else if p.isKeyword("SECRET") {
 		return p.parseCreateSecret(orReplace, persistent, temporary)
+	} else if p.isKeyword("FUNCTION") {
+		return p.parseCreateFunction(orReplace)
 	}
 
 	return nil, p.errorf(
-		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, or SECRET after CREATE",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, SECRET, or FUNCTION after CREATE",
 	)
 }
 
@@ -1533,6 +1535,199 @@ func (p *parser) parseCreateSecret(orReplace, persistent, temporary bool) (*Crea
 	// Validate required fields
 	if stmt.SecretType == "" {
 		return nil, p.errorf("TYPE is required for CREATE SECRET")
+	}
+
+	return stmt, nil
+}
+
+// parseCreateFunction parses a CREATE FUNCTION statement.
+// Syntax: CREATE [OR REPLACE] FUNCTION name(params) RETURNS type
+//
+//	[LANGUAGE lang] [IMMUTABLE|STABLE|VOLATILE] [STRICT] [LEAKPROOF]
+//	[PARALLEL SAFE|UNSAFE|RESTRICTED]
+//	AS 'body' | AS $$body$$
+func (p *parser) parseCreateFunction(orReplace bool) (*CreateFunctionStmt, error) {
+	if err := p.expectKeyword("FUNCTION"); err != nil {
+		return nil, err
+	}
+
+	stmt := &CreateFunctionStmt{
+		OrReplace:  orReplace,
+		Language:   "sql", // Default language
+		Volatility: VolatilityVolatile, // Default volatility
+	}
+
+	// Function name (possibly qualified: schema.name)
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected function name")
+	}
+	stmt.Name = p.advance().value
+
+	// Check for schema qualification
+	if p.current().typ == tokenDot {
+		p.advance()
+		stmt.Schema = stmt.Name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected function name after schema")
+		}
+		stmt.Name = p.advance().value
+	}
+
+	// Parameter list: (name type, ...)
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	// Parse parameters
+	for p.current().typ != tokenRParen && p.current().typ != tokenEOF {
+		param := FuncParam{}
+
+		// Parameter name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected parameter name")
+		}
+		param.Name = p.advance().value
+
+		// Parameter type
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected parameter type")
+		}
+		typeName := strings.ToUpper(p.advance().value)
+		param.Type = parseTypeName(typeName)
+
+		// Handle type modifiers like VARCHAR(100)
+		if p.current().typ == tokenLParen {
+			p.advance()
+			depth := 1
+			for depth > 0 && p.current().typ != tokenEOF {
+				if p.current().typ == tokenLParen {
+					depth++
+				} else if p.current().typ == tokenRParen {
+					depth--
+				}
+				if depth > 0 {
+					p.advance()
+				}
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+		}
+
+		stmt.Params = append(stmt.Params, param)
+
+		// Check for comma or end
+		if p.current().typ == tokenComma {
+			p.advance()
+		} else if p.current().typ != tokenRParen {
+			return nil, p.errorf("expected comma or ) in parameter list")
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	// RETURNS type
+	if err := p.expectKeyword("RETURNS"); err != nil {
+		return nil, err
+	}
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected return type")
+	}
+	returnTypeName := strings.ToUpper(p.advance().value)
+	stmt.Returns = parseTypeName(returnTypeName)
+
+	// Handle return type modifiers like VARCHAR(100)
+	if p.current().typ == tokenLParen {
+		p.advance()
+		depth := 1
+		for depth > 0 && p.current().typ != tokenEOF {
+			if p.current().typ == tokenLParen {
+				depth++
+			} else if p.current().typ == tokenRParen {
+				depth--
+			}
+			if depth > 0 {
+				p.advance()
+			}
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// Parse optional attributes before AS
+	// These can appear in any order: LANGUAGE, IMMUTABLE/STABLE/VOLATILE, STRICT, LEAKPROOF, PARALLEL
+	for {
+		if p.isKeyword("LANGUAGE") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected language name after LANGUAGE")
+			}
+			stmt.Language = strings.ToLower(p.advance().value)
+		} else if p.isKeyword("IMMUTABLE") {
+			p.advance()
+			stmt.Volatility = VolatilityImmutable
+		} else if p.isKeyword("STABLE") {
+			p.advance()
+			stmt.Volatility = VolatilityStable
+		} else if p.isKeyword("VOLATILE") {
+			p.advance()
+			stmt.Volatility = VolatilityVolatile
+		} else if p.isKeyword("STRICT") {
+			p.advance()
+			stmt.Strict = true
+		} else if p.isKeyword("LEAKPROOF") {
+			p.advance()
+			stmt.Leakproof = true
+		} else if p.isKeyword("PARALLEL") {
+			p.advance()
+			if p.isKeyword("SAFE") {
+				p.advance()
+				stmt.ParallelSafe = "SAFE"
+			} else if p.isKeyword("UNSAFE") {
+				p.advance()
+				stmt.ParallelSafe = "UNSAFE"
+			} else if p.isKeyword("RESTRICTED") {
+				p.advance()
+				stmt.ParallelSafe = "RESTRICTED"
+			} else {
+				return nil, p.errorf("expected SAFE, UNSAFE, or RESTRICTED after PARALLEL")
+			}
+		} else {
+			break
+		}
+	}
+
+	// AS clause with function body
+	if err := p.expectKeyword("AS"); err != nil {
+		return nil, err
+	}
+
+	// Function body: either 'single-quoted' or $$dollar-quoted$$
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected function body string after AS")
+	}
+	bodyTok := p.advance()
+	body := bodyTok.value
+
+	// Extract body content based on quote style
+	if strings.HasPrefix(body, "$$") && strings.HasSuffix(body, "$$") {
+		// Dollar-quoted string: strip $$ delimiters
+		stmt.Body = body[2 : len(body)-2]
+	} else if (strings.HasPrefix(body, "'") && strings.HasSuffix(body, "'")) ||
+		(strings.HasPrefix(body, "\"") && strings.HasSuffix(body, "\"")) {
+		// Single or double quoted: strip quotes and unescape
+		stmt.Body = body[1 : len(body)-1]
+		// Handle escaped quotes ('' -> ')
+		if strings.HasPrefix(body, "'") {
+			stmt.Body = strings.ReplaceAll(stmt.Body, "''", "'")
+		} else {
+			stmt.Body = strings.ReplaceAll(stmt.Body, "\"\"", "\"")
+		}
+	} else {
+		stmt.Body = body
 	}
 
 	return stmt, nil

@@ -947,3 +947,57 @@ func (*CheckpointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANS
 func (s *CheckpointStmt) Accept(v Visitor) {
 	v.VisitCheckpointStmt(s)
 }
+
+// ---------- Function DDL Statements ----------
+
+// VolatilityType represents the volatility of a user-defined function.
+// This affects optimizer decisions about when the function can be evaluated.
+type VolatilityType int
+
+const (
+	// VolatilityVolatile is the default - function may return different results
+	// for the same arguments (e.g., random(), now()).
+	VolatilityVolatile VolatilityType = iota
+	// VolatilityStable means the function returns consistent results within a
+	// single query execution but may change between queries.
+	VolatilityStable
+	// VolatilityImmutable means the function always returns the same result
+	// for the same arguments (e.g., mathematical functions).
+	VolatilityImmutable
+)
+
+// FuncParam represents a parameter in a user-defined function.
+type FuncParam struct {
+	Name string     // Parameter name (e.g., "a", "b")
+	Type dukdb.Type // Parameter type (e.g., INTEGER, VARCHAR)
+}
+
+// CreateFunctionStmt represents a CREATE FUNCTION statement for scalar UDFs.
+// Syntax:
+//
+//	CREATE [OR REPLACE] FUNCTION name(params) RETURNS type
+//	    [LANGUAGE lang] [IMMUTABLE|STABLE|VOLATILE] [STRICT] [LEAKPROOF]
+//	    [PARALLEL SAFE|UNSAFE|RESTRICTED]
+//	    AS 'body' | AS $$body$$
+type CreateFunctionStmt struct {
+	Schema      string         // Optional schema name
+	Name        string         // Function name
+	OrReplace   bool           // OR REPLACE clause
+	Params      []FuncParam    // Function parameters
+	Returns     dukdb.Type     // Return type
+	Language    string         // Language (default "sql")
+	Body        string         // Function body
+	Volatility  VolatilityType // VOLATILE, STABLE, or IMMUTABLE
+	Strict      bool           // STRICT (returns NULL if any argument is NULL)
+	Leakproof   bool           // LEAKPROOF (doesn't leak information)
+	ParallelSafe string        // PARALLEL SAFE, UNSAFE, or RESTRICTED (empty = default)
+}
+
+func (*CreateFunctionStmt) stmtNode() {}
+
+func (*CreateFunctionStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateFunctionStmt.
+func (s *CreateFunctionStmt) Accept(v Visitor) {
+	v.VisitCreateFunctionStmt(s)
+}

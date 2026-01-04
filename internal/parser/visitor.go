@@ -48,4 +48,7 @@ type Visitor interface {
 	VisitVacuumStmt(stmt *VacuumStmt)
 	VisitAnalyzeStmt(stmt *AnalyzeStmt)
 	VisitCheckpointStmt(stmt *CheckpointStmt)
+
+	// Function DDL statement visitors
+	VisitCreateFunctionStmt(stmt *CreateFunctionStmt)
 }

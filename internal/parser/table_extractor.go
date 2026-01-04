@@ -391,6 +391,12 @@ func (te *TableExtractor) VisitCheckpointStmt(stmt *CheckpointStmt) {
 	// No table references in CHECKPOINT statements
 }
 
+// VisitCreateFunctionStmt is a no-op for CREATE FUNCTION statements (no table references).
+// UDF bodies are opaque strings - we don't parse them for table references.
+func (te *TableExtractor) VisitCreateFunctionStmt(stmt *CreateFunctionStmt) {
+	// No table references in CREATE FUNCTION statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)

@@ -53,7 +53,14 @@ func (p *parser) tokenize() {
 				token{tokenDot, ".", p.pos},
 			)
 			p.pos++
-		case ch == '$' || ch == '?':
+		case ch == '$':
+			// Check for $$ dollar-quoted string
+			if p.pos+1 < len(p.input) && p.input[p.pos+1] == '$' {
+				p.scanDollarString()
+			} else {
+				p.scanParameter()
+			}
+		case ch == '?':
 			p.scanParameter()
 		case ch == '\'' || ch == '"':
 			p.scanString(ch)
@@ -118,6 +125,34 @@ func (p *parser) scanParameter() {
 		}
 		p.tokens = append(p.tokens, token{tokenParameter, p.input[start:p.pos], start})
 	}
+}
+
+// scanDollarString scans a $$dollar-quoted string$$ for multi-line function bodies.
+// Dollar-quoted strings preserve newlines and don't need escape sequences.
+func (p *parser) scanDollarString() {
+	start := p.pos
+	p.pos += 2 // skip opening $$
+
+	// Find the closing $$
+	for p.pos+1 < len(p.input) {
+		if p.input[p.pos] == '$' && p.input[p.pos+1] == '$' {
+			p.pos += 2 // skip closing $$
+			// Store with the $$ delimiters included so we can extract the body later
+			p.tokens = append(p.tokens, token{tokenString, p.input[start:p.pos], start})
+			return
+		}
+		p.pos++
+	}
+
+	// Unterminated dollar-quoted string
+	p.tokenErr = &dukdb.Error{
+		Type: dukdb.ErrorTypeParser,
+		Msg: fmt.Sprintf(
+			"Parser Error: unterminated dollar-quoted string at or near %q",
+			p.input[start:p.pos],
+		),
+	}
+	p.tokens = append(p.tokens, token{tokenString, p.input[start:p.pos], start})
 }
 
 func (p *parser) scanString(quote byte) {
