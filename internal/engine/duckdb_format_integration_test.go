@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -652,4 +653,273 @@ func TestIntegrationMultipleTables(t *testing.T) {
 
 	err = engine2.Close()
 	require.NoError(t, err)
+}
+
+// TestAutoDetectDuckDBFile tests automatic detection of DuckDB format files.
+// Task 6.2 - Auto-detection of DuckDB files
+func TestAutoDetectDuckDBFile(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	t.Run("detect valid DuckDB file", func(t *testing.T) {
+		dbPath := filepath.Join(tmpDir, "detect_valid.dukdb")
+
+		// Create a database file
+		engine := NewEngine()
+		conn, err := engine.Open(dbPath, nil)
+		require.NoError(t, err)
+		_ = conn
+
+		// Create minimal data
+		tableDef := catalog.NewTableDef("detect_test", []*catalog.ColumnDef{
+			catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		})
+		require.NoError(t, engine.Catalog().CreateTable(tableDef))
+		_, err = engine.Storage().CreateTable("detect_test", []dukdb.Type{dukdb.TYPE_INTEGER})
+		require.NoError(t, err)
+
+		require.NoError(t, engine.Close())
+
+		// Verify the file has DuckDB magic bytes
+		assert.True(t, detectDuckDBFile(dbPath), "Should detect valid DuckDB file")
+	})
+
+	t.Run("detect non-DuckDB file", func(t *testing.T) {
+		nonDuckDBPath := filepath.Join(tmpDir, "not_duckdb.txt")
+
+		// Create a non-DuckDB file
+		err := os.WriteFile(nonDuckDBPath, []byte("This is not a DuckDB file"), 0644)
+		require.NoError(t, err)
+
+		assert.False(t, detectDuckDBFile(nonDuckDBPath), "Should not detect non-DuckDB file")
+	})
+
+	t.Run("detect non-existent file", func(t *testing.T) {
+		nonExistentPath := filepath.Join(tmpDir, "non_existent.dukdb")
+		assert.False(t, detectDuckDBFile(nonExistentPath), "Should return false for non-existent file")
+	})
+
+	t.Run("detect file too small", func(t *testing.T) {
+		smallPath := filepath.Join(tmpDir, "small_file.bin")
+
+		// Create a file smaller than the magic offset
+		err := os.WriteFile(smallPath, []byte("short"), 0644)
+		require.NoError(t, err)
+
+		assert.False(t, detectDuckDBFile(smallPath), "Should return false for file too small")
+	})
+}
+
+// TestResolveStorageFormat tests the storage format resolution logic.
+// Task 6.2 - Storage format selection
+func TestResolveStorageFormat(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	t.Run("explicit duckdb format", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "explicit_duckdb.db")
+		format := resolveStorageFormat(path, "duckdb")
+		assert.Equal(t, StorageFormatDuckDB, format)
+	})
+
+	t.Run("explicit wal format", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "explicit_wal.db")
+		format := resolveStorageFormat(path, "wal")
+		assert.Equal(t, StorageFormatWAL, format)
+	})
+
+	t.Run("auto format with existing DuckDB file", func(t *testing.T) {
+		dbPath := filepath.Join(tmpDir, "auto_duckdb.db")
+
+		// Create a DuckDB file
+		engine := NewEngine()
+		conn, err := engine.Open(dbPath, nil)
+		require.NoError(t, err)
+		_ = conn
+		require.NoError(t, engine.Close())
+
+		// Auto should detect it as DuckDB
+		format := resolveStorageFormat(dbPath, "auto")
+		assert.Equal(t, StorageFormatDuckDB, format)
+	})
+
+	t.Run("auto format with new file", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "new_file.db")
+		format := resolveStorageFormat(path, "auto")
+		// New files default to WAL format
+		assert.Equal(t, StorageFormatWAL, format)
+	})
+
+	t.Run("auto format with non-DuckDB file", func(t *testing.T) {
+		nonDuckDBPath := filepath.Join(tmpDir, "not_duckdb_auto.txt")
+		err := os.WriteFile(nonDuckDBPath, []byte("Not a DuckDB file"), 0644)
+		require.NoError(t, err)
+
+		format := resolveStorageFormat(nonDuckDBPath, "auto")
+		// Non-DuckDB files default to WAL format
+		assert.Equal(t, StorageFormatWAL, format)
+	})
+
+	t.Run("empty format defaults to auto", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "empty_format.db")
+		format := resolveStorageFormat(path, "")
+		// Empty format is treated as auto, which defaults to WAL for new files
+		assert.Equal(t, StorageFormatWAL, format)
+	})
+}
+
+// TestCreateDatabaseWithDuckDBFormat tests creating new databases in DuckDB format.
+// Task 6.2 - Creating new databases in DuckDB format
+func TestCreateDatabaseWithDuckDBFormat(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "new_duckdb.db")
+
+	// Create a new database (uses default format which is compatible with DuckDB)
+	engine := NewEngine()
+	conn, err := engine.Open(dbPath, nil)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	// Create a table and insert data
+	ctx := context.Background()
+	_, err = conn.Execute(ctx, "CREATE TABLE format_test (id INTEGER, name VARCHAR)", nil)
+	require.NoError(t, err)
+
+	_, err = conn.Execute(ctx, "INSERT INTO format_test VALUES (1, 'test')", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, conn.Close())
+	require.NoError(t, engine.Close())
+
+	// Verify the file exists and has DuckDB format
+	assert.True(t, detectDuckDBFile(dbPath), "New database should be in DuckDB format")
+
+	// Reopen and verify data
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+
+	rows, cols, err := conn2.Query(ctx, "SELECT id, name FROM format_test", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(cols))
+	assert.Equal(t, 1, len(rows))
+	assert.Equal(t, int32(1), rows[0]["id"])
+	assert.Equal(t, "test", rows[0]["name"])
+
+	require.NoError(t, conn2.Close())
+	require.NoError(t, engine2.Close())
+}
+
+// TestOpenExistingDuckDBFile tests opening existing DuckDB files.
+// Task 6.2 - Opening existing DuckDB files
+func TestOpenExistingDuckDBFile(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "existing.dukdb")
+
+	// Phase 1: Create database with data
+	engine1 := NewEngine()
+	conn1, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = conn1.Execute(ctx, "CREATE TABLE existing_test (value BIGINT)", nil)
+	require.NoError(t, err)
+
+	for i := int64(1); i <= 5; i++ {
+		_, err = conn1.Execute(ctx, fmt.Sprintf("INSERT INTO existing_test VALUES (%d)", i*100), nil)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, conn1.Close())
+	require.NoError(t, engine1.Close())
+
+	// Phase 2: Reopen and verify
+	engine2 := NewEngine()
+	conn2, err := engine2.Open(dbPath, nil)
+	require.NoError(t, err)
+
+	rows, _, err := conn2.Query(ctx, "SELECT value FROM existing_test ORDER BY value", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 5, len(rows))
+
+	expectedValues := []int64{100, 200, 300, 400, 500}
+	for i, row := range rows {
+		assert.Equal(t, expectedValues[i], row["value"])
+	}
+
+	require.NoError(t, conn2.Close())
+	require.NoError(t, engine2.Close())
+}
+
+// TestFallbackForNonDuckDBFiles tests fallback behavior for non-DuckDB files.
+// Task 6.2 - Fallback to existing format for non-DuckDB files
+func TestFallbackForNonDuckDBFiles(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	t.Run("invalid file format returns error", func(t *testing.T) {
+		invalidPath := filepath.Join(tmpDir, "invalid.db")
+
+		// Create a file with invalid content
+		err := os.WriteFile(invalidPath, []byte("This is definitely not a database file with invalid format"), 0644)
+		require.NoError(t, err)
+
+		// Attempting to open should fail
+		engine := NewEngine()
+		_, err = engine.Open(invalidPath, nil)
+		assert.Error(t, err, "Opening invalid file should return error")
+		// Clean up
+		_ = engine.Close()
+	})
+
+	t.Run("empty file is handled", func(t *testing.T) {
+		emptyPath := filepath.Join(tmpDir, "empty.db")
+
+		// Create an empty file
+		err := os.WriteFile(emptyPath, []byte{}, 0644)
+		require.NoError(t, err)
+
+		// Attempting to open should fail (empty file is invalid)
+		engine := NewEngine()
+		_, err = engine.Open(emptyPath, nil)
+		assert.Error(t, err, "Opening empty file should return error")
+		_ = engine.Close()
+	})
+}
+
+// TestStorageFormatConfigOption tests the storage_format DSN option.
+// Task 6.3 - Configuration options for storage format selection
+func TestStorageFormatConfigOption(t *testing.T) {
+	t.Parallel()
+
+	t.Run("parse storage_format=duckdb", func(t *testing.T) {
+		config, err := dukdb.ParseDSN("/tmp/test.db?storage_format=duckdb")
+		require.NoError(t, err)
+		assert.Equal(t, "duckdb", config.Format)
+	})
+
+	t.Run("parse storage_format=wal", func(t *testing.T) {
+		config, err := dukdb.ParseDSN("/tmp/test.db?storage_format=wal")
+		require.NoError(t, err)
+		assert.Equal(t, "wal", config.Format)
+	})
+
+	t.Run("parse storage_format=auto", func(t *testing.T) {
+		config, err := dukdb.ParseDSN("/tmp/test.db?storage_format=auto")
+		require.NoError(t, err)
+		assert.Equal(t, "auto", config.Format)
+	})
+
+	t.Run("invalid storage_format returns error", func(t *testing.T) {
+		_, err := dukdb.ParseDSN("/tmp/test.db?storage_format=invalid")
+		assert.Error(t, err)
+	})
+
+	t.Run("default format is empty (auto)", func(t *testing.T) {
+		config, err := dukdb.ParseDSN("/tmp/test.db")
+		require.NoError(t, err)
+		assert.Equal(t, "", config.Format)
+	})
 }

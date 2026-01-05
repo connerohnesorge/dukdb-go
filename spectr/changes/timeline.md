@@ -281,12 +281,12 @@ Phase 6: Function Completeness (Weeks 21-24)
 | GAP-001 | DuckDB File Format | CRITICAL | Proposal Ready | None |
 | GAP-002 | Cost-Based Optimizer | CRITICAL | Proposal Ready | None |
 | GAP-004 | Parallel Execution | CRITICAL | Proposal Ready | GAP-002 |
-| GAP-005 | Arrow/IPC Format | HIGH | Needs Proposal | GAP-001 |
-| GAP-007 | Savepoints | HIGH | Needs Proposal | None |
-| GAP-008 | Isolation Levels | HIGH | Needs Proposal | GAP-007 |
-| GAP-009 | Snapshot Isolation | HIGH | Needs Proposal | GAP-008 |
-| GAP-010 | Index Usage | HIGH | Needs Proposal | GAP-002 |
-| GAP-011 | Excel/XLSX | MEDIUM | Needs Proposal | None |
+| GAP-005 | Arrow/IPC Format | HIGH | Proposal Ready | GAP-001 |
+| GAP-007 | Savepoints | HIGH | Proposal Ready | None |
+| GAP-008 | Isolation Levels | HIGH | Proposal Ready | GAP-007 |
+| GAP-009 | Snapshot Isolation | HIGH | Proposal Ready | GAP-008 |
+| GAP-010 | Index Usage | HIGH | Proposal Ready | GAP-002 |
+| GAP-011 | Excel/XLSX | MEDIUM | Proposal Ready | None |
 | GAP-012 | Full-Text Search | LOW | Future | None |
 | GAP-013 | Vector Similarity | LOW | Future | None |
 

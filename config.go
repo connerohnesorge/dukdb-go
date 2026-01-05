@@ -18,9 +18,10 @@ var validAccessModes = map[string]bool{
 
 // validConfigKeys contains the recognized configuration keys.
 var validConfigKeys = map[string]bool{
-	"access_mode": true,
-	"threads":     true,
-	"max_memory":  true,
+	"access_mode":     true,
+	"threads":         true,
+	"max_memory":      true,
+	"storage_format":  true,
 }
 
 // minThreads is the minimum number of threads allowed.
@@ -173,6 +174,12 @@ func parseOptions(
 				return err
 			}
 			config.MaxMemory = value
+
+		case "storage_format":
+			if err := validateStorageFormat(value); err != nil {
+				return err
+			}
+			config.Format = value
 		}
 	}
 
@@ -187,6 +194,28 @@ func validateAccessMode(mode string) error {
 			Msg: fmt.Sprintf(
 				"invalid access_mode: %s (must be one of: automatic, read_only, read_write)",
 				mode,
+			),
+		}
+	}
+
+	return nil
+}
+
+// validStorageFormats contains the valid storage format values.
+var validStorageFormats = map[string]bool{
+	"auto":   true,
+	"duckdb": true,
+	"wal":    true,
+}
+
+// validateStorageFormat validates the storage_format option.
+func validateStorageFormat(format string) error {
+	if !validStorageFormats[format] {
+		return &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"invalid storage_format: %s (must be one of: auto, duckdb, wal)",
+				format,
 			),
 		}
 	}
