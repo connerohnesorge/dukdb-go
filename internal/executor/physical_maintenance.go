@@ -3,10 +3,13 @@ package executor
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/storage"
 )
 
 // executePragma executes a PRAGMA statement.
@@ -397,13 +400,18 @@ func (e *Executor) executeExplain(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalExplain,
 ) (*ExecutionResult, error) {
-	// Generate plan text
-	planText := formatPhysicalPlan(plan.Child, 0)
+	// Create a cost model for estimating costs
+	costModel := optimizer.NewCostModel(
+		optimizer.DefaultCostConstants(),
+		nil, // CardinalityEstimator - not needed for physical plans
+	)
+
+	// Generate plan text with cost annotations
+	planText := formatPhysicalPlanWithCost(plan.Child, 0, costModel)
 
 	if plan.Analyze {
-		// For EXPLAIN ANALYZE, we would execute the plan and collect metrics
-		// For now, just add a note
-		planText = planText + "\n\n(ANALYZE mode: execution metrics would be shown here)"
+		// For EXPLAIN ANALYZE, execute the plan and collect actual metrics
+		planText = e.formatExplainAnalyze(ctx, plan.Child, costModel)
 	}
 
 	return &ExecutionResult{
@@ -414,7 +422,291 @@ func (e *Executor) executeExplain(
 	}, nil
 }
 
-// formatPhysicalPlan formats a physical plan as a text tree.
+// formatCostAnnotation formats a PlanCost as a cost annotation string.
+// Format: (cost=startup..total rows=N width=N)
+func formatCostAnnotation(cost optimizer.PlanCost) string {
+	return fmt.Sprintf("(cost=%.2f..%.2f rows=%.0f width=%d)",
+		cost.StartupCost, cost.TotalCost, cost.OutputRows, cost.OutputWidth)
+}
+
+// ExplainAnalyzeMetrics holds actual execution metrics for EXPLAIN ANALYZE.
+type ExplainAnalyzeMetrics struct {
+	ActualRows int64
+	ActualTime time.Duration
+}
+
+// formatExplainAnalyze executes the plan and formats with both estimated and actual metrics.
+func (e *Executor) formatExplainAnalyze(
+	ctx *ExecutionContext,
+	plan planner.PhysicalPlan,
+	costModel *optimizer.CostModel,
+) string {
+	// Track execution time
+	startTime := time.Now()
+
+	// Execute the plan to get actual row counts
+	result, err := e.executeWithContext(ctx, plan)
+	actualTime := time.Since(startTime)
+
+	if err != nil {
+		// If execution fails, show error in the explain output
+		return formatPhysicalPlanWithCost(plan, 0, costModel) +
+			fmt.Sprintf("\n\n(EXPLAIN ANALYZE failed: %v)", err)
+	}
+
+	actualRows := int64(len(result.Rows))
+
+	// Generate plan text with both estimated and actual metrics
+	return formatPhysicalPlanWithAnalyze(plan, 0, costModel, actualRows, actualTime)
+}
+
+// formatPhysicalPlanWithAnalyze formats a physical plan with both estimated and actual metrics.
+func formatPhysicalPlanWithAnalyze(
+	plan planner.PhysicalPlan,
+	indent int,
+	costModel *optimizer.CostModel,
+	actualRows int64,
+	actualTime time.Duration,
+) string {
+	// Get estimated cost
+	adapter := &physicalPlanAdapter{plan: plan}
+	cost := costModel.EstimateCost(adapter)
+
+	prefix := strings.Repeat("  ", indent)
+	var sb strings.Builder
+
+	// Format node with both estimated and actual metrics
+	switch p := plan.(type) {
+	case *planner.PhysicalScan:
+		sb.WriteString(fmt.Sprintf("%sScan: %s %s (actual rows=%d time=%.2fms)",
+			prefix, p.TableName, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		if p.Alias != "" && p.Alias != p.TableName {
+			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+	case *planner.PhysicalFilter:
+		sb.WriteString(fmt.Sprintf("%sFilter %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalProject:
+		sb.WriteString(fmt.Sprintf("%sProject: %d columns %s (actual rows=%d time=%.2fms)",
+			prefix, len(p.Expressions), formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalHashJoin:
+		sb.WriteString(fmt.Sprintf("%sHashJoin %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalNestedLoopJoin:
+		sb.WriteString(fmt.Sprintf("%sNestedLoopJoin %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalHashAggregate:
+		sb.WriteString(fmt.Sprintf("%sHashAggregate %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalSort:
+		sb.WriteString(fmt.Sprintf("%sSort %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalLimit:
+		sb.WriteString(fmt.Sprintf("%sLimit %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalDistinct:
+		sb.WriteString(fmt.Sprintf("%sDistinct %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalDummyScan:
+		sb.WriteString(fmt.Sprintf("%sDummyScan %s (actual rows=%d time=%.2fms)",
+			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+	case *planner.PhysicalTableFunctionScan:
+		sb.WriteString(fmt.Sprintf("%sTableFunction: %s %s (actual rows=%d time=%.2fms)",
+			prefix, p.FunctionName, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+	default:
+		sb.WriteString(fmt.Sprintf("%s%T %s (actual rows=%d time=%.2fms)",
+			prefix, plan, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+	}
+
+	return sb.String()
+}
+
+// physicalPlanAdapter adapts a planner.PhysicalPlan to the optimizer.PhysicalPlanNode interface.
+// This allows us to use the CostModel to estimate costs for physical plans.
+type physicalPlanAdapter struct {
+	plan planner.PhysicalPlan
+}
+
+func (a *physicalPlanAdapter) PhysicalPlanType() string {
+	switch a.plan.(type) {
+	case *planner.PhysicalScan:
+		return "PhysicalScan"
+	case *planner.PhysicalFilter:
+		return "PhysicalFilter"
+	case *planner.PhysicalProject:
+		return "PhysicalProject"
+	case *planner.PhysicalHashJoin:
+		return "PhysicalHashJoin"
+	case *planner.PhysicalNestedLoopJoin:
+		return "PhysicalNestedLoopJoin"
+	case *planner.PhysicalHashAggregate:
+		return "PhysicalHashAggregate"
+	case *planner.PhysicalSort:
+		return "PhysicalSort"
+	case *planner.PhysicalLimit:
+		return "PhysicalLimit"
+	case *planner.PhysicalDistinct:
+		return "PhysicalDistinct"
+	case *planner.PhysicalWindow:
+		return "PhysicalWindow"
+	case *planner.PhysicalDummyScan:
+		return "PhysicalDummyScan"
+	default:
+		return "Unknown"
+	}
+}
+
+func (a *physicalPlanAdapter) PhysicalChildren() []optimizer.PhysicalPlanNode {
+	children := a.plan.Children()
+	result := make([]optimizer.PhysicalPlanNode, len(children))
+	for i, child := range children {
+		result[i] = &physicalPlanAdapter{plan: child}
+	}
+	return result
+}
+
+func (a *physicalPlanAdapter) PhysicalOutputColumns() []optimizer.PhysicalOutputColumn {
+	cols := a.plan.OutputColumns()
+	result := make([]optimizer.PhysicalOutputColumn, len(cols))
+	for i, col := range cols {
+		result[i] = optimizer.PhysicalOutputColumn{
+			Table:     col.Table,
+			Column:    col.Column,
+			Type:      col.Type,
+			TableIdx:  col.TableIdx,
+			ColumnIdx: col.ColumnIdx,
+		}
+	}
+	return result
+}
+
+// Implement PhysicalScanNode interface for scan nodes
+func (a *physicalPlanAdapter) ScanSchema() string {
+	if scan, ok := a.plan.(*planner.PhysicalScan); ok {
+		return scan.Schema
+	}
+	return ""
+}
+
+func (a *physicalPlanAdapter) ScanTableName() string {
+	if scan, ok := a.plan.(*planner.PhysicalScan); ok {
+		return scan.TableName
+	}
+	return ""
+}
+
+func (a *physicalPlanAdapter) ScanAlias() string {
+	if scan, ok := a.plan.(*planner.PhysicalScan); ok {
+		return scan.Alias
+	}
+	return ""
+}
+
+func (a *physicalPlanAdapter) ScanRowCount() float64 {
+	if scan, ok := a.plan.(*planner.PhysicalScan); ok {
+		if scan.TableDef != nil && scan.TableDef.Statistics != nil {
+			return float64(scan.TableDef.Statistics.RowCount)
+		}
+	}
+	return optimizer.DefaultRowCount
+}
+
+func (a *physicalPlanAdapter) ScanPageCount() float64 {
+	if scan, ok := a.plan.(*planner.PhysicalScan); ok {
+		if scan.TableDef != nil && scan.TableDef.Statistics != nil {
+			return float64(scan.TableDef.Statistics.PageCount)
+		}
+	}
+	return optimizer.DefaultPageCount
+}
+
+// formatPhysicalPlanWithCost formats a physical plan with cost annotations.
+func formatPhysicalPlanWithCost(plan planner.PhysicalPlan, indent int, costModel *optimizer.CostModel) string {
+	prefix := strings.Repeat("  ", indent)
+	var sb strings.Builder
+
+	// Get cost estimate for this plan node
+	adapter := &physicalPlanAdapter{plan: plan}
+	cost := costModel.EstimateCost(adapter)
+
+	switch p := plan.(type) {
+	case *planner.PhysicalScan:
+		sb.WriteString(fmt.Sprintf("%sScan: %s %s", prefix, p.TableName, formatCostAnnotation(cost)))
+		if p.Alias != "" && p.Alias != p.TableName {
+			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+	case *planner.PhysicalFilter:
+		sb.WriteString(fmt.Sprintf("%sFilter %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalProject:
+		sb.WriteString(fmt.Sprintf("%sProject: %d columns %s", prefix, len(p.Expressions), formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalHashJoin:
+		sb.WriteString(fmt.Sprintf("%sHashJoin %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalNestedLoopJoin:
+		sb.WriteString(fmt.Sprintf("%sNestedLoopJoin %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalHashAggregate:
+		sb.WriteString(fmt.Sprintf("%sHashAggregate %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalSort:
+		sb.WriteString(fmt.Sprintf("%sSort %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalLimit:
+		sb.WriteString(fmt.Sprintf("%sLimit %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalDistinct:
+		sb.WriteString(fmt.Sprintf("%sDistinct %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	case *planner.PhysicalDummyScan:
+		sb.WriteString(fmt.Sprintf("%sDummyScan %s", prefix, formatCostAnnotation(cost)))
+	case *planner.PhysicalTableFunctionScan:
+		sb.WriteString(fmt.Sprintf("%sTableFunction: %s %s", prefix, p.FunctionName, formatCostAnnotation(cost)))
+	case *planner.PhysicalWindow:
+		sb.WriteString(fmt.Sprintf("%sWindow %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
+	default:
+		sb.WriteString(fmt.Sprintf("%s%T %s", prefix, plan, formatCostAnnotation(cost)))
+	}
+
+	return sb.String()
+}
+
+// formatPhysicalPlan formats a physical plan as a text tree (without costs, for backwards compatibility).
 func formatPhysicalPlan(plan planner.PhysicalPlan, indent int) string {
 	prefix := strings.Repeat("  ", indent)
 	var sb strings.Builder
@@ -509,24 +801,21 @@ func (e *Executor) executeAnalyze(
 	plan *planner.PhysicalAnalyze,
 ) (*ExecutionResult, error) {
 	// ANALYZE collects statistics about table columns
-	// In our implementation, we'll collect basic statistics
 
 	if plan.TableName != "" {
 		// Analyze specific table
-		table, ok := e.storage.GetTable(plan.TableName)
-		if !ok {
-			return nil, &dukdb.Error{
-				Type: dukdb.ErrorTypeExecutor,
-				Msg:  fmt.Sprintf("table '%s' not found", plan.TableName),
-			}
+		err := e.analyzeTable(plan.TableName)
+		if err != nil {
+			return nil, err
 		}
-		// Collect statistics for this table
-		_ = table // Would analyze table here
 	} else {
 		// Analyze all tables
 		tables := e.storage.Tables()
-		for _, table := range tables {
-			_ = table // Would analyze table here
+		for tableName := range tables {
+			err := e.analyzeTable(tableName)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -535,6 +824,80 @@ func (e *Executor) executeAnalyze(
 		Rows:         []map[string]any{},
 		RowsAffected: 0,
 	}, nil
+}
+
+// analyzeTable collects statistics for a single table.
+func (e *Executor) analyzeTable(tableName string) error {
+	// Get table from storage
+	table, ok := e.storage.GetTable(tableName)
+	if !ok {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("table '%s' not found", tableName),
+		}
+	}
+
+	// Get table definition from catalog
+	tableDef, ok := e.catalog.GetTableInSchema("main", tableName)
+	if !ok {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("table '%s' not found in catalog", tableName),
+		}
+	}
+
+	// Create statistics collector
+	collector := optimizer.NewStatisticsCollector()
+
+	// Build column names and types
+	columnNames := tableDef.ColumnNames()
+	columnTypes := tableDef.ColumnTypes()
+
+	// Create a data reader that reads column data from the table
+	dataReader := func(columnIndex int) ([]any, error) {
+		return e.readColumnData(table, columnIndex)
+	}
+
+	// Collect statistics
+	stats, err := collector.CollectTableStats(
+		columnNames,
+		columnTypes,
+		table.RowCount(),
+		dataReader,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Store statistics in the catalog table definition
+	tableDef.Statistics = stats
+
+	return nil
+}
+
+// readColumnData reads all values for a column from a table.
+func (e *Executor) readColumnData(table *storage.Table, columnIndex int) ([]any, error) {
+	var values []any
+
+	// Scan all row groups
+	for i := 0; i < table.RowGroupCount(); i++ {
+		rg := table.GetRowGroup(i)
+		if rg == nil {
+			continue
+		}
+
+		col := rg.GetColumn(columnIndex)
+		if col == nil {
+			continue
+		}
+
+		// Read all values from this column
+		for j := 0; j < col.Count(); j++ {
+			values = append(values, col.GetValue(j))
+		}
+	}
+
+	return values, nil
 }
 
 // executeCheckpoint executes a CHECKPOINT statement.

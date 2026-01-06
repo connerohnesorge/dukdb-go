@@ -9,6 +9,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/executor"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
@@ -280,8 +281,17 @@ func (c *EngineConn) Query(
 		return nil, nil, err
 	}
 
-	// Plan the statement
+	// Plan the statement with optional optimization hints
 	p := planner.NewPlanner(c.engine.catalog)
+
+	// For SELECT statements, run the cost-based optimizer if enabled
+	if _, isSelect := boundStmt.(*binder.BoundSelectStmt); isSelect {
+		hints := c.getOptimizationHints(boundStmt)
+		if hints != nil {
+			p.SetHints(hints)
+		}
+	}
+
 	plan, err := p.Plan(boundStmt)
 	if err != nil {
 		return nil, nil, err
@@ -310,6 +320,196 @@ func (c *EngineConn) Query(
 	}
 
 	return result.Rows, result.Columns, nil
+}
+
+// getOptimizationHints runs the cost-based optimizer on a bound statement
+// and returns planner hints derived from the optimized plan.
+// Returns nil if optimization is disabled or fails.
+func (c *EngineConn) getOptimizationHints(boundStmt binder.BoundStatement) *planner.OptimizationHints {
+	opt := c.engine.Optimizer()
+	if opt == nil || !opt.IsEnabled() {
+		return nil
+	}
+
+	// We need to convert the bound statement to a logical plan node that
+	// implements optimizer.LogicalPlanNode. The optimizer works on logical plans,
+	// not bound statements directly. For now, we create a wrapper.
+	logicalPlan := createLogicalPlanAdapter(boundStmt)
+	if logicalPlan == nil {
+		return nil
+	}
+
+	// Run the optimizer
+	optimizedPlan, err := opt.Optimize(logicalPlan)
+	if err != nil {
+		// Optimization failed, continue without hints
+		return nil
+	}
+
+	// Convert optimizer hints to planner hints
+	return convertOptimizerHints(optimizedPlan)
+}
+
+// convertOptimizerHints converts optimizer.OptimizedPlan hints to planner.OptimizationHints.
+func convertOptimizerHints(optimizedPlan *optimizer.OptimizedPlan) *planner.OptimizationHints {
+	if optimizedPlan == nil {
+		return nil
+	}
+
+	hints := planner.NewOptimizationHints()
+
+	// Convert join hints
+	for key, hint := range optimizedPlan.JoinHints {
+		hints.JoinHints[key] = planner.JoinHint{
+			Method:    string(hint.Method),
+			BuildSide: hint.BuildSide,
+		}
+	}
+
+	// Convert access hints
+	for key, hint := range optimizedPlan.AccessHints {
+		hints.AccessHints[key] = planner.AccessHint{
+			Method:    string(hint.Method),
+			IndexName: hint.IndexName,
+		}
+	}
+
+	return hints
+}
+
+// createLogicalPlanAdapter creates a logical plan adapter for the optimizer.
+// This adapts a bound statement to the optimizer.LogicalPlanNode interface.
+// For now, we only support SELECT statements.
+func createLogicalPlanAdapter(boundStmt binder.BoundStatement) optimizer.LogicalPlanNode {
+	selectStmt, ok := boundStmt.(*binder.BoundSelectStmt)
+	if !ok {
+		return nil
+	}
+
+	return &selectLogicalPlanAdapter{stmt: selectStmt}
+}
+
+// selectLogicalPlanAdapter adapts a BoundSelectStmt to optimizer.LogicalPlanNode.
+type selectLogicalPlanAdapter struct {
+	stmt *binder.BoundSelectStmt
+}
+
+func (a *selectLogicalPlanAdapter) PlanType() string {
+	// If there's no FROM clause, this is a dummy scan (e.g., SELECT 1+1)
+	if len(a.stmt.From) == 0 && len(a.stmt.Joins) == 0 {
+		return "LogicalDummyScan"
+	}
+	return "LogicalProject" // Top level of a SELECT is typically a projection
+}
+
+func (a *selectLogicalPlanAdapter) PlanChildren() []optimizer.LogicalPlanNode {
+	// Build children from the FROM clause
+	var children []optimizer.LogicalPlanNode
+
+	// Add scan nodes for each table in FROM
+	for _, tableRef := range a.stmt.From {
+		children = append(children, &tableRefLogicalPlanAdapter{ref: tableRef})
+	}
+
+	// Add join nodes for explicit joins
+	for _, join := range a.stmt.Joins {
+		children = append(children, &joinLogicalPlanAdapter{join: join, stmt: a.stmt})
+	}
+
+	return children
+}
+
+func (a *selectLogicalPlanAdapter) PlanOutputColumns() []optimizer.OutputColumn {
+	var cols []optimizer.OutputColumn
+	for _, col := range a.stmt.Columns {
+		outputCol := optimizer.OutputColumn{
+			Column: col.Alias,
+		}
+		if col.Expr != nil {
+			outputCol.Type = col.Expr.ResultType()
+		}
+		cols = append(cols, outputCol)
+	}
+	return cols
+}
+
+// tableRefLogicalPlanAdapter adapts a BoundTableRef to optimizer.LogicalPlanNode/ScanNode.
+type tableRefLogicalPlanAdapter struct {
+	ref *binder.BoundTableRef
+}
+
+func (a *tableRefLogicalPlanAdapter) PlanType() string {
+	return "LogicalScan"
+}
+
+func (a *tableRefLogicalPlanAdapter) PlanChildren() []optimizer.LogicalPlanNode {
+	return nil
+}
+
+func (a *tableRefLogicalPlanAdapter) PlanOutputColumns() []optimizer.OutputColumn {
+	var cols []optimizer.OutputColumn
+	if a.ref.TableDef != nil {
+		for _, colDef := range a.ref.TableDef.Columns {
+			cols = append(cols, optimizer.OutputColumn{
+				Table:  a.ref.Alias,
+				Column: colDef.Name,
+				Type:   colDef.Type,
+			})
+		}
+	}
+	return cols
+}
+
+// Implement optimizer.ScanNode interface
+func (a *tableRefLogicalPlanAdapter) Schema() string {
+	return a.ref.Schema
+}
+
+func (a *tableRefLogicalPlanAdapter) TableName() string {
+	return a.ref.TableName
+}
+
+func (a *tableRefLogicalPlanAdapter) Alias() string {
+	return a.ref.Alias
+}
+
+func (a *tableRefLogicalPlanAdapter) IsTableFunction() bool {
+	return a.ref.TableFunction != nil
+}
+
+func (a *tableRefLogicalPlanAdapter) IsVirtualTable() bool {
+	return a.ref.VirtualTable != nil
+}
+
+// joinLogicalPlanAdapter adapts a BoundJoin to optimizer.LogicalPlanNode.
+type joinLogicalPlanAdapter struct {
+	join *binder.BoundJoin
+	stmt *binder.BoundSelectStmt
+}
+
+func (a *joinLogicalPlanAdapter) PlanType() string {
+	return "LogicalJoin"
+}
+
+func (a *joinLogicalPlanAdapter) PlanChildren() []optimizer.LogicalPlanNode {
+	// Left child is the table being joined
+	return []optimizer.LogicalPlanNode{
+		&tableRefLogicalPlanAdapter{ref: a.join.Table},
+	}
+}
+
+func (a *joinLogicalPlanAdapter) PlanOutputColumns() []optimizer.OutputColumn {
+	var cols []optimizer.OutputColumn
+	if a.join.Table != nil && a.join.Table.TableDef != nil {
+		for _, colDef := range a.join.Table.TableDef.Columns {
+			cols = append(cols, optimizer.OutputColumn{
+				Table:  a.join.Table.Alias,
+				Column: colDef.Name,
+				Type:   colDef.Type,
+			})
+		}
+	}
+	return cols
 }
 
 // Prepare prepares a statement for execution.

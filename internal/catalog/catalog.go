@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 )
 
 // normalizeKey converts a name to lowercase for case-insensitive lookup.
@@ -160,6 +161,17 @@ func (c *Catalog) GetTableInSchema(
 	}
 
 	return schema.GetTable(tableName)
+}
+
+// GetTableInfo returns table information for the given schema and table name.
+// Returns nil if the table does not exist.
+// This method satisfies the optimizer.CatalogProvider interface.
+func (c *Catalog) GetTableInfo(schema, table string) optimizer.TableInfo {
+	tableDef, ok := c.GetTableInSchema(schema, table)
+	if !ok || tableDef == nil {
+		return nil
+	}
+	return tableDef
 }
 
 // CreateTable creates a new table in the default schema.

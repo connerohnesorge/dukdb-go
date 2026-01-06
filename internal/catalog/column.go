@@ -102,3 +102,15 @@ func (b *basicTypeInfo) Details() dukdb.TypeDetails {
 func (b *basicTypeInfo) SQLType() string {
 	return b.typ.String()
 }
+
+// GetName returns the column name.
+// This method satisfies the optimizer.ColumnInfo interface.
+func (c *ColumnDef) GetName() string {
+	return c.Name
+}
+
+// GetType returns the column type.
+// This method satisfies the optimizer.ColumnInfo interface.
+func (c *ColumnDef) GetType() dukdb.Type {
+	return c.Type
+}

@@ -1,6 +1,8 @@
 package planner
 
 import (
+	"fmt"
+
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
@@ -1090,7 +1092,9 @@ func (u *PhysicalUnpivot) OutputColumns() []ColumnBinding {
 
 // Planner converts bound statements to physical plans.
 type Planner struct {
-	catalog *catalog.Catalog
+	catalog   *catalog.Catalog
+	hints     *OptimizationHints // Optional optimization hints from CBO
+	joinIndex int                // Counter for generating join hint keys
 }
 
 // NewPlanner creates a new Planner.
@@ -1098,10 +1102,19 @@ func NewPlanner(cat *catalog.Catalog) *Planner {
 	return &Planner{catalog: cat}
 }
 
+// SetHints sets optimization hints for physical plan selection.
+// The hints guide join method selection and access path choices.
+func (p *Planner) SetHints(hints *OptimizationHints) {
+	p.hints = hints
+}
+
 // Plan creates a physical plan from a bound statement.
 func (p *Planner) Plan(
 	stmt binder.BoundStatement,
 ) (PhysicalPlan, error) {
+	// Reset join index for each planning session
+	p.joinIndex = 0
+
 	// First create logical plan, then convert to physical
 	logical, err := p.createLogicalPlan(stmt)
 	if err != nil {
@@ -2010,7 +2023,16 @@ func (p *Planner) createPhysicalPlan(
 			return nil, err
 		}
 
-		// Use hash join for equi-joins, nested loop for others
+		// Check for optimization hints for this join
+		joinKey := fmt.Sprintf("join_%d", p.joinIndex)
+		p.joinIndex++
+
+		// If we have a hint for this join, use it
+		if hint, ok := p.hints.GetJoinHint(joinKey); ok {
+			return p.createPhysicalJoinFromHint(left, right, l.JoinType, l.Condition, hint)
+		}
+
+		// Default: Use hash join for equi-joins, nested loop for others
 		if isEquiJoin(l.Condition) {
 			return &PhysicalHashJoin{
 				Left:      left,
@@ -2474,6 +2496,80 @@ func (p *Planner) createPhysicalPlan(
 			Type: dukdb.ErrorTypePlanner,
 			Msg:  "unsupported logical plan node",
 		}
+	}
+}
+
+// createPhysicalJoinFromHint creates a physical join node based on optimization hints.
+// It uses the hint to determine the join method and potentially swap sides for hash join build.
+func (p *Planner) createPhysicalJoinFromHint(
+	left, right PhysicalPlan,
+	joinType JoinType,
+	condition binder.BoundExpr,
+	hint JoinHint,
+) (PhysicalPlan, error) {
+	switch hint.Method {
+	case "HashJoin":
+		// For hash joins, the hint may specify which side should be the build side.
+		// By default, the right side is the build side.
+		// If hint.BuildSide is "left", we swap the sides.
+		if hint.BuildSide == "left" {
+			// Swap left and right so left becomes build side
+			return &PhysicalHashJoin{
+				Left:      right, // Right becomes probe side
+				Right:     left,  // Left becomes build side
+				JoinType:  joinType,
+				Condition: condition,
+			}, nil
+		}
+		return &PhysicalHashJoin{
+			Left:      left,
+			Right:     right,
+			JoinType:  joinType,
+			Condition: condition,
+		}, nil
+
+	case "NestedLoopJoin":
+		return &PhysicalNestedLoopJoin{
+			Left:      left,
+			Right:     right,
+			JoinType:  joinType,
+			Condition: condition,
+		}, nil
+
+	case "SortMergeJoin":
+		// TODO: Implement PhysicalSortMergeJoin when it exists in the planner
+		// For now, fall back to hash join if it's an equi-join, otherwise nested loop
+		if isEquiJoin(condition) {
+			return &PhysicalHashJoin{
+				Left:      left,
+				Right:     right,
+				JoinType:  joinType,
+				Condition: condition,
+			}, nil
+		}
+		return &PhysicalNestedLoopJoin{
+			Left:      left,
+			Right:     right,
+			JoinType:  joinType,
+			Condition: condition,
+		}, nil
+
+	default:
+		// Unknown hint method, use default behavior
+		if isEquiJoin(condition) {
+			return &PhysicalHashJoin{
+				Left:      left,
+				Right:     right,
+				JoinType:  joinType,
+				Condition: condition,
+			}, nil
+		}
+		return &PhysicalNestedLoopJoin{
+			Left:      left,
+			Right:     right,
+			JoinType:  joinType,
+			Condition: condition,
+		}, nil
 	}
 }
 

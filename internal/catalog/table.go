@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 )
 
 // normalizeColumnKey converts a column name to lowercase for case-insensitive lookup.
@@ -27,6 +28,10 @@ type TableDef struct {
 
 	// columnIndex maps column names to their indices for fast lookup.
 	columnIndex map[string]int
+
+	// Statistics contains optimizer statistics for this table.
+	// May be nil if table has not been analyzed.
+	Statistics *optimizer.TableStatistics
 }
 
 // NewTableDef creates a new TableDef instance.
@@ -147,6 +152,13 @@ func (t *TableDef) Clone() *TableDef {
 		copy(newTable.PrimaryKey, t.PrimaryKey)
 	}
 
+	// Clone statistics if present
+	if t.Statistics != nil {
+		// For now, just assign pointer since TableStatistics is read-heavy
+		// and rarely modified after creation
+		newTable.Statistics = t.Statistics
+	}
+
 	return newTable
 }
 
@@ -242,4 +254,31 @@ func (t *TableDef) AddColumn(col *ColumnDef) error {
 	t.columnIndex[key] = len(t.Columns) - 1
 
 	return nil
+}
+
+// GetStatistics returns the table's optimizer statistics.
+// Returns nil if the table has not been analyzed.
+// This method satisfies the optimizer.TableInfo interface.
+func (t *TableDef) GetStatistics() *optimizer.TableStatistics {
+	return t.Statistics
+}
+
+// GetColumns returns the table's columns as optimizer.ColumnInfo interfaces.
+// This method satisfies the optimizer.TableInfo interface.
+func (t *TableDef) GetColumns() []optimizer.ColumnInfo {
+	result := make([]optimizer.ColumnInfo, len(t.Columns))
+	for i, col := range t.Columns {
+		result[i] = col
+	}
+	return result
+}
+
+// GetColumnInfo returns a column by name as an optimizer.ColumnInfo interface.
+// This method satisfies the optimizer.TableInfo interface.
+func (t *TableDef) GetColumnInfo(name string) (optimizer.ColumnInfo, bool) {
+	col, ok := t.GetColumn(name)
+	if !ok {
+		return nil, false
+	}
+	return col, true
 }

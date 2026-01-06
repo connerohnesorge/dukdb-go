@@ -12,6 +12,7 @@ import (
 	"github.com/coder/quartz"
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/persistence"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
@@ -24,7 +25,8 @@ type Engine struct {
 	catalog    *catalog.Catalog
 	storage    *storage.Storage
 	txnMgr     *TransactionManager
-	walWriter  *wal.Writer // WAL writer for persistent databases
+	optimizer  *optimizer.CostBasedOptimizer // Cost-based query optimizer
+	walWriter  *wal.Writer                   // WAL writer for persistent databases
 	config     *dukdb.Config
 	path       string
 	persistent bool // true if not :memory:
@@ -33,10 +35,12 @@ type Engine struct {
 
 // NewEngine creates a new Engine instance.
 func NewEngine() *Engine {
+	cat := catalog.NewCatalog()
 	return &Engine{
-		catalog: catalog.NewCatalog(),
-		storage: storage.NewStorage(),
-		txnMgr:  NewTransactionManager(),
+		catalog:   cat,
+		storage:   storage.NewStorage(),
+		txnMgr:    NewTransactionManager(),
+		optimizer: optimizer.NewCostBasedOptimizer(cat),
 	}
 }
 
@@ -230,6 +234,14 @@ func (e *Engine) Storage() *storage.Storage {
 // TransactionManager returns the transaction manager.
 func (e *Engine) TransactionManager() *TransactionManager {
 	return e.txnMgr
+}
+
+// Optimizer returns the cost-based query optimizer.
+// Returns nil if optimization is disabled.
+func (e *Engine) Optimizer() *optimizer.CostBasedOptimizer {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.optimizer
 }
 
 // TransactionManager manages transactions for the engine.
