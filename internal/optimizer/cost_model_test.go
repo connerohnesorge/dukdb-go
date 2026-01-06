@@ -18,6 +18,8 @@ func TestDefaultCostConstants(t *testing.T) {
 	assert.Equal(t, 0.02, constants.HashBuildCost)
 	assert.Equal(t, 0.01, constants.HashProbeCost)
 	assert.Equal(t, 0.05, constants.SortCost)
+	assert.Equal(t, 0.005, constants.IndexLookupCost)
+	assert.Equal(t, 0.005, constants.IndexTupleCost)
 }
 
 func TestPlanCostAdd(t *testing.T) {
@@ -513,5 +515,320 @@ func BenchmarkCostSort(b *testing.B) {
 
 	for range b.N {
 		_ = model.costSort(child, 10000)
+	}
+}
+
+// Tests for index scan cost estimation (Phase 3)
+
+func TestEstimateIndexScanCost(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+
+	testCases := []struct {
+		name          string
+		selectivity   float64
+		tableRows     int64
+		tablePages    int64
+		isIndexOnly   bool
+		wantStartup   float64
+		wantTotalMin  float64 // Minimum expected total cost
+		wantTotalMax  float64 // Maximum expected total cost
+		wantOutputMin float64
+		wantOutputMax float64
+	}{
+		{
+			name:          "high selectivity index scan",
+			selectivity:   0.01, // 1% of rows
+			tableRows:     10000,
+			tablePages:    100,
+			isIndexOnly:   false,
+			wantStartup:   0.005, // IndexLookupCost
+			wantTotalMin:  1.0,   // Should have non-trivial cost
+			wantTotalMax:  500.0, // But not too expensive
+			wantOutputMin: 100,   // 10000 * 0.01 = 100
+			wantOutputMax: 100,
+		},
+		{
+			name:          "index-only scan",
+			selectivity:   0.01,
+			tableRows:     10000,
+			tablePages:    100,
+			isIndexOnly:   true,
+			wantStartup:   0.005,
+			wantTotalMin:  0.005, // Just startup + index scan
+			wantTotalMax:  10.0,  // Much cheaper than regular index scan
+			wantOutputMin: 100,
+			wantOutputMax: 100,
+		},
+		{
+			name:          "low selectivity (many rows)",
+			selectivity:   0.5, // 50% of rows
+			tableRows:     10000,
+			tablePages:    100,
+			isIndexOnly:   false,
+			wantStartup:   0.005,
+			wantTotalMin:  100.0,  // Higher cost due to more rows
+			wantTotalMax:  1000.0, // Expensive but bounded
+			wantOutputMin: 5000,
+			wantOutputMax: 5000,
+		},
+		{
+			name:          "small table",
+			selectivity:   0.1,
+			tableRows:     100,
+			tablePages:    1,
+			isIndexOnly:   false,
+			wantStartup:   0.005,
+			wantTotalMin:  0.01,
+			wantTotalMax:  100.0,
+			wantOutputMin: 10,
+			wantOutputMax: 10,
+		},
+		{
+			name:          "minimum values handled",
+			selectivity:   0.001,
+			tableRows:     0, // Should be treated as 1
+			tablePages:    0, // Should be treated as 1
+			isIndexOnly:   false,
+			wantStartup:   0.005,
+			wantTotalMin:  0.0,
+			wantTotalMax:  100.0,
+			wantOutputMin: 1, // Minimum 1 row
+			wantOutputMax: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cost := model.EstimateIndexScanCost(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+
+			assert.InDelta(t, tc.wantStartup, cost.StartupCost, 0.001, "startup cost mismatch")
+			assert.GreaterOrEqual(t, cost.TotalCost, tc.wantTotalMin, "total cost below minimum")
+			assert.LessOrEqual(t, cost.TotalCost, tc.wantTotalMax, "total cost above maximum")
+			assert.GreaterOrEqual(t, cost.OutputRows, tc.wantOutputMin, "output rows below minimum")
+			assert.LessOrEqual(t, cost.OutputRows, tc.wantOutputMax, "output rows above maximum")
+		})
+	}
+}
+
+func TestEstimateIndexScanCostFormula(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+	constants := model.GetConstants()
+
+	// Test index-only scan formula explicitly
+	t.Run("index-only scan formula", func(t *testing.T) {
+		selectivity := 0.1
+		tableRows := int64(1000)
+		tablePages := int64(10)
+
+		cost := model.EstimateIndexScanCost(selectivity, tableRows, tablePages, true)
+
+		estimatedRows := float64(tableRows) * selectivity
+		expectedStartup := constants.IndexLookupCost
+		expectedTotal := expectedStartup + (estimatedRows * constants.IndexTupleCost)
+
+		assert.InDelta(t, expectedStartup, cost.StartupCost, 0.001)
+		assert.InDelta(t, expectedTotal, cost.TotalCost, 0.001)
+		assert.InDelta(t, estimatedRows, cost.OutputRows, 0.001)
+	})
+
+	// Test regular index scan formula explicitly
+	t.Run("regular index scan formula", func(t *testing.T) {
+		selectivity := 0.1
+		tableRows := int64(1000)
+		tablePages := int64(10)
+
+		cost := model.EstimateIndexScanCost(selectivity, tableRows, tablePages, false)
+
+		estimatedRows := float64(tableRows) * selectivity
+		expectedStartup := constants.IndexLookupCost
+		indexScanCost := estimatedRows * constants.IndexTupleCost
+		randomPages := math.Min(estimatedRows, float64(tablePages))
+		heapCost := randomPages * constants.RandomPageCost
+		tupleCost := estimatedRows * constants.CPUTupleCost
+		expectedTotal := expectedStartup + indexScanCost + heapCost + tupleCost
+
+		assert.InDelta(t, expectedStartup, cost.StartupCost, 0.001)
+		assert.InDelta(t, expectedTotal, cost.TotalCost, 0.001)
+		assert.InDelta(t, estimatedRows, cost.OutputRows, 0.001)
+	})
+}
+
+func TestEstimateSeqScanCost(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+	constants := model.GetConstants()
+
+	testCases := []struct {
+		name        string
+		tableRows   int64
+		tablePages  int64
+		selectivity float64
+	}{
+		{
+			name:        "medium table",
+			tableRows:   10000,
+			tablePages:  100,
+			selectivity: 0.1,
+		},
+		{
+			name:        "small table",
+			tableRows:   100,
+			tablePages:  1,
+			selectivity: 0.5,
+		},
+		{
+			name:        "large table",
+			tableRows:   1000000,
+			tablePages:  10000,
+			selectivity: 0.01,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cost := model.EstimateSeqScanCost(tc.tableRows, tc.tablePages, tc.selectivity)
+
+			// Verify the formula
+			expectedTotal := float64(tc.tablePages)*constants.SeqPageCost +
+				float64(tc.tableRows)*constants.CPUTupleCost
+			expectedOutput := float64(tc.tableRows) * tc.selectivity
+
+			assert.Equal(t, 0.0, cost.StartupCost, "seq scan has no startup cost")
+			assert.InDelta(t, expectedTotal, cost.TotalCost, 0.001)
+			assert.InDelta(t, expectedOutput, cost.OutputRows, 0.001)
+		})
+	}
+}
+
+func TestShouldUseIndexScan(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+
+	testCases := []struct {
+		name        string
+		selectivity float64
+		tableRows   int64
+		tablePages  int64
+		isIndexOnly bool
+		wantIndex   bool
+	}{
+		{
+			name:        "very selective - should use index",
+			selectivity: 0.001, // 0.1% of rows
+			tableRows:   100000,
+			tablePages:  1000,
+			isIndexOnly: false,
+			wantIndex:   true, // Index should win for very selective queries
+		},
+		{
+			name:        "index-only scan - should use index",
+			selectivity: 0.01,
+			tableRows:   100000,
+			tablePages:  1000,
+			isIndexOnly: true,
+			wantIndex:   true, // Index-only is much cheaper
+		},
+		{
+			name:        "low selectivity - should use seq scan",
+			selectivity: 0.9, // 90% of rows
+			tableRows:   100000,
+			tablePages:  1000,
+			isIndexOnly: false,
+			wantIndex:   false, // Seq scan better for most rows
+		},
+		{
+			name:        "small table low selectivity - seq scan might win",
+			selectivity: 0.3,
+			tableRows:   100,
+			tablePages:  1,
+			isIndexOnly: false,
+			wantIndex:   false, // Small table, seq scan is cheap
+		},
+		{
+			name:        "medium selectivity large table",
+			selectivity: 0.1,
+			tableRows:   1000000,
+			tablePages:  10000,
+			isIndexOnly: false,
+			wantIndex:   false, // 10% is usually too high for index
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := model.ShouldUseIndexScan(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+			assert.Equal(t, tc.wantIndex, result)
+		})
+	}
+}
+
+func TestIndexScanVsSeqScanCrossover(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+
+	// Test the crossover point where index scan becomes cheaper
+	// For a large table, index scan should be cheaper at low selectivity
+	tableRows := int64(100000)
+	tablePages := int64(1000)
+
+	// Find approximate crossover point
+	var crossoverSelectivity float64
+	for sel := 0.001; sel <= 1.0; sel += 0.001 {
+		indexCost := model.EstimateIndexScanCost(sel, tableRows, tablePages, false)
+		seqCost := model.EstimateSeqScanCost(tableRows, tablePages, sel)
+
+		if seqCost.TotalCost < indexCost.TotalCost {
+			crossoverSelectivity = sel
+			break
+		}
+	}
+
+	// Crossover should happen somewhere between 0.1% and 50%
+	// With RandomPageCost = 4.0, the crossover is around 1%
+	assert.GreaterOrEqual(t, crossoverSelectivity, 0.001, "crossover should be at or above 0.1%")
+	assert.Less(t, crossoverSelectivity, 0.50, "crossover should be below 50%")
+
+	t.Logf("Crossover selectivity: %.2f%%", crossoverSelectivity*100)
+}
+
+func TestIndexScanCostEdgeCases(t *testing.T) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+
+	t.Run("zero selectivity", func(t *testing.T) {
+		cost := model.EstimateIndexScanCost(0, 10000, 100, false)
+		assert.GreaterOrEqual(t, cost.OutputRows, 1.0, "should have minimum 1 row")
+		assert.Greater(t, cost.TotalCost, 0.0, "should have positive cost")
+	})
+
+	t.Run("selectivity above 1 is capped", func(t *testing.T) {
+		cost := model.EstimateIndexScanCost(2.0, 1000, 10, false)
+		assert.LessOrEqual(t, cost.OutputRows, 1000.0, "output rows should not exceed table rows")
+	})
+
+	t.Run("negative selectivity is capped", func(t *testing.T) {
+		cost := model.EstimateIndexScanCost(-0.5, 1000, 10, false)
+		assert.GreaterOrEqual(t, cost.OutputRows, 1.0, "should have minimum 1 row")
+	})
+
+	t.Run("very large table", func(t *testing.T) {
+		cost := model.EstimateIndexScanCost(0.001, 1e9, 1e7, false)
+		assert.Greater(t, cost.TotalCost, 0.0)
+		assert.False(t, math.IsInf(cost.TotalCost, 0))
+		assert.False(t, math.IsNaN(cost.TotalCost))
+	})
+}
+
+func BenchmarkEstimateIndexScanCost(b *testing.B) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+	b.ResetTimer()
+
+	for range b.N {
+		_ = model.EstimateIndexScanCost(0.01, 100000, 1000, false)
+	}
+}
+
+func BenchmarkShouldUseIndexScan(b *testing.B) {
+	model := NewCostModel(DefaultCostConstants(), nil)
+	b.ResetTimer()
+
+	for range b.N {
+		_ = model.ShouldUseIndexScan(0.01, 100000, 1000, false)
 	}
 }

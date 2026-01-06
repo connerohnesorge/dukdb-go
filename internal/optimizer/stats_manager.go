@@ -13,6 +13,20 @@ type ColumnInfo interface {
 	GetType() dukdb.Type
 }
 
+// IndexDef represents an index definition for optimization purposes.
+// This interface allows the optimizer to work with indexes without
+// directly depending on the catalog package.
+type IndexDef interface {
+	// GetName returns the index name.
+	GetName() string
+	// GetTable returns the table name the index is on.
+	GetTable() string
+	// GetColumns returns the column names included in the index.
+	GetColumns() []string
+	// GetIsUnique returns true if this is a unique index.
+	GetIsUnique() bool
+}
+
 // TableInfo provides table information needed for statistics.
 // This interface is implemented by catalog.TableDef.
 type TableInfo interface {
@@ -30,6 +44,9 @@ type CatalogProvider interface {
 	// GetTableInfo returns table information for the given schema and table name.
 	// Returns nil if the table does not exist.
 	GetTableInfo(schema, table string) TableInfo
+	// GetIndexesForTableAsInterface returns all indexes for the given table in the schema.
+	// Returns nil if no indexes exist for the table.
+	GetIndexesForTableAsInterface(schema, table string) []IndexDef
 }
 
 // StatisticsManager provides access to table statistics with sensible defaults.

@@ -160,6 +160,7 @@ type CostBasedOptimizer struct {
 	costModel     *CostModel
 	joinOptimizer *JoinOrderOptimizer
 	enumerator    *PlanEnumerator
+	indexMatcher  *IndexMatcher // Index matcher for finding applicable indexes
 	enabled       bool
 }
 
@@ -170,6 +171,7 @@ func NewCostBasedOptimizer(catalogProvider CatalogProvider) *CostBasedOptimizer 
 	costModel := NewCostModel(DefaultCostConstants(), estimator)
 	joinOptimizer := NewJoinOrderOptimizer(estimator, costModel)
 	enumerator := NewPlanEnumerator(estimator, costModel, stats)
+	indexMatcher := NewIndexMatcher(catalogProvider)
 
 	return &CostBasedOptimizer{
 		stats:         stats,
@@ -177,6 +179,7 @@ func NewCostBasedOptimizer(catalogProvider CatalogProvider) *CostBasedOptimizer 
 		costModel:     costModel,
 		joinOptimizer: joinOptimizer,
 		enumerator:    enumerator,
+		indexMatcher:  indexMatcher,
 		enabled:       true,
 	}
 }
@@ -234,6 +237,159 @@ func (o *CostBasedOptimizer) GetJoinOrderOptimizer() *JoinOrderOptimizer {
 // GetPlanEnumerator returns the plan enumerator for external access.
 func (o *CostBasedOptimizer) GetPlanEnumerator() *PlanEnumerator {
 	return o.enumerator
+}
+
+// GetIndexMatcher returns the index matcher for external access.
+func (o *CostBasedOptimizer) GetIndexMatcher() *IndexMatcher {
+	return o.indexMatcher
+}
+
+// AccessMethod represents an access method alternative for a table scan.
+// It encapsulates all information needed to generate a physical scan operator.
+type AccessMethod struct {
+	// Type is the access method type (SeqScan or IndexScan)
+	Type PhysicalPlanType
+	// IndexMatch contains index match details (nil for SeqScan)
+	IndexMatch *IndexMatch
+	// EstimatedCost is the estimated cost of this access method
+	EstimatedCost PlanCost
+	// IsIndexOnly is true if this is an index-only scan (covering index)
+	IsIndexOnly bool
+	// ResidualPredicates are predicates not satisfied by the index
+	ResidualPredicates []PredicateExpr
+}
+
+// enumerateAccessMethods generates alternative access methods for a table scan.
+// It always includes sequential scan as a baseline, plus index scans for any
+// applicable indexes found by the IndexMatcher.
+//
+// Parameters:
+//   - schema: The schema containing the table
+//   - table: The table name to scan
+//   - predicates: Filter predicates that might be satisfied by indexes
+//   - requiredColumns: Columns needed by the query (for covering index detection)
+//   - tableStats: Statistics for the table (for cost estimation)
+//
+// Returns a slice of AccessMethod alternatives, sorted by estimated cost.
+func (o *CostBasedOptimizer) enumerateAccessMethods(
+	schema, table string,
+	predicates []PredicateExpr,
+	requiredColumns []string,
+	tableStats *TableStatistics,
+) []AccessMethod {
+	var methods []AccessMethod
+
+	// Get table statistics for cost estimation
+	rowCount := int64(DefaultRowCount)
+	pageCount := int64(DefaultPageCount)
+	if tableStats != nil {
+		rowCount = tableStats.RowCount
+		pageCount = tableStats.PageCount
+	}
+
+	// 1. Always include sequential scan as baseline
+	seqScanCost := o.costModel.EstimateSeqScanCost(rowCount, pageCount, 1.0)
+	methods = append(methods, AccessMethod{
+		Type:          PlanTypeSeqScan,
+		IndexMatch:    nil,
+		EstimatedCost: seqScanCost,
+		IsIndexOnly:   false,
+	})
+
+	// 2. Find applicable indexes
+	if o.indexMatcher != nil && len(predicates) > 0 {
+		indexMatches := o.indexMatcher.FindApplicableIndexes(schema, table, predicates)
+
+		for i := range indexMatches {
+			match := &indexMatches[i]
+
+			// Check if this is a covering index
+			isIndexOnly := false
+			if len(requiredColumns) > 0 {
+				isIndexOnly = IsCoveringIndex(match.Index, requiredColumns)
+			}
+
+			// Estimate index scan cost
+			indexCost := o.costModel.EstimateIndexScanCost(
+				match.Selectivity,
+				rowCount,
+				pageCount,
+				isIndexOnly,
+			)
+
+			// Calculate residual predicates (predicates not satisfied by index)
+			residual := o.calculateResidualPredicates(predicates, match.Predicates)
+
+			methods = append(methods, AccessMethod{
+				Type:               PlanTypeIndexScan,
+				IndexMatch:         match,
+				EstimatedCost:      indexCost,
+				IsIndexOnly:        isIndexOnly,
+				ResidualPredicates: residual,
+			})
+		}
+	}
+
+	// Sort by estimated cost (cheapest first)
+	o.sortAccessMethodsByCost(methods)
+
+	return methods
+}
+
+// selectBestAccessMethod picks the cheapest access method from the alternatives.
+// Returns nil if no alternatives are provided.
+func (o *CostBasedOptimizer) selectBestAccessMethod(methods []AccessMethod) *AccessMethod {
+	if len(methods) == 0 {
+		return nil
+	}
+
+	best := &methods[0]
+	for i := 1; i < len(methods); i++ {
+		if methods[i].EstimatedCost.TotalCost < best.EstimatedCost.TotalCost {
+			best = &methods[i]
+		}
+	}
+
+	return best
+}
+
+// calculateResidualPredicates returns predicates not satisfied by the index match.
+// These predicates must be applied as a filter after the index scan.
+func (o *CostBasedOptimizer) calculateResidualPredicates(
+	allPredicates []PredicateExpr,
+	matchedPredicates []PredicateExpr,
+) []PredicateExpr {
+	if len(matchedPredicates) == 0 {
+		return allPredicates
+	}
+
+	// Build a set of matched predicate pointers for efficient lookup
+	matched := make(map[PredicateExpr]bool)
+	for _, p := range matchedPredicates {
+		matched[p] = true
+	}
+
+	// Collect unmatched predicates
+	var residual []PredicateExpr
+	for _, p := range allPredicates {
+		if !matched[p] {
+			residual = append(residual, p)
+		}
+	}
+
+	return residual
+}
+
+// sortAccessMethodsByCost sorts access methods by total cost (ascending).
+func (o *CostBasedOptimizer) sortAccessMethodsByCost(methods []AccessMethod) {
+	// Simple insertion sort (good for small slices)
+	for i := 1; i < len(methods); i++ {
+		j := i
+		for j > 0 && methods[j].EstimatedCost.TotalCost < methods[j-1].EstimatedCost.TotalCost {
+			methods[j], methods[j-1] = methods[j-1], methods[j]
+			j--
+		}
+	}
 }
 
 // noOptimize returns the plan unchanged with basic cost estimate.
@@ -471,6 +627,27 @@ func (o *CostBasedOptimizer) collectAccessHints(plan LogicalPlanNode, hints map[
 		return
 	}
 
+	// Check if this is a Filter over a Scan - the pattern we want to optimize
+	if plan.PlanType() == "LogicalFilter" {
+		if filter, ok := plan.(FilterNode); ok {
+			child := filter.FilterChild()
+			if child != nil && child.PlanType() == "LogicalScan" {
+				if scan, ok := child.(ScanNode); ok {
+					// We have a Filter -> Scan pattern, try to use index
+					hint := o.selectAccessHintForFilteredScan(filter, scan)
+					tableName := scan.TableName()
+					if tableName == "" {
+						tableName = scan.Alias()
+					}
+					hints[tableName] = hint
+					// Don't recurse into the scan since we already handled it
+					return
+				}
+			}
+		}
+	}
+
+	// For standalone scans (no filter above), default to sequential scan
 	if plan.PlanType() == "LogicalScan" {
 		if scan, ok := plan.(ScanNode); ok {
 			tableName := scan.TableName()
@@ -478,11 +655,12 @@ func (o *CostBasedOptimizer) collectAccessHints(plan LogicalPlanNode, hints map[
 				tableName = scan.Alias()
 			}
 
-			// For now, default to sequential scan
-			// In the future, we could check for available indexes and filter selectivity
-			hints[tableName] = AccessHint{
-				Method:    PlanTypeSeqScan,
-				IndexName: "",
+			// Check if we already have a hint for this table (from Filter handling)
+			if _, exists := hints[tableName]; !exists {
+				hints[tableName] = AccessHint{
+					Method:    PlanTypeSeqScan,
+					IndexName: "",
+				}
 			}
 		}
 	}
@@ -491,6 +669,83 @@ func (o *CostBasedOptimizer) collectAccessHints(plan LogicalPlanNode, hints map[
 	for _, child := range plan.PlanChildren() {
 		o.collectAccessHints(child, hints)
 	}
+}
+
+// selectAccessHintForFilteredScan determines the best access method for a filtered scan.
+// It extracts predicates from the filter condition and uses enumerateAccessMethods to
+// find applicable indexes and select the cheapest access method.
+func (o *CostBasedOptimizer) selectAccessHintForFilteredScan(
+	filter FilterNode,
+	scan ScanNode,
+) AccessHint {
+	schema := scan.Schema()
+	tableName := scan.TableName()
+
+	// Get table statistics
+	tableStats := o.stats.GetTableStats(schema, tableName)
+
+	// Extract predicates from filter condition
+	predicates := o.extractPredicatesFromCondition(filter.FilterCondition())
+
+	// Get required columns for covering index detection
+	// For now, use output columns from the scan
+	requiredColumns := o.getRequiredColumnsFromScan(scan)
+
+	// Enumerate access methods and select the best one
+	methods := o.enumerateAccessMethods(schema, tableName, predicates, requiredColumns, tableStats)
+	best := o.selectBestAccessMethod(methods)
+
+	if best == nil || best.Type == PlanTypeSeqScan {
+		return AccessHint{
+			Method:    PlanTypeSeqScan,
+			IndexName: "",
+		}
+	}
+
+	// Best is an index scan
+	return AccessHint{
+		Method:    PlanTypeIndexScan,
+		IndexName: best.IndexMatch.Index.GetName(),
+	}
+}
+
+// extractPredicatesFromCondition extracts PredicateExpr slices from a filter condition.
+// It handles AND conjunctions by splitting them into separate predicates.
+func (o *CostBasedOptimizer) extractPredicatesFromCondition(condition ExprNode) []PredicateExpr {
+	if condition == nil {
+		return nil
+	}
+
+	// Check if condition implements PredicateExpr
+	predExpr, ok := condition.(PredicateExpr)
+	if !ok {
+		return nil
+	}
+
+	// Check if it's an AND binary expression - if so, split into multiple predicates
+	if binExpr, ok := condition.(BinaryExprNode); ok {
+		if binExpr.Operator() == OpAnd {
+			// Recursively extract from left and right
+			left := o.extractPredicatesFromCondition(binExpr.Left())
+			right := o.extractPredicatesFromCondition(binExpr.Right())
+			return append(left, right...)
+		}
+	}
+
+	// Single predicate
+	return []PredicateExpr{predExpr}
+}
+
+// getRequiredColumnsFromScan extracts column names from a scan's output columns.
+func (o *CostBasedOptimizer) getRequiredColumnsFromScan(scan ScanNode) []string {
+	outputCols := scan.PlanOutputColumns()
+	result := make([]string, 0, len(outputCols))
+	for _, col := range outputCols {
+		if col.Column != "" {
+			result = append(result, col.Column)
+		}
+	}
+	return result
 }
 
 // countJoins counts the number of join nodes in a plan tree.

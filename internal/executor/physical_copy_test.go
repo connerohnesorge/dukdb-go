@@ -430,3 +430,325 @@ func TestCopySchemaQualifiedTable(t *testing.T) {
 	assert.Equal(t, "users", copyStmt.TableName)
 	assert.True(t, copyStmt.IsFrom)
 }
+
+// TestCopyToArrow tests exporting data to an Arrow IPC file.
+func TestCopyToArrow(t *testing.T) {
+	// Create temporary directory
+	tempDir := t.TempDir()
+	arrowPath := filepath.Join(tempDir, "output.arrow")
+
+	// Create catalog and storage
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+
+	// Create and populate table
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("value", dukdb.TYPE_DOUBLE),
+	}
+	tableDef := catalog.NewTableDef("data", columns)
+	err := cat.CreateTable(tableDef)
+	require.NoError(t, err)
+
+	table, err := stor.CreateTable("data", tableDef.ColumnTypes())
+	require.NoError(t, err)
+
+	// Insert test data
+	chunk := storage.NewDataChunkWithCapacity(tableDef.ColumnTypes(), 3)
+	chunk.AppendRow([]any{1, "Alice", 10.5})
+	chunk.AppendRow([]any{2, "Bob", 20.5})
+	chunk.AppendRow([]any{3, "Charlie", 30.5})
+	_, err = table.InsertChunk(chunk)
+	require.NoError(t, err)
+
+	// Parse COPY TO ARROW statement
+	sql := `COPY data TO '` + arrowPath + `' (FORMAT ARROW)`
+	stmt, err := parser.Parse(sql)
+	require.NoError(t, err)
+
+	// Bind the statement
+	b := binder.NewBinder(cat)
+	boundStmt, err := b.Bind(stmt)
+	require.NoError(t, err)
+
+	// Plan the statement
+	p := planner.NewPlanner(cat)
+	plan, err := p.Plan(boundStmt)
+	require.NoError(t, err)
+
+	// Execute
+	exec := NewExecutor(cat, stor)
+	result, err := exec.Execute(nil, plan, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), result.RowsAffected)
+
+	// Verify file was created
+	_, err = os.Stat(arrowPath)
+	require.NoError(t, err)
+}
+
+// TestCopyFromArrow tests importing data from an Arrow IPC file.
+func TestCopyFromArrow(t *testing.T) {
+	// Create temporary directory
+	tempDir := t.TempDir()
+	arrowPath := filepath.Join(tempDir, "test_data.arrow")
+
+	// First, create an Arrow file by exporting
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+
+	// Create source table and populate it
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	}
+	tableDef := catalog.NewTableDef("source", columns)
+	err := cat.CreateTable(tableDef)
+	require.NoError(t, err)
+
+	sourceTable, err := stor.CreateTable("source", tableDef.ColumnTypes())
+	require.NoError(t, err)
+
+	chunk := storage.NewDataChunkWithCapacity(tableDef.ColumnTypes(), 2)
+	chunk.AppendRow([]any{1, "test1"})
+	chunk.AppendRow([]any{2, "test2"})
+	_, err = sourceTable.InsertChunk(chunk)
+	require.NoError(t, err)
+
+	// Export to Arrow
+	sql := `COPY source TO '` + arrowPath + `' (FORMAT ARROW)`
+	stmt, err := parser.Parse(sql)
+	require.NoError(t, err)
+
+	b := binder.NewBinder(cat)
+	boundStmt, err := b.Bind(stmt)
+	require.NoError(t, err)
+
+	p := planner.NewPlanner(cat)
+	plan, err := p.Plan(boundStmt)
+	require.NoError(t, err)
+
+	exec := NewExecutor(cat, stor)
+	_, err = exec.Execute(nil, plan, nil)
+	require.NoError(t, err)
+
+	// Now create a target table and import from Arrow
+	targetColumns := []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	}
+	targetTableDef := catalog.NewTableDef("target", targetColumns)
+	err = cat.CreateTable(targetTableDef)
+	require.NoError(t, err)
+
+	_, err = stor.CreateTable("target", targetTableDef.ColumnTypes())
+	require.NoError(t, err)
+
+	// Import from Arrow
+	sql = `COPY target FROM '` + arrowPath + `' (FORMAT ARROW)`
+	stmt, err = parser.Parse(sql)
+	require.NoError(t, err)
+
+	b = binder.NewBinder(cat)
+	boundStmt, err = b.Bind(stmt)
+	require.NoError(t, err)
+
+	p = planner.NewPlanner(cat)
+	plan, err = p.Plan(boundStmt)
+	require.NoError(t, err)
+
+	result, err := exec.Execute(nil, plan, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), result.RowsAffected)
+
+	// Verify data was imported
+	targetTable, ok := stor.GetTable("target")
+	require.True(t, ok)
+
+	scanner := targetTable.Scan()
+	rows := 0
+	for {
+		c := scanner.Next()
+		if c == nil {
+			break
+		}
+		rows += c.Count()
+	}
+	assert.Equal(t, 2, rows)
+}
+
+// TestCopyToArrowWithCompression tests exporting data to an Arrow file with compression.
+func TestCopyToArrowWithCompression(t *testing.T) {
+	tests := []struct {
+		name        string
+		compression string
+	}{
+		{"None", "NONE"},
+		{"LZ4", "LZ4"},
+		{"ZSTD", "ZSTD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			arrowPath := filepath.Join(tempDir, "compressed.arrow")
+
+			cat := catalog.NewCatalog()
+			stor := storage.NewStorage()
+
+			columns := []*catalog.ColumnDef{
+				catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+				catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR),
+			}
+			tableDef := catalog.NewTableDef("data", columns)
+			err := cat.CreateTable(tableDef)
+			require.NoError(t, err)
+
+			table, err := stor.CreateTable("data", tableDef.ColumnTypes())
+			require.NoError(t, err)
+
+			chunk := storage.NewDataChunkWithCapacity(tableDef.ColumnTypes(), 2)
+			chunk.AppendRow([]any{1, "value1"})
+			chunk.AppendRow([]any{2, "value2"})
+			_, err = table.InsertChunk(chunk)
+			require.NoError(t, err)
+
+			sql := `COPY data TO '` + arrowPath + `' (FORMAT ARROW, COMPRESSION '` + tt.compression + `')`
+			stmt, err := parser.Parse(sql)
+			require.NoError(t, err)
+
+			b := binder.NewBinder(cat)
+			boundStmt, err := b.Bind(stmt)
+			require.NoError(t, err)
+
+			p := planner.NewPlanner(cat)
+			plan, err := p.Plan(boundStmt)
+			require.NoError(t, err)
+
+			exec := NewExecutor(cat, stor)
+			result, err := exec.Execute(nil, plan, nil)
+			require.NoError(t, err)
+			assert.Equal(t, int64(2), result.RowsAffected)
+
+			// Verify file was created
+			_, err = os.Stat(arrowPath)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestCopyArrowAutoDetect tests auto-detection of Arrow format from file extension.
+func TestCopyArrowAutoDetect(t *testing.T) {
+	extensions := []string{".arrow", ".feather", ".ipc"}
+
+	for _, ext := range extensions {
+		t.Run(ext, func(t *testing.T) {
+			tempDir := t.TempDir()
+			arrowPath := filepath.Join(tempDir, "data"+ext)
+
+			cat := catalog.NewCatalog()
+			stor := storage.NewStorage()
+
+			columns := []*catalog.ColumnDef{
+				catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+			}
+			tableDef := catalog.NewTableDef("test", columns)
+			err := cat.CreateTable(tableDef)
+			require.NoError(t, err)
+
+			table, err := stor.CreateTable("test", tableDef.ColumnTypes())
+			require.NoError(t, err)
+
+			chunk := storage.NewDataChunkWithCapacity(tableDef.ColumnTypes(), 1)
+			chunk.AppendRow([]any{42})
+			_, err = table.InsertChunk(chunk)
+			require.NoError(t, err)
+
+			// Note: no FORMAT option, should auto-detect from extension
+			sql := `COPY test TO '` + arrowPath + `'`
+			stmt, err := parser.Parse(sql)
+			require.NoError(t, err)
+
+			b := binder.NewBinder(cat)
+			boundStmt, err := b.Bind(stmt)
+			require.NoError(t, err)
+
+			p := planner.NewPlanner(cat)
+			plan, err := p.Plan(boundStmt)
+			require.NoError(t, err)
+
+			exec := NewExecutor(cat, stor)
+			result, err := exec.Execute(nil, plan, nil)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), result.RowsAffected)
+
+			// Verify file was created
+			_, err = os.Stat(arrowPath)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestParseCopyArrowStatement tests parsing of COPY statement with Arrow format.
+func TestParseCopyArrowStatement(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		options map[string]any
+	}{
+		{
+			name: "COPY TO ARROW",
+			sql:  "COPY users TO '/path/to/file.arrow' (FORMAT ARROW)",
+			options: map[string]any{
+				"FORMAT": "ARROW",
+			},
+		},
+		{
+			name: "COPY TO ARROW with LZ4 compression",
+			sql:  "COPY users TO '/path/to/file.arrow' (FORMAT ARROW, COMPRESSION 'LZ4')",
+			options: map[string]any{
+				"FORMAT":      "ARROW",
+				"COMPRESSION": "LZ4",
+			},
+		},
+		{
+			name: "COPY TO ARROW with ZSTD compression",
+			sql:  "COPY users TO '/path/to/file.arrow' (FORMAT ARROW, COMPRESSION 'ZSTD')",
+			options: map[string]any{
+				"FORMAT":      "ARROW",
+				"COMPRESSION": "ZSTD",
+			},
+		},
+		{
+			name: "COPY FROM ARROW",
+			sql:  "COPY users FROM '/path/to/file.arrow' (FORMAT ARROW)",
+			options: map[string]any{
+				"FORMAT": "ARROW",
+			},
+		},
+		{
+			name: "COPY TO ARROW_STREAM",
+			sql:  "COPY users TO '/path/to/file.arrows' (FORMAT ARROW_STREAM)",
+			options: map[string]any{
+				"FORMAT": "ARROW_STREAM",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := parser.Parse(tt.sql)
+			require.NoError(t, err)
+
+			copyStmt, ok := stmt.(*parser.CopyStmt)
+			require.True(t, ok)
+
+			for key, expected := range tt.options {
+				actual, found := copyStmt.Options[key]
+				assert.True(t, found, "Option %s not found", key)
+				assert.Equal(t, expected, actual, "Option %s mismatch", key)
+			}
+		})
+	}
+}

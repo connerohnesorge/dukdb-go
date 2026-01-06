@@ -27,6 +27,11 @@ func (c *mockCatalog) GetTableInfo(schema, table string) TableInfo {
 	return nil
 }
 
+func (c *mockCatalog) GetIndexesForTableAsInterface(schema, table string) []IndexDef {
+	// For now, return nil as the cardinality tests don't need indexes
+	return nil
+}
+
 func (c *mockCatalog) AddTable(schema, table string, info *mockTableInfo) {
 	key := schema + "." + table
 	c.tables[key] = info

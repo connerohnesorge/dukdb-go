@@ -266,6 +266,8 @@ func (e *Executor) executeWithContext(
 	switch p := plan.(type) {
 	case *planner.PhysicalScan:
 		return e.executeScan(execCtx, p)
+	case *planner.PhysicalIndexScan:
+		return e.executeIndexScan(execCtx, p)
 	case *planner.PhysicalVirtualTableScan:
 		return e.executeVirtualTableScan(execCtx, p)
 	case *planner.PhysicalTableFunctionScan:
@@ -494,6 +496,106 @@ func (e *Executor) executeScan(
 		},
 		outputCols,
 	)
+}
+
+// executeIndexScan executes a PhysicalIndexScan plan node.
+// It uses the index to look up matching row IDs and fetches the corresponding rows.
+func (e *Executor) executeIndexScan(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalIndexScan,
+) (*ExecutionResult, error) {
+	// Verify the table exists
+	_, ok := e.storage.GetTable(plan.TableName)
+	if !ok {
+		return nil, dukdb.ErrTableNotFound
+	}
+
+	// Get the index from storage
+	index := e.storage.GetIndex(plan.Schema, plan.IndexName)
+	if index == nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("index %q not found", plan.IndexName),
+		}
+	}
+
+	// Create the index scan operator
+	indexScanOp, err := NewPhysicalIndexScanOperator(
+		plan.TableName,
+		plan.Schema,
+		plan.TableDef,
+		plan.IndexName,
+		plan.IndexDef,
+		index,
+		plan.LookupKeys,
+		plan.Projections,
+		plan.IsIndexOnly,
+		e.storage,
+		e,
+		ctx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	outputCols := plan.OutputColumns()
+
+	// Collect results from the index scan
+	result := &ExecutionResult{
+		Rows:    make([]map[string]any, 0),
+		Columns: make([]string, len(outputCols)),
+	}
+
+	// Build column names
+	for i, col := range outputCols {
+		if col.Column != "" {
+			result.Columns[i] = col.Column
+		} else {
+			result.Columns[i] = fmt.Sprintf("col%d", i)
+		}
+	}
+
+	// Fetch all chunks from the index scan
+	for {
+		chunk, err := indexScanOp.Next()
+		if err != nil {
+			return nil, err
+		}
+		if chunk == nil {
+			break
+		}
+
+		// Convert chunk to rows
+		for i := 0; i < chunk.Count(); i++ {
+			row := make(map[string]any)
+			for j, col := range outputCols {
+				val := chunk.GetValue(i, j)
+				row[result.Columns[j]] = val
+				// Also store with qualified name if table is specified
+				if col.Table != "" {
+					row[col.Table+"."+col.Column] = val
+				}
+			}
+			result.Rows = append(result.Rows, row)
+		}
+	}
+
+	// Apply residual filter if present
+	if plan.ResidualFilter != nil {
+		filteredRows := make([]map[string]any, 0)
+		for _, row := range result.Rows {
+			passes, err := e.evaluateExprAsBool(ctx, plan.ResidualFilter, row)
+			if err != nil {
+				return nil, err
+			}
+			if passes {
+				filteredRows = append(filteredRows, row)
+			}
+		}
+		result.Rows = filteredRows
+	}
+
+	return result, nil
 }
 
 func (e *Executor) executeVirtualTableScan(

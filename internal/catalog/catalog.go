@@ -174,6 +174,20 @@ func (c *Catalog) GetTableInfo(schema, table string) optimizer.TableInfo {
 	return tableDef
 }
 
+// GetIndexesForTableAsInterface returns all indexes for a table as optimizer.IndexDef interfaces.
+// This method satisfies the optimizer.CatalogProvider interface.
+func (c *Catalog) GetIndexesForTableAsInterface(schemaName, tableName string) []optimizer.IndexDef {
+	indexes := c.GetIndexesForTable(schemaName, tableName)
+	if len(indexes) == 0 {
+		return nil
+	}
+	result := make([]optimizer.IndexDef, len(indexes))
+	for i, idx := range indexes {
+		result[i] = idx
+	}
+	return result
+}
+
 // CreateTable creates a new table in the default schema.
 func (c *Catalog) CreateTable(
 	table *TableDef,

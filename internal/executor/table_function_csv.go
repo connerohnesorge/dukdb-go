@@ -33,6 +33,10 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeReadNDJSON(ctx, plan)
 	case "read_parquet":
 		return e.executeReadParquet(ctx, plan)
+	case "read_arrow":
+		return e.executeReadArrow(ctx, plan)
+	case "read_arrow_auto":
+		return e.executeReadArrowAuto(ctx, plan)
 	// Secret system functions
 	case "which_secret":
 		return e.executeWhichSecret(ctx, plan)

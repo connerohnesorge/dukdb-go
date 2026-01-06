@@ -10,6 +10,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	fileio "github.com/dukdb/dukdb-go/internal/io"
+	arrowio "github.com/dukdb/dukdb-go/internal/io/arrow"
 	csvio "github.com/dukdb/dukdb-go/internal/io/csv"
 	jsonio "github.com/dukdb/dukdb-go/internal/io/json"
 	parquetio "github.com/dukdb/dukdb-go/internal/io/parquet"
@@ -275,6 +276,10 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 				return fileio.FormatJSON
 			case "NDJSON":
 				return fileio.FormatNDJSON
+			case "ARROW":
+				return fileio.FormatArrow
+			case "ARROW_STREAM", "ARROWS":
+				return fileio.FormatArrowStream
 			}
 		}
 	}
@@ -290,6 +295,10 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 		return fileio.FormatJSON
 	case ".ndjson":
 		return fileio.FormatNDJSON
+	case ".arrow", ".feather", ".ipc":
+		return fileio.FormatArrow
+	case ".arrows":
+		return fileio.FormatArrowStream
 	default:
 		// Default to CSV
 		return fileio.FormatCSV
@@ -318,6 +327,16 @@ func createFileReader(path string, format fileio.Format, options map[string]any)
 	case fileio.FormatParquet:
 		opts := parquetio.DefaultReaderOptions()
 		return parquetio.NewReaderFromPath(path, opts)
+
+	case fileio.FormatArrow:
+		opts := arrowio.DefaultReaderOptions()
+		applyArrowReaderOptions(opts, options)
+		return arrowio.NewReaderFromPath(path, opts)
+
+	case fileio.FormatArrowStream:
+		opts := arrowio.DefaultReaderOptions()
+		applyArrowReaderOptions(opts, options)
+		return arrowio.NewStreamReaderFromPath(path, opts)
 
 	default:
 		return nil, fmt.Errorf("unsupported format: %v", format)
@@ -348,6 +367,16 @@ func createFileWriter(path string, format fileio.Format, options map[string]any)
 		opts := parquetio.DefaultWriterOptions()
 		applyParquetWriterOptions(opts, options)
 		return parquetio.NewWriterToPath(path, opts)
+
+	case fileio.FormatArrow:
+		opts := arrowio.DefaultWriterOptions()
+		applyArrowWriterOptions(opts, options)
+		return arrowio.NewWriterToPathOverwrite(path, opts)
+
+	case fileio.FormatArrowStream:
+		opts := arrowio.DefaultWriterOptions()
+		applyArrowWriterOptions(opts, options)
+		return arrowio.NewStreamWriterToPathOverwrite(path, opts)
 
 	default:
 		return nil, fmt.Errorf("unsupported format: %v", format)
@@ -463,6 +492,47 @@ func applyParquetWriterOptions(opts *parquetio.WriterOptions, options map[string
 		if rgs, isInt := rowGroupSize.(int64); isInt {
 			opts.RowGroupSize = int(rgs)
 		}
+	}
+}
+
+// applyArrowReaderOptions applies COPY options to Arrow reader options.
+func applyArrowReaderOptions(opts *arrowio.ReaderOptions, options map[string]any) {
+	// Arrow reader currently only supports column projection
+	if columns, ok := options["COLUMNS"]; ok {
+		if colSlice, isSlice := columns.([]string); isSlice {
+			opts.Columns = colSlice
+		}
+	}
+}
+
+// applyArrowWriterOptions applies COPY options to Arrow writer options.
+func applyArrowWriterOptions(opts *arrowio.WriterOptions, options map[string]any) {
+	// Handle compression option
+	if comp, ok := options["COMPRESSION"]; ok {
+		if compStr, isStr := comp.(string); isStr {
+			opts.Compression = parseArrowCompression(compStr)
+		}
+	}
+	// Also support CODEC for consistency with Parquet
+	if codec, ok := options["CODEC"]; ok {
+		if codecStr, isStr := codec.(string); isStr {
+			opts.Compression = parseArrowCompression(codecStr)
+		}
+	}
+}
+
+// parseArrowCompression converts a compression string to arrowio.Compression.
+func parseArrowCompression(comp string) arrowio.Compression {
+	switch strings.ToUpper(comp) {
+	case "LZ4":
+		return arrowio.CompressionLZ4
+	case "ZSTD":
+		return arrowio.CompressionZSTD
+	case "NONE", "":
+		return arrowio.CompressionNone
+	default:
+		// Default to no compression for unsupported types
+		return arrowio.CompressionNone
 	}
 }
 

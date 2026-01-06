@@ -27,6 +27,10 @@ const (
 	FormatNDJSON
 	// FormatParquet indicates Apache Parquet format.
 	FormatParquet
+	// FormatArrow indicates Apache Arrow IPC file format.
+	FormatArrow
+	// FormatArrowStream indicates Apache Arrow IPC stream format.
+	FormatArrowStream
 )
 
 // String returns the string representation of a Format.
@@ -42,6 +46,10 @@ func (f Format) String() string {
 		return "ndjson"
 	case FormatParquet:
 		return "parquet"
+	case FormatArrow:
+		return "arrow"
+	case FormatArrowStream:
+		return "arrow_stream"
 	}
 
 	return unknownStr

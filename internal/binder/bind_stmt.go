@@ -7,6 +7,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/io/arrow"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
 	"github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/io/parquet"
@@ -588,6 +589,11 @@ func (b *Binder) inferTableFunctionSchema(
 		return b.inferJSONSchema(path, options)
 	case "read_parquet":
 		return b.inferParquetSchema(path, options)
+	case "read_arrow":
+		return b.inferArrowSchema(path, options)
+	case "read_arrow_auto":
+		// read_arrow_auto uses auto-detection for file vs stream format
+		return b.inferArrowSchemaAuto(path, options)
 	default:
 		// For unknown table functions, return no columns
 		// The executor will handle the error
@@ -792,6 +798,163 @@ func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*cat
 	columnTypes, err := reader.Types()
 	if err != nil {
 		return nil, b.errorf("failed to get Parquet types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
+}
+
+// inferArrowSchema reads an Arrow IPC file and infers its schema.
+// This function defaults to the file format (random access).
+func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Build reader options from options map
+	opts := arrow.DefaultReaderOptions()
+
+	// Apply column projection if specified
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "columns":
+			switch v := val.(type) {
+			case []string:
+				opts.Columns = v
+			case []any:
+				cols := make([]string, 0, len(v))
+				for _, c := range v {
+					if s, ok := c.(string); ok {
+						cols = append(cols, s)
+					}
+				}
+				opts.Columns = cols
+			}
+		}
+	}
+
+	// Create the Arrow reader from path (file format)
+	reader, err := arrow.NewReaderFromPath(path, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create Arrow reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get Arrow schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get Arrow types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
+}
+
+// inferArrowSchemaAuto reads an Arrow IPC file with auto-detection for format.
+// It detects whether the file is in file format or stream format based on magic bytes.
+func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Build reader options from options map
+	opts := arrow.DefaultReaderOptions()
+
+	// Apply column projection if specified
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "columns":
+			switch v := val.(type) {
+			case []string:
+				opts.Columns = v
+			case []any:
+				cols := make([]string, 0, len(v))
+				for _, c := range v {
+					if s, ok := c.(string); ok {
+						cols = append(cols, s)
+					}
+				}
+				opts.Columns = cols
+			}
+		}
+	}
+
+	// Detect format from file extension first
+	format := arrow.DetectFormatFromPath(path)
+
+	var columnNames []string
+	var columnTypes []dukdb.Type
+
+	if format == arrow.FormatStream {
+		// Use stream reader for stream format
+		reader, err := arrow.NewStreamReaderFromPath(path, opts)
+		if err != nil {
+			return nil, b.errorf("failed to create Arrow stream reader: %v", err)
+		}
+		defer func() { _ = reader.Close() }()
+
+		columnNames, err = reader.Schema()
+		if err != nil {
+			return nil, b.errorf("failed to get Arrow schema: %v", err)
+		}
+
+		columnTypes, err = reader.Types()
+		if err != nil {
+			return nil, b.errorf("failed to get Arrow types: %v", err)
+		}
+	} else {
+		// Default to file reader (handles .arrow, .feather, .ipc, and unknown extensions)
+		reader, err := arrow.NewReaderFromPath(path, opts)
+		if err != nil {
+			// If file format fails, try stream format as fallback
+			streamReader, streamErr := arrow.NewStreamReaderFromPath(path, opts)
+			if streamErr != nil {
+				return nil, b.errorf("failed to create Arrow reader: %v", err)
+			}
+			defer func() { _ = streamReader.Close() }()
+
+			columnNames, err = streamReader.Schema()
+			if err != nil {
+				return nil, b.errorf("failed to get Arrow schema: %v", err)
+			}
+
+			columnTypes, err = streamReader.Types()
+			if err != nil {
+				return nil, b.errorf("failed to get Arrow types: %v", err)
+			}
+		} else {
+			defer func() { _ = reader.Close() }()
+
+			columnNames, err = reader.Schema()
+			if err != nil {
+				return nil, b.errorf("failed to get Arrow schema: %v", err)
+			}
+
+			columnTypes, err = reader.Types()
+			if err != nil {
+				return nil, b.errorf("failed to get Arrow types: %v", err)
+			}
+		}
 	}
 
 	// Create column definitions
@@ -1505,38 +1668,38 @@ func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 			return b.errorf("FORMAT option must be a string")
 		}
 		switch strings.ToUpper(formatStr) {
-		case "CSV", "PARQUET", "JSON", "NDJSON":
+		case "CSV", "PARQUET", "JSON", "NDJSON", "ARROW", "ARROW_STREAM", "ARROWS":
 			// Valid formats
 		default:
-			return b.errorf("unsupported FORMAT: %s (supported: CSV, PARQUET, JSON, NDJSON)", formatStr)
+			return b.errorf("unsupported FORMAT: %s (supported: CSV, PARQUET, JSON, NDJSON, ARROW, ARROW_STREAM)", formatStr)
 		}
 	}
 
-	// Validate CODEC option for Parquet
+	// Validate CODEC option for Parquet/Arrow
 	if codec, ok := stmt.Options["CODEC"]; ok {
 		codecStr, isStr := codec.(string)
 		if !isStr {
 			return b.errorf("CODEC option must be a string")
 		}
 		switch strings.ToUpper(codecStr) {
-		case "UNCOMPRESSED", "SNAPPY", "GZIP", "ZSTD", "LZ4", "LZ4_RAW", "BROTLI":
+		case "UNCOMPRESSED", "SNAPPY", "GZIP", "ZSTD", "LZ4", "LZ4_RAW", "BROTLI", "NONE":
 			// Valid codecs
 		default:
-			return b.errorf("unsupported CODEC: %s (supported: UNCOMPRESSED, SNAPPY, GZIP, ZSTD, LZ4, LZ4_RAW, BROTLI)", codecStr)
+			return b.errorf("unsupported CODEC: %s (supported: UNCOMPRESSED, SNAPPY, GZIP, ZSTD, LZ4, LZ4_RAW, BROTLI, NONE)", codecStr)
 		}
 	}
 
-	// Validate COMPRESSION option
+	// Validate COMPRESSION option (for CSV, JSON, Arrow)
 	if compression, ok := stmt.Options["COMPRESSION"]; ok {
 		compStr, isStr := compression.(string)
 		if !isStr {
 			return b.errorf("COMPRESSION option must be a string")
 		}
 		switch strings.ToUpper(compStr) {
-		case "NONE", "GZIP", "ZSTD", "SNAPPY":
+		case "NONE", "GZIP", "ZSTD", "SNAPPY", "LZ4":
 			// Valid compressions
 		default:
-			return b.errorf("unsupported COMPRESSION: %s (supported: NONE, GZIP, ZSTD, SNAPPY)", compStr)
+			return b.errorf("unsupported COMPRESSION: %s (supported: NONE, GZIP, ZSTD, SNAPPY, LZ4)", compStr)
 		}
 	}
 

@@ -47,3 +47,27 @@ func (i *IndexDef) Clone() *IndexDef {
 		IsPrimary: i.IsPrimary,
 	}
 }
+
+// GetName returns the index name.
+// This method satisfies the optimizer.IndexDef interface.
+func (i *IndexDef) GetName() string {
+	return i.Name
+}
+
+// GetTable returns the table name the index is on.
+// This method satisfies the optimizer.IndexDef interface.
+func (i *IndexDef) GetTable() string {
+	return i.Table
+}
+
+// GetColumns returns the column names included in the index.
+// This method satisfies the optimizer.IndexDef interface.
+func (i *IndexDef) GetColumns() []string {
+	return i.Columns
+}
+
+// GetIsUnique returns true if this is a unique index.
+// This method satisfies the optimizer.IndexDef interface.
+func (i *IndexDef) GetIsUnique() bool {
+	return i.IsUnique
+}

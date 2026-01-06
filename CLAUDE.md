@@ -102,11 +102,39 @@ database/sql API
 - `DROP VIEW name` - Drop view
 - Views expand at query time (not materialized)
 
-**Indexes**: `internal/catalog/index.go`, `internal/storage/index.go`
+**Indexes**: `internal/catalog/index.go`, `internal/storage/index.go`, `internal/optimizer/index_matcher.go`
 - `CREATE INDEX name ON table(columns)` - Create hash index
 - `CREATE UNIQUE INDEX name ON table(columns)` - Create unique index
 - `DROP INDEX name` - Drop index
-- Currently supports simple hash indexes (ART indexes as future work)
+- Currently supports hash indexes (ART indexes as future work)
+
+**Index Usage in Query Plans**: `internal/optimizer/`, `internal/executor/index_scan.go`
+
+The optimizer automatically uses indexes for equality predicates when cost-effective:
+
+| Query Pattern | Index Usage |
+|--------------|-------------|
+| `WHERE col = value` | Uses index if exists on col |
+| `WHERE a = 1 AND b = 2` | Uses composite index on (a, b) |
+| `WHERE a = 1 AND c = 3` | Uses index on (a) with residual filter for c |
+| `WHERE b = 2` (index on a, b) | Cannot use index (not prefix) |
+| `WHERE col IN (1, 2, 3)` | Uses index with multiple lookups |
+
+Cost-based selection:
+- Index scan chosen when selectivity < ~10% (configurable)
+- Sequential scan preferred for high-selectivity queries
+- Cost model considers: IndexLookupCost, IndexTupleCost, RandomPageCost
+
+Index-only scan (covering index):
+- When index contains all required columns, can skip heap access
+- Detected via `IsCoveringIndex()` function
+- Note: Current HashIndex stores RowIDs only, true index-only optimization is future work
+
+Key files:
+- `internal/optimizer/index_matcher.go` - Index matching and selection
+- `internal/optimizer/cost_model.go` - Cost estimation (EstimateIndexScanCost)
+- `internal/executor/index_scan.go` - PhysicalIndexScanOperator
+- `internal/planner/physical.go` - PhysicalIndexScan plan node
 
 **Sequences**: `internal/catalog/sequence.go`
 - `CREATE SEQUENCE name [START WITH n] [INCREMENT BY n] [CYCLE]` - Create sequence

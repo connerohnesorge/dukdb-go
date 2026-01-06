@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	fileio "github.com/dukdb/dukdb-go/internal/io"
+	arrowio "github.com/dukdb/dukdb-go/internal/io/arrow"
 	csvio "github.com/dukdb/dukdb-go/internal/io/csv"
 	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 	jsonio "github.com/dukdb/dukdb-go/internal/io/json"
@@ -336,6 +337,23 @@ func createFileReaderFromFS(
 		// Fallback: read entire file into memory for non-seekable readers
 		return createParquetReaderFromStream(file, opts)
 
+	case fileio.FormatArrow:
+		// Arrow IPC file reader needs ReadAtSeeker
+		opts := arrowio.DefaultReaderOptions()
+		applyArrowReaderOptions(opts, options)
+		// Check if file implements ReadAtSeeker
+		if ras, ok := file.(arrowio.ReadAtSeeker); ok {
+			return arrowio.NewReader(ras, opts)
+		}
+		// Fallback: read entire file into memory for non-seekable readers
+		return createArrowReaderFromStream(file, opts)
+
+	case fileio.FormatArrowStream:
+		// Arrow IPC stream reader works with any io.Reader
+		opts := arrowio.DefaultReaderOptions()
+		applyArrowReaderOptions(opts, options)
+		return arrowio.NewStreamReader(file, opts)
+
 	case fileio.FormatUnknown:
 		_ = file.Close()
 		return nil, fmt.Errorf("unknown format specified")
@@ -382,6 +400,16 @@ func createFileWriterFromFS(
 		opts := parquetio.DefaultWriterOptions()
 		applyParquetWriterOptions(opts, options)
 		return parquetio.NewWriter(writer, opts)
+
+	case fileio.FormatArrow:
+		opts := arrowio.DefaultWriterOptions()
+		applyArrowWriterOptions(opts, options)
+		return arrowio.NewWriter(writer, opts)
+
+	case fileio.FormatArrowStream:
+		opts := arrowio.DefaultWriterOptions()
+		applyArrowWriterOptions(opts, options)
+		return arrowio.NewStreamWriter(writer, opts)
 
 	case fileio.FormatUnknown:
 		_ = writer.Close()
@@ -471,4 +499,21 @@ func createParquetReaderFromStream(reader io.ReadCloser, opts *parquetio.ReaderO
 	br := &bytesReaderAt{data: data}
 
 	return parquetio.NewReader(br, int64(len(data)), opts)
+}
+
+// createArrowReaderFromStream reads the entire stream into memory and creates an Arrow reader.
+// This is a fallback for streams that don't support seeking.
+func createArrowReaderFromStream(reader io.ReadCloser, opts *arrowio.ReaderOptions) (fileio.FileReader, error) {
+	defer func() { _ = reader.Close() }()
+
+	// Read entire file into memory
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read arrow data: %w", err)
+	}
+
+	// Create a bytes reader that implements ReadAtSeeker
+	br := &bytesReaderAt{data: data}
+
+	return arrowio.NewReader(br, opts)
 }

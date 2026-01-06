@@ -67,6 +67,81 @@ func (s *PhysicalScan) OutputColumns() []ColumnBinding {
 	return s.columns
 }
 
+// PhysicalIndexScan represents a physical index-based table scan.
+// It uses an index to find matching rows rather than scanning the entire table.
+type PhysicalIndexScan struct {
+	// Table metadata
+	Schema    string
+	TableName string
+	Alias     string
+	TableDef  *catalog.TableDef
+
+	// Index metadata
+	IndexName string
+	IndexDef  *catalog.IndexDef
+
+	// LookupKeys are expressions that evaluate to the values to look up in the index.
+	// For a single-column index, there's typically one key.
+	// For composite indexes, there may be multiple keys (one per prefix column).
+	LookupKeys []binder.BoundExpr
+
+	// Projections specifies which columns to return (nil = all columns)
+	Projections []int
+
+	// IsIndexOnly indicates if this is an index-only scan (covering index).
+	// When true, all required columns can be satisfied from the index itself
+	// without fetching the table row. Currently not fully supported since
+	// HashIndex only stores RowIDs.
+	IsIndexOnly bool
+
+	// ResidualFilter contains any filter conditions that couldn't be pushed
+	// into the index lookup and must be evaluated after fetching rows.
+	// For example, if the index is on (a, b) but the query has WHERE a = 1 AND c > 5,
+	// the "c > 5" predicate becomes a residual filter.
+	ResidualFilter binder.BoundExpr
+
+	// columns is a cache for OutputColumns()
+	columns []ColumnBinding
+}
+
+func (*PhysicalIndexScan) physicalPlanNode() {}
+
+func (*PhysicalIndexScan) Children() []PhysicalPlan { return nil }
+
+func (s *PhysicalIndexScan) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+
+	cols := s.TableDef.Columns
+	if s.Projections != nil {
+		s.columns = make(
+			[]ColumnBinding,
+			len(s.Projections),
+		)
+		for i, idx := range s.Projections {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    cols[idx].Name,
+				Type:      cols[idx].Type,
+				ColumnIdx: idx,
+			}
+		}
+	} else {
+		s.columns = make([]ColumnBinding, len(cols))
+		for i, col := range cols {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    col.Name,
+				Type:      col.Type,
+				ColumnIdx: i,
+			}
+		}
+	}
+
+	return s.columns
+}
+
 // PhysicalFilter represents a physical filter operation.
 type PhysicalFilter struct {
 	Child     PhysicalPlan

@@ -17,6 +17,8 @@ type CostConstants struct {
 	HashBuildCost   float64 // Cost per tuple for hash table build (default: 0.02)
 	HashProbeCost   float64 // Cost per tuple for hash table probe (default: 0.01)
 	SortCost        float64 // Cost per comparison in sort (default: 0.05)
+	IndexLookupCost float64 // Cost per index lookup (default: 0.005)
+	IndexTupleCost  float64 // Cost per index entry scanned (default: 0.005)
 }
 
 // DefaultCostConstants returns the default cost constants optimized for
@@ -31,6 +33,8 @@ func DefaultCostConstants() CostConstants {
 		HashBuildCost:   0.02,
 		HashProbeCost:   0.01,
 		SortCost:        0.05,
+		IndexLookupCost: 0.005,
+		IndexTupleCost:  0.005,
 	}
 }
 
@@ -326,6 +330,157 @@ func (m *CostModel) costScan(rows, pages float64) PlanCost {
 		OutputRows:  rows,
 		OutputWidth: widthDefault,
 	}
+}
+
+// EstimateIndexScanCost calculates the estimated cost for an index scan operation.
+// It considers the selectivity (fraction of rows to return), table statistics,
+// and whether this is an index-only scan (no heap access needed).
+//
+// Parameters:
+//   - selectivity: Fraction of rows expected to match (0.0-1.0)
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - isIndexOnly: True if all needed columns are in the index (no heap access)
+//
+// Formula:
+//   - Startup cost = IndexLookupCost (initial index access overhead)
+//   - For index-only scan: totalCost = startup + (estimatedRows * IndexTupleCost)
+//   - For regular scan: totalCost = startup + (estimatedRows * IndexTupleCost) + heapCost + tupleCost
+//     where heapCost = min(estimatedRows, tablePages) * RandomPageCost
+//     and tupleCost = estimatedRows * CPUTupleCost
+func (m *CostModel) EstimateIndexScanCost(
+	selectivity float64,
+	tableRows int64,
+	tablePages int64,
+	isIndexOnly bool,
+) PlanCost {
+	// Ensure minimum values
+	if tableRows < 1 {
+		tableRows = 1
+	}
+	if tablePages < 1 {
+		tablePages = 1
+	}
+	if selectivity < 0 {
+		selectivity = 0
+	}
+	if selectivity > 1 {
+		selectivity = 1
+	}
+
+	estimatedRows := float64(tableRows) * selectivity
+	if estimatedRows < 1 {
+		estimatedRows = 1
+	}
+
+	// Startup cost is the index lookup overhead
+	startupCost := m.constants.IndexLookupCost
+
+	// Cost to scan index entries
+	indexScanCost := estimatedRows * m.constants.IndexTupleCost
+
+	if isIndexOnly {
+		// Index-only scan: no heap access needed
+		totalCost := startupCost + indexScanCost
+
+		return PlanCost{
+			StartupCost: startupCost,
+			TotalCost:   totalCost,
+			OutputRows:  estimatedRows,
+			OutputWidth: widthDefault,
+		}
+	}
+
+	// Regular index scan: need to access heap for each row
+	// Random page accesses are capped by the number of pages in the table
+	randomPages := math.Min(estimatedRows, float64(tablePages))
+	heapCost := randomPages * m.constants.RandomPageCost
+	tupleCost := estimatedRows * m.constants.CPUTupleCost
+
+	totalCost := startupCost + indexScanCost + heapCost + tupleCost
+
+	return PlanCost{
+		StartupCost: startupCost,
+		TotalCost:   totalCost,
+		OutputRows:  estimatedRows,
+		OutputWidth: widthDefault,
+	}
+}
+
+// EstimateSeqScanCost calculates the estimated cost for a sequential scan operation.
+// This is useful for comparing against index scan costs.
+//
+// Parameters:
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - selectivity: Fraction of rows expected to pass filter (0.0-1.0)
+//
+// Formula:
+//
+//	totalCost = (tablePages * SeqPageCost) + (tableRows * CPUTupleCost)
+//	outputRows = tableRows * selectivity
+func (m *CostModel) EstimateSeqScanCost(
+	tableRows int64,
+	tablePages int64,
+	selectivity float64,
+) PlanCost {
+	// Ensure minimum values
+	if tableRows < 1 {
+		tableRows = 1
+	}
+	if tablePages < 1 {
+		tablePages = 1
+	}
+	if selectivity < 0 {
+		selectivity = 0
+	}
+	if selectivity > 1 {
+		selectivity = 1
+	}
+
+	seqCost := float64(tablePages) * m.constants.SeqPageCost
+	tupleCost := float64(tableRows) * m.constants.CPUTupleCost
+	totalCost := seqCost + tupleCost
+
+	outputRows := float64(tableRows) * selectivity
+	if outputRows < 1 {
+		outputRows = 1
+	}
+
+	return PlanCost{
+		StartupCost: 0,
+		TotalCost:   totalCost,
+		OutputRows:  outputRows,
+		OutputWidth: widthDefault,
+	}
+}
+
+// ShouldUseIndexScan compares the estimated costs of index scan vs sequential scan
+// and returns true if index scan is expected to be cheaper.
+//
+// This method encapsulates the access method selection logic, making it easy
+// for the optimizer to decide whether to use an index.
+//
+// Parameters:
+//   - selectivity: Fraction of rows expected to match (0.0-1.0)
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - isIndexOnly: True if all needed columns are in the index
+//
+// Index scan is typically preferred when:
+//   - Selectivity is low (small fraction of rows match)
+//   - Table is large (many pages to scan sequentially)
+//   - Index-only scan is possible (eliminates heap access)
+func (m *CostModel) ShouldUseIndexScan(
+	selectivity float64,
+	tableRows int64,
+	tablePages int64,
+	isIndexOnly bool,
+) bool {
+	indexCost := m.EstimateIndexScanCost(selectivity, tableRows, tablePages, isIndexOnly)
+	seqCost := m.EstimateSeqScanCost(tableRows, tablePages, selectivity)
+
+	return indexCost.TotalCost < seqCost.TotalCost
 }
 
 // costFilter calculates the cost of a filter operation.
