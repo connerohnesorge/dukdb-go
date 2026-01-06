@@ -328,14 +328,35 @@ func (e *Executor) pragmaMemoryLimit(ctx *ExecutionContext, plan *planner.Physic
 
 func (e *Executor) pragmaThreads(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
 	if plan.Value != nil {
+		// SET mode - update the global parallel configuration
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse the thread count
+		var threadCount int
+		if _, err := fmt.Sscanf(valueStr, "%d", &threadCount); err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("invalid thread count: %s", valueStr),
+			}
+		}
+
+		// Update the global configuration
+		if err := HandlePragmaThreads(threadCount); err != nil {
+			return nil, err
+		}
+
 		return &ExecutionResult{
 			Columns: []string{"success"},
 			Rows:    []map[string]any{{"success": true}},
 		}, nil
 	}
+	// GET mode - return current thread configuration
 	return &ExecutionResult{
 		Columns: []string{"threads"},
-		Rows:    []map[string]any{{"threads": int64(4)}},
+		Rows:    []map[string]any{{"threads": int64(GetPragmaThreads())}},
 	}, nil
 }
 
