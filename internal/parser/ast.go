@@ -125,6 +125,47 @@ const (
 	SetOpExceptAll
 )
 
+// IsolationLevel represents the transaction isolation level.
+// The isolation level determines what data a transaction can see
+// when other transactions are running concurrently.
+type IsolationLevel int
+
+const (
+	// IsolationLevelSerializable is the default and strictest isolation level.
+	// It prevents dirty reads, non-repeatable reads, and phantom reads.
+	// Transactions appear to execute serially.
+	IsolationLevelSerializable IsolationLevel = iota
+
+	// IsolationLevelRepeatableRead prevents dirty reads and non-repeatable reads.
+	// A snapshot is taken at transaction start; phantom reads may occur.
+	IsolationLevelRepeatableRead
+
+	// IsolationLevelReadCommitted prevents dirty reads only.
+	// Each statement sees data committed before that statement began.
+	// Non-repeatable reads and phantom reads may occur.
+	IsolationLevelReadCommitted
+
+	// IsolationLevelReadUncommitted allows dirty reads.
+	// Transactions can see uncommitted changes from other transactions.
+	IsolationLevelReadUncommitted
+)
+
+// String returns the human-readable name of the isolation level.
+func (il IsolationLevel) String() string {
+	switch il {
+	case IsolationLevelSerializable:
+		return "SERIALIZABLE"
+	case IsolationLevelRepeatableRead:
+		return "REPEATABLE READ"
+	case IsolationLevelReadCommitted:
+		return "READ COMMITTED"
+	case IsolationLevelReadUncommitted:
+		return "READ UNCOMMITTED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // OrderByExpr represents an ORDER BY expression.
 type OrderByExpr struct {
 	Expr Expr
@@ -672,7 +713,25 @@ func (s *CopyStmt) Accept(v Visitor) {
 }
 
 // BeginStmt represents a BEGIN TRANSACTION statement.
-type BeginStmt struct{}
+// Supports optional isolation level specification:
+//   - BEGIN
+//   - BEGIN TRANSACTION
+//   - BEGIN TRANSACTION ISOLATION LEVEL <level>
+//
+// Where <level> is one of: READ UNCOMMITTED, READ COMMITTED,
+// REPEATABLE READ, or SERIALIZABLE.
+type BeginStmt struct {
+	// IsolationLevel specifies the isolation level for this transaction.
+	// If not explicitly specified in the SQL, this defaults to
+	// IsolationLevelSerializable (the zero value).
+	IsolationLevel IsolationLevel
+
+	// HasExplicitIsolation indicates whether the isolation level was
+	// explicitly specified in the SQL statement (e.g., "BEGIN TRANSACTION
+	// ISOLATION LEVEL SERIALIZABLE"). When false, the connection's default
+	// isolation level should be used instead.
+	HasExplicitIsolation bool
+}
 
 func (*BeginStmt) stmtNode() {}
 
@@ -1047,4 +1106,46 @@ func (*CreateFunctionStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_C
 // Accept implements the Visitor pattern for CreateFunctionStmt.
 func (s *CreateFunctionStmt) Accept(v Visitor) {
 	v.VisitCreateFunctionStmt(s)
+}
+
+// ---------- SET/SHOW Statements ----------
+
+// SetStmt represents a SET statement for session configuration.
+// Supports:
+//   - SET default_transaction_isolation = 'level'
+//   - SET variable = value
+type SetStmt struct {
+	// Variable is the name of the configuration variable to set.
+	// For isolation levels: "default_transaction_isolation" or "transaction_isolation"
+	Variable string
+	// Value is the string value to set.
+	Value string
+}
+
+func (*SetStmt) stmtNode() {}
+
+func (*SetStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SET }
+
+// Accept implements the Visitor pattern for SetStmt.
+func (s *SetStmt) Accept(v Visitor) {
+	v.VisitSetStmt(s)
+}
+
+// ShowStmt represents a SHOW statement for querying session configuration.
+// Supports:
+//   - SHOW transaction_isolation
+//   - SHOW variable
+type ShowStmt struct {
+	// Variable is the name of the configuration variable to show.
+	// For isolation levels: "transaction_isolation" or "default_transaction_isolation"
+	Variable string
+}
+
+func (*ShowStmt) stmtNode() {}
+
+func (*ShowStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
+
+// Accept implements the Visitor pattern for ShowStmt.
+func (s *ShowStmt) Accept(v Visitor) {
+	v.VisitShowStmt(s)
 }

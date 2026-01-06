@@ -2,12 +2,17 @@ package executor
 
 import (
 	"fmt"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
+
+// defaultLockTimeout is the default timeout for acquiring row locks
+// in SERIALIZABLE isolation level.
+const defaultLockTimeout = 5 * time.Second
 
 // executeDelete executes a DELETE operation using the RowID/tombstone architecture.
 // DELETE works by:
@@ -30,8 +35,14 @@ func (e *Executor) executeDelete(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	// Create a scanner with RowID tracking enabled
-	scanner := table.Scan()
+	// Create a scanner with visibility support if MVCC is enabled
+	// This ensures DELETE only sees rows visible to the current transaction
+	var scanner *storage.TableScanner
+	if e.visibility != nil && e.txnCtx != nil {
+		scanner = table.ScanWithVisibility(e.visibility, e.txnCtx)
+	} else {
+		scanner = table.Scan()
+	}
 
 	// Collect RowIDs and data of rows to delete
 	// We store both RowID and row data for WAL logging (rollback support)
@@ -105,6 +116,36 @@ func (e *Executor) executeDelete(
 	deletedRowIDs := make([]storage.RowID, len(deletedRows))
 	for i, row := range deletedRows {
 		deletedRowIDs[i] = row.rowID
+	}
+
+	// For SERIALIZABLE isolation, acquire locks and register writes before modifying data
+	// This ensures proper conflict detection at commit time
+	if len(deletedRowIDs) > 0 {
+		// Acquire row locks for SERIALIZABLE isolation
+		if e.lockManager != nil && e.txnCtx != nil {
+			for _, rid := range deletedRowIDs {
+				err := e.lockManager.Lock(
+					e.txnCtx.GetTxnID(),
+					plan.Table,
+					fmt.Sprintf("%d", rid),
+					defaultLockTimeout,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to acquire lock for delete: %w", err)
+				}
+			}
+		}
+
+		// Register writes in conflict detector for SERIALIZABLE isolation
+		if e.conflictDetector != nil && e.txnCtx != nil {
+			for _, rid := range deletedRowIDs {
+				e.conflictDetector.RegisterWrite(
+					e.txnCtx.GetTxnID(),
+					plan.Table,
+					fmt.Sprintf("%d", rid),
+				)
+			}
+		}
 	}
 
 	// Mark rows as deleted using tombstones (in-place deletion)

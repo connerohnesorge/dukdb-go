@@ -86,6 +86,10 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseSavepoint()
 	case p.isKeyword("RELEASE"):
 		stmt, err = p.parseReleaseSavepoint()
+	case p.isKeyword("SET"):
+		stmt, err = p.parseSet()
+	case p.isKeyword("SHOW"):
+		stmt, err = p.parseShow()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",
@@ -1836,7 +1840,54 @@ func (p *parser) parseBegin() (*BeginStmt, error) {
 		p.advance() // consume TRANSACTION (optional)
 	}
 
-	return &BeginStmt{}, nil
+	stmt := &BeginStmt{
+		IsolationLevel: IsolationLevelSerializable, // default
+	}
+
+	// Parse optional ISOLATION LEVEL clause
+	if p.isKeyword("ISOLATION") {
+		p.advance() // consume ISOLATION
+		if err := p.expectKeyword("LEVEL"); err != nil {
+			return nil, err
+		}
+
+		// Parse the isolation level
+		isolationLevel, err := p.parseIsolationLevel()
+		if err != nil {
+			return nil, err
+		}
+		stmt.IsolationLevel = isolationLevel
+		stmt.HasExplicitIsolation = true
+	}
+
+	return stmt, nil
+}
+
+// parseIsolationLevel parses an isolation level specification.
+// Supports: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+func (p *parser) parseIsolationLevel() (IsolationLevel, error) {
+	if p.isKeyword("READ") {
+		p.advance() // consume READ
+		if p.isKeyword("UNCOMMITTED") {
+			p.advance() // consume UNCOMMITTED
+			return IsolationLevelReadUncommitted, nil
+		} else if p.isKeyword("COMMITTED") {
+			p.advance() // consume COMMITTED
+			return IsolationLevelReadCommitted, nil
+		}
+		return IsolationLevelSerializable, p.errorf("expected UNCOMMITTED or COMMITTED after READ")
+	} else if p.isKeyword("REPEATABLE") {
+		p.advance() // consume REPEATABLE
+		if err := p.expectKeyword("READ"); err != nil {
+			return IsolationLevelSerializable, err
+		}
+		return IsolationLevelRepeatableRead, nil
+	} else if p.isKeyword("SERIALIZABLE") {
+		p.advance() // consume SERIALIZABLE
+		return IsolationLevelSerializable, nil
+	}
+
+	return IsolationLevelSerializable, p.errorf("expected isolation level (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, or SERIALIZABLE)")
 }
 
 // parseRollback parses a ROLLBACK statement.

@@ -128,6 +128,58 @@ database/sql API
 
 ### Transaction Support
 
+**Isolation Levels**: `internal/engine/engine.go`, `internal/storage/mvcc.go`
+
+Syntax:
+- `BEGIN TRANSACTION ISOLATION LEVEL <level>` - Start transaction with specific isolation
+- `SET default_transaction_isolation = '<level>'` - Set default for new transactions
+- `SET transaction_isolation = '<level>'` - Synonym for default setting
+- `SHOW transaction_isolation` - Show current transaction's isolation level
+- `SHOW default_transaction_isolation` - Show connection's default level
+
+Supported levels (from least to most restrictive):
+
+| Level | Dirty Reads | Non-repeatable Reads | Phantom Reads | Conflict Detection |
+|-------|-------------|---------------------|---------------|-------------------|
+| READ UNCOMMITTED | Allowed | Allowed | Allowed | No |
+| READ COMMITTED | Prevented | Allowed | Allowed | No |
+| REPEATABLE READ | Prevented | Prevented | Allowed | No |
+| SERIALIZABLE | Prevented | Prevented | Prevented | Yes |
+
+Behavior details:
+- **READ UNCOMMITTED**: Sees uncommitted changes from other transactions (dirty reads)
+- **READ COMMITTED**: Each statement sees only data committed before that statement began
+- **REPEATABLE READ**: Snapshot taken at transaction start; sees consistent view throughout
+- **SERIALIZABLE**: Same as REPEATABLE READ plus conflict detection at commit time
+
+SERIALIZABLE conflict detection (`internal/storage/conflict_detector.go`, `internal/storage/lock_manager.go`):
+- Write-write conflicts: Two transactions cannot both modify the same row
+- Read-write conflicts: If transaction A reads a row that concurrent transaction B modifies, A fails at commit
+- On conflict: Returns `ErrSerializationFailure` - application should retry the transaction
+
+Example - handling serialization failures:
+```go
+// Retry loop for SERIALIZABLE transactions
+for retries := 0; retries < 3; retries++ {
+    _, err := db.Exec("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+    if err != nil { return err }
+
+    // ... perform transaction operations ...
+
+    _, err = db.Exec("COMMIT")
+    if err == nil {
+        break // Success
+    }
+    if strings.Contains(err.Error(), "could not serialize") {
+        db.Exec("ROLLBACK")
+        continue // Retry
+    }
+    return err // Other error
+}
+```
+
+Default isolation level is SERIALIZABLE (matching DuckDB/PostgreSQL behavior).
+
 **Savepoints**: `internal/engine/savepoint.go`, `internal/engine/conn.go`
 - `SAVEPOINT name` - Create named checkpoint within transaction
 - `ROLLBACK TO SAVEPOINT name` - Rollback to checkpoint (also: `ROLLBACK TO name`)

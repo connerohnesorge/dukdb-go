@@ -56,4 +56,8 @@ type Visitor interface {
 	VisitSavepointStmt(stmt *SavepointStmt)
 	VisitRollbackToSavepointStmt(stmt *RollbackToSavepointStmt)
 	VisitReleaseSavepointStmt(stmt *ReleaseSavepointStmt)
+
+	// Session configuration statement visitors
+	VisitSetStmt(stmt *SetStmt)
+	VisitShowStmt(stmt *ShowStmt)
 }

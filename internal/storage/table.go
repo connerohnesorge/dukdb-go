@@ -87,6 +87,9 @@ type Table struct {
 	nextRowID  uint64   // Monotonic counter for RowID generation
 	tombstones *Bitmap  // Tracks deleted rows
 	rowIDMap   map[RowID]*rowLocation // Maps RowID to physical location
+
+	// MVCC version tracking for isolation levels
+	rowVersions map[RowID]*VersionInfo // Maps RowID to version info
 }
 
 // rowLocation identifies the physical location of a row.
@@ -108,6 +111,7 @@ func NewTable(
 		nextRowID:   0,
 		tombstones:  NewBitmap(1024), // Start with space for 1024 rows
 		rowIDMap:    make(map[RowID]*rowLocation),
+		rowVersions: make(map[RowID]*VersionInfo),
 	}
 }
 
@@ -569,6 +573,33 @@ func (t *Table) HardDeleteRows(rowIDs []uint64) {
 	}
 }
 
+// SetRowVersion sets the version info for a row.
+// This should be called when creating or modifying a row to track MVCC metadata.
+func (t *Table) SetRowVersion(rowID RowID, version *VersionInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rowVersions[rowID] = version
+}
+
+// GetRowVersion returns the version info for a row.
+// Returns nil if no version info is tracked for this row.
+func (t *Table) GetRowVersion(rowID RowID) *VersionInfo {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.rowVersions[rowID]
+}
+
+// SetRowDeleted marks a row as deleted by a specific transaction.
+// This updates both the tombstone and the version info.
+func (t *Table) SetRowDeleted(rowID RowID, deletedTxnID uint64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.tombstones.Set(rowID, true)
+	if version, exists := t.rowVersions[rowID]; exists {
+		version.DeletedTxnID = deletedTxnID
+	}
+}
+
 // Scan creates a scanner for iterating over the table.
 // It snapshots the row groups and their counts to avoid holding locks during iteration.
 func (t *Table) Scan() *TableScanner {
@@ -606,6 +637,60 @@ func (t *Table) Scan() *TableScanner {
 		columnTypes:     t.columnTypes,
 		tombstones:      t.tombstones,
 		locationToRowID: locationToRowID,
+	}
+}
+
+// ScanWithVisibility creates a scanner that uses MVCC visibility checking.
+// The visibility checker determines which row versions are visible to the transaction.
+// If visibility or txnCtx is nil, the scanner behaves like Scan().
+func (t *Table) ScanWithVisibility(visibility VisibilityChecker, txnCtx TransactionContext) *TableScanner {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Snapshot row groups to avoid deadlocks during concurrent access
+	rowGroups := make(
+		[]*RowGroup,
+		len(t.rowGroups),
+	)
+	copy(rowGroups, t.rowGroups)
+
+	// Snapshot row group counts to provide a consistent view of data
+	rowGroupCounts := make([]int, len(rowGroups))
+	for i, rg := range rowGroups {
+		rowGroupCounts[i] = rg.count
+	}
+
+	// Create a reverse map from physical location to RowID
+	locationToRowID := make(map[int]map[int]RowID)
+	for rowID, loc := range t.rowIDMap {
+		if locationToRowID[loc.rowGroupIdx] == nil {
+			locationToRowID[loc.rowGroupIdx] = make(map[int]RowID)
+		}
+		locationToRowID[loc.rowGroupIdx][loc.rowIdx] = rowID
+	}
+
+	// Snapshot row versions for visibility checking
+	var rowVersions map[RowID]*VersionInfo
+	if visibility != nil && txnCtx != nil {
+		rowVersions = make(map[RowID]*VersionInfo, len(t.rowVersions))
+		for k, v := range t.rowVersions {
+			// Copy the version info to avoid race conditions
+			vCopy := *v
+			rowVersions[k] = &vCopy
+		}
+	}
+
+	return &TableScanner{
+		rowGroups:       rowGroups,
+		rowGroupCounts:  rowGroupCounts,
+		currentRG:       0,
+		currentRow:      0,
+		columnTypes:     t.columnTypes,
+		tombstones:      t.tombstones,
+		locationToRowID: locationToRowID,
+		rowVersions:     rowVersions,
+		visibility:      visibility,
+		txnCtx:          txnCtx,
 	}
 }
 
@@ -774,6 +859,11 @@ type TableScanner struct {
 
 	// Metadata about the last returned chunk for RowID tracking
 	lastChunkRowIDs []RowID // RowIDs of rows in the last returned chunk
+
+	// MVCC visibility support
+	rowVersions map[RowID]*VersionInfo  // Snapshot of row version info (nil if visibility not used)
+	visibility  VisibilityChecker       // Visibility checker for MVCC (nil for basic scan)
+	txnCtx      TransactionContext      // Transaction context for visibility checks (nil for basic scan)
 }
 
 // Next advances to the next chunk and returns it, skipping tombstoned rows.
@@ -831,7 +921,20 @@ func (s *TableScanner) Next() *DataChunk {
 			isTombstoned = s.tombstones.Get(rowID)
 		}
 
-		if !isTombstoned {
+		// Determine visibility based on MVCC rules if visibility checker is set
+		isVisible := true
+		if !isTombstoned && s.visibility != nil && s.txnCtx != nil && hasRowID {
+			// Get version info for this row
+			if version, exists := s.rowVersions[rowID]; exists {
+				isVisible = s.visibility.IsVisible(*version, s.txnCtx)
+			} else {
+				// No version info - create a default that marks it as created by system
+				// and visible to everyone (legacy rows before MVCC was enabled)
+				isVisible = true
+			}
+		}
+
+		if !isTombstoned && isVisible {
 			// Add this row to the chunk
 			values := make([]any, len(rg.columns))
 			for col, v := range rg.columns {

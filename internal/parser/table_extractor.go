@@ -412,6 +412,16 @@ func (te *TableExtractor) VisitReleaseSavepointStmt(stmt *ReleaseSavepointStmt) 
 	// No table references in RELEASE SAVEPOINT statements
 }
 
+// VisitSetStmt is a no-op for SET statements (no table references).
+func (te *TableExtractor) VisitSetStmt(stmt *SetStmt) {
+	// No table references in SET statements
+}
+
+// VisitShowStmt is a no-op for SHOW statements (no table references).
+func (te *TableExtractor) VisitShowStmt(stmt *ShowStmt) {
+	// No table references in SHOW statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)

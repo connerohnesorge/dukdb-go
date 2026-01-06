@@ -161,6 +161,12 @@ type Executor struct {
 	undoRecorder  UndoRecorder   // Undo recorder for transaction rollback (optional, may be nil)
 	inTxn         bool           // Whether we're in an explicit transaction (BEGIN was called)
 	secretManager SecretManager  // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
+
+	// MVCC isolation level support
+	visibility       storage.VisibilityChecker   // Visibility checker based on isolation level (optional, may be nil)
+	txnCtx           storage.TransactionContext  // Transaction context for visibility checks (optional, may be nil)
+	conflictDetector *storage.ConflictDetector   // Conflict detector for SERIALIZABLE (optional, may be nil)
+	lockManager      *storage.LockManager        // Lock manager for SERIALIZABLE write locks (optional, may be nil)
 }
 
 // NewExecutor creates a new Executor.
@@ -201,6 +207,34 @@ func (e *Executor) SetInTransaction(inTxn bool) {
 // If set to nil, secret operations will return an error.
 func (e *Executor) SetSecretManager(mgr SecretManager) {
 	e.secretManager = mgr
+}
+
+// SetVisibility sets the visibility checker for MVCC isolation.
+// This determines which row versions are visible during read operations.
+// If set to nil, no visibility filtering is applied (all rows are visible).
+func (e *Executor) SetVisibility(visibility storage.VisibilityChecker) {
+	e.visibility = visibility
+}
+
+// SetTransactionContext sets the transaction context for visibility checks.
+// This provides the transaction's state (ID, timestamps, snapshot) needed for MVCC.
+// If set to nil, visibility checking is disabled.
+func (e *Executor) SetTransactionContext(txnCtx storage.TransactionContext) {
+	e.txnCtx = txnCtx
+}
+
+// SetConflictDetector sets the conflict detector for SERIALIZABLE isolation.
+// This tracks read/write sets for detecting serialization conflicts at commit time.
+// If set to nil, conflict detection is disabled.
+func (e *Executor) SetConflictDetector(cd *storage.ConflictDetector) {
+	e.conflictDetector = cd
+}
+
+// SetLockManager sets the lock manager for SERIALIZABLE isolation.
+// This manages row-level locks for write operations to prevent concurrent modifications.
+// If set to nil, locking is disabled.
+func (e *Executor) SetLockManager(lm *storage.LockManager) {
+	e.lockManager = lm
 }
 
 // recordUndo records an undo operation if we're in a transaction.
@@ -408,7 +442,13 @@ func (e *Executor) executeScan(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	scanner := table.Scan()
+	// Use visibility-aware scanning if visibility checker and transaction context are set
+	var scanner *storage.TableScanner
+	if e.visibility != nil && e.txnCtx != nil {
+		scanner = table.ScanWithVisibility(e.visibility, e.txnCtx)
+	} else {
+		scanner = table.Scan()
+	}
 	outputCols := plan.OutputColumns()
 
 	return e.collectResults(
@@ -417,6 +457,22 @@ func (e *Executor) executeScan(
 			chunk := scanner.Next()
 			if chunk == nil {
 				return false, nil
+			}
+
+			// For SERIALIZABLE isolation, register reads for conflict detection
+			// Each row returned by the scanner should be tracked in the read set
+			if e.conflictDetector != nil && e.txnCtx != nil {
+				for i := 0; i < chunk.Count(); i++ {
+					// Get RowID from scanner for conflict tracking
+					rowID := scanner.GetRowID(i)
+					if rowID != nil {
+						e.conflictDetector.RegisterRead(
+							e.txnCtx.GetTxnID(),
+							plan.TableName,
+							fmt.Sprintf("%d", *rowID),
+						)
+					}
+				}
 			}
 
 			// Copy data to output

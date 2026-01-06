@@ -174,3 +174,110 @@ func (p *parser) parseCheckpoint() (*CheckpointStmt, error) {
 
 	return stmt, nil
 }
+
+// parseSet parses a SET statement.
+// Supports:
+//   - SET variable = value
+//   - SET variable = 'value'
+//   - SET default_transaction_isolation = 'READ UNCOMMITTED'
+//   - SET default_transaction_isolation = 'READ COMMITTED'
+//   - SET default_transaction_isolation = 'REPEATABLE READ'
+//   - SET default_transaction_isolation = 'SERIALIZABLE'
+//   - SET default_transaction_isolation TO 'level'
+func (p *parser) parseSet() (*SetStmt, error) {
+	if err := p.expectKeyword("SET"); err != nil {
+		return nil, err
+	}
+
+	stmt := &SetStmt{}
+
+	// Parse variable name (may contain underscores, e.g., default_transaction_isolation)
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected variable name after SET")
+	}
+	stmt.Variable = p.advance().value
+
+	// Check for = or TO
+	if p.current().typ == tokenOperator && p.current().value == "=" {
+		p.advance()
+	} else if p.isKeyword("TO") {
+		p.advance()
+	} else {
+		return nil, p.errorf("expected '=' or 'TO' after variable name")
+	}
+
+	// Parse value - can be a string literal or identifier(s)
+	// For isolation levels, the value may be multiple tokens like "READ UNCOMMITTED"
+	value, err := p.parseSetValue()
+	if err != nil {
+		return nil, err
+	}
+	stmt.Value = value
+
+	return stmt, nil
+}
+
+// parseSetValue parses the value part of a SET statement.
+// This handles:
+//   - String literals: 'value'
+//   - Identifiers: value
+//   - Multi-word identifiers: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ
+func (p *parser) parseSetValue() (string, error) {
+	// Check for string literal
+	if p.current().typ == tokenString {
+		val := p.advance().value
+		// Remove quotes
+		if len(val) >= 2 && val[0] == '\'' && val[len(val)-1] == '\'' {
+			return val[1 : len(val)-1], nil
+		}
+		return val, nil
+	}
+
+	// Parse identifier(s) - may be multi-word for isolation levels
+	if p.current().typ != tokenIdent {
+		return "", p.errorf("expected value after SET")
+	}
+
+	// Collect identifier tokens until we hit something that's not an identifier
+	// This handles "READ UNCOMMITTED", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"
+	var parts []string
+	for p.current().typ == tokenIdent {
+		parts = append(parts, p.advance().value)
+		// Stop if we hit end of statement indicators
+		if p.current().typ == tokenSemicolon || p.current().typ == tokenEOF {
+			break
+		}
+	}
+
+	// Join with spaces and return
+	result := ""
+	for i, part := range parts {
+		if i > 0 {
+			result += " "
+		}
+		result += part
+	}
+
+	return result, nil
+}
+
+// parseShow parses a SHOW statement.
+// Supports:
+//   - SHOW variable
+//   - SHOW transaction_isolation
+//   - SHOW default_transaction_isolation
+func (p *parser) parseShow() (*ShowStmt, error) {
+	if err := p.expectKeyword("SHOW"); err != nil {
+		return nil, err
+	}
+
+	stmt := &ShowStmt{}
+
+	// Parse variable name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected variable name after SHOW")
+	}
+	stmt.Variable = p.advance().value
+
+	return stmt, nil
+}

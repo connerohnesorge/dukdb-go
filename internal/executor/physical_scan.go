@@ -62,6 +62,62 @@ func NewPhysicalScanOperator(
 	}, nil
 }
 
+// NewPhysicalScanOperatorWithVisibility creates a PhysicalScanOperator with MVCC visibility support.
+// The visibility checker determines which row versions are visible to the transaction.
+// If visibility or txnCtx is nil, the operator behaves like NewPhysicalScanOperator.
+func NewPhysicalScanOperatorWithVisibility(
+	plan *planner.PhysicalScan,
+	stor *storage.Storage,
+	visibility storage.VisibilityChecker,
+	txnCtx storage.TransactionContext,
+) (*PhysicalScanOperator, error) {
+	// Get the table from storage
+	table, ok := stor.GetTable(plan.TableName)
+	if !ok {
+		return nil, dukdb.ErrTableNotFound
+	}
+
+	// Create a scanner with visibility support
+	var scanner *storage.TableScanner
+	if visibility != nil && txnCtx != nil {
+		scanner = table.ScanWithVisibility(visibility, txnCtx)
+	} else {
+		scanner = table.Scan()
+	}
+
+	// Get TypeInfo for output columns
+	outputCols := plan.OutputColumns()
+	types := make(
+		[]dukdb.TypeInfo,
+		len(outputCols),
+	)
+	for i, col := range outputCols {
+		if col.ColumnIdx >= 0 &&
+			col.ColumnIdx < len(
+				plan.TableDef.Columns,
+			) {
+			colDef := plan.TableDef.Columns[col.ColumnIdx]
+			types[i] = colDef.GetTypeInfo()
+		} else {
+			// Fallback: create basic TypeInfo from Type
+			info, err := dukdb.NewTypeInfo(col.Type)
+			if err != nil {
+				// Use a basic wrapper if TypeInfo creation fails
+				types[i] = &basicTypeInfo{typ: col.Type}
+			} else {
+				types[i] = info
+			}
+		}
+	}
+
+	return &PhysicalScanOperator{
+		plan:    plan,
+		storage: stor,
+		scanner: scanner,
+		types:   types,
+	}, nil
+}
+
 // Next returns the next DataChunk of results, or nil if no more data.
 func (op *PhysicalScanOperator) Next() (*storage.DataChunk, error) {
 	// Get the next chunk from the scanner

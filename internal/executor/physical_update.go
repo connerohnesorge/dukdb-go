@@ -2,12 +2,16 @@ package executor
 
 import (
 	"fmt"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
+
+// updateLockTimeout is the default timeout for acquiring row locks in UPDATE.
+const updateLockTimeout = 5 * time.Second
 
 // executeUpdate executes an UPDATE operation using the RowID/tombstone architecture.
 // UPDATE works by:
@@ -32,8 +36,14 @@ func (e *Executor) executeUpdate(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	// Create a scanner with RowID tracking enabled
-	scanner := table.Scan()
+	// Create a scanner with visibility support if MVCC is enabled
+	// This ensures UPDATE only sees rows visible to the current transaction
+	var scanner *storage.TableScanner
+	if e.visibility != nil && e.txnCtx != nil {
+		scanner = table.ScanWithVisibility(e.visibility, e.txnCtx)
+	} else {
+		scanner = table.Scan()
+	}
 
 	// Collect updates: each entry maps a RowID to its new column values
 	// We need per-row updates because SET expressions may reference current row values
@@ -138,6 +148,36 @@ func (e *Executor) executeUpdate(
 				columnValues: columnValues,
 				beforeValues: beforeValues,
 			})
+		}
+	}
+
+	// For SERIALIZABLE isolation, acquire locks and register writes before modifying data
+	// This ensures proper conflict detection at commit time
+	if len(updates) > 0 {
+		// Acquire row locks for SERIALIZABLE isolation
+		if e.lockManager != nil && e.txnCtx != nil {
+			for _, update := range updates {
+				err := e.lockManager.Lock(
+					e.txnCtx.GetTxnID(),
+					plan.Table,
+					fmt.Sprintf("%d", update.rowID),
+					updateLockTimeout,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to acquire lock for update: %w", err)
+				}
+			}
+		}
+
+		// Register writes in conflict detector for SERIALIZABLE isolation
+		if e.conflictDetector != nil && e.txnCtx != nil {
+			for _, update := range updates {
+				e.conflictDetector.RegisterWrite(
+					e.txnCtx.GetTxnID(),
+					plan.Table,
+					fmt.Sprintf("%d", update.rowID),
+				)
+			}
 		}
 	}
 

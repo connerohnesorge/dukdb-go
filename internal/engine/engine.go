@@ -15,6 +15,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
+	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/persistence"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
@@ -33,16 +34,22 @@ type Engine struct {
 	path       string
 	persistent bool // true if not :memory:
 	closed     bool
+
+	// SERIALIZABLE isolation level support
+	conflictDetector *storage.ConflictDetector // Shared conflict detector for all connections
+	lockManager      *storage.LockManager      // Shared lock manager for all connections
 }
 
 // NewEngine creates a new Engine instance.
 func NewEngine() *Engine {
 	cat := catalog.NewCatalog()
 	return &Engine{
-		catalog:   cat,
-		storage:   storage.NewStorage(),
-		txnMgr:    NewTransactionManager(),
-		optimizer: optimizer.NewCostBasedOptimizer(cat),
+		catalog:          cat,
+		storage:          storage.NewStorage(),
+		txnMgr:           NewTransactionManager(),
+		optimizer:        optimizer.NewCostBasedOptimizer(cat),
+		conflictDetector: storage.NewConflictDetector(),
+		lockManager:      storage.NewLockManager(),
 	}
 }
 
@@ -246,35 +253,119 @@ func (e *Engine) Optimizer() *optimizer.CostBasedOptimizer {
 	return e.optimizer
 }
 
+// ConflictDetector returns the shared conflict detector for SERIALIZABLE isolation.
+func (e *Engine) ConflictDetector() *storage.ConflictDetector {
+	return e.conflictDetector
+}
+
+// LockManager returns the shared lock manager for SERIALIZABLE isolation.
+func (e *Engine) LockManager() *storage.LockManager {
+	return e.lockManager
+}
+
 // TransactionManager manages transactions for the engine.
 type TransactionManager struct {
 	mu        sync.Mutex
 	nextTxnID uint64
 	active    map[uint64]*Transaction
+	// committedSince tracks transaction IDs that have committed since each active transaction started.
+	// Key is the observing transaction ID, value is slice of transaction IDs that committed after it started.
+	// Used for SERIALIZABLE conflict detection at commit time.
+	committedSince map[uint64][]uint64
 }
 
 // NewTransactionManager creates a new TransactionManager.
 func NewTransactionManager() *TransactionManager {
 	return &TransactionManager{
-		nextTxnID: 1,
-		active:    make(map[uint64]*Transaction),
+		nextTxnID:      1,
+		active:         make(map[uint64]*Transaction),
+		committedSince: make(map[uint64][]uint64),
 	}
 }
 
-// Begin starts a new transaction.
+// Begin starts a new transaction with the default isolation level (SERIALIZABLE).
 func (tm *TransactionManager) Begin() *Transaction {
+	return tm.BeginWithIsolation(parser.IsolationLevelSerializable)
+}
+
+// BeginWithIsolation starts a new transaction with the specified isolation level.
+// The isolation level determines what data the transaction can see when other
+// transactions are running concurrently.
+//
+// Supported isolation levels:
+//   - IsolationLevelSerializable: Strictest level, prevents all anomalies
+//   - IsolationLevelRepeatableRead: Prevents dirty and non-repeatable reads
+//   - IsolationLevelReadCommitted: Prevents dirty reads only
+//   - IsolationLevelReadUncommitted: Allows dirty reads
+//
+// For REPEATABLE READ and SERIALIZABLE isolation levels, a snapshot is taken
+// at transaction start. This snapshot captures which transactions were active
+// at that moment, enabling consistent reads throughout the transaction.
+func (tm *TransactionManager) BeginWithIsolation(level parser.IsolationLevel) *Transaction {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
+	now := time.Now()
+
 	txn := &Transaction{
-		id:         tm.nextTxnID,
-		active:     true,
-		savepoints: NewSavepointStack(),
+		id:             tm.nextTxnID,
+		active:         true,
+		isolationLevel: level,
+		startTime:      now,
+		savepoints:     NewSavepointStack(),
 	}
+
+	// For REPEATABLE READ and SERIALIZABLE, take a snapshot at transaction start.
+	// This snapshot captures the current set of active transactions, which is
+	// used for visibility checks to ensure consistent reads.
+	if level == parser.IsolationLevelRepeatableRead || level == parser.IsolationLevelSerializable {
+		txn.snapshot = tm.takeSnapshotLocked(now)
+	}
+
+	// For SERIALIZABLE, initialize tracking for concurrent committed transactions
+	if level == parser.IsolationLevelSerializable {
+		tm.committedSince[txn.id] = []uint64{}
+	}
+
 	tm.nextTxnID++
 	tm.active[txn.id] = txn
 
 	return txn
+}
+
+// TakeSnapshot captures the current database state for snapshot-based isolation.
+// It returns a Snapshot containing the current timestamp and the list of
+// currently active (uncommitted) transaction IDs.
+//
+// This method is thread-safe and acquires the necessary locks.
+func (tm *TransactionManager) TakeSnapshot() *storage.Snapshot {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.takeSnapshotLocked(time.Now())
+}
+
+// takeSnapshotLocked creates a snapshot while holding the mutex.
+// The caller must hold tm.mu.
+func (tm *TransactionManager) takeSnapshotLocked(timestamp time.Time) *storage.Snapshot {
+	// Collect all currently active transaction IDs
+	activeIDs := make([]uint64, 0, len(tm.active))
+	for id := range tm.active {
+		activeIDs = append(activeIDs, id)
+	}
+	return storage.NewSnapshot(timestamp, activeIDs)
+}
+
+// GetActiveTransactionIDs returns a slice of all currently active transaction IDs.
+// This is useful for debugging and testing.
+func (tm *TransactionManager) GetActiveTransactionIDs() []uint64 {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	ids := make([]uint64, 0, len(tm.active))
+	for id := range tm.active {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // Commit commits a transaction.
@@ -288,8 +379,19 @@ func (tm *TransactionManager) Commit(
 		return dukdb.ErrTransactionAlreadyEnded
 	}
 
+	// For all other active SERIALIZABLE transactions, record that this transaction committed.
+	// This is used for conflict detection at their commit time.
+	for otherID, txnRef := range tm.active {
+		if otherID != txn.id && txnRef.isolationLevel == parser.IsolationLevelSerializable {
+			tm.committedSince[otherID] = append(tm.committedSince[otherID], txn.id)
+		}
+	}
+
 	delete(tm.active, txn.id)
 	txn.active = false
+
+	// Clean up committed tracking for this transaction
+	delete(tm.committedSince, txn.id)
 
 	// Clear savepoints on commit
 	if txn.savepoints != nil {
@@ -313,11 +415,29 @@ func (tm *TransactionManager) Rollback(
 	delete(tm.active, txn.id)
 	txn.active = false
 
+	// Clean up committed tracking for this transaction
+	delete(tm.committedSince, txn.id)
+
 	// Clear savepoints on rollback
 	if txn.savepoints != nil {
 		txn.savepoints.Clear()
 	}
 
+	return nil
+}
+
+// GetConcurrentCommitted returns the list of transaction IDs that have committed
+// since the given transaction started. This is used for SERIALIZABLE conflict detection.
+func (tm *TransactionManager) GetConcurrentCommitted(txnID uint64) []uint64 {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if concurrent, ok := tm.committedSince[txnID]; ok {
+		// Return a copy to prevent external modification
+		result := make([]uint64, len(concurrent))
+		copy(result, concurrent)
+		return result
+	}
 	return nil
 }
 
@@ -346,13 +466,30 @@ type Transaction struct {
 	id     uint64
 	active bool
 
+	// Isolation level for this transaction
+	isolationLevel parser.IsolationLevel
+
+	// startTime is when this transaction began.
+	// Used for REPEATABLE READ and SERIALIZABLE snapshot-based visibility.
+	startTime time.Time
+
+	// Statement time tracking for READ COMMITTED isolation.
+	// This is the timestamp when the current statement started.
+	// It gets updated at the beginning of each statement execution.
+	statementTime time.Time
+
+	// snapshot is the point-in-time view for REPEATABLE READ and SERIALIZABLE.
+	// It captures which transactions were active at transaction start.
+	// This is nil for READ UNCOMMITTED and READ COMMITTED isolation levels.
+	snapshot *storage.Snapshot
+
 	// DDL rollback support: snapshot state at transaction start
 	catalogSnapshot *catalog.Catalog
 	storageSnapshot *storage.Storage
 
 	// DML rollback support: undo log for INSERT/UPDATE/DELETE operations
 	undoLog []UndoOperation
-	mu      sync.Mutex // protects undoLog and savepoints
+	mu      sync.Mutex // protects undoLog, savepoints, and statementTime
 
 	// Savepoint support: stack of named savepoints within the transaction
 	savepoints *SavepointStack
@@ -391,6 +528,74 @@ func (t *Transaction) ID() uint64 {
 // IsActive returns whether the transaction is still active.
 func (t *Transaction) IsActive() bool {
 	return t.active
+}
+
+// GetIsolationLevel returns the isolation level of this transaction.
+// The isolation level determines what data the transaction can see when
+// other transactions are running concurrently.
+func (t *Transaction) GetIsolationLevel() parser.IsolationLevel {
+	return t.isolationLevel
+}
+
+// SetIsolationLevel sets the isolation level for this transaction.
+// This should only be called before the transaction performs any reads.
+// Calling this on an active transaction with ongoing reads may lead to
+// inconsistent behavior.
+func (t *Transaction) SetIsolationLevel(level parser.IsolationLevel) {
+	t.isolationLevel = level
+}
+
+// BeginStatement marks the start of a new statement within this transaction.
+// This updates the statement timestamp which is used by READ COMMITTED
+// isolation level to determine visibility. Each statement in READ COMMITTED
+// sees a snapshot of data as of its start time.
+//
+// This method should be called at the beginning of each statement execution,
+// before any reads are performed.
+func (t *Transaction) BeginStatement() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.statementTime = time.Now()
+}
+
+// GetStatementTime returns the timestamp when the current statement started.
+// This is used by READ COMMITTED isolation to determine visibility of rows.
+// If no statement has started yet, returns the zero time.
+func (t *Transaction) GetStatementTime() time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.statementTime
+}
+
+// GetStartTime returns the timestamp when this transaction started.
+// This is used for REPEATABLE READ and SERIALIZABLE isolation levels
+// to determine the snapshot point for visibility checks.
+func (t *Transaction) GetStartTime() time.Time {
+	return t.startTime
+}
+
+// GetSnapshot returns the snapshot taken at transaction start.
+// This is only non-nil for REPEATABLE READ and SERIALIZABLE isolation levels.
+// The snapshot contains the timestamp and list of active transaction IDs
+// at the moment the transaction began.
+func (t *Transaction) GetSnapshot() *storage.Snapshot {
+	return t.snapshot
+}
+
+// HasSnapshot returns true if this transaction has a snapshot.
+// Snapshots are created for REPEATABLE READ and SERIALIZABLE isolation levels.
+func (t *Transaction) HasSnapshot() bool {
+	return t.snapshot != nil
+}
+
+// WasActiveAtSnapshot returns true if the given transaction ID was active
+// (uncommitted) when this transaction's snapshot was taken.
+// Returns false if this transaction has no snapshot.
+func (t *Transaction) WasActiveAtSnapshot(txnID uint64) bool {
+	if t.snapshot == nil {
+		return false
+	}
+	return t.snapshot.WasActiveAtSnapshot(txnID)
 }
 
 // CreateSavepoint creates a new savepoint with the given name.
@@ -495,6 +700,78 @@ func (t *Transaction) SavepointCount() int {
 	}
 
 	return t.savepoints.Len()
+}
+
+// TransactionContextAdapter implements storage.TransactionContext for visibility checks.
+// It wraps a Transaction and TransactionManager to provide the context needed for MVCC.
+type TransactionContextAdapter struct {
+	txn    *Transaction
+	txnMgr *TransactionManager
+}
+
+// NewTransactionContextAdapter creates a new TransactionContextAdapter.
+func NewTransactionContextAdapter(txn *Transaction, txnMgr *TransactionManager) *TransactionContextAdapter {
+	return &TransactionContextAdapter{
+		txn:    txn,
+		txnMgr: txnMgr,
+	}
+}
+
+// GetTxnID returns the unique identifier for this transaction.
+func (a *TransactionContextAdapter) GetTxnID() uint64 {
+	return a.txn.ID()
+}
+
+// GetIsolationLevel returns the isolation level for this transaction.
+func (a *TransactionContextAdapter) GetIsolationLevel() parser.IsolationLevel {
+	return a.txn.GetIsolationLevel()
+}
+
+// GetStartTime returns the timestamp when this transaction started.
+// This is used for REPEATABLE READ and SERIALIZABLE isolation levels
+// to determine the snapshot point for visibility checks.
+func (a *TransactionContextAdapter) GetStartTime() time.Time {
+	return a.txn.GetStartTime()
+}
+
+// GetStatementTime returns the timestamp when the current statement started.
+// This is used by READ COMMITTED isolation level to determine visibility.
+// Each statement sees a snapshot of committed data as of this time.
+func (a *TransactionContextAdapter) GetStatementTime() time.Time {
+	return a.txn.GetStatementTime()
+}
+
+// IsCommitted checks if another transaction has committed.
+func (a *TransactionContextAdapter) IsCommitted(txnID uint64) bool {
+	a.txnMgr.mu.Lock()
+	defer a.txnMgr.mu.Unlock()
+	// If the transaction is not in the active map, it has either committed or been rolled back.
+	// For now, we assume non-active transactions have committed (unless aborted).
+	// A proper implementation would track committed vs rolled back transactions.
+	_, isActive := a.txnMgr.active[txnID]
+	return !isActive
+}
+
+// IsAborted checks if another transaction has been aborted.
+// For now, this returns false since we don't track aborted transactions separately.
+// A proper implementation would track rolled back transaction IDs.
+func (a *TransactionContextAdapter) IsAborted(txnID uint64) bool {
+	// TODO: Track aborted transactions for proper MVCC support
+	return false
+}
+
+// GetSnapshot returns the snapshot taken at transaction start.
+// This is only non-nil for REPEATABLE READ and SERIALIZABLE isolation levels.
+func (a *TransactionContextAdapter) GetSnapshot() *storage.Snapshot {
+	return a.txn.GetSnapshot()
+}
+
+// WasActiveAtSnapshot returns true if the given transaction ID was active
+// (uncommitted) when this transaction's snapshot was taken.
+// This is used for REPEATABLE READ and SERIALIZABLE visibility checks.
+// Returns false if this transaction has no snapshot.
+func (a *TransactionContextAdapter) WasActiveAtSnapshot(txnID uint64) bool {
+	return a.txn.WasActiveAtSnapshot(txnID)
 }
 
 // loadFromFile loads the database from a file

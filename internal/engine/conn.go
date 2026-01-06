@@ -79,12 +79,14 @@ func generateConnID() uint64 {
 // EngineConn represents a connection to the engine.
 // It implements the BackendConn interface.
 type EngineConn struct {
-	mu     sync.Mutex
-	id     uint64 // Unique connection ID, assigned at creation
-	engine *Engine
-	txn    *Transaction
-	closed bool
-	inTxn  bool // Whether BEGIN was explicitly called (explicit transaction mode)
+	mu                        sync.Mutex
+	id                        uint64 // Unique connection ID, assigned at creation
+	engine                    *Engine
+	txn                       *Transaction
+	closed                    bool
+	inTxn                     bool                 // Whether BEGIN was explicitly called (explicit transaction mode)
+	defaultIsolationLevel     parser.IsolationLevel // Default isolation level for new transactions
+	currentIsolationLevel     parser.IsolationLevel // Isolation level of current transaction (if any)
 }
 
 // undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
@@ -118,6 +120,13 @@ func (c *EngineConn) Execute(
 		return 0, dukdb.ErrConnectionClosed
 	}
 
+	// Mark the start of a new statement for READ COMMITTED isolation.
+	// This must happen before any reads so that visibility checks use
+	// the correct statement timestamp.
+	if c.txn != nil {
+		c.txn.BeginStatement()
+	}
+
 	// Parse the query
 	stmt, err := parser.Parse(query)
 	if err != nil {
@@ -127,7 +136,7 @@ func (c *EngineConn) Execute(
 	// Handle transaction statements at connection level for DDL rollback support
 	switch s := stmt.(type) {
 	case *parser.BeginStmt:
-		return c.handleBegin()
+		return c.handleBeginWithIsolation(s)
 	case *parser.CommitStmt:
 		return c.handleCommit()
 	case *parser.RollbackStmt:
@@ -138,6 +147,8 @@ func (c *EngineConn) Execute(
 		return c.handleRollbackToSavepoint(s)
 	case *parser.ReleaseSavepointStmt:
 		return c.handleReleaseSavepoint(s)
+	case *parser.SetStmt:
+		return c.handleSet(s)
 	}
 
 	// Bind the statement
@@ -171,6 +182,9 @@ func (c *EngineConn) Execute(
 		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
 		exec.SetInTransaction(true)
 	}
+	// Configure MVCC visibility based on transaction's isolation level
+	c.configureExecutorMVCC(exec)
+
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return 0, err
@@ -179,31 +193,90 @@ func (c *EngineConn) Execute(
 	return result.RowsAffected, nil
 }
 
-// handleBegin handles the BEGIN statement, capturing catalog and storage snapshots
-// for DDL transaction rollback support and enabling DML undo logging.
-func (c *EngineConn) handleBegin() (int64, error) {
+// handleBeginWithIsolation handles the BEGIN statement with optional isolation level,
+// capturing catalog and storage snapshots for DDL transaction rollback support
+// and enabling DML undo logging.
+func (c *EngineConn) handleBeginWithIsolation(stmt *parser.BeginStmt) (int64, error) {
 	// Mark that we're in an explicit transaction
 	c.inTxn = true
+
+	// Determine the isolation level for this transaction
+	// If the statement explicitly specifies an isolation level, use it; otherwise use the default
+	var isolationLevel parser.IsolationLevel
+	if stmt.HasExplicitIsolation {
+		// Explicit isolation level specified in BEGIN statement
+		isolationLevel = stmt.IsolationLevel
+	} else {
+		// Use the connection's default isolation level
+		isolationLevel = c.defaultIsolationLevel
+	}
+
+	// Store the isolation level on both connection and transaction
+	c.currentIsolationLevel = isolationLevel
+
+	// Create a new transaction with the correct isolation level.
+	// This ensures the snapshot is properly created (for REPEATABLE READ/SERIALIZABLE)
+	// or not created (for READ UNCOMMITTED/READ COMMITTED) based on the isolation level.
+	c.txn = c.engine.txnMgr.BeginWithIsolation(isolationLevel)
 
 	// Capture catalog and storage snapshots for DDL rollback
 	if c.txn != nil {
 		c.txn.catalogSnapshot = c.engine.catalog.Clone()
 		c.txn.storageSnapshot = c.engine.storage.Clone()
-		// Clear any existing undo log from previous transactions
-		c.txn.ClearUndoLog()
 	}
 
 	return 0, nil
 }
 
 // handleCommit handles the COMMIT statement, clearing any snapshots and undo log.
+// For SERIALIZABLE isolation, it first checks for conflicts with concurrent transactions.
 func (c *EngineConn) handleCommit() (int64, error) {
-	// Clear snapshots and undo log - changes are now permanent
-	if c.txn != nil {
-		c.txn.catalogSnapshot = nil
-		c.txn.storageSnapshot = nil
-		c.txn.ClearUndoLog()
+	if c.txn == nil {
+		c.inTxn = false
+
+		return 0, nil
 	}
+
+	txnID := c.txn.ID()
+	isolationLevel := c.txn.GetIsolationLevel()
+
+	// Use defer to ensure cleanup happens even on error
+	defer func() {
+		// Release all locks held by this transaction
+		if c.engine.LockManager() != nil {
+			c.engine.LockManager().Release(txnID)
+		}
+
+		// Clear read/write tracking data for this transaction
+		if c.engine.ConflictDetector() != nil {
+			c.engine.ConflictDetector().ClearTransaction(txnID)
+		}
+	}()
+
+	// For SERIALIZABLE isolation, check for conflicts before committing
+	if isolationLevel == parser.IsolationLevelSerializable {
+		// Get list of transactions that committed since this transaction started
+		concurrentCommitted := c.engine.txnMgr.GetConcurrentCommitted(txnID)
+
+		// Check for conflicts with those concurrent committed transactions
+		if len(concurrentCommitted) > 0 && c.engine.ConflictDetector() != nil {
+			if err := c.engine.ConflictDetector().CheckConflicts(txnID, concurrentCommitted); err != nil {
+				// Conflict detected - abort the transaction
+				// The defer will still clean up locks and tracking data
+				c.txn.catalogSnapshot = nil
+				c.txn.storageSnapshot = nil
+				c.txn.ClearUndoLog()
+				c.inTxn = false
+
+				return 0, err
+			}
+		}
+	}
+
+	// No conflicts - clear snapshots and undo log, changes are now permanent
+	c.txn.catalogSnapshot = nil
+	c.txn.storageSnapshot = nil
+	c.txn.ClearUndoLog()
 
 	// Exit explicit transaction mode
 	c.inTxn = false
@@ -213,8 +286,24 @@ func (c *EngineConn) handleCommit() (int64, error) {
 
 // handleRollback handles the ROLLBACK statement, restoring from snapshots
 // for DDL transaction rollback and executing DML undo operations.
+// Also releases all locks and cleans up conflict tracking data.
 func (c *EngineConn) handleRollback() (int64, error) {
 	if c.txn != nil {
+		txnID := c.txn.ID()
+
+		// Use defer to ensure lock and tracking cleanup happens
+		defer func() {
+			// Release all locks held by this transaction
+			if c.engine.LockManager() != nil {
+				c.engine.LockManager().Release(txnID)
+			}
+
+			// Clear read/write tracking data for this transaction
+			if c.engine.ConflictDetector() != nil {
+				c.engine.ConflictDetector().ClearTransaction(txnID)
+			}
+		}()
+
 		// First, execute DML undo operations in reverse order (LIFO)
 		undoLog := c.txn.GetUndoLog()
 		for i := len(undoLog) - 1; i >= 0; i-- {
@@ -368,6 +457,126 @@ func (c *EngineConn) handleReleaseSavepoint(stmt *parser.ReleaseSavepointStmt) (
 	return 0, nil
 }
 
+// handleSet handles the SET statement for session configuration.
+// Supports:
+//   - SET default_transaction_isolation = 'level'
+//   - SET transaction_isolation = 'level' (synonym)
+func (c *EngineConn) handleSet(stmt *parser.SetStmt) (int64, error) {
+	switch stmt.Variable {
+	case "default_transaction_isolation", "transaction_isolation":
+		// Parse the isolation level from the value
+		level, err := parseIsolationLevelString(stmt.Value)
+		if err != nil {
+			return 0, err
+		}
+		c.defaultIsolationLevel = level
+		return 0, nil
+	default:
+		// Unknown variable - for now we silently accept it
+		// In a full implementation, we might store these in a config map
+		return 0, nil
+	}
+}
+
+// parseIsolationLevelString converts a string to an IsolationLevel.
+// Accepts case-insensitive values like:
+//   - 'READ UNCOMMITTED' or 'read uncommitted'
+//   - 'READ COMMITTED' or 'read committed'
+//   - 'REPEATABLE READ' or 'repeatable read'
+//   - 'SERIALIZABLE' or 'serializable'
+func parseIsolationLevelString(s string) (parser.IsolationLevel, error) {
+	// Normalize to uppercase for comparison
+	upper := ""
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c = c - 32 // Convert to uppercase
+		}
+		upper += string(c)
+	}
+
+	switch upper {
+	case "READ UNCOMMITTED":
+		return parser.IsolationLevelReadUncommitted, nil
+	case "READ COMMITTED":
+		return parser.IsolationLevelReadCommitted, nil
+	case "REPEATABLE READ":
+		return parser.IsolationLevelRepeatableRead, nil
+	case "SERIALIZABLE":
+		return parser.IsolationLevelSerializable, nil
+	default:
+		return parser.IsolationLevelSerializable, errors.New("invalid isolation level: " + s)
+	}
+}
+
+// handleShow handles the SHOW statement for session configuration.
+// Returns a single row with the value of the requested variable.
+func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []string, error) {
+	var value string
+
+	switch stmt.Variable {
+	case "transaction_isolation":
+		// Return the current transaction's isolation level if in a transaction,
+		// otherwise return the default isolation level
+		if c.inTxn {
+			value = c.currentIsolationLevel.String()
+		} else {
+			value = c.defaultIsolationLevel.String()
+		}
+	case "default_transaction_isolation":
+		// Return the default isolation level
+		value = c.defaultIsolationLevel.String()
+	default:
+		// Unknown variable - return empty
+		value = ""
+	}
+
+	// Return a single row with the variable name as column name
+	rows := []map[string]any{
+		{stmt.Variable: value},
+	}
+	columns := []string{stmt.Variable}
+
+	return rows, columns, nil
+}
+
+// configureExecutorMVCC configures the executor with MVCC visibility settings
+// based on the current transaction's isolation level.
+//
+// This method sets up:
+//   - VisibilityChecker: Determines which row versions are visible during reads
+//   - TransactionContext: Provides transaction state for visibility checks
+//   - ConflictDetector: Tracks read/write sets for SERIALIZABLE isolation
+//   - LockManager: Manages row locks for SERIALIZABLE write operations
+//
+// The visibility checker and transaction context are only set when there is
+// an active transaction. For auto-commit (single statement) mode, MVCC is not
+// enabled since there are no concurrent visibility concerns.
+func (c *EngineConn) configureExecutorMVCC(exec *executor.Executor) {
+	// Only configure MVCC if we have an active transaction
+	if c.txn == nil {
+		return
+	}
+
+	// Get the appropriate visibility checker for the transaction's isolation level
+	isolationLevel := c.txn.GetIsolationLevel()
+	visibility := storage.GetVisibilityChecker(isolationLevel)
+	exec.SetVisibility(visibility)
+
+	// Create a transaction context adapter for visibility checks
+	txnCtx := NewTransactionContextAdapter(c.txn, c.engine.txnMgr)
+	exec.SetTransactionContext(txnCtx)
+
+	// For SERIALIZABLE isolation, set up conflict detection and locking
+	// These are only needed for the strictest isolation level
+	if isolationLevel == parser.IsolationLevelSerializable {
+		// Use the engine's shared conflict detector and lock manager
+		// This allows conflict detection across all connections
+		exec.SetConflictDetector(c.engine.ConflictDetector())
+		exec.SetLockManager(c.engine.LockManager())
+	}
+}
+
 // Query executes a query that returns rows.
 func (c *EngineConn) Query(
 	ctx context.Context,
@@ -381,10 +590,22 @@ func (c *EngineConn) Query(
 		return nil, nil, dukdb.ErrConnectionClosed
 	}
 
+	// Mark the start of a new statement for READ COMMITTED isolation.
+	// This must happen before any reads so that visibility checks use
+	// the correct statement timestamp.
+	if c.txn != nil {
+		c.txn.BeginStatement()
+	}
+
 	// Parse the query
 	stmt, err := parser.Parse(query)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Handle SHOW statements at connection level
+	if showStmt, ok := stmt.(*parser.ShowStmt); ok {
+		return c.handleShow(showStmt)
 	}
 
 	// Bind the statement
@@ -427,6 +648,9 @@ func (c *EngineConn) Query(
 		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
 		exec.SetInTransaction(true)
 	}
+	// Configure MVCC visibility based on transaction's isolation level
+	c.configureExecutorMVCC(exec)
+
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return nil, nil, err

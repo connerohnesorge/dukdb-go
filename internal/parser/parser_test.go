@@ -2277,3 +2277,143 @@ func TestCountParametersExcelTableFunction(t *testing.T) {
 		})
 	}
 }
+
+// TestParseBeginIsolationLevel tests parsing of BEGIN statements with isolation level clauses.
+func TestParseBeginIsolationLevel(t *testing.T) {
+	tests := []struct {
+		name          string
+		sql           string
+		wantErr       bool
+		wantIsolation IsolationLevel
+	}{
+		{
+			name:          "simple BEGIN",
+			sql:           "BEGIN",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		{
+			name:          "BEGIN TRANSACTION",
+			sql:           "BEGIN TRANSACTION",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		{
+			name:          "BEGIN with trailing semicolon",
+			sql:           "BEGIN;",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		{
+			name:          "BEGIN TRANSACTION with trailing semicolon",
+			sql:           "BEGIN TRANSACTION;",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		{
+			name:          "READ UNCOMMITTED isolation level",
+			sql:           "BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+			wantErr:       false,
+			wantIsolation: IsolationLevelReadUncommitted,
+		},
+		{
+			name:          "READ COMMITTED isolation level",
+			sql:           "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			wantErr:       false,
+			wantIsolation: IsolationLevelReadCommitted,
+		},
+		{
+			name:          "REPEATABLE READ isolation level",
+			sql:           "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			wantErr:       false,
+			wantIsolation: IsolationLevelRepeatableRead,
+		},
+		{
+			name:          "SERIALIZABLE isolation level",
+			sql:           "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		{
+			name:          "isolation level without TRANSACTION keyword",
+			sql:           "BEGIN ISOLATION LEVEL READ COMMITTED",
+			wantErr:       false,
+			wantIsolation: IsolationLevelReadCommitted,
+		},
+		{
+			name:          "lowercase isolation level",
+			sql:           "begin transaction isolation level read committed",
+			wantErr:       false,
+			wantIsolation: IsolationLevelReadCommitted,
+		},
+		{
+			name:          "mixed case isolation level",
+			sql:           "BEGIN Transaction ISOLATION Level REPEATABLE Read",
+			wantErr:       false,
+			wantIsolation: IsolationLevelRepeatableRead,
+		},
+		{
+			name:          "isolation level with semicolon",
+			sql:           "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;",
+			wantErr:       false,
+			wantIsolation: IsolationLevelSerializable,
+		},
+		// Error cases
+		{
+			name:    "ISOLATION without LEVEL",
+			sql:     "BEGIN TRANSACTION ISOLATION READ COMMITTED",
+			wantErr: true,
+		},
+		{
+			name:    "invalid isolation level",
+			sql:     "BEGIN TRANSACTION ISOLATION LEVEL SNAPSHOT",
+			wantErr: true,
+		},
+		{
+			name:    "READ without following keyword",
+			sql:     "BEGIN TRANSACTION ISOLATION LEVEL READ",
+			wantErr: true,
+		},
+		{
+			name:    "REPEATABLE without READ",
+			sql:     "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE",
+			wantErr: true,
+		},
+		{
+			name:    "incomplete READ keyword",
+			sql:     "BEGIN TRANSACTION ISOLATION LEVEL READ ONLY",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if stmt == nil {
+				t.Error("Parse() returned nil statement")
+				return
+			}
+			if stmt.Type() != dukdb.STATEMENT_TYPE_TRANSACTION {
+				t.Errorf("Expected TRANSACTION statement type, got %v", stmt.Type())
+				return
+			}
+			beginStmt, ok := stmt.(*BeginStmt)
+			if !ok {
+				t.Errorf("Expected *BeginStmt, got %T", stmt)
+				return
+			}
+			if beginStmt.IsolationLevel != tt.wantIsolation {
+				t.Errorf("IsolationLevel = %v (%s), want %v (%s)",
+					beginStmt.IsolationLevel, beginStmt.IsolationLevel.String(),
+					tt.wantIsolation, tt.wantIsolation.String())
+			}
+		})
+	}
+}
