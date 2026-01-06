@@ -42,8 +42,11 @@ const (
 	EntryRowGroup EntryType = 29
 
 	// Transaction boundaries (90-97)
-	EntryTxnBegin  EntryType = 90
-	EntryTxnCommit EntryType = 91
+	EntryTxnBegin          EntryType = 90
+	EntryTxnCommit         EntryType = 91
+	EntrySavepoint         EntryType = 92 // Create savepoint
+	EntryReleaseSavepoint  EntryType = 93 // Release savepoint
+	EntryRollbackSavepoint EntryType = 94 // Rollback to savepoint
 
 	// Control entries (98-100)
 	EntryVersion    EntryType = 98
@@ -104,6 +107,12 @@ func (t EntryType) String() string {
 		return "TXN_BEGIN"
 	case EntryTxnCommit:
 		return "TXN_COMMIT"
+	case EntrySavepoint:
+		return "SAVEPOINT"
+	case EntryReleaseSavepoint:
+		return "RELEASE_SAVEPOINT"
+	case EntryRollbackSavepoint:
+		return "ROLLBACK_SAVEPOINT"
 	case EntryVersion:
 		return "VERSION"
 	case EntryCheckpoint:

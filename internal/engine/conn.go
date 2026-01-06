@@ -3,8 +3,10 @@ package engine
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -13,6 +15,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
 // nextConnID is the global atomic counter for generating unique connection IDs.
@@ -122,13 +125,19 @@ func (c *EngineConn) Execute(
 	}
 
 	// Handle transaction statements at connection level for DDL rollback support
-	switch stmt.(type) {
+	switch s := stmt.(type) {
 	case *parser.BeginStmt:
 		return c.handleBegin()
 	case *parser.CommitStmt:
 		return c.handleCommit()
 	case *parser.RollbackStmt:
 		return c.handleRollback()
+	case *parser.SavepointStmt:
+		return c.handleSavepoint(s)
+	case *parser.RollbackToSavepointStmt:
+		return c.handleRollbackToSavepoint(s)
+	case *parser.ReleaseSavepointStmt:
+		return c.handleReleaseSavepoint(s)
 	}
 
 	// Bind the statement
@@ -252,6 +261,110 @@ func (c *EngineConn) handleRollback() (int64, error) {
 	// Exit explicit transaction mode
 	c.inTxn = false
 
+	return 0, nil
+}
+
+// handleSavepoint creates a savepoint within the current transaction.
+func (c *EngineConn) handleSavepoint(stmt *parser.SavepointStmt) (int64, error) {
+	// Must be in a transaction
+	if !c.inTxn {
+		return 0, errors.New("SAVEPOINT can only be used in transaction block")
+	}
+
+	now := time.Now()
+
+	// Get current undo log position before creating savepoint
+	undoIndex := len(c.txn.GetUndoLog())
+
+	// Write WAL entry for persistent databases (before creating savepoint)
+	if walWriter := c.engine.WAL(); walWriter != nil {
+		entry := wal.NewSavepointEntry(c.txn.ID(), stmt.Name, undoIndex, now)
+		if err := walWriter.WriteEntry(entry); err != nil {
+			return 0, err
+		}
+	}
+
+	// Create the savepoint using the Transaction method
+	if err := c.txn.CreateSavepoint(stmt.Name, now); err != nil {
+		return 0, err
+	}
+	return 0, nil
+}
+
+// handleRollbackToSavepoint rolls back to a savepoint.
+func (c *EngineConn) handleRollbackToSavepoint(stmt *parser.RollbackToSavepointStmt) (int64, error) {
+	// Must be in a transaction
+	if !c.inTxn {
+		return 0, errors.New("ROLLBACK TO SAVEPOINT can only be used in transaction block")
+	}
+
+	// Get the savepoint's undo index before rolling back
+	sp, exists := c.txn.GetSavepoint(stmt.Name)
+	if !exists {
+		return 0, errors.New("savepoint \"" + stmt.Name + "\" does not exist")
+	}
+	undoIndex := sp.UndoIndex
+
+	// Write WAL entry for persistent databases (before rollback)
+	if walWriter := c.engine.WAL(); walWriter != nil {
+		entry := wal.NewRollbackSavepointEntry(c.txn.ID(), stmt.Name, undoIndex, time.Now())
+		if err := walWriter.WriteEntry(entry); err != nil {
+			return 0, err
+		}
+	}
+
+	// Roll back using the Transaction method
+	// The undo function handles each operation type using the same logic as handleRollback
+	err := c.txn.RollbackToSavepoint(stmt.Name, func(op UndoOperation) error {
+		table, ok := c.engine.storage.GetTable(op.TableName)
+		if !ok {
+			// Table might have been dropped, skip this undo operation
+			return nil
+		}
+
+		switch op.OpType {
+		case UndoInsert:
+			// Undo INSERT: Delete the inserted rows by setting tombstones
+			table.HardDeleteRows(op.RowIDs)
+
+		case UndoDelete:
+			// Undo DELETE: Clear tombstones (un-delete)
+			rowIDs := make([]storage.RowID, len(op.RowIDs))
+			for j, id := range op.RowIDs {
+				rowIDs[j] = storage.RowID(id)
+			}
+			table.ClearTombstones(rowIDs)
+
+		case UndoUpdate:
+			// Undo UPDATE: Restore before-image values
+			_ = table.RestoreRows(op.RowIDs, op.BeforeImage)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return 0, nil
+}
+
+// handleReleaseSavepoint releases a savepoint.
+func (c *EngineConn) handleReleaseSavepoint(stmt *parser.ReleaseSavepointStmt) (int64, error) {
+	// Must be in a transaction
+	if !c.inTxn {
+		return 0, errors.New("RELEASE SAVEPOINT can only be used in transaction block")
+	}
+
+	// Write WAL entry for persistent databases (before release)
+	if walWriter := c.engine.WAL(); walWriter != nil {
+		entry := wal.NewReleaseSavepointEntry(c.txn.ID(), stmt.Name, time.Now())
+		if err := walWriter.WriteEntry(entry); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := c.txn.ReleaseSavepoint(stmt.Name); err != nil {
+		return 0, err
+	}
 	return 0, nil
 }
 

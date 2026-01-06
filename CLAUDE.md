@@ -126,6 +126,15 @@ database/sql API
 - `ALTER TABLE table DROP COLUMN name` - Drop column
 - `ALTER TABLE table ADD COLUMN name type` - Add column
 
+### Transaction Support
+
+**Savepoints**: `internal/engine/savepoint.go`, `internal/engine/conn.go`
+- `SAVEPOINT name` - Create named checkpoint within transaction
+- `ROLLBACK TO SAVEPOINT name` - Rollback to checkpoint (also: `ROLLBACK TO name`)
+- `RELEASE SAVEPOINT name` - Remove checkpoint (also: `RELEASE name`)
+- Nested savepoints follow PostgreSQL semantics
+- WAL integration for crash recovery (entry types 92, 93, 94)
+
 ### Query Execution Flow
 
 ```

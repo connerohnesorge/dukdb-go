@@ -51,4 +51,9 @@ type Visitor interface {
 
 	// Function DDL statement visitors
 	VisitCreateFunctionStmt(stmt *CreateFunctionStmt)
+
+	// Savepoint statement visitors
+	VisitSavepointStmt(stmt *SavepointStmt)
+	VisitRollbackToSavepointStmt(stmt *RollbackToSavepointStmt)
+	VisitReleaseSavepointStmt(stmt *ReleaseSavepointStmt)
 }

@@ -67,8 +67,7 @@ func (p *parser) parse() (Statement, error) {
 		stmt = &CommitStmt{}
 		p.advance()
 	case p.isKeyword("ROLLBACK"):
-		stmt = &RollbackStmt{}
-		p.advance()
+		stmt, err = p.parseRollback()
 	case p.isKeyword("COPY"):
 		stmt, err = p.parseCopy()
 	case p.isKeyword("MERGE"):
@@ -83,6 +82,10 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseAnalyze()
 	case p.isKeyword("CHECKPOINT"):
 		stmt, err = p.parseCheckpoint()
+	case p.isKeyword("SAVEPOINT"):
+		stmt, err = p.parseSavepoint()
+	case p.isKeyword("RELEASE"):
+		stmt, err = p.parseReleaseSavepoint()
 	default:
 		return nil, p.errorf(
 			"unexpected token: %s",
@@ -1834,6 +1837,80 @@ func (p *parser) parseBegin() (*BeginStmt, error) {
 	}
 
 	return &BeginStmt{}, nil
+}
+
+// parseRollback parses a ROLLBACK statement.
+// Supports:
+//   - ROLLBACK
+//   - ROLLBACK TRANSACTION
+//   - ROLLBACK TO SAVEPOINT <name>
+func (p *parser) parseRollback() (Statement, error) {
+	p.advance() // consume ROLLBACK
+
+	// Check for ROLLBACK TO SAVEPOINT
+	if p.isKeyword("TO") {
+		p.advance() // consume TO
+		if err := p.expectKeyword("SAVEPOINT"); err != nil {
+			return nil, err
+		}
+		// Parse savepoint name
+		if p.current().typ != tokenIdent && p.current().typ != tokenString {
+			return nil, p.errorf("expected savepoint name")
+		}
+		name := p.advance().value
+		// Remove quotes if it's a string literal
+		if len(name) >= 2 && name[0] == '\'' && name[len(name)-1] == '\'' {
+			name = name[1 : len(name)-1]
+		}
+		return &RollbackToSavepointStmt{Name: name}, nil
+	}
+
+	// Optional TRANSACTION keyword
+	if p.isKeyword("TRANSACTION") {
+		p.advance()
+	}
+
+	return &RollbackStmt{}, nil
+}
+
+// parseSavepoint parses a SAVEPOINT statement.
+// Syntax: SAVEPOINT <name>
+func (p *parser) parseSavepoint() (*SavepointStmt, error) {
+	p.advance() // consume SAVEPOINT
+
+	// Parse savepoint name
+	if p.current().typ != tokenIdent && p.current().typ != tokenString {
+		return nil, p.errorf("expected savepoint name")
+	}
+	name := p.advance().value
+	// Remove quotes if it's a string literal
+	if len(name) >= 2 && name[0] == '\'' && name[len(name)-1] == '\'' {
+		name = name[1 : len(name)-1]
+	}
+
+	return &SavepointStmt{Name: name}, nil
+}
+
+// parseReleaseSavepoint parses a RELEASE SAVEPOINT statement.
+// Syntax: RELEASE SAVEPOINT <name>
+func (p *parser) parseReleaseSavepoint() (*ReleaseSavepointStmt, error) {
+	p.advance() // consume RELEASE
+
+	if err := p.expectKeyword("SAVEPOINT"); err != nil {
+		return nil, err
+	}
+
+	// Parse savepoint name
+	if p.current().typ != tokenIdent && p.current().typ != tokenString {
+		return nil, p.errorf("expected savepoint name")
+	}
+	name := p.advance().value
+	// Remove quotes if it's a string literal
+	if len(name) >= 2 && name[0] == '\'' && name[len(name)-1] == '\'' {
+		name = name[1 : len(name)-1]
+	}
+
+	return &ReleaseSavepointStmt{Name: name}, nil
 }
 
 // parseCopy parses a COPY statement.

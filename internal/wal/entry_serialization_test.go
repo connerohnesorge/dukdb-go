@@ -560,6 +560,21 @@ func TestWALEntry_CompleteRoundTrip(t *testing.T) {
 			entry: NewVersionEntry(3, 1, timestamp),
 			eType: EntryVersion,
 		},
+		{
+			name:  "savepoint",
+			entry: NewSavepointEntry(1, "sp1", 5, timestamp),
+			eType: EntrySavepoint,
+		},
+		{
+			name:  "release_savepoint",
+			entry: NewReleaseSavepointEntry(1, "sp1", timestamp),
+			eType: EntryReleaseSavepoint,
+		},
+		{
+			name:  "rollback_savepoint",
+			entry: NewRollbackSavepointEntry(1, "sp1", 5, timestamp),
+			eType: EntryRollbackSavepoint,
+		},
 	}
 
 	for _, tt := range entries {
@@ -721,6 +736,312 @@ func BenchmarkWALEntry_InsertDeserialize(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		reader := bytes.NewReader(data)
 		var e InsertEntry
+		_ = e.Deserialize(reader)
+	}
+}
+
+// TestWALEntry_SavepointRoundTrip tests SAVEPOINT entry serialization with DuckDB format.
+func TestWALEntry_SavepointRoundTrip(t *testing.T) {
+	tests := []struct {
+		name      string
+		txnID     uint64
+		spName    string
+		undoIndex int
+		timestamp time.Time
+	}{
+		{
+			name:      "basic_savepoint",
+			txnID:     1,
+			spName:    "sp1",
+			undoIndex: 0,
+			timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "savepoint_with_undo_operations",
+			txnID:     2,
+			spName:    "my_savepoint",
+			undoIndex: 5,
+			timestamp: time.Date(2024, 12, 31, 23, 59, 59, 999999999, time.UTC),
+		},
+		{
+			name:      "savepoint_max_txn",
+			txnID:     ^uint64(0), // max uint64
+			spName:    "sp_max",
+			undoIndex: 1000,
+			timestamp: time.Now(),
+		},
+		{
+			name:      "savepoint_with_special_chars",
+			txnID:     42,
+			spName:    "sp_with_underscores_123",
+			undoIndex: 10,
+			timestamp: time.Date(2024, 6, 15, 12, 30, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create entry
+			original := NewSavepointEntry(tt.txnID, tt.spName, tt.undoIndex, tt.timestamp)
+
+			// Verify entry type
+			assert.Equal(t, EntrySavepoint, original.Type())
+			assert.Equal(t, tt.txnID, original.TxnID())
+
+			// Serialize payload
+			var payloadBuf bytes.Buffer
+			err := original.Serialize(&payloadBuf)
+			require.NoError(t, err)
+			payload := payloadBuf.Bytes()
+
+			// Create entry header
+			header := EntryHeader{
+				Type:           EntrySavepoint,
+				Flags:          EntryFlagChecksum,
+				Length:         uint32(len(payload)),
+				SequenceNumber: 1,
+			}
+
+			// Serialize header
+			var headerBuf bytes.Buffer
+			err = header.Serialize(&headerBuf)
+			require.NoError(t, err)
+			assert.Equal(t, EntryHeaderSize, headerBuf.Len())
+
+			// Calculate checksum
+			checksum := header.CalculateChecksum(payload)
+			assert.NotZero(t, checksum)
+
+			// Deserialize entry
+			deserialized := &SavepointEntry{}
+			err = deserialized.Deserialize(bytes.NewReader(payload))
+			require.NoError(t, err)
+
+			// Verify fields
+			assert.Equal(t, tt.txnID, deserialized.TxnID())
+			assert.Equal(t, tt.spName, deserialized.Name)
+			assert.Equal(t, tt.undoIndex, deserialized.UndoIndex)
+			assert.Equal(t, tt.timestamp.UnixNano(), deserialized.Timestamp)
+		})
+	}
+}
+
+// TestWALEntry_ReleaseSavepointRoundTrip tests RELEASE SAVEPOINT entry serialization.
+func TestWALEntry_ReleaseSavepointRoundTrip(t *testing.T) {
+	tests := []struct {
+		name      string
+		txnID     uint64
+		spName    string
+		timestamp time.Time
+	}{
+		{
+			name:      "basic_release",
+			txnID:     1,
+			spName:    "sp1",
+			timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "release_with_long_name",
+			txnID:     100,
+			spName:    "a_very_long_savepoint_name_that_is_still_valid",
+			timestamp: time.Date(2024, 12, 31, 23, 59, 59, 999999999, time.UTC),
+		},
+		{
+			name:      "release_max_txn",
+			txnID:     ^uint64(0), // max uint64
+			spName:    "sp_max",
+			timestamp: time.Now(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create entry
+			original := NewReleaseSavepointEntry(tt.txnID, tt.spName, tt.timestamp)
+
+			// Verify entry type
+			assert.Equal(t, EntryReleaseSavepoint, original.Type())
+			assert.Equal(t, tt.txnID, original.TxnID())
+
+			// Serialize payload
+			var payloadBuf bytes.Buffer
+			err := original.Serialize(&payloadBuf)
+			require.NoError(t, err)
+			payload := payloadBuf.Bytes()
+
+			// Create entry header
+			header := EntryHeader{
+				Type:           EntryReleaseSavepoint,
+				Flags:          EntryFlagChecksum,
+				Length:         uint32(len(payload)),
+				SequenceNumber: 1,
+			}
+
+			// Serialize header
+			var headerBuf bytes.Buffer
+			err = header.Serialize(&headerBuf)
+			require.NoError(t, err)
+			assert.Equal(t, EntryHeaderSize, headerBuf.Len())
+
+			// Calculate checksum
+			checksum := header.CalculateChecksum(payload)
+			assert.NotZero(t, checksum)
+
+			// Deserialize entry
+			deserialized := &ReleaseSavepointEntry{}
+			err = deserialized.Deserialize(bytes.NewReader(payload))
+			require.NoError(t, err)
+
+			// Verify fields
+			assert.Equal(t, tt.txnID, deserialized.TxnID())
+			assert.Equal(t, tt.spName, deserialized.Name)
+			assert.Equal(t, tt.timestamp.UnixNano(), deserialized.Timestamp)
+		})
+	}
+}
+
+// TestWALEntry_RollbackSavepointRoundTrip tests ROLLBACK TO SAVEPOINT entry serialization.
+func TestWALEntry_RollbackSavepointRoundTrip(t *testing.T) {
+	tests := []struct {
+		name      string
+		txnID     uint64
+		spName    string
+		undoIndex int
+		timestamp time.Time
+	}{
+		{
+			name:      "basic_rollback",
+			txnID:     1,
+			spName:    "sp1",
+			undoIndex: 0,
+			timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "rollback_with_undo_operations",
+			txnID:     2,
+			spName:    "my_savepoint",
+			undoIndex: 5,
+			timestamp: time.Date(2024, 12, 31, 23, 59, 59, 999999999, time.UTC),
+		},
+		{
+			name:      "rollback_max_txn",
+			txnID:     ^uint64(0), // max uint64
+			spName:    "sp_max",
+			undoIndex: 1000,
+			timestamp: time.Now(),
+		},
+		{
+			name:      "rollback_partial_undo",
+			txnID:     42,
+			spName:    "checkpoint_sp",
+			undoIndex: 25,
+			timestamp: time.Date(2024, 6, 15, 12, 30, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create entry
+			original := NewRollbackSavepointEntry(tt.txnID, tt.spName, tt.undoIndex, tt.timestamp)
+
+			// Verify entry type
+			assert.Equal(t, EntryRollbackSavepoint, original.Type())
+			assert.Equal(t, tt.txnID, original.TxnID())
+
+			// Serialize payload
+			var payloadBuf bytes.Buffer
+			err := original.Serialize(&payloadBuf)
+			require.NoError(t, err)
+			payload := payloadBuf.Bytes()
+
+			// Create entry header
+			header := EntryHeader{
+				Type:           EntryRollbackSavepoint,
+				Flags:          EntryFlagChecksum,
+				Length:         uint32(len(payload)),
+				SequenceNumber: 1,
+			}
+
+			// Serialize header
+			var headerBuf bytes.Buffer
+			err = header.Serialize(&headerBuf)
+			require.NoError(t, err)
+			assert.Equal(t, EntryHeaderSize, headerBuf.Len())
+
+			// Calculate checksum
+			checksum := header.CalculateChecksum(payload)
+			assert.NotZero(t, checksum)
+
+			// Deserialize entry
+			deserialized := &RollbackSavepointEntry{}
+			err = deserialized.Deserialize(bytes.NewReader(payload))
+			require.NoError(t, err)
+
+			// Verify fields
+			assert.Equal(t, tt.txnID, deserialized.TxnID())
+			assert.Equal(t, tt.spName, deserialized.Name)
+			assert.Equal(t, tt.undoIndex, deserialized.UndoIndex)
+			assert.Equal(t, tt.timestamp.UnixNano(), deserialized.Timestamp)
+		})
+	}
+}
+
+// TestWALEntry_SavepointEntryTypes tests that all savepoint entry types are correct.
+func TestWALEntry_SavepointEntryTypes(t *testing.T) {
+	timestamp := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	// Test EntrySavepoint
+	spEntry := NewSavepointEntry(1, "sp1", 0, timestamp)
+	assert.Equal(t, EntrySavepoint, spEntry.Type())
+	assert.Equal(t, "SAVEPOINT", spEntry.Type().String())
+
+	// Test EntryReleaseSavepoint
+	releaseEntry := NewReleaseSavepointEntry(1, "sp1", timestamp)
+	assert.Equal(t, EntryReleaseSavepoint, releaseEntry.Type())
+	assert.Equal(t, "RELEASE_SAVEPOINT", releaseEntry.Type().String())
+
+	// Test EntryRollbackSavepoint
+	rollbackEntry := NewRollbackSavepointEntry(1, "sp1", 0, timestamp)
+	assert.Equal(t, EntryRollbackSavepoint, rollbackEntry.Type())
+	assert.Equal(t, "ROLLBACK_SAVEPOINT", rollbackEntry.Type().String())
+}
+
+// BenchmarkWALEntry_SavepointSerialize benchmarks SAVEPOINT entry serialization.
+func BenchmarkWALEntry_SavepointSerialize(b *testing.B) {
+	entry := NewSavepointEntry(
+		1,
+		"my_savepoint_name",
+		10,
+		time.Now(),
+	)
+
+	var buf bytes.Buffer
+	buf.Grow(256)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		_ = entry.Serialize(&buf)
+	}
+}
+
+// BenchmarkWALEntry_SavepointDeserialize benchmarks SAVEPOINT entry deserialization.
+func BenchmarkWALEntry_SavepointDeserialize(b *testing.B) {
+	entry := NewSavepointEntry(
+		1,
+		"my_savepoint_name",
+		10,
+		time.Now(),
+	)
+
+	var buf bytes.Buffer
+	_ = entry.Serialize(&buf)
+	data := buf.Bytes()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader := bytes.NewReader(data)
+		var e SavepointEntry
 		_ = e.Deserialize(reader)
 	}
 }

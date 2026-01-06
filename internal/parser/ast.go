@@ -707,6 +707,53 @@ func (s *RollbackStmt) Accept(v Visitor) {
 	v.VisitRollbackStmt(s)
 }
 
+// ---------- Savepoint Statements ----------
+
+// SavepointStmt represents a SAVEPOINT statement.
+// Syntax: SAVEPOINT <name>
+type SavepointStmt struct {
+	Name string // The savepoint name
+}
+
+func (*SavepointStmt) stmtNode() {}
+
+func (*SavepointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// Accept implements the Visitor pattern for SavepointStmt.
+func (s *SavepointStmt) Accept(v Visitor) {
+	v.VisitSavepointStmt(s)
+}
+
+// RollbackToSavepointStmt represents a ROLLBACK TO SAVEPOINT statement.
+// Syntax: ROLLBACK TO SAVEPOINT <name>
+type RollbackToSavepointStmt struct {
+	Name string // The savepoint name
+}
+
+func (*RollbackToSavepointStmt) stmtNode() {}
+
+func (*RollbackToSavepointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// Accept implements the Visitor pattern for RollbackToSavepointStmt.
+func (s *RollbackToSavepointStmt) Accept(v Visitor) {
+	v.VisitRollbackToSavepointStmt(s)
+}
+
+// ReleaseSavepointStmt represents a RELEASE SAVEPOINT statement.
+// Syntax: RELEASE SAVEPOINT <name>
+type ReleaseSavepointStmt struct {
+	Name string // The savepoint name
+}
+
+func (*ReleaseSavepointStmt) stmtNode() {}
+
+func (*ReleaseSavepointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// Accept implements the Visitor pattern for ReleaseSavepointStmt.
+func (s *ReleaseSavepointStmt) Accept(v Visitor) {
+	v.VisitReleaseSavepointStmt(s)
+}
+
 // ---------- Window Function Types ----------
 
 // WindowExpr represents a window function expression.

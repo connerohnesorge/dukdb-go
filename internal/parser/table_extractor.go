@@ -397,6 +397,21 @@ func (te *TableExtractor) VisitCreateFunctionStmt(stmt *CreateFunctionStmt) {
 	// No table references in CREATE FUNCTION statements
 }
 
+// VisitSavepointStmt is a no-op for SAVEPOINT statements (no table references).
+func (te *TableExtractor) VisitSavepointStmt(stmt *SavepointStmt) {
+	// No table references in SAVEPOINT statements
+}
+
+// VisitRollbackToSavepointStmt is a no-op for ROLLBACK TO SAVEPOINT statements (no table references).
+func (te *TableExtractor) VisitRollbackToSavepointStmt(stmt *RollbackToSavepointStmt) {
+	// No table references in ROLLBACK TO SAVEPOINT statements
+}
+
+// VisitReleaseSavepointStmt is a no-op for RELEASE SAVEPOINT statements (no table references).
+func (te *TableExtractor) VisitReleaseSavepointStmt(stmt *ReleaseSavepointStmt) {
+	// No table references in RELEASE SAVEPOINT statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)

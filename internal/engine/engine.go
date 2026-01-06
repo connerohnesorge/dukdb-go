@@ -4,10 +4,12 @@ package engine
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/coder/quartz"
 	dukdb "github.com/dukdb/dukdb-go"
@@ -265,8 +267,9 @@ func (tm *TransactionManager) Begin() *Transaction {
 	defer tm.mu.Unlock()
 
 	txn := &Transaction{
-		id:     tm.nextTxnID,
-		active: true,
+		id:         tm.nextTxnID,
+		active:     true,
+		savepoints: NewSavepointStack(),
 	}
 	tm.nextTxnID++
 	tm.active[txn.id] = txn
@@ -288,6 +291,11 @@ func (tm *TransactionManager) Commit(
 	delete(tm.active, txn.id)
 	txn.active = false
 
+	// Clear savepoints on commit
+	if txn.savepoints != nil {
+		txn.savepoints.Clear()
+	}
+
 	return nil
 }
 
@@ -304,6 +312,11 @@ func (tm *TransactionManager) Rollback(
 
 	delete(tm.active, txn.id)
 	txn.active = false
+
+	// Clear savepoints on rollback
+	if txn.savepoints != nil {
+		txn.savepoints.Clear()
+	}
 
 	return nil
 }
@@ -339,7 +352,10 @@ type Transaction struct {
 
 	// DML rollback support: undo log for INSERT/UPDATE/DELETE operations
 	undoLog []UndoOperation
-	mu      sync.Mutex // protects undoLog
+	mu      sync.Mutex // protects undoLog and savepoints
+
+	// Savepoint support: stack of named savepoints within the transaction
+	savepoints *SavepointStack
 }
 
 // RecordUndo adds an undo operation to the transaction's undo log.
@@ -357,11 +373,14 @@ func (t *Transaction) GetUndoLog() []UndoOperation {
 	return t.undoLog
 }
 
-// ClearUndoLog clears the undo log (called on commit).
+// ClearUndoLog clears the undo log and savepoints (called on commit).
 func (t *Transaction) ClearUndoLog() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.undoLog = nil
+	if t.savepoints != nil {
+		t.savepoints.Clear()
+	}
 }
 
 // ID returns the transaction ID.
@@ -372,6 +391,110 @@ func (t *Transaction) ID() uint64 {
 // IsActive returns whether the transaction is still active.
 func (t *Transaction) IsActive() bool {
 	return t.active
+}
+
+// CreateSavepoint creates a new savepoint with the given name.
+// The savepoint records the current position in the undo log so that
+// RollbackToSavepoint can undo operations back to this point.
+// If a savepoint with the same name already exists, it is replaced (PostgreSQL behavior).
+func (t *Transaction) CreateSavepoint(name string, createdAt time.Time) error {
+	if !t.active {
+		return errors.New("cannot create savepoint: transaction is not active")
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Initialize savepoints if nil (shouldn't happen if Begin was used)
+	if t.savepoints == nil {
+		t.savepoints = NewSavepointStack()
+	}
+
+	sp := &Savepoint{
+		Name:      name,
+		UndoIndex: len(t.undoLog),
+		CreatedAt: createdAt,
+	}
+
+	return t.savepoints.Push(sp)
+}
+
+// RollbackToSavepoint rolls back the transaction to the specified savepoint.
+// This undoes all operations performed after the savepoint was created.
+// The savepoint and any nested savepoints are released after the rollback.
+func (t *Transaction) RollbackToSavepoint(name string, undoFunc func(op UndoOperation) error) error {
+	if !t.active {
+		return errors.New("cannot rollback to savepoint: transaction is not active")
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.savepoints == nil {
+		return fmt.Errorf("savepoint %q does not exist", name)
+	}
+
+	// Get the savepoint and release it along with any nested savepoints
+	sp, err := t.savepoints.RollbackTo(name)
+	if err != nil {
+		return err
+	}
+
+	// Undo operations in REVERSE order (from end of undoLog back to savepoint's UndoIndex)
+	if undoFunc != nil {
+		for i := len(t.undoLog) - 1; i >= sp.UndoIndex; i-- {
+			if err := undoFunc(t.undoLog[i]); err != nil {
+				return fmt.Errorf("failed to undo operation %d: %w", i, err)
+			}
+		}
+	}
+
+	// Truncate the undo log to the savepoint's position
+	t.undoLog = t.undoLog[:sp.UndoIndex]
+
+	return nil
+}
+
+// ReleaseSavepoint releases the specified savepoint and any nested savepoints.
+// The operations performed since the savepoint are kept and will be committed
+// or rolled back with the transaction.
+func (t *Transaction) ReleaseSavepoint(name string) error {
+	if !t.active {
+		return errors.New("cannot release savepoint: transaction is not active")
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.savepoints == nil {
+		return fmt.Errorf("savepoint %q does not exist", name)
+	}
+
+	return t.savepoints.Release(name)
+}
+
+// GetSavepoint returns the savepoint with the given name, or nil if not found.
+func (t *Transaction) GetSavepoint(name string) (*Savepoint, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.savepoints == nil {
+		return nil, false
+	}
+
+	return t.savepoints.Get(name)
+}
+
+// SavepointCount returns the number of active savepoints in the transaction.
+func (t *Transaction) SavepointCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.savepoints == nil {
+		return 0
+	}
+
+	return t.savepoints.Len()
 }
 
 // loadFromFile loads the database from a file
