@@ -3,8 +3,10 @@ package storage
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
 // RowGroupSize is the number of rows per row group.
@@ -75,6 +77,39 @@ func (b *Bitmap) Grow(newSize uint64) {
 	b.size = newSize
 }
 
+// MVCCTransactionContext provides transaction context for versioned operations.
+// This interface is implemented by MVCCTransaction in the engine package.
+// It is defined here in storage to avoid circular imports between storage and engine.
+//
+// The interface matches the methods available on MVCCTransaction that are needed
+// for versioned table operations:
+//   - ID() for identifying the transaction creating/modifying versions
+//   - GetStartTS() for visibility calculations
+//   - GetCommitTS() for committing versions
+//   - RecordRead/RecordWrite for conflict detection
+//   - VisibilityChecker() for finding visible versions
+type MVCCTransactionContext interface {
+	// ID returns the unique identifier for this transaction.
+	ID() uint64
+
+	// GetStartTS returns the MVCC start timestamp for this transaction.
+	GetStartTS() uint64
+
+	// GetCommitTS returns the commit timestamp for this transaction.
+	// Returns 0 if the transaction has not yet committed.
+	GetCommitTS() uint64
+
+	// RecordRead tracks that this transaction has read a row from a table.
+	RecordRead(table string, rowID uint64)
+
+	// RecordWrite tracks that this transaction has written a row to a table.
+	RecordWrite(table string, rowID uint64)
+
+	// VisibilityChecker returns the appropriate visibility checker for this
+	// transaction's isolation level.
+	VisibilityChecker() VisibilityChecker
+}
+
 // Table represents a table's data in columnar storage.
 type Table struct {
 	mu          sync.RWMutex
@@ -90,6 +125,10 @@ type Table struct {
 
 	// MVCC version tracking for isolation levels
 	rowVersions map[RowID]*VersionInfo // Maps RowID to version info
+
+	// MVCC version chains for snapshot isolation
+	versions   map[RowID]*VersionChain // rowID -> version chain
+	versionsMu sync.RWMutex            // Protects versions map
 }
 
 // rowLocation identifies the physical location of a row.
@@ -112,6 +151,7 @@ func NewTable(
 		tombstones:  NewBitmap(1024), // Start with space for 1024 rows
 		rowIDMap:    make(map[RowID]*rowLocation),
 		rowVersions: make(map[RowID]*VersionInfo),
+		versions:    make(map[RowID]*VersionChain),
 	}
 }
 
@@ -978,4 +1018,413 @@ func (s *TableScanner) GetRowID(rowIdx int) *RowID {
 	}
 	rowID := s.lastChunkRowIDs[rowIdx]
 	return &rowID
+}
+
+// =============================================================================
+// Versioned Table Operations for MVCC
+// =============================================================================
+//
+// The following methods provide MVCC-aware table operations that integrate with
+// the version chain system. These methods are used by transactions that require
+// snapshot isolation or serializable isolation.
+//
+// Each method:
+//   - Operates on the versions map (VersionChain per row) for MVCC visibility
+//   - Records reads/writes in the transaction for conflict detection
+//   - Also updates the regular storage (rowIDMap, tombstones) for backwards compatibility
+
+// InsertVersioned inserts a new row with MVCC versioning.
+// It creates a new VersionedRow and adds it to a new VersionChain for the row.
+// The row is also stored in regular storage for backwards compatibility with
+// non-MVCC operations.
+//
+// Parameters:
+//   - txn: The transaction context for this operation
+//   - values: The column values for the new row
+//
+// Returns:
+//   - RowID: The unique identifier assigned to the new row
+//   - error: An error if the insert fails
+//
+// The new row will be visible to the inserting transaction immediately, but
+// will not be visible to other transactions until the inserting transaction
+// commits (depending on their isolation level).
+func (t *Table) InsertVersioned(txn MVCCTransactionContext, values []any) (RowID, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Generate a new RowID
+	rowID := t.generateRowID()
+
+	// Create the versioned row
+	version := &VersionedRow{
+		Data:      make([]any, len(values)),
+		RowID:     uint64(rowID),
+		TxnID:     txn.ID(),
+		CommitTS:  0, // Will be set when transaction commits
+		DeletedBy: 0,
+		DeleteTS:  0,
+		PrevPtr:   nil,
+	}
+	copy(version.Data, values)
+
+	// Create a new version chain with this version
+	t.versionsMu.Lock()
+	chain := NewVersionChain(uint64(rowID))
+	chain.AddVersion(version)
+	t.versions[rowID] = chain
+	t.versionsMu.Unlock()
+
+	// Record the write in the transaction for conflict detection
+	txn.RecordWrite(t.name, uint64(rowID))
+
+	// Also store in regular storage for backwards compatibility
+	// Get or create the current row group
+	var currentRG *RowGroup
+	var currentRGIdx int
+	if len(t.rowGroups) == 0 || t.rowGroups[len(t.rowGroups)-1].IsFull() {
+		currentRG = NewRowGroup(t.columnTypes, RowGroupSize)
+		t.rowGroups = append(t.rowGroups, currentRG)
+		currentRGIdx = len(t.rowGroups) - 1
+	} else {
+		currentRGIdx = len(t.rowGroups) - 1
+		currentRG = t.rowGroups[currentRGIdx]
+	}
+
+	rowIdxInGroup := currentRG.count
+	currentRG.AppendRow(values)
+
+	// Map RowID to physical location
+	t.rowIDMap[rowID] = &rowLocation{
+		rowGroupIdx: currentRGIdx,
+		rowIdx:      rowIdxInGroup,
+	}
+
+	t.totalRows++
+
+	return rowID, nil
+}
+
+// ReadVersioned reads a row using MVCC visibility rules.
+// It traverses the version chain to find the version visible to the given transaction.
+//
+// Parameters:
+//   - txn: The transaction context for this operation
+//   - rowID: The unique identifier of the row to read
+//
+// Returns:
+//   - []any: The column values of the visible version, or nil if not found/visible
+//   - error: An error if the row does not exist or no visible version is found
+//
+// The method uses the transaction's visibility checker to determine which version
+// of the row is visible based on the transaction's isolation level and snapshot.
+func (t *Table) ReadVersioned(txn MVCCTransactionContext, rowID RowID) ([]any, error) {
+	t.versionsMu.RLock()
+	chain, exists := t.versions[rowID]
+	t.versionsMu.RUnlock()
+
+	if !exists {
+		// No version chain - try regular storage for legacy rows
+		t.mu.RLock()
+		defer t.mu.RUnlock()
+
+		// Check if row exists in regular storage
+		loc, exists := t.rowIDMap[rowID]
+		if !exists {
+			return nil, fmt.Errorf("row with RowID %d does not exist", rowID)
+		}
+
+		// Check tombstone
+		if t.tombstones.Get(rowID) {
+			return nil, fmt.Errorf("row with RowID %d has been deleted", rowID)
+		}
+
+		// Record the read
+		txn.RecordRead(t.name, uint64(rowID))
+
+		// Return from regular storage
+		if loc.rowGroupIdx >= len(t.rowGroups) {
+			return nil, fmt.Errorf("invalid row group index for RowID %d", rowID)
+		}
+		rg := t.rowGroups[loc.rowGroupIdx]
+		values := make([]any, len(rg.columns))
+		for i, col := range rg.columns {
+			values[i] = col.GetValue(loc.rowIdx)
+		}
+		return values, nil
+	}
+
+	// Find the visible version using the transaction's visibility checker
+	checker := txn.VisibilityChecker()
+
+	// We need to implement a TransactionContext adapter for the visibility check
+	// Since we're in storage package and can't directly access engine.MVCCTransaction,
+	// we need to use the interface-based approach with version info
+	chain.RLock()
+	defer chain.RUnlock()
+
+	// Traverse from head (newest) to oldest
+	current := chain.Head
+	for current != nil {
+		// Check if this version is visible to the transaction
+		versionInfo := current.ToVersionInfo()
+
+		// Create a minimal transaction context for visibility check
+		txnCtx := &versionedTxnContext{
+			txnID:            txn.ID(),
+			startTS:          txn.GetStartTS(),
+			commitTS:         txn.GetCommitTS(),
+			visibilityChecker: checker,
+		}
+
+		if checker.IsVisible(versionInfo, txnCtx) {
+			// Found visible version
+			txn.RecordRead(t.name, uint64(rowID))
+
+			// Return a copy of the data
+			result := make([]any, len(current.Data))
+			copy(result, current.Data)
+			return result, nil
+		}
+
+		current = current.PrevPtr
+	}
+
+	return nil, fmt.Errorf("no visible version found for row with RowID %d", rowID)
+}
+
+// versionedTxnContext is a minimal TransactionContext implementation for visibility checks.
+// It provides the transaction state needed by VisibilityChecker.IsVisible().
+type versionedTxnContext struct {
+	txnID             uint64
+	startTS           uint64
+	commitTS          uint64
+	visibilityChecker VisibilityChecker
+}
+
+func (c *versionedTxnContext) GetTxnID() uint64 {
+	return c.txnID
+}
+
+func (c *versionedTxnContext) GetIsolationLevel() parser.IsolationLevel {
+	// The visibility checker already encapsulates the isolation level behavior
+	return parser.IsolationLevelSerializable // Default
+}
+
+func (c *versionedTxnContext) GetStartTime() time.Time {
+	// Convert timestamp to time
+	return time.Unix(0, int64(c.startTS))
+}
+
+func (c *versionedTxnContext) GetStatementTime() time.Time {
+	// For versioned operations, use the same as start time
+	return time.Unix(0, int64(c.startTS))
+}
+
+func (c *versionedTxnContext) IsCommitted(txnID uint64) bool {
+	// A transaction is committed if it has a non-zero commit timestamp
+	// For our purposes, we check if the txnID matches our transaction
+	// and whether we have a commit timestamp
+	if txnID == c.txnID {
+		return c.commitTS != 0
+	}
+	// For other transactions, we assume they are committed if they have
+	// a commit timestamp. This is a simplification - in a full implementation,
+	// this would check against a global transaction table.
+	return true // Conservative: assume other transactions are committed
+}
+
+func (c *versionedTxnContext) IsAborted(txnID uint64) bool {
+	// In a full implementation, this would check against a global transaction table
+	return false // Conservative: assume no transactions are aborted
+}
+
+func (c *versionedTxnContext) GetSnapshot() *Snapshot {
+	// For simple versioned operations, return nil (no snapshot)
+	return nil
+}
+
+func (c *versionedTxnContext) WasActiveAtSnapshot(txnID uint64) bool {
+	// Without a proper snapshot, we can't determine this
+	return false
+}
+
+// UpdateVersioned updates a row with MVCC versioning.
+// It creates a new VersionedRow with the updated values and adds it to the
+// head of the version chain. The old version remains in the chain for
+// snapshot isolation.
+//
+// Parameters:
+//   - txn: The transaction context for this operation
+//   - rowID: The unique identifier of the row to update
+//   - values: The new column values for the row
+//
+// Returns:
+//   - error: An error if the row does not exist or is deleted
+//
+// The update creates a new version at the head of the chain. The old version
+// remains accessible to transactions that should see it based on their snapshot.
+func (t *Table) UpdateVersioned(txn MVCCTransactionContext, rowID RowID, values []any) error {
+	t.versionsMu.Lock()
+	chain, exists := t.versions[rowID]
+	if !exists {
+		t.versionsMu.Unlock()
+		return fmt.Errorf("row with RowID %d does not exist in version chain", rowID)
+	}
+	t.versionsMu.Unlock()
+
+	// Check if the row has been deleted
+	chain.Lock()
+	head := chain.Head
+	if head != nil && head.DeletedBy != 0 {
+		chain.Unlock()
+		return fmt.Errorf("cannot update deleted row with RowID %d", rowID)
+	}
+
+	// Create a new version with the updated values
+	newVersion := &VersionedRow{
+		Data:      make([]any, len(values)),
+		RowID:     uint64(rowID),
+		TxnID:     txn.ID(),
+		CommitTS:  0, // Will be set when transaction commits
+		DeletedBy: 0,
+		DeleteTS:  0,
+		PrevPtr:   head, // Link to previous version
+	}
+	copy(newVersion.Data, values)
+
+	// Add to the head of the chain (without using AddVersion to avoid double-locking)
+	chain.Head = newVersion
+	chain.Unlock()
+
+	// Record the write in the transaction for conflict detection
+	txn.RecordWrite(t.name, uint64(rowID))
+
+	// Also update regular storage for backwards compatibility
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	loc, exists := t.rowIDMap[rowID]
+	if exists && loc.rowGroupIdx < len(t.rowGroups) {
+		rg := t.rowGroups[loc.rowGroupIdx]
+		for colIdx, value := range values {
+			if colIdx < len(rg.columns) {
+				rg.columns[colIdx].SetValue(loc.rowIdx, value)
+			}
+		}
+	}
+
+	return nil
+}
+
+// DeleteVersioned marks a row as deleted with MVCC versioning.
+// It sets the DeletedBy field on the head version to the transaction ID.
+// The row will no longer be visible to transactions based on their
+// visibility rules.
+//
+// Parameters:
+//   - txn: The transaction context for this operation
+//   - rowID: The unique identifier of the row to delete
+//
+// Returns:
+//   - error: An error if the row does not exist or is already deleted
+//
+// The delete marks the version for deletion but does not physically remove it.
+// The version remains in the chain for snapshot isolation and will be cleaned
+// up by the vacuum process when no active transactions need it.
+func (t *Table) DeleteVersioned(txn MVCCTransactionContext, rowID RowID) error {
+	t.versionsMu.Lock()
+	chain, exists := t.versions[rowID]
+	if !exists {
+		t.versionsMu.Unlock()
+		return fmt.Errorf("row with RowID %d does not exist in version chain", rowID)
+	}
+	t.versionsMu.Unlock()
+
+	// Mark the head version as deleted
+	chain.Lock()
+	head := chain.Head
+	if head == nil {
+		chain.Unlock()
+		return fmt.Errorf("no version found for row with RowID %d", rowID)
+	}
+
+	if head.DeletedBy != 0 {
+		chain.Unlock()
+		return fmt.Errorf("row with RowID %d is already deleted", rowID)
+	}
+
+	head.DeletedBy = txn.ID()
+	// DeleteTS will be set when the transaction commits
+	chain.Unlock()
+
+	// Record the write in the transaction for conflict detection
+	txn.RecordWrite(t.name, uint64(rowID))
+
+	// Also mark tombstone for backwards compatibility
+	t.mu.Lock()
+	t.tombstones.Set(rowID, true)
+	t.mu.Unlock()
+
+	return nil
+}
+
+// CommitVersions commits all versions created by the given transaction.
+// It sets the CommitTS on all versions that were created by this transaction
+// and sets DeleteTS on any versions that were deleted by this transaction.
+//
+// Parameters:
+//   - txn: The transaction context that is committing
+//   - commitTS: The commit timestamp to assign to the versions
+//
+// This method should be called when a transaction commits to make its changes
+// visible to other transactions according to their visibility rules.
+func (t *Table) CommitVersions(txn MVCCTransactionContext, commitTS uint64) {
+	t.versionsMu.RLock()
+	defer t.versionsMu.RUnlock()
+
+	txnID := txn.ID()
+
+	// Iterate through all version chains
+	for _, chain := range t.versions {
+		chain.Lock()
+
+		// Traverse the chain and commit versions belonging to this transaction
+		current := chain.Head
+		for current != nil {
+			// Commit created versions
+			if current.TxnID == txnID && current.CommitTS == 0 {
+				current.CommitTS = commitTS
+			}
+
+			// Commit deleted versions
+			if current.DeletedBy == txnID && current.DeleteTS == 0 {
+				current.DeleteTS = commitTS
+			}
+
+			current = current.PrevPtr
+		}
+
+		chain.Unlock()
+	}
+}
+
+// GetVersionChains returns all version chains in the table.
+// This is primarily used for vacuum/garbage collection purposes.
+//
+// Returns:
+//   - []*VersionChain: A slice of all version chains in the table
+//
+// The returned slice contains pointers to the actual chains, not copies.
+// The caller should be careful about modifying the chains.
+func (t *Table) GetVersionChains() []*VersionChain {
+	t.versionsMu.RLock()
+	defer t.versionsMu.RUnlock()
+
+	chains := make([]*VersionChain, 0, len(t.versions))
+	for _, chain := range t.versions {
+		chains = append(chains, chain)
+	}
+
+	return chains
 }
