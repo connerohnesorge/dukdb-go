@@ -41,7 +41,7 @@ ORC (Optimized Row Columnar) is a self-describing, type-aware columnar file form
 - `github.com/xitongsys/parquet-go` (has ORC support)
 - `github.com/apache/orc-go` (if available)
 
-**Effort**: 2-3 months for full implementation
+**Effort**: 5-7 months for full implementation (read-only: 3-4 months)
 
 ### Option 2: CGO with liborc
 
@@ -115,6 +115,8 @@ internal/io/orc/
 | DECIMAL(p,s) | DECIMAL | |
 | UUID | STRING | Encode as string |
 | JSON | STRING | Store as string |
+| CHAR(n) | CHAR | Fixed-width string with padding |
+| UNION | UNION | ORC-specific type, map to DuckDB UNION |
 
 ## Compression Support
 
@@ -144,5 +146,5 @@ internal/io/orc/
 ## References
 
 - ORC Spec: https://orc.apache.org/docs/spec.html
-- DuckDB ORC: https://duckdb.org/docs/data/parquet
+- DuckDB ORC: https://duckdb.org/docs/data/orc
 - Parquet implementation reference: `internal/io/parquet/`

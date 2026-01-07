@@ -17,12 +17,15 @@ Key Iceberg concepts:
 
 ### Goals
 - Read existing Iceberg tables from S3/GCS/HDFS/local
-- Support time travel queries (`AS OF TIMESTAMP`, `AS OF SNAPSHOT`)
+- Support time travel queries (`AS OF TIMESTAMP`, `AS OF SNAPSHOT`, `AT (VERSION => ...)`)
 - Support schema evolution queries (new columns added)
 - Implement partition pruning using Iceberg partition specs
 - Implement column projection using Iceberg column stats
-- Provide `duckdb_iceberg_tables()` to list accessible Iceberg tables
-- Support `COPY TO` for creating new Iceberg tables (Parquet files with Iceberg metadata)
+- Provide `iceberg_metadata()` and `iceberg_snapshots()` for metadata discovery
+- Support version selection parameters (version, allow_moved_paths, metadata_compression_codec)
+- Support version guessing for tables without version-hint.text
+- Handle delete files (positional and equality deletes)
+- Support REST catalog with OAuth2 authentication
 
 ### Non-Goals
 - Full Iceberg write support (INSERT, UPDATE, DELETE)
@@ -50,7 +53,7 @@ Key Iceberg concepts:
 - `github.com/tabular-io/iceberg-go` (if exists)
 - Custom implementation (starting with read-only)
 
-**Effort**: 4-6 months for read-only implementation
+**Effort**: 9-12 months for read-only implementation (full DuckDB v1.4.3 feature parity)
 
 ### Option 2: Hybrid Approach (Recommended)
 
@@ -78,9 +81,12 @@ Start with read-only access using existing Parquet infrastructure.
 internal/io/iceberg/
 ├── metadata.go          # Parse metadata.json
 ├── snapshot.go          # Snapshot management
-├── manifest.go          # Manifest file parsing
+├── manifest.go          # Manifest file parsing (AVRO)
+├── manifest_file.go     # Manifest file entries
 ├── partition.go         # Partition spec and transform
-└── schema.go            # Iceberg schema (different from DuckDB)
+├── schema.go            # Iceberg schema (different from DuckDB)
+├── delete_file.go       # Delete file handling (positional, equality)
+└── avro.go              # AVRO parser for manifest lists/files
 ```
 
 ### Phase 2: Iceberg Data Reader
@@ -90,7 +96,10 @@ internal/io/iceberg/
 ├── reader.go            # Main Iceberg table reader
 ├── scan.go              # Scan planning with push-down
 ├── filter.go            # Partition and column stats filtering
-└── time_travel.go       # Snapshot selection by timestamp/snapshot_id
+├── time_travel.go       # Snapshot selection by timestamp/snapshot_id
+├── version_select.go    # Version selection parameters
+├── version_guess.go     # Version guessing for missing hint
+└── delete_applier.go    # Apply delete files to data
 ```
 
 ### Phase 3: Integration
@@ -98,7 +107,8 @@ internal/io/iceberg/
 ```
 internal/catalog/
 ├── iceberg_catalog.go   # Catalog integration for Iceberg tables
-└── duckdb_iceberg_tables.go  # List Iceberg tables function
+├── iceberg_metadata.go  # iceberg_metadata() function
+└── iceberg_snapshots.go # iceberg_snapshots() function
 
 internal/executor/
 └── iceberg_scan.go      # Physical operator for Iceberg scan
@@ -122,6 +132,17 @@ SELECT * FROM iceberg_table AS OF SNAPSHOT 1234567890;
 
 -- By snapshot reference (branch or tag)
 SELECT * FROM iceberg_table AS OF BRANCH main;
+
+-- Version selection parameter (explicit metadata version)
+SELECT * FROM iceberg_scan('s3://bucket/table/', version => 3);
+
+-- Allow moved paths (for relocated tables)
+SELECT * FROM iceberg_scan('s3://bucket/table/', allow_moved_paths => true);
+
+-- Version guessing for tables without version-hint.text
+SELECT * FROM iceberg_scan('s3://bucket/table/');
+-- or with unsafe flag
+SET unsafe_enable_version_guessing = true;
 ```
 
 ## Partition Pruning

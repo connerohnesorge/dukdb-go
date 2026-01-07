@@ -360,19 +360,16 @@ func CreateDuckDBStorage(path string, config *Config) (*DuckDBStorage, error) {
 
 // loadCatalogFromBlocks loads the catalog from metadata blocks.
 func (s *DuckDBStorage) loadCatalogFromBlocks(metaBlockID uint64) error {
-	// Read the metadata block
-	block, err := s.blockManager.ReadBlock(metaBlockID)
+	// Use the metadata reader to parse catalog entries
+	catalog, err := ReadCatalogFromMetadata(s.blockManager, metaBlockID)
 	if err != nil {
-		return fmt.Errorf("failed to read metadata block %d: %w", metaBlockID, err)
+		// If we fail to parse the catalog, fall back to an empty catalog
+		// This allows the file to be opened even if catalog parsing fails
+		s.catalog = NewDuckDBCatalog()
+		return fmt.Errorf("failed to read catalog from metadata: %w", err)
 	}
 
-	// Parse catalog entries from the block
-	// For now, we create an empty catalog - full deserialization would
-	// require implementing the catalog reader which is complex
-	// This is a placeholder that will be enhanced in future tasks
-	_ = block // Use block data for future catalog deserialization
-	s.catalog = NewDuckDBCatalog()
-
+	s.catalog = catalog
 	return nil
 }
 

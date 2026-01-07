@@ -13,13 +13,18 @@ DuckDB v1.4.3 enables Iceberg by default, but this requires C++ Iceberg bindings
 
 ## What Changes
 
-- **ADDED**: Iceberg table format reader for `duckdb_iceberg_tables()` function
+- **ADDED**: Iceberg table format reader for `iceberg_scan()` function
+- **ADDED**: `iceberg_metadata()` function for detailed manifest/file metadata
+- **ADDED**: `iceberg_snapshots()` function for snapshot history discovery
 - **ADDED**: Iceberg metadata parsing (metadata.json, manifest lists, manifests)
-- **ADDED**: Iceberg snapshot discovery and time travel queries
+- **ADDED**: Iceberg snapshot discovery and time travel queries (AS OF TIMESTAMP, AS OF SNAPSHOT)
+- **ADDED**: Version selection parameters (version, allow_moved_paths, metadata_compression_codec)
+- **ADDED**: Version guessing support for tables without version-hint.text
 - **ADDED**: Partition pruning using Iceberg partition specs
 - **ADDED**: Column projection using Iceberg column stats
+- **ADDED**: Delete file handling (positional and equality deletes)
 - **ADDED**: DuckDB catalog integration for Iceberg tables
-- **ADDED**: `CREATE ICEBERG TABLE` for creating new Iceberg-format tables
+- **ADDED**: REST catalog support with OAuth2 authentication
 
 ## Impact
 

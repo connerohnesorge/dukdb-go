@@ -2,8 +2,10 @@
 
 - [ ] 1.1 Research pure Go ORC libraries (apache/orc-go, xitongsys/parquet-go)
 - [ ] 1.2 Evaluate library maturity and API fit
-- [ ] 1.3 Design type mapping between ORC and DuckDB
-- [ ] 1.4 Create detailed implementation spec
+- [ ] 1.3 Proof-of-concept with selected library
+- [ ] 1.4 Design type mapping between ORC and DuckDB (including UNION, CHAR)
+- [ ] 1.5 Design Protobuf handling for ORC metadata
+- [ ] 1.6 Create detailed implementation spec
 
 ## 2. ORC Reader Implementation
 
@@ -11,8 +13,12 @@
 - [ ] 2.2 Implement file footer parsing (schema, stripes, metadata)
 - [ ] 2.3 Implement stripe descriptor parsing
 - [ ] 2.4 Implement column reader with vector output
-- [ ] 2.5 Implement compression decompression (zlib, snappy, lz4)
+- [ ] 2.5 Implement compression decompression (zlib, snappy, lz4, zstd)
 - [ ] 2.6 Implement type conversion (ORC → DuckDB vectors)
+- [ ] 2.7 Handle file version compatibility (0.11, 0.12)
+- [ ] 2.8 Handle UNION type mapping (ORC-specific)
+- [ ] 2.9 Handle CHAR type padding correctly
+- [ ] 2.10 Handle string dictionary encoding for large values
 
 ## 3. Predicate Push-down
 
@@ -47,9 +53,14 @@
 
 - [ ] 7.1 Write unit tests for type mapping
 - [ ] 7.2 Write integration tests for reading
-- [ ] 7.3 Test with sample ORC files (Hive, Spark generated)
-- [ ] 7.4 Test predicate push-down
-- [ ] 7.5 Test compression variants
+- [ ] 7.3 Test with sample ORC files (Hive, Spark, Trino generated)
+- [ ] 7.4 Test predicate push-down with column statistics
+- [ ] 7.5 Test compression variants (NONE, ZLIB, SNAPPY, LZ4, ZSTD)
+- [ ] 7.6 Test CHAR type handling with padding
+- [ ] 7.7 Test UNION type handling
+- [ ] 7.8 Test file version compatibility (0.11, 0.12)
+- [ ] 7.9 Test ORC file corruption handling
+- [ ] 7.10 Test Hive partition column handling
 
 ## 8. Documentation
 
@@ -63,4 +74,7 @@
 - [ ] 9.1 Run `spectr validate add-orc-format-support`
 - [ ] 9.2 Verify with DuckDB ORC compatibility tests
 - [ ] 9.3 Ensure all existing tests pass
-- [ ] 9.4 Performance benchmark vs DuckDB
+- [ ] 9.4 Performance benchmark vs DuckDB (target: within 3x)
+- [ ] 9.5 Verify UNION type handling
+- [ ] 9.6 Verify CHAR type handling
+- [ ] 9.7 Verify all compression codecs
