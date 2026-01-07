@@ -264,7 +264,7 @@ func OpenDuckDBStorage(path string, config *Config) (*DuckDBStorage, error) {
 	}
 
 	// Load catalog from metadata blocks if present
-	if dbHeader.MetaBlock.IsValid() {
+	if IsValidBlockID(dbHeader.MetaBlock) {
 		if err := storage.loadCatalogFromBlocks(dbHeader.MetaBlock); err != nil {
 			_ = file.Close()
 			return nil, fmt.Errorf("failed to load catalog: %w", err)
@@ -359,23 +359,18 @@ func CreateDuckDBStorage(path string, config *Config) (*DuckDBStorage, error) {
 }
 
 // loadCatalogFromBlocks loads the catalog from metadata blocks.
-func (s *DuckDBStorage) loadCatalogFromBlocks(metaBlock BlockPointer) error {
+func (s *DuckDBStorage) loadCatalogFromBlocks(metaBlockID uint64) error {
 	// Read the metadata block
-	block, err := s.blockManager.ReadBlock(metaBlock.BlockID)
+	block, err := s.blockManager.ReadBlock(metaBlockID)
 	if err != nil {
-		return fmt.Errorf("failed to read metadata block %d: %w", metaBlock.BlockID, err)
-	}
-
-	// Deserialize the catalog from block data starting at offset
-	if uint32(len(block.Data)) <= metaBlock.Offset {
-		return fmt.Errorf("metadata offset %d exceeds block size %d",
-			metaBlock.Offset, len(block.Data))
+		return fmt.Errorf("failed to read metadata block %d: %w", metaBlockID, err)
 	}
 
 	// Parse catalog entries from the block
 	// For now, we create an empty catalog - full deserialization would
 	// require implementing the catalog reader which is complex
 	// This is a placeholder that will be enhanced in future tasks
+	_ = block // Use block data for future catalog deserialization
 	s.catalog = NewDuckDBCatalog()
 
 	return nil
@@ -754,10 +749,10 @@ func (s *DuckDBStorage) Checkpoint() error {
 
 	// Create new database header
 	dbHeader := &DatabaseHeader{
-		Iteration:  iteration,
-		MetaBlock:  BlockPointer{BlockID: metaBlock.BlockID, Offset: uint32(metaBlock.Offset)},
-		FreeList:   InvalidBlockPointer(),
-		BlockCount: s.blockManager.BlockCount(),
+		Iteration:                  iteration,
+		MetaBlock:                  metaBlock.BlockID,
+		FreeList:                   InvalidBlockID,
+		BlockCount:                 s.blockManager.BlockCount(),
 		BlockAllocSize:             s.blockManager.BlockSize(),
 		VectorSize:                 DefaultVectorSize,
 		SerializationCompatibility: CurrentVersion,

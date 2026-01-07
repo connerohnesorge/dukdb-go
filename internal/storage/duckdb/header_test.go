@@ -13,26 +13,28 @@ import (
 )
 
 // TestChecksumBlock tests the custom checksum algorithm.
+// The algorithm starts with checksumInitial (5381) and XORs in each chunk's hash.
 func TestChecksumBlock(t *testing.T) {
 	t.Run("empty data", func(t *testing.T) {
 		checksum := checksumBlock([]byte{})
-		assert.Equal(t, uint64(0), checksum, "empty data should produce zero checksum")
+		// With no data, result is just the initial value 5381 (0x1505)
+		assert.Equal(t, checksumInitial, checksum, "empty data should produce initial value (5381)")
 	})
 
 	t.Run("single byte", func(t *testing.T) {
 		checksum := checksumBlock([]byte{0x42})
-		assert.NotEqual(t, uint64(0), checksum, "single byte should produce non-zero checksum")
+		assert.NotEqual(t, checksumInitial, checksum, "single byte should produce different checksum than initial")
 	})
 
 	t.Run("exactly 8 bytes", func(t *testing.T) {
 		data := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 		checksum := checksumBlock(data)
 
-		// Compute expected: value * 0xbf58476d1ce4e5b9
+		// Compute expected: initial XOR (value * multiplier)
 		value := binary.LittleEndian.Uint64(data)
-		expected := value * checksumMultiplier
+		expected := checksumInitial ^ (value * checksumMultiplier)
 
-		assert.Equal(t, expected, checksum, "8-byte data should use multiplication hash")
+		assert.Equal(t, expected, checksum, "8-byte data should XOR multiplication hash with initial")
 	})
 
 	t.Run("16 bytes", func(t *testing.T) {
@@ -42,12 +44,12 @@ func TestChecksumBlock(t *testing.T) {
 		}
 		checksum := checksumBlock(data)
 
-		// Should XOR two multiplication hashes
+		// Should XOR initial with two multiplication hashes
 		v1 := binary.LittleEndian.Uint64(data[0:8])
 		v2 := binary.LittleEndian.Uint64(data[8:16])
-		expected := (v1 * checksumMultiplier) ^ (v2 * checksumMultiplier)
+		expected := checksumInitial ^ (v1 * checksumMultiplier) ^ (v2 * checksumMultiplier)
 
-		assert.Equal(t, expected, checksum, "16-byte data should XOR two hashes")
+		assert.Equal(t, expected, checksum, "16-byte data should XOR two hashes with initial")
 	})
 
 	t.Run("9 bytes uses MurmurHash for tail", func(t *testing.T) {
@@ -199,8 +201,8 @@ func TestDatabaseHeader(t *testing.T) {
 		require.NotNil(t, header)
 
 		assert.Equal(t, uint64(0), header.Iteration)
-		assert.False(t, header.MetaBlock.IsValid())
-		assert.False(t, header.FreeList.IsValid())
+		assert.False(t, IsValidBlockID(header.MetaBlock))
+		assert.False(t, IsValidBlockID(header.FreeList))
 		assert.Equal(t, uint64(0), header.BlockCount)
 		assert.Equal(t, DefaultBlockSize, header.BlockAllocSize)
 		assert.Equal(t, DefaultVectorSize, header.VectorSize)
@@ -241,15 +243,9 @@ func TestDatabaseHeaderReadWrite(t *testing.T) {
 
 		// Write header
 		original := &DatabaseHeader{
-			Iteration: 42,
-			MetaBlock: BlockPointer{
-				BlockID: 100,
-				Offset:  200,
-			},
-			FreeList: BlockPointer{
-				BlockID: 300,
-				Offset:  400,
-			},
+			Iteration:                  42,
+			MetaBlock:                  100,
+			FreeList:                   300,
 			BlockCount:                 500,
 			BlockAllocSize:             DefaultBlockSize,
 			VectorSize:                 DefaultVectorSize,
@@ -278,8 +274,8 @@ func TestDatabaseHeaderReadWrite(t *testing.T) {
 
 		original := &DatabaseHeader{
 			Iteration:                  99,
-			MetaBlock:                  BlockPointer{BlockID: 1, Offset: 2},
-			FreeList:                   BlockPointer{BlockID: 3, Offset: 4},
+			MetaBlock:                  1,
+			FreeList:                   3,
 			BlockCount:                 10,
 			BlockAllocSize:             DefaultBlockSize,
 			VectorSize:                 DefaultVectorSize,
@@ -488,14 +484,14 @@ func TestSerializeDatabaseHeader(t *testing.T) {
 	header := NewDatabaseHeader()
 	data := serializeDatabaseHeader(header)
 
-	// Should be exactly 64 bytes
-	assert.Len(t, data, 64, "serialized database header should be 64 bytes")
+	// Should be exactly 56 bytes (7 * uint64)
+	assert.Len(t, data, 56, "serialized database header should be 56 bytes")
 }
 
 // TestDeserializeDatabaseHeader tests deserialization error cases.
 func TestDeserializeDatabaseHeader(t *testing.T) {
 	t.Run("too short", func(t *testing.T) {
-		data := make([]byte, 32) // Less than 64
+		data := make([]byte, 32) // Less than 56
 		_, err := deserializeDatabaseHeader(data)
 		assert.Error(t, err)
 	})
@@ -503,8 +499,8 @@ func TestDeserializeDatabaseHeader(t *testing.T) {
 	t.Run("exact size", func(t *testing.T) {
 		header := &DatabaseHeader{
 			Iteration:                  123,
-			MetaBlock:                  BlockPointer{BlockID: 456, Offset: 789},
-			FreeList:                   BlockPointer{BlockID: 111, Offset: 222},
+			MetaBlock:                  456,
+			FreeList:                   111,
 			BlockCount:                 333,
 			BlockAllocSize:             DefaultBlockSize,
 			VectorSize:                 DefaultVectorSize,
@@ -532,12 +528,12 @@ func TestChecksumConsistency(t *testing.T) {
 	// Write both database headers
 	dbHeader1 := NewDatabaseHeader()
 	dbHeader1.Iteration = 1
-	dbHeader1.MetaBlock = BlockPointer{BlockID: 10, Offset: 100}
+	dbHeader1.MetaBlock = 10
 	require.NoError(t, WriteDatabaseHeader(buf, dbHeader1, DatabaseHeader1Offset))
 
 	dbHeader2 := NewDatabaseHeader()
 	dbHeader2.Iteration = 2
-	dbHeader2.MetaBlock = BlockPointer{BlockID: 20, Offset: 200}
+	dbHeader2.MetaBlock = 20
 	require.NoError(t, WriteDatabaseHeader(buf, dbHeader2, DatabaseHeader2Offset))
 
 	// Read and verify
@@ -551,60 +547,33 @@ func TestChecksumConsistency(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, slot, "header 2 should be active (higher iteration)")
 	assert.Equal(t, uint64(2), readDbHeader.Iteration)
-	assert.Equal(t, uint64(20), readDbHeader.MetaBlock.BlockID)
+	assert.Equal(t, uint64(20), readDbHeader.MetaBlock)
 }
 
-// TestMurmurHashBytes tests the MurmurHash variant for tail bytes.
-func TestMurmurHashBytes(t *testing.T) {
+// TestChecksumRemainder tests the MurmurHash2 variant for remaining bytes.
+func TestChecksumRemainder(t *testing.T) {
 	t.Run("single byte", func(t *testing.T) {
-		result := murmurHashBytes([]byte{0x42}, murmurSeed)
+		result := checksumRemainder([]byte{0x42})
 		assert.NotEqual(t, uint64(0), result)
 	})
 
 	t.Run("different bytes produce different hashes", func(t *testing.T) {
-		h1 := murmurHashBytes([]byte{0x01, 0x02, 0x03}, murmurSeed)
-		h2 := murmurHashBytes([]byte{0x01, 0x02, 0x04}, murmurSeed)
+		h1 := checksumRemainder([]byte{0x01, 0x02, 0x03})
+		h2 := checksumRemainder([]byte{0x01, 0x02, 0x04})
 		assert.NotEqual(t, h1, h2)
 	})
 
-	t.Run("different seeds produce different hashes", func(t *testing.T) {
-		data := []byte{0x01, 0x02, 0x03, 0x04, 0x05}
-		h1 := murmurHashBytes(data, 0x12345678)
-		h2 := murmurHashBytes(data, 0x87654321)
-		assert.NotEqual(t, h1, h2)
+	t.Run("all tail lengths produce valid hashes", func(t *testing.T) {
+		// Test all tail lengths from 1 to 7 bytes
+		for length := 1; length <= 7; length++ {
+			data := make([]byte, length)
+			for i := 0; i < length; i++ {
+				data[i] = byte(i + 1)
+			}
+			result := checksumRemainder(data)
+			assert.NotEqual(t, uint64(0), result, "length %d should produce non-zero hash", length)
+		}
 	})
-}
-
-// TestRotateLeft64 tests the bit rotation function.
-func TestRotateLeft64(t *testing.T) {
-	// Rotate 0x8000000000000000 left by 1 should give 0x0000000000000001
-	result := rotateLeft64(0x8000000000000000, 1)
-	assert.Equal(t, uint64(0x0000000000000001), result)
-
-	// Rotate 0x0000000000000001 left by 1 should give 0x0000000000000002
-	result = rotateLeft64(0x0000000000000001, 1)
-	assert.Equal(t, uint64(0x0000000000000002), result)
-
-	// Rotate by 64 should be identity
-	result = rotateLeft64(0xDEADBEEFCAFEBABE, 64)
-	assert.Equal(t, uint64(0xDEADBEEFCAFEBABE), result)
-}
-
-// TestFmix64 tests the finalization mix function.
-func TestFmix64(t *testing.T) {
-	// Zero input produces zero (this is correct behavior for MurmurHash3 fmix64)
-	result := fmix64(0)
-	assert.Equal(t, uint64(0), result, "fmix64(0) should be 0")
-
-	// Same input produces same output (deterministic)
-	result1 := fmix64(0xDEADBEEF)
-	result2 := fmix64(0xDEADBEEF)
-	assert.Equal(t, result1, result2)
-
-	// Different inputs produce different outputs
-	result1 = fmix64(0x12345678)
-	result2 = fmix64(0x12345679)
-	assert.NotEqual(t, result1, result2)
 }
 
 // BenchmarkChecksumBlock benchmarks the checksum algorithm.
@@ -642,8 +611,8 @@ func byteSizeString(size int) string {
 func BenchmarkDatabaseHeaderRoundTrip(b *testing.B) {
 	header := &DatabaseHeader{
 		Iteration:                  42,
-		MetaBlock:                  BlockPointer{BlockID: 100, Offset: 200},
-		FreeList:                   BlockPointer{BlockID: 300, Offset: 400},
+		MetaBlock:                  100,
+		FreeList:                   300,
 		BlockCount:                 500,
 		BlockAllocSize:             DefaultBlockSize,
 		VectorSize:                 DefaultVectorSize,

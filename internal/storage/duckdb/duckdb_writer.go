@@ -624,10 +624,10 @@ func (w *DuckDBWriter) checkpointLocked() error {
 	w.iteration++
 
 	dbHeader := &DatabaseHeader{
-		Iteration:  w.iteration,
-		MetaBlock:  BlockPointer{BlockID: metaBlock.BlockID, Offset: uint32(metaBlock.Offset)},
-		FreeList:   InvalidBlockPointer(),
-		BlockCount: w.blockManager.BlockCount(),
+		Iteration:                  w.iteration,
+		MetaBlock:                  metaBlock.BlockID,
+		FreeList:                   InvalidBlockID,
+		BlockCount:                 w.blockManager.BlockCount(),
 		BlockAllocSize:             w.blockManager.BlockSize(),
 		VectorSize:                 DefaultVectorSize,
 		SerializationCompatibility: CurrentVersion,
