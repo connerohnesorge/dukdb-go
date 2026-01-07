@@ -15,6 +15,8 @@ import (
 var (
 	// Parquet magic bytes: "PAR1" (0x50 0x41 0x52 0x31)
 	parquetMagic = []byte{0x50, 0x41, 0x52, 0x31}
+	// ZIP magic bytes: "PK.." (0x50 0x4B 0x03 0x04) - XLSX files are ZIP archives
+	zipMagic = []byte{0x50, 0x4B, 0x03, 0x04}
 )
 
 // Errors for format detection operations.
@@ -29,6 +31,8 @@ const (
 	maxFormatMagicBytes = 64
 	// parquetMagicLen is the length of the Parquet magic bytes.
 	parquetMagicLen = 4
+	// zipMagicLen is the length of the ZIP magic bytes.
+	zipMagicLen = 4
 )
 
 // DetectFormat detects the file format from magic bytes at the start of the reader.
@@ -65,6 +69,13 @@ func detectFormatFromBytes(header []byte) Format {
 	// Check for Parquet magic bytes first
 	if len(header) >= parquetMagicLen && bytes.HasPrefix(header, parquetMagic) {
 		return FormatParquet
+	}
+
+	// Check for ZIP magic bytes (XLSX files are ZIP archives)
+	// Note: This detects ZIP format which includes XLSX. The caller should
+	// verify via file extension or content inspection whether it's XLSX.
+	if len(header) >= zipMagicLen && bytes.HasPrefix(header, zipMagic) {
+		return FormatXLSX
 	}
 
 	// Skip leading whitespace to find the first significant character
@@ -138,6 +149,7 @@ func isLikelyNDJSON(header []byte) bool {
 //   - .parquet, .pq -> FormatParquet
 //   - .json -> FormatJSON
 //   - .ndjson, .jsonl -> FormatNDJSON
+//   - .xlsx -> FormatXLSX
 //
 // Returns FormatUnknown if the extension is not recognized.
 func DetectFormatFromPath(path string) Format {
@@ -154,6 +166,8 @@ func DetectFormatFromPath(path string) Format {
 		return FormatJSON
 	case ".ndjson", ".jsonl":
 		return FormatNDJSON
+	case ".xlsx":
+		return FormatXLSX
 	default:
 		return FormatUnknown
 	}
@@ -186,6 +200,8 @@ func ParseFormat(s string) Format {
 		return FormatJSON
 	case "ndjson", "jsonl", "newline_delimited":
 		return FormatNDJSON
+	case "xlsx", "excel":
+		return FormatXLSX
 	default:
 		return FormatUnknown
 	}

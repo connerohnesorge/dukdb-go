@@ -37,6 +37,11 @@ func TestDetectFormatFromPath(t *testing.T) {
 		{"data.jsonl", FormatNDJSON},
 		{"data.JSONL", FormatNDJSON},
 
+		// XLSX extensions
+		{"data.xlsx", FormatXLSX},
+		{"data.XLSX", FormatXLSX},
+		{"/path/to/workbook.xlsx", FormatXLSX},
+
 		// With compression extensions
 		{"data.csv.gz", FormatCSV},
 		{"data.csv.gzip", FormatCSV},
@@ -142,6 +147,16 @@ func TestDetectFormatFromMagicBytes(t *testing.T) {
 			content:  []byte("hello world this is some text"),
 			expected: FormatCSV,
 		},
+		{
+			name:     "ZIP/XLSX magic bytes (PK..)",
+			content:  []byte{0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00},
+			expected: FormatXLSX,
+		},
+		{
+			name:     "XLSX magic bytes with more content",
+			content:  append([]byte{0x50, 0x4B, 0x03, 0x04}, []byte("more zip content here...")...),
+			expected: FormatXLSX,
+		},
 	}
 
 	for _, tt := range tests {
@@ -201,6 +216,10 @@ func TestParseFormat(t *testing.T) {
 		{"jsonl", FormatNDJSON},
 		{"JSONL", FormatNDJSON},
 		{"newline_delimited", FormatNDJSON},
+		{"xlsx", FormatXLSX},
+		{"XLSX", FormatXLSX},
+		{"excel", FormatXLSX},
+		{"EXCEL", FormatXLSX},
 		{"unknown", FormatUnknown},
 		{"", FormatUnknown},
 		{"xml", FormatUnknown},
@@ -225,6 +244,7 @@ func TestFormatString(t *testing.T) {
 		{FormatJSON, "json"},
 		{FormatNDJSON, "ndjson"},
 		{FormatParquet, "parquet"},
+		{FormatXLSX, "xlsx"},
 		{Format(999), "unknown"},
 	}
 

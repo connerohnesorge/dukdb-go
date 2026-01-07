@@ -31,6 +31,8 @@ const (
 	FormatArrow
 	// FormatArrowStream indicates Apache Arrow IPC stream format.
 	FormatArrowStream
+	// FormatXLSX indicates Microsoft Excel XLSX format.
+	FormatXLSX
 )
 
 // String returns the string representation of a Format.
@@ -50,6 +52,8 @@ func (f Format) String() string {
 		return "arrow"
 	case FormatArrowStream:
 		return "arrow_stream"
+	case FormatXLSX:
+		return "xlsx"
 	}
 
 	return unknownStr

@@ -2,7 +2,6 @@
 package executor
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -10,76 +9,40 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
-	"github.com/dukdb/dukdb-go/internal/io/csv"
 	"github.com/dukdb/dukdb-go/internal/io/filesystem"
+	"github.com/dukdb/dukdb-go/internal/io/xlsx"
 	"github.com/dukdb/dukdb-go/internal/planner"
 )
 
-// executeTableFunctionScan executes a table function scan (read_csv, read_json, etc.).
-func (e *Executor) executeTableFunctionScan(
-	ctx *ExecutionContext,
-	plan *planner.PhysicalTableFunctionScan,
-) (*ExecutionResult, error) {
-	switch strings.ToLower(plan.FunctionName) {
-	case "read_csv":
-		return e.executeReadCSV(ctx, plan)
-	case "read_csv_auto":
-		return e.executeReadCSVAuto(ctx, plan)
-	case "read_json":
-		return e.executeReadJSON(ctx, plan)
-	case "read_json_auto":
-		return e.executeReadJSONAuto(ctx, plan)
-	case "read_ndjson":
-		return e.executeReadNDJSON(ctx, plan)
-	case "read_parquet":
-		return e.executeReadParquet(ctx, plan)
-	case "read_xlsx":
-		return e.executeReadXLSX(ctx, plan)
-	case "read_xlsx_auto":
-		return e.executeReadXLSXAuto(ctx, plan)
-	case "read_arrow":
-		return e.executeReadArrow(ctx, plan)
-	case "read_arrow_auto":
-		return e.executeReadArrowAuto(ctx, plan)
-	// Secret system functions
-	case "which_secret":
-		return e.executeWhichSecret(ctx, plan)
-	case "duckdb_secrets":
-		return e.executeDuckDBSecrets(ctx, plan)
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("unknown table function: %s", plan.FunctionName),
-		}
-	}
-}
-
-// executeReadCSV executes a read_csv table function.
-func (e *Executor) executeReadCSV(
+// executeReadXLSX executes a read_xlsx table function.
+func (e *Executor) executeReadXLSX(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
 	// Build reader options from plan options
-	opts := csv.DefaultReaderOptions()
+	opts := xlsx.DefaultReaderOptions()
 
 	// Apply options from the query
 	for name, val := range plan.Options {
 		switch strings.ToLower(name) {
-		case "delimiter", "delim", "sep":
-			if s, ok := val.(string); ok && s != "" {
-				opts.Delimiter = rune(s[0])
+		case "sheet":
+			if s, ok := val.(string); ok {
+				opts.Sheet = s
 			}
-		case "quote":
-			if s, ok := val.(string); ok && s != "" {
-				opts.Quote = rune(s[0])
+		case "sheet_index":
+			switch v := val.(type) {
+			case int64:
+				opts.SheetIndex = int(v)
+			case int:
+				opts.SheetIndex = v
+			}
+		case "range":
+			if s, ok := val.(string); ok {
+				opts.Range = s
 			}
 		case "header":
 			if b, ok := val.(bool); ok {
 				opts.Header = b
-			}
-		case "nullstr", "null":
-			if s, ok := val.(string); ok {
-				opts.NullStr = s
 			}
 		case "skip":
 			switch v := val.(type) {
@@ -88,15 +51,59 @@ func (e *Executor) executeReadCSV(
 			case int:
 				opts.Skip = v
 			}
-		case "ignore_errors":
+		case "empty_as_null":
 			if b, ok := val.(bool); ok {
-				opts.IgnoreErrors = b
+				opts.EmptyAsNull = b
+			}
+		case "start_row":
+			switch v := val.(type) {
+			case int64:
+				opts.StartRow = int(v)
+			case int:
+				opts.StartRow = v
+			}
+		case "end_row":
+			switch v := val.(type) {
+			case int64:
+				opts.EndRow = int(v)
+			case int:
+				opts.EndRow = v
+			}
+		case "start_col":
+			if s, ok := val.(string); ok {
+				opts.StartCol = s
+			}
+		case "end_col":
+			if s, ok := val.(string); ok {
+				opts.EndCol = s
+			}
+		case "infer_types":
+			if b, ok := val.(bool); ok {
+				opts.InferTypes = b
+			}
+		case "date_format":
+			if s, ok := val.(string); ok {
+				opts.DateFormat = s
+			}
+		case "null_values":
+			// Handle null values as a list of strings
+			switch v := val.(type) {
+			case []string:
+				opts.NullValues = v
+			case []any:
+				nullVals := make([]string, 0, len(v))
+				for _, nv := range v {
+					if s, ok := nv.(string); ok {
+						nullVals = append(nullVals, s)
+					}
+				}
+				opts.NullValues = nullVals
 			}
 		}
 	}
 
-	// Create the CSV reader - use filesystem for cloud URLs, local file for local paths
-	var reader *csv.Reader
+	// Create the XLSX reader - use filesystem for cloud URLs, local file for local paths
+	var reader *xlsx.Reader
 	var closer io.Closer
 
 	if filesystem.IsCloudURL(plan.Path) {
@@ -105,17 +112,17 @@ func (e *Executor) executeReadCSV(
 		if err != nil {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+				Msg:  fmt.Sprintf("failed to open XLSX file: %v", err),
 			}
 		}
 		closer = file
 
-		reader, err = csv.NewReader(file, opts)
+		reader, err = xlsx.NewReader(file, opts)
 		if err != nil {
 			_ = file.Close()
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+				Msg:  fmt.Sprintf("failed to create XLSX reader: %v", err),
 			}
 		}
 	} else {
@@ -124,17 +131,17 @@ func (e *Executor) executeReadCSV(
 		if err != nil {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+				Msg:  fmt.Sprintf("failed to open XLSX file: %v", err),
 			}
 		}
 		closer = file
 
-		reader, err = csv.NewReader(file, opts)
+		reader, err = xlsx.NewReader(file, opts)
 		if err != nil {
 			_ = file.Close()
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+				Msg:  fmt.Sprintf("failed to create XLSX reader: %v", err),
 			}
 		}
 	}
@@ -150,7 +157,7 @@ func (e *Executor) executeReadCSV(
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to get CSV schema: %v", err),
+			Msg:  fmt.Sprintf("failed to get XLSX schema: %v", err),
 		}
 	}
 
@@ -159,7 +166,7 @@ func (e *Executor) executeReadCSV(
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to get CSV types: %v", err),
+			Msg:  fmt.Sprintf("failed to get XLSX types: %v", err),
 		}
 	}
 
@@ -192,7 +199,7 @@ func (e *Executor) executeReadCSV(
 			}
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to read CSV chunk: %v", err),
+				Msg:  fmt.Sprintf("failed to read XLSX chunk: %v", err),
 			}
 		}
 		if chunk == nil {
@@ -212,39 +219,26 @@ func (e *Executor) executeReadCSV(
 	return result, nil
 }
 
-// openFileForReading opens a file for reading using the filesystem provider.
-// This supports both local and cloud URLs (S3, GCS, Azure, HTTP/HTTPS).
-func (e *Executor) openFileForReading(ctx context.Context, path string) (filesystem.File, error) {
-	provider := NewFileSystemProvider(e.getSecretManager())
-
-	fs, err := provider.GetFileSystem(ctx, path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get filesystem: %w", err)
-	}
-
-	// For cloud filesystems with context support, use OpenContext
-	if ctxFS, ok := fs.(filesystem.ContextFileSystem); ok {
-		return ctxFS.OpenContext(ctx, path)
-	}
-
-	return fs.Open(path)
-}
-
-// executeReadCSVAuto executes a read_csv_auto table function with automatic format detection.
-// This function uses auto-detection for delimiter, quote character, header row, and column types.
-func (e *Executor) executeReadCSVAuto(
+// executeReadXLSXAuto executes a read_xlsx_auto table function with automatic format detection.
+// This function uses auto-detection for header row and column types.
+// It is a convenience wrapper around read_xlsx with sensible defaults for automatic operation:
+// - Header: true (first row is header)
+// - InferTypes: true (automatically detect column types)
+// - EmptyAsNull: true (treat empty cells as NULL)
+func (e *Executor) executeReadXLSXAuto(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	// Use default reader options which enable auto-detection:
-	// - Delimiter: 0 (auto-detect comma, tab, semicolon, pipe)
-	// - Header: true (first row is header)
-	// - Quote: '"' (default quote character)
-	// Type inference is also automatically performed
-	opts := csv.DefaultReaderOptions()
+	// Use default reader options which enable auto-detection
+	opts := xlsx.DefaultReaderOptions()
 
-	// Create the CSV reader - use filesystem for cloud URLs, local file for local paths
-	var reader *csv.Reader
+	// Ensure auto-detection options are enabled
+	opts.Header = true
+	opts.InferTypes = true
+	opts.EmptyAsNull = true
+
+	// Create the XLSX reader - use filesystem for cloud URLs, local file for local paths
+	var reader *xlsx.Reader
 	var closer io.Closer
 
 	if filesystem.IsCloudURL(plan.Path) {
@@ -253,17 +247,17 @@ func (e *Executor) executeReadCSVAuto(
 		if err != nil {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+				Msg:  fmt.Sprintf("failed to open XLSX file: %v", err),
 			}
 		}
 		closer = file
 
-		reader, err = csv.NewReader(file, opts)
+		reader, err = xlsx.NewReader(file, opts)
 		if err != nil {
 			_ = file.Close()
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+				Msg:  fmt.Sprintf("failed to create XLSX reader: %v", err),
 			}
 		}
 	} else {
@@ -272,17 +266,17 @@ func (e *Executor) executeReadCSVAuto(
 		if err != nil {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to open CSV file: %v", err),
+				Msg:  fmt.Sprintf("failed to open XLSX file: %v", err),
 			}
 		}
 		closer = file
 
-		reader, err = csv.NewReader(file, opts)
+		reader, err = xlsx.NewReader(file, opts)
 		if err != nil {
 			_ = file.Close()
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to create CSV reader: %v", err),
+				Msg:  fmt.Sprintf("failed to create XLSX reader: %v", err),
 			}
 		}
 	}
@@ -298,7 +292,7 @@ func (e *Executor) executeReadCSVAuto(
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to get CSV schema: %v", err),
+			Msg:  fmt.Sprintf("failed to get XLSX schema: %v", err),
 		}
 	}
 
@@ -307,7 +301,7 @@ func (e *Executor) executeReadCSVAuto(
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeIO,
-			Msg:  fmt.Sprintf("failed to get CSV types: %v", err),
+			Msg:  fmt.Sprintf("failed to get XLSX types: %v", err),
 		}
 	}
 
@@ -340,7 +334,7 @@ func (e *Executor) executeReadCSVAuto(
 			}
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeIO,
-				Msg:  fmt.Sprintf("failed to read CSV chunk: %v", err),
+				Msg:  fmt.Sprintf("failed to read XLSX chunk: %v", err),
 			}
 		}
 		if chunk == nil {

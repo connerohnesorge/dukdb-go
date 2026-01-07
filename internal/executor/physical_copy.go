@@ -14,6 +14,7 @@ import (
 	csvio "github.com/dukdb/dukdb-go/internal/io/csv"
 	jsonio "github.com/dukdb/dukdb-go/internal/io/json"
 	parquetio "github.com/dukdb/dukdb-go/internal/io/parquet"
+	xlsxio "github.com/dukdb/dukdb-go/internal/io/xlsx"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/secret"
 	"github.com/dukdb/dukdb-go/internal/storage"
@@ -280,6 +281,8 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 				return fileio.FormatArrow
 			case "ARROW_STREAM", "ARROWS":
 				return fileio.FormatArrowStream
+			case "XLSX", "EXCEL":
+				return fileio.FormatXLSX
 			}
 		}
 	}
@@ -299,6 +302,8 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 		return fileio.FormatArrow
 	case ".arrows":
 		return fileio.FormatArrowStream
+	case ".xlsx":
+		return fileio.FormatXLSX
 	default:
 		// Default to CSV
 		return fileio.FormatCSV
@@ -306,6 +311,8 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 }
 
 // createFileReader creates the appropriate file reader based on format.
+//
+//nolint:exhaustive // FormatUnknown is handled by default case.
 func createFileReader(path string, format fileio.Format, options map[string]any) (fileio.FileReader, error) {
 	switch format {
 	case fileio.FormatCSV:
@@ -338,12 +345,19 @@ func createFileReader(path string, format fileio.Format, options map[string]any)
 		applyArrowReaderOptions(opts, options)
 		return arrowio.NewStreamReaderFromPath(path, opts)
 
+	case fileio.FormatXLSX:
+		opts := xlsxio.DefaultReaderOptions()
+		applyXLSXReaderOptions(opts, options)
+		return xlsxio.NewReaderFromPath(path, opts)
+
 	default:
 		return nil, fmt.Errorf("unsupported format: %v", format)
 	}
 }
 
 // createFileWriter creates the appropriate file writer based on format.
+//
+//nolint:exhaustive // FormatUnknown is handled by default case.
 func createFileWriter(path string, format fileio.Format, options map[string]any) (fileio.FileWriter, error) {
 	switch format {
 	case fileio.FormatCSV:
@@ -377,6 +391,11 @@ func createFileWriter(path string, format fileio.Format, options map[string]any)
 		opts := arrowio.DefaultWriterOptions()
 		applyArrowWriterOptions(opts, options)
 		return arrowio.NewStreamWriterToPathOverwrite(path, opts)
+
+	case fileio.FormatXLSX:
+		opts := xlsxio.DefaultWriterOptions()
+		applyXLSXWriterOptions(opts, options)
+		return xlsxio.NewWriterToPath(path, opts)
 
 	default:
 		return nil, fmt.Errorf("unsupported format: %v", format)
@@ -517,6 +536,79 @@ func applyArrowWriterOptions(opts *arrowio.WriterOptions, options map[string]any
 	if codec, ok := options["CODEC"]; ok {
 		if codecStr, isStr := codec.(string); isStr {
 			opts.Compression = parseArrowCompression(codecStr)
+		}
+	}
+}
+
+// applyXLSXReaderOptions applies COPY options to XLSX reader options.
+func applyXLSXReaderOptions(opts *xlsxio.ReaderOptions, options map[string]any) {
+	// Sheet selection
+	if sheet, ok := options["SHEET"]; ok {
+		if sheetStr, isStr := sheet.(string); isStr {
+			opts.Sheet = sheetStr
+		}
+	}
+	if sheetIndex, ok := options["SHEET_INDEX"]; ok {
+		if idx, isInt := sheetIndex.(int64); isInt {
+			opts.SheetIndex = int(idx)
+		}
+	}
+	// Range selection
+	if rangeOpt, ok := options["RANGE"]; ok {
+		if rangeStr, isStr := rangeOpt.(string); isStr {
+			opts.Range = rangeStr
+		}
+	}
+	// Header handling
+	if header, ok := options["HEADER"]; ok {
+		if headerBool, isBool := header.(bool); isBool {
+			opts.Header = headerBool
+		}
+	}
+	// Skip rows
+	if skip, ok := options["SKIP"]; ok {
+		if skipInt, isInt := skip.(int64); isInt {
+			opts.Skip = int(skipInt)
+		}
+	}
+	// Empty as NULL
+	if emptyAsNull, ok := options["EMPTY_AS_NULL"]; ok {
+		if emptyBool, isBool := emptyAsNull.(bool); isBool {
+			opts.EmptyAsNull = emptyBool
+		}
+	}
+}
+
+// applyXLSXWriterOptions applies COPY options to XLSX writer options.
+func applyXLSXWriterOptions(opts *xlsxio.WriterOptions, options map[string]any) {
+	// Sheet name
+	if sheet, ok := options["SHEET"]; ok {
+		if sheetStr, isStr := sheet.(string); isStr {
+			opts.SheetName = sheetStr
+		}
+	}
+	// Header handling
+	if header, ok := options["HEADER"]; ok {
+		if headerBool, isBool := header.(bool); isBool {
+			opts.Header = headerBool
+		}
+	}
+	// Auto-width
+	if autoWidth, ok := options["AUTO_WIDTH"]; ok {
+		if autoWidthBool, isBool := autoWidth.(bool); isBool {
+			opts.AutoWidth = autoWidthBool
+		}
+	}
+	// Date format
+	if dateFormat, ok := options["DATE_FORMAT"]; ok {
+		if dfStr, isStr := dateFormat.(string); isStr {
+			opts.DateFormat = dfStr
+		}
+	}
+	// Time format
+	if timeFormat, ok := options["TIME_FORMAT"]; ok {
+		if tfStr, isStr := timeFormat.(string); isStr {
+			opts.TimeFormat = tfStr
 		}
 	}
 }
