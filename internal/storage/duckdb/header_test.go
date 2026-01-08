@@ -143,7 +143,7 @@ func TestFileHeaderReadWrite(t *testing.T) {
 		// Write header
 		original := NewFileHeader()
 		original.Flags = 0x1234567890ABCDEF
-		original.BlockHeaderStorage = [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+		// Note: BlockHeaderStorage is not preserved - it contains the computed checksum
 
 		err = WriteFileHeader(f, original)
 		require.NoError(t, err)
@@ -155,7 +155,9 @@ func TestFileHeaderReadWrite(t *testing.T) {
 		assert.Equal(t, original.Magic, read.Magic)
 		assert.Equal(t, original.Version, read.Version)
 		assert.Equal(t, original.Flags, read.Flags)
-		assert.Equal(t, original.BlockHeaderStorage, read.BlockHeaderStorage)
+		// BlockHeaderStorage contains the checksum computed by WriteFileHeader
+		// Verify it's non-zero (indicating a checksum was written)
+		assert.NotEqual(t, [8]byte{}, read.BlockHeaderStorage, "checksum should be non-zero")
 	})
 
 	t.Run("file too small", func(t *testing.T) {

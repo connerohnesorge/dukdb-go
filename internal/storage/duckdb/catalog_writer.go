@@ -169,6 +169,10 @@ func (w *CatalogWriter) AddRowGroupPointer(tableOID uint64, rgp *RowGroupPointer
 // Returns the MetaBlockPointer for the database header, which points
 // to the catalog index block containing references to all catalog entries.
 //
+// For an empty catalog (no entries), returns an invalid MetaBlockPointer
+// with BlockID set to InvalidBlockID. This signals to DuckDB that there
+// is no catalog metadata to load.
+//
 // The write process:
 //  1. Write all schemas
 //  2. Write all tables with row group pointers
@@ -183,6 +187,11 @@ func (w *CatalogWriter) Write() (MetaBlockPointer, error) {
 
 	if w.closed {
 		return MetaBlockPointer{}, ErrCatalogWriterClosed
+	}
+
+	// For empty catalogs, return an invalid pointer so DuckDB won't try to load metadata
+	if w.catalog.IsEmpty() {
+		return MetaBlockPointer{BlockID: InvalidBlockID, Offset: 0}, nil
 	}
 
 	// 1. Write schemas

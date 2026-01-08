@@ -256,11 +256,10 @@ func ReadFileHeader(r io.ReaderAt) (*FileHeader, error) {
 }
 
 // WriteFileHeader writes the file header to offset 0.
+// The checksum is computed over the data portion (bytes 8-4095) and stored
+// in the first 8 bytes for DuckDB CLI compatibility.
 func WriteFileHeader(w io.WriterAt, header *FileHeader) error {
 	data := make([]byte, FileHeaderSize)
-
-	// Copy block header storage (first 8 bytes)
-	copy(data[0:8], header.BlockHeaderStorage[:])
 
 	// Write magic bytes (offset 8-11)
 	copy(data[MagicByteOffset:MagicByteOffset+4], header.Magic[:])
@@ -272,6 +271,13 @@ func WriteFileHeader(w io.WriterAt, header *FileHeader) error {
 	binary.LittleEndian.PutUint64(data[20:28], header.Flags)
 
 	// Rest is zero-padded (already zero from make)
+
+	// Compute checksum over the data portion (bytes 8 onwards)
+	// This matches DuckDB's ChecksumAndWrite behavior for the main header
+	checksum := checksumBlock(data[BlockChecksumSize:])
+
+	// Store checksum in first 8 bytes
+	binary.LittleEndian.PutUint64(data[0:BlockChecksumSize], checksum)
 
 	_, err := w.WriteAt(data, 0)
 	if err != nil {

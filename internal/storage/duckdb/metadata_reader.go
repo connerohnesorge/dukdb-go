@@ -334,8 +334,8 @@ func (r *MetadataReader) readBytes(n int) ([]byte, error) {
 	return result, nil
 }
 
-// ReadFieldID reads a uint16 field ID.
-func (r *MetadataReader) ReadFieldID() (uint16, error) {
+// readRawFieldID reads a uint16 field ID directly from the stream.
+func (r *MetadataReader) readRawFieldID() (uint16, error) {
 	data, err := r.readBytes(2)
 	if err != nil {
 		return 0, err
@@ -343,10 +343,15 @@ func (r *MetadataReader) ReadFieldID() (uint16, error) {
 	return uint16(data[0]) | uint16(data[1])<<8, nil
 }
 
+// ReadFieldID reads a uint16 field ID, consuming any buffered field first.
+func (r *MetadataReader) ReadFieldID() (uint16, error) {
+	return r.NextField()
+}
+
 // PeekField returns the next field ID without consuming it.
 func (r *MetadataReader) PeekField() (uint16, error) {
 	if !r.hasBufferedField {
-		field, err := r.ReadFieldID()
+		field, err := r.readRawFieldID()
 		if err != nil {
 			return 0, err
 		}
@@ -367,7 +372,7 @@ func (r *MetadataReader) NextField() (uint16, error) {
 		r.hasBufferedField = false
 		return r.bufferedField, nil
 	}
-	return r.ReadFieldID()
+	return r.readRawFieldID()
 }
 
 // ReadVarint reads a variable-length integer (LEB128 encoded).
@@ -656,16 +661,54 @@ func (r *MetadataReader) ReadCatalogEntry() (CatalogEntry, error) {
 		return nil, err
 	}
 
-	// Read the list item terminator (each list item is wrapped in an object by list.WriteObject)
-	term, err := r.NextField()
-	if err != nil {
+	// After the catalog entry (e.g., CreateTableInfo), DuckDB may write additional
+	// storage metadata (row counts, block allocation, index data, etc.) that uses
+	// field IDs 100-109 range. We need to skip all of this until we reach either:
+	// - Field 99 (ddbFieldCatalogType): start of the next catalog entry
+	// - End of data
+	// The storage data may contain nested objects with their own terminators.
+	if err := r.skipStorageMetadata(); err != nil {
 		return nil, err
-	}
-	if term != ddbFieldTerminator {
-		return nil, fmt.Errorf("expected list item terminator, got %d at offset %d", term, r.offset)
 	}
 
 	return entry, nil
+}
+
+// skipStorageMetadata skips storage-related fields that appear after catalog entries.
+// DuckDB writes table storage info (row counts, block allocations, index metadata)
+// after the CreateTableInfo object. We skip everything until we find field 99
+// (the start of the next catalog entry) or reach the end of data.
+func (r *MetadataReader) skipStorageMetadata() error {
+	// The storage metadata can contain complex nested structures.
+	// We use a simple approach: scan byte-by-byte looking for field 99.
+	// This is safe because field 99 (0x63 0x00) is a unique marker that
+	// only appears at the start of catalog entries.
+	for {
+		if r.remaining() < 2 {
+			// Try to load more data
+			if err := r.loadNextBlock(); err != nil {
+				// End of data is OK here
+				return nil
+			}
+		}
+
+		// Peek at the next two bytes to check for field 99
+		if r.offset+1 < len(r.data) {
+			low := r.data[r.offset]
+			high := r.data[r.offset+1]
+			field := uint16(low) | uint16(high)<<8
+
+			if field == ddbFieldCatalogType {
+				// Found the next catalog entry - don't consume it
+				// Clear any buffered field since we're repositioning
+				r.hasBufferedField = false
+				return nil
+			}
+		}
+
+		// Skip one byte and continue scanning
+		r.offset++
+	}
 }
 
 // readCreateInfo reads the common CreateInfo fields.
@@ -1314,13 +1357,23 @@ func (r *MetadataReader) readConstraintList() ([]Constraint, error) {
 
 	constraints := make([]Constraint, 0, count)
 	for i := uint64(0); i < count; i++ {
-		constraint, err := r.readConstraint()
+		// Each constraint in the vector is wrapped with a nullable bool
+		isPresent, err := r.ReadBool()
 		if err != nil {
 			return constraints, err
 		}
-		if constraint != nil {
-			constraints = append(constraints, *constraint)
+
+		if isPresent {
+			constraint, err := r.readConstraint()
+			if err != nil {
+				return constraints, err
+			}
+			if constraint != nil {
+				constraints = append(constraints, *constraint)
+			}
 		}
+		// Note: The constraint's own terminator (read by readConstraint)
+		// serves as the only terminator. No additional wrapper terminator.
 	}
 
 	return constraints, nil

@@ -19,7 +19,7 @@ const (
 	strUnknown = "UNKNOWN"
 )
 
-// File format constants matching DuckDB v1.4.3 storage format.
+// File format constants matching DuckDB storage format.
 const (
 	// MagicBytes identifies a valid DuckDB file (stored at offset 8 in file header).
 	MagicBytes = "DUCK"
@@ -27,8 +27,10 @@ const (
 	// MagicByteOffset is the file offset where magic bytes are located.
 	MagicByteOffset = 8
 
-	// CurrentVersion is the storage format version for DuckDB v1.4.3.
-	CurrentVersion uint64 = 67
+	// CurrentVersion is the storage format version.
+	// Version 64 is the base version compatible with DuckDB v1.0.0+.
+	// This provides maximum compatibility with different DuckDB CLI versions.
+	CurrentVersion uint64 = 64
 
 	// FileHeaderSize is the size of the file header block in bytes.
 	FileHeaderSize = 4096

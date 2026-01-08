@@ -192,10 +192,11 @@ func TestCatalogWriter_Write_EmptyCatalog(t *testing.T) {
 	catalog := NewDuckDBCatalog()
 	writer := NewCatalogWriter(bm, catalog)
 
-	// Write empty catalog - should succeed but with empty blocks
+	// Write empty catalog - returns invalid MetaBlockPointer
+	// This signals to DuckDB that there is no catalog metadata to load
 	mbp, err := writer.Write()
 	assert.NoError(t, err)
-	assert.True(t, mbp.IsValid())
+	assert.False(t, mbp.IsValid(), "empty catalog should return invalid MetaBlockPointer for DuckDB compatibility")
 }
 
 func TestCatalogWriter_Write_WithSchemas(t *testing.T) {
