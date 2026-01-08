@@ -39,6 +39,26 @@ The system MUST provide an index scan operator that retrieves rows via index loo
 
 ---
 
+### Requirement: EXPLAIN Shows Index Usage
+
+The system MUST show index usage in EXPLAIN output.
+
+#### Scenario: EXPLAIN shows lookup keys
+
+- WHEN EXPLAIN is run on a query using index scan
+- THEN output SHALL show lookup keys if applicable
+
+#### Scenario: EXPLAIN shows residual filters
+
+- WHEN EXPLAIN is run on a query with residual filters
+- AND the query uses index scan
+- THEN output SHALL show residual filter expressions
+- AND output SHALL indicate filters applied after index lookup
+
+---
+
+## ADDED Requirements
+
 ### Requirement: Planner Uses Optimizer Hints
 
 The system MUST pass optimizer access hints to the planner for physical plan generation.
@@ -101,60 +121,6 @@ The system MUST support index range scans for <, >, BETWEEN predicates.
 - AND the optimizer selects range scan
 - THEN the executor SHALL use ART.RangeScan() with composite bounds
 - AND only rows matching the range SHALL be returned
-
----
-
-### Requirement: EXPLAIN Shows Index Usage
-
-The system MUST show index usage in EXPLAIN output.
-
-#### Scenario: EXPLAIN shows IndexScan operator
-
-- WHEN EXPLAIN is run on a query using index scan
-- THEN output SHALL show IndexScan as the access method
-- AND output SHALL show the index name being used
-- AND output SHALL show lookup keys if applicable
-
-#### Scenario: EXPLAIN shows residual filters
-
-- WHEN EXPLAIN is run on a query with residual filters
-- AND the query uses index scan
-- THEN output SHALL show residual filter expressions
-- AND output SHALL indicate filters applied after index lookup
-
-#### Scenario: EXPLAIN shows sequential scan when no index
-
-- WHEN EXPLAIN is run on a query not using index
-- THEN output SHALL show SeqScan as the access method
-- AND output SHALL NOT show index name
-
----
-
-### Requirement: Cost-Based Index Selection
-
-The system MUST select between index scan and table scan based on estimated cost.
-
-#### Scenario: Index scan selected for selective query
-
-- WHEN a query filters on an indexed column
-- AND the filter selectivity is low (e.g., 1%)
-- AND the table is large (e.g., 100,000 rows)
-- THEN the optimizer SHALL select index scan over sequential scan
-- AND EXPLAIN output SHALL show IndexScan operator
-
-#### Scenario: Sequential scan selected for non-selective query
-
-- WHEN a query filters on an indexed column
-- AND the filter selectivity is high (e.g., 50%)
-- THEN the optimizer SHALL select sequential scan over index scan
-- AND EXPLAIN output SHALL show SeqScan operator
-
-#### Scenario: Cost comparison uses table statistics
-
-- WHEN an index exists and statistics are available
-- THEN the optimizer SHALL use row count from statistics
-- AND selectivity estimation SHALL use column statistics
-- AND access method with lower estimated cost SHALL be selected
 
 ---
 

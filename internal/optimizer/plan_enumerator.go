@@ -24,6 +24,7 @@ const (
 	PlanTypeNestedLoopJoin PhysicalPlanType = "NestedLoopJoin"
 	PlanTypeSortMergeJoin  PhysicalPlanType = "SortMergeJoin"
 	PlanTypeIndexScan      PhysicalPlanType = "IndexScan"
+	PlanTypeIndexRangeScan PhysicalPlanType = "IndexRangeScan"
 	PlanTypeSeqScan        PhysicalPlanType = "SeqScan"
 )
 

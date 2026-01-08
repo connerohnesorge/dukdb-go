@@ -8,6 +8,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
+	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
@@ -450,6 +451,265 @@ func formatCostAnnotation(cost optimizer.PlanCost) string {
 		cost.StartupCost, cost.TotalCost, cost.OutputRows, cost.OutputWidth)
 }
 
+// formatIndexCondition formats the index lookup conditions for EXPLAIN output.
+// It formats the lookup keys associated with a PhysicalIndexScan.
+// Format examples:
+//   - Single key: "(id = 42)"
+//   - Multiple keys: "((a = 1) AND (b = 2))"
+//   - String values: "(email = 'test@example.com')"
+func formatIndexCondition(scan *planner.PhysicalIndexScan) string {
+	if scan == nil || len(scan.LookupKeys) == 0 {
+		return ""
+	}
+
+	// Get column names from the index definition
+	var indexCols []string
+	if scan.IndexDef != nil {
+		indexCols = scan.IndexDef.Columns
+	}
+
+	var parts []string
+	for i, key := range scan.LookupKeys {
+		// Determine column name
+		var colName string
+		if i < len(indexCols) {
+			colName = indexCols[i]
+		} else {
+			colName = fmt.Sprintf("col%d", i)
+		}
+
+		// Format the value
+		valueStr := formatExpressionValue(key)
+
+		// Build the condition (equality for point lookups)
+		parts = append(parts, fmt.Sprintf("(%s = %s)", colName, valueStr))
+	}
+
+	// If single condition, return it directly
+	if len(parts) == 1 {
+		return parts[0]
+	}
+
+	// Multiple conditions - join with AND
+	return "(" + strings.Join(parts, " AND ") + ")"
+}
+
+// formatExpressionValue formats a bound expression's value for EXPLAIN display.
+// Handles literals, column references, and parameter placeholders.
+func formatExpressionValue(expr binder.BoundExpr) string {
+	if expr == nil {
+		return "<nil>"
+	}
+
+	switch e := expr.(type) {
+	case *binder.BoundLiteral:
+		return formatLiteralValue(e.Value)
+	case *binder.BoundColumnRef:
+		if e.Table != "" {
+			return fmt.Sprintf("%s.%s", e.Table, e.Column)
+		}
+		return e.Column
+	default:
+		// For other expression types, provide a generic representation
+		return "<expr>"
+	}
+}
+
+// formatLiteralValue formats a literal value for EXPLAIN display.
+// Handles various types (strings, integers, floats, booleans, nil).
+func formatLiteralValue(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case string:
+		// Escape single quotes in the string
+		escaped := strings.ReplaceAll(val, "'", "''")
+		return fmt.Sprintf("'%s'", escaped)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int32:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	case float32:
+		return fmt.Sprintf("%g", val)
+	case float64:
+		return fmt.Sprintf("%g", val)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	case []byte:
+		return fmt.Sprintf("'\\x%x'", val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// formatResidualFilter formats a residual filter condition for EXPLAIN display.
+// Returns empty string if filter is nil.
+// Handles single predicates, AND/OR combinations, and complex expressions.
+func formatResidualFilter(filter binder.BoundExpr) string {
+	if filter == nil {
+		return ""
+	}
+
+	return formatFilterExpression(filter)
+}
+
+// formatFilterExpression recursively formats a filter expression for EXPLAIN display.
+// It handles AND/OR combinations, comparisons, and other expression types.
+func formatFilterExpression(expr binder.BoundExpr) string {
+	if expr == nil {
+		return ""
+	}
+
+	switch e := expr.(type) {
+	case *binder.BoundBinaryExpr:
+		// Handle AND/OR combinations specially for better formatting
+		if e.Op == parser.OpAnd {
+			left := formatFilterExpression(e.Left)
+			right := formatFilterExpression(e.Right)
+			if left == "" {
+				return right
+			}
+			if right == "" {
+				return left
+			}
+			return fmt.Sprintf("(%s AND %s)", left, right)
+		}
+		if e.Op == parser.OpOr {
+			left := formatFilterExpression(e.Left)
+			right := formatFilterExpression(e.Right)
+			if left == "" {
+				return right
+			}
+			if right == "" {
+				return left
+			}
+			return fmt.Sprintf("(%s OR %s)", left, right)
+		}
+		// Handle comparison operators
+		left := formatFilterExpression(e.Left)
+		right := formatFilterExpression(e.Right)
+		op := formatBinaryOp(e.Op)
+		return fmt.Sprintf("(%s %s %s)", left, op, right)
+
+	case *binder.BoundUnaryExpr:
+		// Handle NOT, IS NULL, IS NOT NULL, and other unary operators
+		operand := formatFilterExpression(e.Expr)
+		switch e.Op {
+		case parser.OpNot:
+			return fmt.Sprintf("(NOT %s)", operand)
+		case parser.OpNeg:
+			return fmt.Sprintf("(-%s)", operand)
+		case parser.OpIsNull:
+			return fmt.Sprintf("(%s IS NULL)", operand)
+		case parser.OpIsNotNull:
+			return fmt.Sprintf("(%s IS NOT NULL)", operand)
+		default:
+			return operand
+		}
+
+	case *binder.BoundLiteral:
+		return formatLiteralValue(e.Value)
+
+	case *binder.BoundColumnRef:
+		if e.Table != "" {
+			return fmt.Sprintf("%s.%s", e.Table, e.Column)
+		}
+		return e.Column
+
+	case *binder.BoundFunctionCall:
+		// Format function calls
+		var args []string
+		for _, arg := range e.Args {
+			args = append(args, formatFilterExpression(arg))
+		}
+		return fmt.Sprintf("%s(%s)", e.Name, strings.Join(args, ", "))
+
+	case *binder.BoundBetweenExpr:
+		operand := formatFilterExpression(e.Expr)
+		low := formatFilterExpression(e.Low)
+		high := formatFilterExpression(e.High)
+		if e.Not {
+			return fmt.Sprintf("(%s NOT BETWEEN %s AND %s)", operand, low, high)
+		}
+		return fmt.Sprintf("(%s BETWEEN %s AND %s)", operand, low, high)
+
+	case *binder.BoundInListExpr:
+		operand := formatFilterExpression(e.Expr)
+		var values []string
+		for _, val := range e.Values {
+			values = append(values, formatFilterExpression(val))
+		}
+		if e.Not {
+			return fmt.Sprintf("(%s NOT IN (%s))", operand, strings.Join(values, ", "))
+		}
+		return fmt.Sprintf("(%s IN (%s))", operand, strings.Join(values, ", "))
+
+	case *binder.BoundInSubqueryExpr:
+		operand := formatFilterExpression(e.Expr)
+		if e.Not {
+			return fmt.Sprintf("(%s NOT IN <subquery>)", operand)
+		}
+		return fmt.Sprintf("(%s IN <subquery>)", operand)
+
+	case *binder.BoundExistsExpr:
+		if e.Not {
+			return "(NOT EXISTS <subquery>)"
+		}
+		return "(EXISTS <subquery>)"
+
+	case *binder.BoundCastExpr:
+		operand := formatFilterExpression(e.Expr)
+		return fmt.Sprintf("CAST(%s AS %s)", operand, e.TargetType.String())
+
+	case *binder.BoundCaseExpr:
+		// Simplified CASE representation
+		return "<CASE>"
+
+	default:
+		return "<expr>"
+	}
+}
+
+// formatBinaryOp converts a binary operator to its string representation.
+func formatBinaryOp(op parser.BinaryOp) string {
+	switch op {
+	case parser.OpEq:
+		return "="
+	case parser.OpNe:
+		return "<>"
+	case parser.OpLt:
+		return "<"
+	case parser.OpGt:
+		return ">"
+	case parser.OpLe:
+		return "<="
+	case parser.OpGe:
+		return ">="
+	case parser.OpAnd:
+		return "AND"
+	case parser.OpOr:
+		return "OR"
+	case parser.OpAdd:
+		return "+"
+	case parser.OpSub:
+		return "-"
+	case parser.OpMul:
+		return "*"
+	case parser.OpDiv:
+		return "/"
+	case parser.OpMod:
+		return "%"
+	default:
+		return fmt.Sprintf("op%d", op)
+	}
+}
+
 // ExplainAnalyzeMetrics holds actual execution metrics for EXPLAIN ANALYZE.
 type ExplainAnalyzeMetrics struct {
 	ActualRows int64
@@ -503,6 +763,27 @@ func formatPhysicalPlanWithAnalyze(
 			prefix, p.TableName, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
 		if p.Alias != "" && p.Alias != p.TableName {
 			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+	case *planner.PhysicalIndexScan:
+		// Determine scan type label based on scan characteristics
+		scanType := "IndexScan"
+		if p.IsIndexOnly {
+			scanType = "IndexOnlyScan"
+		}
+		sb.WriteString(fmt.Sprintf("%s%s: %s USING %s %s (actual rows=%d time=%.2fms)",
+			prefix, scanType, p.TableName, p.IndexName, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+		if p.Alias != "" && p.Alias != p.TableName {
+			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+		// Add Index Cond line showing lookup keys
+		if indexCond := formatIndexCondition(p); indexCond != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Index Cond: %s", prefix, indexCond))
+		}
+		// Add Filter line showing residual filter (predicates that can't be pushed into index)
+		if residualFilter := formatResidualFilter(p.ResidualFilter); residualFilter != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Filter: %s", prefix, residualFilter))
 		}
 	case *planner.PhysicalFilter:
 		sb.WriteString(fmt.Sprintf("%sFilter %s (actual rows=%d time=%.2fms)",
@@ -569,9 +850,15 @@ type physicalPlanAdapter struct {
 }
 
 func (a *physicalPlanAdapter) PhysicalPlanType() string {
-	switch a.plan.(type) {
+	switch p := a.plan.(type) {
 	case *planner.PhysicalScan:
 		return "PhysicalScan"
+	case *planner.PhysicalIndexScan:
+		// Distinguish between different index scan types for cost estimation
+		if p.IsIndexOnly {
+			return "PhysicalIndexOnlyScan"
+		}
+		return "PhysicalIndexScan"
 	case *planner.PhysicalFilter:
 		return "PhysicalFilter"
 	case *planner.PhysicalProject:
@@ -676,6 +963,28 @@ func formatPhysicalPlanWithCost(plan planner.PhysicalPlan, indent int, costModel
 		if p.Alias != "" && p.Alias != p.TableName {
 			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
 		}
+	case *planner.PhysicalIndexScan:
+		// Determine scan type label based on scan characteristics
+		// Note: IsRangeScan field may be added in future; for now use IndexScan
+		scanType := "IndexScan"
+		if p.IsIndexOnly {
+			scanType = "IndexOnlyScan"
+		}
+		sb.WriteString(fmt.Sprintf("%s%s: %s USING %s %s",
+			prefix, scanType, p.TableName, p.IndexName, formatCostAnnotation(cost)))
+		if p.Alias != "" && p.Alias != p.TableName {
+			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+		// Add Index Cond line showing lookup keys
+		if indexCond := formatIndexCondition(p); indexCond != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Index Cond: %s", prefix, indexCond))
+		}
+		// Add Filter line showing residual filter (predicates that can't be pushed into index)
+		if residualFilter := formatResidualFilter(p.ResidualFilter); residualFilter != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Filter: %s", prefix, residualFilter))
+		}
 	case *planner.PhysicalFilter:
 		sb.WriteString(fmt.Sprintf("%sFilter %s", prefix, formatCostAnnotation(cost)))
 		sb.WriteString("\n")
@@ -737,6 +1046,26 @@ func formatPhysicalPlan(plan planner.PhysicalPlan, indent int) string {
 		sb.WriteString(fmt.Sprintf("%sScan: %s", prefix, p.TableName))
 		if p.Alias != "" && p.Alias != p.TableName {
 			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+	case *planner.PhysicalIndexScan:
+		// Determine scan type label based on scan characteristics
+		scanType := "IndexScan"
+		if p.IsIndexOnly {
+			scanType = "IndexOnlyScan"
+		}
+		sb.WriteString(fmt.Sprintf("%s%s: %s USING %s", prefix, scanType, p.TableName, p.IndexName))
+		if p.Alias != "" && p.Alias != p.TableName {
+			sb.WriteString(fmt.Sprintf(" AS %s", p.Alias))
+		}
+		// Add Index Cond line showing lookup keys
+		if indexCond := formatIndexCondition(p); indexCond != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Index Cond: %s", prefix, indexCond))
+		}
+		// Add Filter line showing residual filter (predicates that can't be pushed into index)
+		if residualFilter := formatResidualFilter(p.ResidualFilter); residualFilter != "" {
+			sb.WriteString("\n")
+			sb.WriteString(fmt.Sprintf("%s  Filter: %s", prefix, residualFilter))
 		}
 	case *planner.PhysicalFilter:
 		sb.WriteString(fmt.Sprintf("%sFilter", prefix))

@@ -3,6 +3,7 @@ package storage
 import (
 	"testing"
 
+	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -380,4 +381,233 @@ func TestHashIndexConcurrency(t *testing.T) {
 		// Verify final state
 		assert.LessOrEqual(t, idx.Count(), 10) // At most 10 unique keys
 	})
+}
+
+// =============================================================================
+// Index Corruption Tests - Task 2.9
+// =============================================================================
+
+func TestIndexCorruptionError(t *testing.T) {
+	t.Run("error message includes details", func(t *testing.T) {
+		err := &IndexCorruptionError{
+			IndexName:   "idx_test",
+			TableName:   "test_table",
+			Description: "found stale RowIDs",
+			StaleRowIDs: []RowID{1, 2, 3},
+		}
+
+		assert.Contains(t, err.Error(), "idx_test")
+		assert.Contains(t, err.Error(), "test_table")
+		assert.Contains(t, err.Error(), "found stale RowIDs")
+		assert.Contains(t, err.Error(), "corrupted")
+	})
+
+	t.Run("error unwraps to ErrIndexCorrupted", func(t *testing.T) {
+		err := &IndexCorruptionError{
+			IndexName:   "idx_test",
+			TableName:   "test_table",
+			Description: "test",
+		}
+
+		assert.ErrorIs(t, err, ErrIndexCorrupted)
+	})
+}
+
+func TestHashIndexValidateAgainstTable(t *testing.T) {
+	t.Run("valid index passes validation", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index and add entries for existing rows
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(2)}, RowID(1))
+		require.NoError(t, err)
+
+		// Validate should pass
+		err = idx.ValidateAgainstTable(table)
+		assert.NoError(t, err)
+	})
+
+	t.Run("index with stale RowIDs fails validation", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index with entries for non-existent rows
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(999)}, RowID(999)) // Invalid - row doesn't exist
+		require.NoError(t, err)
+
+		// Validate should fail
+		err = idx.ValidateAgainstTable(table)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrIndexCorrupted)
+
+		// Check error details
+		var corruptErr *IndexCorruptionError
+		assert.ErrorAs(t, err, &corruptErr)
+		assert.Equal(t, "idx_test", corruptErr.IndexName)
+		assert.Contains(t, corruptErr.StaleRowIDs, RowID(999))
+	})
+
+	t.Run("index with tombstoned rows fails validation", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index and add entries
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(2)}, RowID(1))
+		require.NoError(t, err)
+
+		// Delete a row (tombstone it)
+		err = table.DeleteRows([]RowID{RowID(0)})
+		require.NoError(t, err)
+
+		// Validate should fail - index has entry for deleted row
+		err = idx.ValidateAgainstTable(table)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrIndexCorrupted)
+
+		var corruptErr *IndexCorruptionError
+		assert.ErrorAs(t, err, &corruptErr)
+		assert.Contains(t, corruptErr.StaleRowIDs, RowID(0))
+	})
+
+	t.Run("nil table fails validation", func(t *testing.T) {
+		idx := NewHashIndex("idx_test", "test_table", []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+
+		err = idx.ValidateAgainstTable(nil)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrIndexCorrupted)
+	})
+}
+
+func TestHashIndexLookupWithValidation(t *testing.T) {
+	t.Run("lookup filters out stale RowIDs", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index with both valid and invalid entries
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(1)}, RowID(999)) // Invalid
+		require.NoError(t, err)
+
+		// Lookup with validation should filter out invalid entries
+		rowIDs, err := idx.LookupWithValidation([]any{int32(1)}, table, false)
+		assert.NoError(t, err)
+		assert.Len(t, rowIDs, 1)
+		assert.Equal(t, RowID(0), rowIDs[0])
+	})
+
+	t.Run("lookup reports corruption when requested", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index with both valid and invalid entries
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(1)}, RowID(999)) // Invalid
+		require.NoError(t, err)
+
+		// Lookup with validation and reportCorruption=true
+		rowIDs, err := idx.LookupWithValidation([]any{int32(1)}, table, true)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrIndexCorrupted)
+
+		// Should still return valid RowIDs
+		assert.Len(t, rowIDs, 1)
+		assert.Equal(t, RowID(0), rowIDs[0])
+	})
+
+	t.Run("lookup with deleted rows filters them out", func(t *testing.T) {
+		// Create a table with some rows
+		table := createTestTableWithData(t)
+
+		// Create an index
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(1)}, RowID(1))
+		require.NoError(t, err)
+
+		// Delete one row
+		err = table.DeleteRows([]RowID{RowID(0)})
+		require.NoError(t, err)
+
+		// Lookup should filter out deleted row
+		rowIDs, err := idx.LookupWithValidation([]any{int32(1)}, table, false)
+		assert.NoError(t, err)
+		assert.Len(t, rowIDs, 1)
+		assert.Equal(t, RowID(1), rowIDs[0])
+	})
+
+	t.Run("lookup with nil table returns nil", func(t *testing.T) {
+		idx := NewHashIndex("idx_test", "test_table", []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+
+		rowIDs, err := idx.LookupWithValidation([]any{int32(1)}, nil, false)
+		assert.NoError(t, err)
+		assert.Nil(t, rowIDs)
+	})
+
+	t.Run("lookup non-existent key returns nil", func(t *testing.T) {
+		table := createTestTableWithData(t)
+		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+
+		rowIDs, err := idx.LookupWithValidation([]any{int32(999)}, table, false)
+		assert.NoError(t, err)
+		assert.Nil(t, rowIDs)
+	})
+}
+
+func TestHashIndexGetAllRowIDs(t *testing.T) {
+	t.Run("returns all RowIDs", func(t *testing.T) {
+		idx := NewHashIndex("idx_test", "test_table", []string{"col1"}, false)
+		err := idx.Insert([]any{int32(1)}, RowID(0))
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(2)}, RowID(1))
+		require.NoError(t, err)
+		err = idx.Insert([]any{int32(1)}, RowID(2))
+		require.NoError(t, err)
+
+		rowIDs := idx.GetAllRowIDs()
+		assert.Len(t, rowIDs, 3)
+		assert.Contains(t, rowIDs, RowID(0))
+		assert.Contains(t, rowIDs, RowID(1))
+		assert.Contains(t, rowIDs, RowID(2))
+	})
+
+	t.Run("empty index returns empty slice", func(t *testing.T) {
+		idx := NewHashIndex("idx_test", "test_table", []string{"col1"}, false)
+		rowIDs := idx.GetAllRowIDs()
+		assert.Len(t, rowIDs, 0)
+	})
+}
+
+// createTestTableWithData creates a test table with two rows.
+func createTestTableWithData(t *testing.T) *Table {
+	t.Helper()
+
+	table := NewTable("test_table", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+
+	// Add some rows
+	err := table.AppendRow([]any{int32(1), "first"})
+	require.NoError(t, err)
+	err = table.AppendRow([]any{int32(2), "second"})
+	require.NoError(t, err)
+
+	return table
 }

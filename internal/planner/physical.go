@@ -2,6 +2,7 @@ package planner
 
 import (
 	"fmt"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -83,6 +84,7 @@ type PhysicalIndexScan struct {
 	// LookupKeys are expressions that evaluate to the values to look up in the index.
 	// For a single-column index, there's typically one key.
 	// For composite indexes, there may be multiple keys (one per prefix column).
+	// Used for point lookups (equality predicates).
 	LookupKeys []binder.BoundExpr
 
 	// Projections specifies which columns to return (nil = all columns)
@@ -99,6 +101,32 @@ type PhysicalIndexScan struct {
 	// For example, if the index is on (a, b) but the query has WHERE a = 1 AND c > 5,
 	// the "c > 5" predicate becomes a residual filter.
 	ResidualFilter binder.BoundExpr
+
+	// Range scan fields (for <, >, <=, >=, BETWEEN predicates)
+
+	// IsRangeScan indicates this uses a range scan instead of point lookups.
+	// When true, LowerBound and/or UpperBound are used instead of LookupKeys.
+	IsRangeScan bool
+
+	// LowerBound is the lower bound value expression for range scans.
+	// May be nil for unbounded scans (e.g., col < 100 has no lower bound).
+	LowerBound binder.BoundExpr
+
+	// UpperBound is the upper bound value expression for range scans.
+	// May be nil for unbounded scans (e.g., col > 10 has no upper bound).
+	UpperBound binder.BoundExpr
+
+	// LowerInclusive is true if the lower bound is inclusive (>=).
+	LowerInclusive bool
+
+	// UpperInclusive is true if the upper bound is inclusive (<=).
+	UpperInclusive bool
+
+	// RangeColumnIndex is the index of the range column within the composite index.
+	// For single-column indexes, this is always 0.
+	// For composite indexes with equality on prefix columns, this indicates
+	// which column has the range predicate.
+	RangeColumnIndex int
 
 	// columns is a cache for OutputColumns()
 	columns []ColumnBinding
@@ -2057,6 +2085,25 @@ func (p *Planner) createPhysicalPlan(
 			}, nil
 		}
 
+		// Check for index scan hint from optimizer
+		// Try alias first (for queries with table aliases), then table name
+		if p.hints != nil {
+			var hint AccessHint
+			var hasHint bool
+
+			if l.Alias != "" {
+				hint, hasHint = p.hints.GetAccessHint(l.Alias)
+			}
+			if !hasHint {
+				hint, hasHint = p.hints.GetAccessHint(l.TableName)
+			}
+
+			if hasHint && (hint.Method == "IndexScan" || hint.Method == "IndexRangeScan") {
+				return p.createPhysicalIndexScan(l, &hint)
+			}
+		}
+
+		// Default: Sequential scan
 		return &PhysicalScan{
 			Schema:      l.Schema,
 			TableName:   l.TableName,
@@ -2646,6 +2693,230 @@ func (p *Planner) createPhysicalJoinFromHint(
 			Condition: condition,
 		}, nil
 	}
+}
+
+// createPhysicalIndexScan creates a PhysicalIndexScan node from a LogicalScan and access hint.
+// This is called when the optimizer has determined that an index scan is more efficient
+// than a sequential scan for the given query predicates.
+//
+// The method validates the index exists and matches the table being scanned,
+// then creates a PhysicalIndexScan node ready for the executor.
+func (p *Planner) createPhysicalIndexScan(l *LogicalScan, hint *AccessHint) (PhysicalPlan, error) {
+	// Validate hint has an index name
+	if hint.IndexName == "" {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypePlanner,
+			Msg: fmt.Sprintf(
+				"index scan hint for table %q in schema %q has empty index name; "+
+					"this indicates an internal optimizer error",
+				l.TableName, l.Schema,
+			),
+		}
+	}
+
+	// Lookup index in catalog
+	indexDef, ok := p.catalog.GetIndexInSchema(l.Schema, hint.IndexName)
+	if !ok {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypePlanner,
+			Msg: fmt.Sprintf(
+				"index %q not found in schema %q for table %q (referenced in optimizer hint); "+
+					"verify the index exists with: CREATE INDEX %s ON %s (...)",
+				hint.IndexName, l.Schema, l.TableName, hint.IndexName, l.TableName,
+			),
+		}
+	}
+
+	// Validate index is for the correct table (case-insensitive comparison)
+	if !strings.EqualFold(indexDef.Table, l.TableName) {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypePlanner,
+			Msg: fmt.Sprintf(
+				"index %q is defined on table %q but query scans table %q in schema %q; "+
+					"ensure the optimizer hint references an index for the correct table",
+				hint.IndexName, indexDef.Table, l.TableName, l.Schema,
+			),
+		}
+	}
+
+	// Compute whether this could be an index-only scan
+	// Index-only scan is possible when all projected columns are in the index
+	// Note: Current HashIndex only stores RowIDs, so true index-only scan
+	// is not yet possible. This is for future use.
+	isIndexOnly := isIndexOnlyScan(indexDef, l.Projections, l.TableDef)
+
+	// Convert LookupKeys from []any to []binder.BoundExpr if possible
+	// The hint.LookupKeys contains optimizer.PredicateExpr values stored as []any.
+	// We attempt to type-assert them to binder.BoundExpr if they implement that interface,
+	// otherwise we leave LookupKeys as nil and the executor will handle it.
+	var lookupKeys []binder.BoundExpr
+	for _, key := range hint.LookupKeys {
+		if boundExpr, ok := key.(binder.BoundExpr); ok {
+			lookupKeys = append(lookupKeys, boundExpr)
+		}
+		// If not a BoundExpr, we skip it - the executor will need to
+		// reconstruct lookup keys from the original filter condition
+	}
+
+	// Convert ResidualFilter from any to binder.BoundExpr if possible
+	// The hint.ResidualFilter may be a []any containing predicates or a single expression.
+	var residualFilter binder.BoundExpr
+	if hint.ResidualFilter != nil {
+		if boundExpr, ok := hint.ResidualFilter.(binder.BoundExpr); ok {
+			residualFilter = boundExpr
+		}
+		// If it's a []any of predicates, the executor will need to handle it
+	}
+
+	// Extract range scan bounds if this is a range scan
+	var lowerBound, upperBound binder.BoundExpr
+	var lowerInclusive, upperInclusive bool
+	var rangeColumnIndex int
+	isRangeScan := hint.IsRangeScan && hint.RangeBounds != nil
+
+	if isRangeScan {
+		// Convert lower bound to BoundExpr if possible
+		if hint.RangeBounds.LowerBound != nil {
+			lowerBound = convertToBoundExpr(hint.RangeBounds.LowerBound)
+		}
+		// Convert upper bound to BoundExpr if possible
+		if hint.RangeBounds.UpperBound != nil {
+			upperBound = convertToBoundExpr(hint.RangeBounds.UpperBound)
+		}
+		lowerInclusive = hint.RangeBounds.LowerInclusive
+		upperInclusive = hint.RangeBounds.UpperInclusive
+		rangeColumnIndex = hint.RangeBounds.RangeColumnIndex
+	}
+
+	// Create the PhysicalIndexScan node
+	// Note: LookupKeys and ResidualFilter may be nil if the optimizer predicates
+	// don't directly implement binder.BoundExpr. In that case, the executor
+	// will need to extract lookup values from the original filter or handle
+	// residual filtering separately.
+	return &PhysicalIndexScan{
+		Schema:           l.Schema,
+		TableName:        l.TableName,
+		Alias:            l.Alias,
+		TableDef:         l.TableDef,
+		IndexName:        hint.IndexName,
+		IndexDef:         indexDef,
+		LookupKeys:       lookupKeys,
+		ResidualFilter:   residualFilter,
+		Projections:      l.Projections,
+		IsIndexOnly:      isIndexOnly,
+		IsRangeScan:      isRangeScan,
+		LowerBound:       lowerBound,
+		UpperBound:       upperBound,
+		LowerInclusive:   lowerInclusive,
+		UpperInclusive:   upperInclusive,
+		RangeColumnIndex: rangeColumnIndex,
+	}, nil
+}
+
+// literalValueExpr is an interface for expressions that provide a literal value.
+// This matches the optimizer.LiteralPredicateExpr interface without importing optimizer.
+type literalValueExpr interface {
+	PredicateLiteralValue() any
+}
+
+// convertToBoundExpr attempts to convert an any value to a binder.BoundExpr.
+// It handles:
+// 1. Direct binder.BoundExpr values
+// 2. LiteralPredicateExpr from the optimizer (via the literalValueExpr interface)
+// 3. Raw literal values (wrapped in BoundLiteral)
+func convertToBoundExpr(v any) binder.BoundExpr {
+	if v == nil {
+		return nil
+	}
+
+	// Case 1: Already a BoundExpr
+	if boundExpr, ok := v.(binder.BoundExpr); ok {
+		return boundExpr
+	}
+
+	// Case 2: Optimizer's LiteralPredicateExpr (has PredicateLiteralValue method)
+	if litExpr, ok := v.(literalValueExpr); ok {
+		litVal := litExpr.PredicateLiteralValue()
+		return wrapLiteralValue(litVal)
+	}
+
+	// Case 3: Raw literal value
+	return wrapLiteralValue(v)
+}
+
+// wrapLiteralValue wraps a raw value in a BoundLiteral with appropriate type.
+func wrapLiteralValue(v any) *binder.BoundLiteral {
+	if v == nil {
+		return nil
+	}
+
+	var valType dukdb.Type
+	switch v.(type) {
+	case int, int8, int16, int32, int64:
+		valType = dukdb.TYPE_BIGINT
+	case uint, uint8, uint16, uint32, uint64:
+		valType = dukdb.TYPE_UBIGINT
+	case float32, float64:
+		valType = dukdb.TYPE_DOUBLE
+	case string:
+		valType = dukdb.TYPE_VARCHAR
+	case bool:
+		valType = dukdb.TYPE_BOOLEAN
+	case []byte:
+		valType = dukdb.TYPE_BLOB
+	default:
+		valType = dukdb.TYPE_ANY
+	}
+
+	return &binder.BoundLiteral{
+		Value:   v,
+		ValType: valType,
+	}
+}
+
+// isIndexOnlyScan determines if all projected columns can be satisfied from the index.
+// Returns true if the index covers all columns that need to be retrieved.
+// Note: Current HashIndex only stores RowIDs, so true index-only scan
+// is not yet possible. This is for future optimization.
+func isIndexOnlyScan(indexDef *catalog.IndexDef, projections []int, tableDef *catalog.TableDef) bool {
+	// If projecting all columns (nil projections means SELECT *),
+	// we can only do index-only if index has all columns
+	if projections == nil {
+		// SELECT * - index must contain all table columns
+		if len(indexDef.Columns) != len(tableDef.Columns) {
+			return false
+		}
+		// Check all table columns are in the index
+		indexCols := make(map[string]bool)
+		for _, col := range indexDef.Columns {
+			indexCols[strings.ToLower(col)] = true
+		}
+		for _, col := range tableDef.Columns {
+			if !indexCols[strings.ToLower(col.Name)] {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	// Check if all projected columns are in the index
+	indexCols := make(map[string]bool)
+	for _, col := range indexDef.Columns {
+		indexCols[strings.ToLower(col)] = true
+	}
+
+	for _, projIdx := range projections {
+		if projIdx < 0 || projIdx >= len(tableDef.Columns) {
+			return false
+		}
+		colName := strings.ToLower(tableDef.Columns[projIdx].Name)
+		if !indexCols[colName] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Helper functions

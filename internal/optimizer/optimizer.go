@@ -148,8 +148,38 @@ type JoinHint struct {
 
 // AccessHint provides hints for physical access method.
 type AccessHint struct {
-	Method    PhysicalPlanType // SeqScan or IndexScan
-	IndexName string           // Index to use (if IndexScan)
+	Method    PhysicalPlanType // SeqScan, IndexScan, or IndexRangeScan
+	IndexName string           // Index to use (if IndexScan or IndexRangeScan)
+
+	// LookupKeys contains expressions that evaluate to the values to look up in the index.
+	// For equality predicates like "col = 5", this contains the value expressions.
+	// For composite indexes, there may be multiple keys (one per matched prefix column).
+	LookupKeys []PredicateExpr
+
+	// ResidualPredicates contains predicates that couldn't be pushed into the index lookup.
+	// These must be evaluated after fetching rows from the index.
+	ResidualPredicates []PredicateExpr
+
+	// MatchedPredicates contains the predicates that are satisfied by the index.
+	// These predicates can be removed from the filter after the index scan.
+	MatchedPredicates []PredicateExpr
+
+	// Selectivity is the estimated fraction of rows returned by the index scan (0.0-1.0).
+	Selectivity float64
+
+	// MatchedColumns is the number of index columns matched by predicates.
+	MatchedColumns int
+
+	// IsFullMatch is true if all index columns are matched by predicates.
+	IsFullMatch bool
+
+	// IsRangeScan is true if this is a range scan rather than point lookup.
+	// Range scans use <, >, <=, >=, or BETWEEN predicates on the range column.
+	IsRangeScan bool
+
+	// RangeBounds contains the range scan boundaries when IsRangeScan is true.
+	// Includes lower/upper bounds and inclusivity flags.
+	RangeBounds *RangeScanBounds
 }
 
 // CostBasedOptimizer is the main optimizer implementation.
@@ -303,6 +333,21 @@ func (o *CostBasedOptimizer) enumerateAccessMethods(
 		for i := range indexMatches {
 			match := &indexMatches[i]
 
+			// For hash indexes, we require a full match (all columns must be provided)
+			// because the hash function requires all key columns.
+			// However, we allow:
+			// - Range scans (which use tree-based iteration, not hash lookups)
+			// - Full matches on any index type
+			//
+			// Range scans are valid for sorted indexes (B-Tree, etc.) and can be
+			// used even with partial matches (e.g., equality on prefix + range on next column).
+			if !match.IsFullMatch && !match.IsRangeScan {
+				// Non-full equality match on hash index - skip
+				// TODO: When we add tree-based indexes, check index type here
+				// and allow prefix matches for tree-based indexes
+				continue
+			}
+
 			// Check if this is a covering index
 			isIndexOnly := false
 			if len(requiredColumns) > 0 {
@@ -310,18 +355,39 @@ func (o *CostBasedOptimizer) enumerateAccessMethods(
 			}
 
 			// Estimate index scan cost
-			indexCost := o.costModel.EstimateIndexScanCost(
-				match.Selectivity,
-				rowCount,
-				pageCount,
-				isIndexOnly,
-			)
+			// Use different cost model for range scans vs point lookups
+			var indexCost PlanCost
+			if match.IsRangeScan {
+				// Range scans have different cost characteristics:
+				// - Higher heap access cost due to scattered rows
+				// - Additional bound checking overhead
+				indexCost = o.costModel.EstimateIndexRangeScanCost(
+					match.Selectivity,
+					rowCount,
+					pageCount,
+					isIndexOnly,
+				)
+			} else {
+				// Point lookups (equality predicates)
+				indexCost = o.costModel.EstimateIndexScanCost(
+					match.Selectivity,
+					rowCount,
+					pageCount,
+					isIndexOnly,
+				)
+			}
 
 			// Calculate residual predicates (predicates not satisfied by index)
 			residual := o.calculateResidualPredicates(predicates, match.Predicates)
 
+			// Determine the access method type
+			methodType := PlanTypeIndexScan
+			if match.IsRangeScan {
+				methodType = PlanTypeIndexRangeScan
+			}
+
 			methods = append(methods, AccessMethod{
-				Type:               PlanTypeIndexScan,
+				Type:               methodType,
 				IndexMatch:         match,
 				EstimatedCost:      indexCost,
 				IsIndexOnly:        isIndexOnly,
@@ -674,6 +740,10 @@ func (o *CostBasedOptimizer) collectAccessHints(plan LogicalPlanNode, hints map[
 // selectAccessHintForFilteredScan determines the best access method for a filtered scan.
 // It extracts predicates from the filter condition and uses enumerateAccessMethods to
 // find applicable indexes and select the cheapest access method.
+//
+// This function handles both point lookups (equality predicates) and range scans
+// (<, >, <=, >=, BETWEEN predicates). When a range scan is detected, the AccessHint
+// includes RangeBounds with the lower/upper bounds and inclusivity flags.
 func (o *CostBasedOptimizer) selectAccessHintForFilteredScan(
 	filter FilterNode,
 	scan ScanNode,
@@ -702,10 +772,52 @@ func (o *CostBasedOptimizer) selectAccessHintForFilteredScan(
 		}
 	}
 
-	// Best is an index scan
-	return AccessHint{
-		Method:    PlanTypeIndexScan,
-		IndexName: best.IndexMatch.Index.GetName(),
+	// Best is an index scan - populate all hint fields from IndexMatch
+	indexMatch := best.IndexMatch
+
+	// Calculate residual predicates (predicates not satisfied by the index)
+	residualPredicates := o.calculateResidualPredicates(predicates, indexMatch.Predicates)
+
+	// Determine the access method type based on whether this is a range scan
+	method := PlanTypeIndexScan
+	if indexMatch.IsRangeScan {
+		method = PlanTypeIndexRangeScan
+	}
+
+	// Build the AccessHint with all relevant fields
+	hint := AccessHint{
+		Method:             method,
+		IndexName:          indexMatch.Index.GetName(),
+		LookupKeys:         indexMatch.LookupKeys,
+		ResidualPredicates: residualPredicates,
+		MatchedPredicates:  indexMatch.Predicates,
+		Selectivity:        indexMatch.Selectivity,
+		MatchedColumns:     indexMatch.MatchedColumns,
+		IsFullMatch:        indexMatch.IsFullMatch,
+		IsRangeScan:        indexMatch.IsRangeScan,
+	}
+
+	// If this is a range scan, populate the RangeBounds
+	if indexMatch.IsRangeScan && indexMatch.RangeBounds != nil {
+		hint.RangeBounds = convertIndexMatchRangeBounds(indexMatch.RangeBounds)
+	}
+
+	return hint
+}
+
+// convertIndexMatchRangeBounds converts an IndexMatch.RangeScanBounds to an AccessHint.RangeScanBounds.
+// This function bridges the index_matcher representation to the optimizer hint representation.
+func convertIndexMatchRangeBounds(imBounds *RangeScanBounds) *RangeScanBounds {
+	if imBounds == nil {
+		return nil
+	}
+
+	return &RangeScanBounds{
+		LowerBound:       imBounds.LowerBound,
+		UpperBound:       imBounds.UpperBound,
+		LowerInclusive:   imBounds.LowerInclusive,
+		UpperInclusive:   imBounds.UpperInclusive,
+		RangeColumnIndex: imBounds.RangeColumnIndex,
 	}
 }
 

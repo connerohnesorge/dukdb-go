@@ -626,6 +626,17 @@ func (c *EngineConn) Query(
 		}
 	}
 
+	// For EXPLAIN statements, run the cost-based optimizer on the child query
+	// so that EXPLAIN output shows IndexScan when an index would be used.
+	if explainStmt, isExplain := boundStmt.(*binder.BoundExplainStmt); isExplain {
+		if _, isSelectChild := explainStmt.Query.(*binder.BoundSelectStmt); isSelectChild {
+			hints := c.getOptimizationHints(explainStmt.Query)
+			if hints != nil {
+				p.SetHints(hints)
+			}
+		}
+	}
+
 	plan, err := p.Plan(boundStmt)
 	if err != nil {
 		return nil, nil, err
@@ -705,13 +716,94 @@ func convertOptimizerHints(optimizedPlan *optimizer.OptimizedPlan) *planner.Opti
 
 	// Convert access hints
 	for key, hint := range optimizedPlan.AccessHints {
+		// Convert LookupKeys from []optimizer.PredicateExpr to []any
+		// If the PredicateExpr is a boundExprAdapter, extract the underlying BoundExpr
+		// so the planner can recognize it as a binder.BoundExpr
+		var lookupKeys []any
+		for _, lk := range hint.LookupKeys {
+			// Try to extract the underlying BoundExpr if this is a boundExprAdapter
+			if adapter, ok := lk.(*boundExprAdapter); ok && adapter.expr != nil {
+				lookupKeys = append(lookupKeys, adapter.expr)
+			} else {
+				lookupKeys = append(lookupKeys, lk)
+			}
+		}
+
+		// Convert ResidualPredicates to []any for residual filter
+		var residualFilter any
+		if len(hint.ResidualPredicates) > 0 {
+			residualAsAny := make([]any, len(hint.ResidualPredicates))
+			for i, rp := range hint.ResidualPredicates {
+				residualAsAny[i] = rp
+			}
+			residualFilter = residualAsAny
+		}
+
+		// Convert MatchedPredicates from []optimizer.PredicateExpr to []any
+		var matchedPredicates []any
+		for _, mp := range hint.MatchedPredicates {
+			matchedPredicates = append(matchedPredicates, mp)
+		}
+
+		// Convert RangeBounds if this is a range scan
+		var rangeBounds *planner.RangeScanBounds
+		if hint.IsRangeScan && hint.RangeBounds != nil {
+			rangeBounds = convertRangeBoundsToPlanner(hint.RangeBounds)
+		}
+
 		hints.AccessHints[key] = planner.AccessHint{
-			Method:    string(hint.Method),
-			IndexName: hint.IndexName,
+			Method:            string(hint.Method),
+			IndexName:         hint.IndexName,
+			LookupKeys:        lookupKeys,
+			ResidualFilter:    residualFilter,
+			MatchedPredicates: matchedPredicates,
+			Selectivity:       hint.Selectivity,
+			MatchedColumns:    hint.MatchedColumns,
+			IsFullMatch:       hint.IsFullMatch,
+			IsRangeScan:       hint.IsRangeScan,
+			RangeBounds:       rangeBounds,
 		}
 	}
 
 	return hints
+}
+
+// convertRangeBoundsToPlanner converts optimizer RangeScanBounds to planner RangeScanBounds.
+// This bridges the gap between the optimizer representation and the planner representation.
+// The bounds may contain boundExprAdapter wrappers that need to be preserved for proper
+// expression evaluation in the executor.
+func convertRangeBoundsToPlanner(optBounds *optimizer.RangeScanBounds) *planner.RangeScanBounds {
+	if optBounds == nil {
+		return nil
+	}
+
+	// Convert LowerBound - extract BoundExpr from adapter if needed
+	var lowerBound any
+	if optBounds.LowerBound != nil {
+		if adapter, ok := optBounds.LowerBound.(*boundExprAdapter); ok && adapter.expr != nil {
+			lowerBound = adapter.expr
+		} else {
+			lowerBound = optBounds.LowerBound
+		}
+	}
+
+	// Convert UpperBound - extract BoundExpr from adapter if needed
+	var upperBound any
+	if optBounds.UpperBound != nil {
+		if adapter, ok := optBounds.UpperBound.(*boundExprAdapter); ok && adapter.expr != nil {
+			upperBound = adapter.expr
+		} else {
+			upperBound = optBounds.UpperBound
+		}
+	}
+
+	return &planner.RangeScanBounds{
+		LowerBound:       lowerBound,
+		UpperBound:       upperBound,
+		LowerInclusive:   optBounds.LowerInclusive,
+		UpperInclusive:   optBounds.UpperInclusive,
+		RangeColumnIndex: optBounds.RangeColumnIndex,
+	}
 }
 
 // createLogicalPlanAdapter creates a logical plan adapter for the optimizer.
@@ -744,8 +836,18 @@ func (a *selectLogicalPlanAdapter) PlanChildren() []optimizer.LogicalPlanNode {
 	var children []optimizer.LogicalPlanNode
 
 	// Add scan nodes for each table in FROM
+	// If there's a WHERE clause, wrap each scan in a filter node
 	for _, tableRef := range a.stmt.From {
-		children = append(children, &tableRefLogicalPlanAdapter{ref: tableRef})
+		scanNode := &tableRefLogicalPlanAdapter{ref: tableRef}
+		if a.stmt.Where != nil {
+			// Wrap the scan in a filter node for the optimizer to detect index opportunities
+			children = append(children, &filterLogicalPlanAdapter{
+				condition: a.stmt.Where,
+				child:     scanNode,
+			})
+		} else {
+			children = append(children, scanNode)
+		}
 	}
 
 	// Add join nodes for explicit joins
@@ -816,6 +918,253 @@ func (a *tableRefLogicalPlanAdapter) IsTableFunction() bool {
 
 func (a *tableRefLogicalPlanAdapter) IsVirtualTable() bool {
 	return a.ref.VirtualTable != nil
+}
+
+// filterLogicalPlanAdapter adapts a WHERE clause to optimizer.FilterNode.
+// This allows the optimizer to detect Filter -> Scan patterns and generate IndexScan hints.
+type filterLogicalPlanAdapter struct {
+	condition binder.BoundExpr
+	child     optimizer.LogicalPlanNode
+}
+
+func (a *filterLogicalPlanAdapter) PlanType() string {
+	return "LogicalFilter"
+}
+
+func (a *filterLogicalPlanAdapter) PlanChildren() []optimizer.LogicalPlanNode {
+	return []optimizer.LogicalPlanNode{a.child}
+}
+
+func (a *filterLogicalPlanAdapter) PlanOutputColumns() []optimizer.OutputColumn {
+	// Filter passes through all columns from child
+	return a.child.PlanOutputColumns()
+}
+
+// FilterChild implements optimizer.FilterNode interface.
+func (a *filterLogicalPlanAdapter) FilterChild() optimizer.LogicalPlanNode {
+	return a.child
+}
+
+// FilterCondition implements optimizer.FilterNode interface.
+func (a *filterLogicalPlanAdapter) FilterCondition() optimizer.ExprNode {
+	return &boundExprAdapter{expr: a.condition}
+}
+
+// boundExprAdapter adapts binder.BoundExpr to optimizer.ExprNode interface.
+type boundExprAdapter struct {
+	expr binder.BoundExpr
+}
+
+func (a *boundExprAdapter) ExprType() string {
+	if a.expr == nil {
+		return "Unknown"
+	}
+	switch e := a.expr.(type) {
+	case *binder.BoundBinaryExpr:
+		return "BinaryExpr"
+	case *binder.BoundUnaryExpr:
+		return "UnaryExpr"
+	case *binder.BoundColumnRef:
+		return "ColumnRef"
+	case *binder.BoundLiteral:
+		return "Literal"
+	case *binder.BoundFunctionCall:
+		return "FunctionCall"
+	default:
+		_ = e
+		return "Unknown"
+	}
+}
+
+func (a *boundExprAdapter) ExprResultType() dukdb.Type {
+	if a.expr == nil {
+		return dukdb.TYPE_ANY
+	}
+	return a.expr.ResultType()
+}
+
+// Implement optimizer.BinaryExprNode for binary expressions
+func (a *boundExprAdapter) Left() optimizer.ExprNode {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		return &boundExprAdapter{expr: binExpr.Left}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) Right() optimizer.ExprNode {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		return &boundExprAdapter{expr: binExpr.Right}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) Operator() optimizer.BinaryOp {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		// Map parser.BinaryOp to optimizer.BinaryOp
+		// Both packages use the same constant ordering, so we can cast directly
+		// but we explicitly map for safety
+		switch binExpr.Op {
+		case parser.OpEq:
+			return optimizer.OpEq
+		case parser.OpNe:
+			return optimizer.OpNe
+		case parser.OpLt:
+			return optimizer.OpLt
+		case parser.OpLe:
+			return optimizer.OpLe
+		case parser.OpGt:
+			return optimizer.OpGt
+		case parser.OpGe:
+			return optimizer.OpGe
+		case parser.OpAnd:
+			return optimizer.OpAnd
+		case parser.OpOr:
+			return optimizer.OpOr
+		case parser.OpLike:
+			return optimizer.OpLike
+		case parser.OpIn:
+			return optimizer.OpIn
+		default:
+			// For unknown operators, return -1 as a sentinel value
+			return optimizer.BinaryOp(-1)
+		}
+	}
+	return optimizer.BinaryOp(-1)
+}
+
+// Implement optimizer.PredicateExpr interface for index matching
+func (a *boundExprAdapter) PredicateType() string {
+	if a.expr == nil {
+		return "Unknown"
+	}
+	switch a.expr.(type) {
+	case *binder.BoundBinaryExpr:
+		return "BinaryExpr"
+	case *binder.BoundColumnRef:
+		return "ColumnRef"
+	case *binder.BoundLiteral:
+		return "Literal"
+	case *binder.BoundBetweenExpr:
+		return "BetweenExpr"
+	case *binder.BoundInListExpr:
+		return "InListExpr"
+	default:
+		return "Unknown"
+	}
+}
+
+func (a *boundExprAdapter) GetColumn() string {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		// For equality predicates, extract column name from left side
+		if colRef, ok := binExpr.Left.(*binder.BoundColumnRef); ok {
+			return colRef.Column
+		}
+	}
+	if colRef, ok := a.expr.(*binder.BoundColumnRef); ok {
+		return colRef.Column
+	}
+	return ""
+}
+
+func (a *boundExprAdapter) GetTable() string {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		// For equality predicates, extract table from left side
+		if colRef, ok := binExpr.Left.(*binder.BoundColumnRef); ok {
+			return colRef.Table
+		}
+	}
+	if colRef, ok := a.expr.(*binder.BoundColumnRef); ok {
+		return colRef.Table
+	}
+	return ""
+}
+
+func (a *boundExprAdapter) GetOperator() optimizer.BinaryOp {
+	return a.Operator()
+}
+
+func (a *boundExprAdapter) GetValue() any {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		// For equality predicates, extract literal value from right side
+		if lit, ok := binExpr.Right.(*binder.BoundLiteral); ok {
+			return lit.Value
+		}
+	}
+	if lit, ok := a.expr.(*binder.BoundLiteral); ok {
+		return lit.Value
+	}
+	return nil
+}
+
+// Implement optimizer.BinaryPredicateExpr interface for index matching
+func (a *boundExprAdapter) PredicateLeft() optimizer.PredicateExpr {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		return &boundExprAdapter{expr: binExpr.Left}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) PredicateRight() optimizer.PredicateExpr {
+	if binExpr, ok := a.expr.(*binder.BoundBinaryExpr); ok {
+		return &boundExprAdapter{expr: binExpr.Right}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) PredicateOperator() optimizer.BinaryOp {
+	return a.Operator()
+}
+
+// Implement optimizer.ColumnRefPredicateExpr interface for index matching
+func (a *boundExprAdapter) PredicateTable() string {
+	if colRef, ok := a.expr.(*binder.BoundColumnRef); ok {
+		return colRef.Table
+	}
+	return ""
+}
+
+func (a *boundExprAdapter) PredicateColumn() string {
+	if colRef, ok := a.expr.(*binder.BoundColumnRef); ok {
+		return colRef.Column
+	}
+	return ""
+}
+
+// Implement optimizer.BetweenPredicateExpr interface for BETWEEN index matching
+func (a *boundExprAdapter) PredicateBetweenExpr() optimizer.PredicateExpr {
+	if betweenExpr, ok := a.expr.(*binder.BoundBetweenExpr); ok {
+		return &boundExprAdapter{expr: betweenExpr.Expr}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) PredicateLowBound() optimizer.PredicateExpr {
+	if betweenExpr, ok := a.expr.(*binder.BoundBetweenExpr); ok {
+		return &boundExprAdapter{expr: betweenExpr.Low}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) PredicateHighBound() optimizer.PredicateExpr {
+	if betweenExpr, ok := a.expr.(*binder.BoundBetweenExpr); ok {
+		return &boundExprAdapter{expr: betweenExpr.High}
+	}
+	return nil
+}
+
+func (a *boundExprAdapter) PredicateIsNotBetween() bool {
+	if betweenExpr, ok := a.expr.(*binder.BoundBetweenExpr); ok {
+		return betweenExpr.Not
+	}
+	return false
+}
+
+// Implement optimizer.LiteralPredicateExpr interface for literal value extraction
+func (a *boundExprAdapter) PredicateLiteralValue() any {
+	if lit, ok := a.expr.(*binder.BoundLiteral); ok {
+		return lit.Value
+	}
+	return nil
 }
 
 // joinLogicalPlanAdapter adapts a BoundJoin to optimizer.LogicalPlanNode.

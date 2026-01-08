@@ -65,14 +65,18 @@
 //   - Node structure is identical to DuckDB's in-memory representation
 //   - Row IDs are stored as uint64 values in leaf nodes
 //
+// ## Supported Operations
+//
+// The current implementation supports:
+//   - Insert: Full tree construction with proper node splitting
+//   - Lookup: Exact key lookup with prefix matching
+//   - RangeScan: Iterator-based range queries with lower/upper bounds
+//   - InsertEncoded: Insert with pre-encoded keys (for composite indexes)
+//
 // ## Limitations
 //
-// The current implementation has the following limitations:
-//   - Simplified insert logic (root-only for now)
-//   - No node splitting or merging during inserts
 //   - No deletion support
-//   - No range scan support
-//   - Full ART implementation will be added in future versions
+//   - No node merging (nodes don't shrink after deletions)
 //
 // These limitations do not affect serialization/deserialization compatibility
 // with DuckDB, which is the primary goal for persistence support.
@@ -184,13 +188,27 @@ func newNode(nodeType NodeType) *ARTNode {
 	return node
 }
 
-// Insert adds a key-value pair to the ART
+// Insert adds a key-value pair to the ART.
+// The key should be the raw byte representation of the value (e.g., little-endian int).
+// It will be encoded internally to ensure proper lexicographic ordering.
 func (a *ART) Insert(key []byte, value any) error {
 	encodedKey, err := encodeKey(key, a.keyType)
 	if err != nil {
 		return fmt.Errorf("failed to encode key: %w", err)
 	}
 
+	return a.insertEncodedKey(encodedKey, value)
+}
+
+// InsertEncoded adds a key-value pair to the ART where the key is already encoded.
+// Use this when the key has already been encoded for lexicographic ordering
+// (e.g., when using keys produced by encodeKeyValue from the executor).
+func (a *ART) InsertEncoded(encodedKey []byte, value any) error {
+	return a.insertEncodedKey(encodedKey, value)
+}
+
+// insertEncodedKey is the internal implementation that inserts a pre-encoded key.
+func (a *ART) insertEncodedKey(encodedKey []byte, value any) error {
 	if a.root == nil {
 		// Create a leaf node as root
 		leaf := newNode(NodeTypeLeaf)
@@ -201,11 +219,277 @@ func (a *ART) Insert(key []byte, value any) error {
 		return nil
 	}
 
-	// For this simplified implementation, we just store at the root
-	// A full implementation would traverse and split nodes as needed
-	a.root.value = value
+	// Insert into existing tree
+	a.root = a.insertRecursive(a.root, encodedKey, value, 0)
 
 	return nil //nolint:nlreturn // Allow no blank line before return
+}
+
+// insertRecursive inserts a key-value pair into the tree rooted at node.
+// depth is the current byte position in the key being processed.
+// Returns the new root of this subtree (may be different if splits occur).
+//
+//nolint:funlen // ART insert requires handling multiple cases
+func (a *ART) insertRecursive(node *ARTNode, key []byte, value any, depth int) *ARTNode {
+	if node == nil {
+		// Create a new leaf node
+		leaf := newNode(NodeTypeLeaf)
+		if depth < len(key) {
+			leaf.prefix = key[depth:]
+		}
+		leaf.value = value
+		return leaf
+	}
+
+	// Handle leaf node
+	if node.nodeType == NodeTypeLeaf {
+		// Check if this is an exact key match (update)
+		existingKey := node.prefix
+		if bytes.Equal(existingKey, key[depth:]) {
+			// Update existing value
+			node.value = value
+			return node
+		}
+
+		// Need to split: create a new Node4 to hold both leaves
+		// Find the common prefix length
+		newKeyPart := key[depth:]
+		commonLen := commonPrefixLen(existingKey, newKeyPart)
+
+		// Create new Node4 as the new root of this subtree
+		newNode4 := newNode(NodeType4)
+		if commonLen > 0 {
+			newNode4.prefix = existingKey[:commonLen]
+		}
+
+		// Create two new leaves
+		existingLeaf := newNode(NodeTypeLeaf)
+		if commonLen < len(existingKey) {
+			existingLeaf.prefix = existingKey[commonLen+1:]
+		}
+		existingLeaf.value = node.value
+
+		newLeaf := newNode(NodeTypeLeaf)
+		if commonLen < len(newKeyPart) {
+			newLeaf.prefix = newKeyPart[commonLen+1:]
+		}
+		newLeaf.value = value
+
+		// Add both children to the Node4
+		if commonLen < len(existingKey) {
+			newNode4.keys = append(newNode4.keys, existingKey[commonLen])
+			newNode4.children = append(newNode4.children, existingLeaf)
+		}
+		if commonLen < len(newKeyPart) {
+			// Insert in sorted order
+			insertKey := newKeyPart[commonLen]
+			inserted := false
+			for i, k := range newNode4.keys {
+				if insertKey < k {
+					// Insert before this position
+					newNode4.keys = append(newNode4.keys[:i], append([]byte{insertKey}, newNode4.keys[i:]...)...)
+					newNode4.children = append(newNode4.children[:i], append([]*ARTNode{newLeaf}, newNode4.children[i:]...)...)
+					inserted = true
+					break
+				}
+			}
+			if !inserted {
+				newNode4.keys = append(newNode4.keys, insertKey)
+				newNode4.children = append(newNode4.children, newLeaf)
+			}
+		}
+
+		return newNode4
+	}
+
+	// Handle inner node (Node4, Node16, Node48, Node256)
+	// First check if we need to handle prefix mismatch
+	if len(node.prefix) > 0 {
+		keyPart := key[depth:]
+		commonLen := commonPrefixLen(node.prefix, keyPart)
+
+		if commonLen < len(node.prefix) {
+			// Prefix mismatch - need to split this node
+			// Create a new Node4 to be the parent
+			newParent := newNode(NodeType4)
+			newParent.prefix = node.prefix[:commonLen]
+
+			// Update current node's prefix
+			oldPrefix := node.prefix
+			node.prefix = oldPrefix[commonLen+1:]
+
+			// Add current node as child
+			newParent.keys = append(newParent.keys, oldPrefix[commonLen])
+			newParent.children = append(newParent.children, node)
+
+			// Create and add new leaf
+			newLeaf := newNode(NodeTypeLeaf)
+			if commonLen < len(keyPart) {
+				newLeaf.prefix = keyPart[commonLen+1:]
+			}
+			newLeaf.value = value
+
+			if commonLen < len(keyPart) {
+				insertKey := keyPart[commonLen]
+				// Insert in sorted order
+				if insertKey < newParent.keys[0] {
+					newParent.keys = append([]byte{insertKey}, newParent.keys...)
+					newParent.children = append([]*ARTNode{newLeaf}, newParent.children...)
+				} else {
+					newParent.keys = append(newParent.keys, insertKey)
+					newParent.children = append(newParent.children, newLeaf)
+				}
+			}
+
+			return newParent
+		}
+
+		// Full prefix match, continue with depth + prefixLen
+		depth += len(node.prefix)
+	}
+
+	// Find or create child for next byte
+	if depth >= len(key) {
+		// Key ends at this node - store value here
+		node.value = value
+		return node
+	}
+
+	nextByte := key[depth]
+	childIdx := a.findChild(node, nextByte)
+
+	if childIdx >= 0 {
+		// Child exists, recurse
+		node.children[childIdx] = a.insertRecursive(node.children[childIdx], key, value, depth+1)
+	} else {
+		// Need to add new child
+		newLeaf := newNode(NodeTypeLeaf)
+		if depth+1 < len(key) {
+			newLeaf.prefix = key[depth+1:]
+		}
+		newLeaf.value = value
+
+		node = a.addChild(node, nextByte, newLeaf)
+	}
+
+	return node
+}
+
+// commonPrefixLen returns the length of the common prefix between two byte slices.
+func commonPrefixLen(a, b []byte) int {
+	minLen := len(a)
+	if len(b) < minLen {
+		minLen = len(b)
+	}
+	for i := 0; i < minLen; i++ {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+	return minLen
+}
+
+// findChild returns the index of the child with the given key, or -1 if not found.
+func (a *ART) findChild(node *ARTNode, key byte) int {
+	switch node.nodeType {
+	case NodeType4, NodeType16:
+		for i, k := range node.keys {
+			if k == key {
+				return i
+			}
+		}
+	case NodeType48:
+		const emptyMarker = 0xFF
+		if idx := node.keys[key]; idx != emptyMarker {
+			return int(idx)
+		}
+	case NodeType256:
+		if node.children[key] != nil {
+			return int(key)
+		}
+	}
+	return -1
+}
+
+// addChild adds a new child to the node, growing the node type if necessary.
+// Returns the (possibly new) node.
+//
+//nolint:funlen // Node growth handling requires multiple cases
+func (a *ART) addChild(node *ARTNode, key byte, child *ARTNode) *ARTNode {
+	const (
+		node4Max   = 4
+		node16Max  = 16
+		node48Max  = 48
+		emptyMarker = 0xFF
+	)
+
+	switch node.nodeType {
+	case NodeType4:
+		if len(node.keys) < node4Max {
+			// Find insertion point to maintain sorted order
+			insertIdx := 0
+			for insertIdx < len(node.keys) && node.keys[insertIdx] < key {
+				insertIdx++
+			}
+			// Insert key and child at the right position
+			node.keys = append(node.keys[:insertIdx], append([]byte{key}, node.keys[insertIdx:]...)...)
+			node.children = append(node.children[:insertIdx], append([]*ARTNode{child}, node.children[insertIdx:]...)...)
+			return node
+		}
+		// Grow to Node16
+		newNode16 := newNode(NodeType16)
+		newNode16.prefix = node.prefix
+		newNode16.value = node.value
+		newNode16.keys = make([]byte, len(node.keys), node16Max)
+		copy(newNode16.keys, node.keys)
+		newNode16.children = make([]*ARTNode, len(node.children), node16Max)
+		copy(newNode16.children, node.children)
+		return a.addChild(newNode16, key, child)
+
+	case NodeType16:
+		if len(node.keys) < node16Max {
+			insertIdx := 0
+			for insertIdx < len(node.keys) && node.keys[insertIdx] < key {
+				insertIdx++
+			}
+			node.keys = append(node.keys[:insertIdx], append([]byte{key}, node.keys[insertIdx:]...)...)
+			node.children = append(node.children[:insertIdx], append([]*ARTNode{child}, node.children[insertIdx:]...)...)
+			return node
+		}
+		// Grow to Node48
+		newNode48 := newNode(NodeType48)
+		newNode48.prefix = node.prefix
+		newNode48.value = node.value
+		newNode48.children = make([]*ARTNode, 0, node48Max)
+		for i, k := range node.keys {
+			newNode48.keys[k] = byte(len(newNode48.children))
+			newNode48.children = append(newNode48.children, node.children[i])
+		}
+		return a.addChild(newNode48, key, child)
+
+	case NodeType48:
+		if len(node.children) < node48Max {
+			node.keys[key] = byte(len(node.children))
+			node.children = append(node.children, child)
+			return node
+		}
+		// Grow to Node256
+		newNode256 := newNode(NodeType256)
+		newNode256.prefix = node.prefix
+		newNode256.value = node.value
+		for k := 0; k < 256; k++ {
+			if node.keys[k] != emptyMarker {
+				newNode256.children[k] = node.children[node.keys[k]]
+			}
+		}
+		return a.addChild(newNode256, key, child)
+
+	case NodeType256:
+		node.children[key] = child
+		return node
+	}
+
+	return node
 }
 
 // Lookup finds a value by key in the ART
@@ -219,12 +503,53 @@ func (a *ART) Lookup(key []byte) (any, bool) {
 		return nil, false
 	}
 
-	// For this simplified implementation, we just check the root
-	if a.root.nodeType == NodeTypeLeaf && bytes.Equal(a.root.prefix, encodedKey) {
-		return a.root.value, true
+	return a.lookupRecursive(a.root, encodedKey, 0)
+}
+
+// lookupRecursive searches for a key in the tree rooted at node.
+func (a *ART) lookupRecursive(node *ARTNode, key []byte, depth int) (any, bool) {
+	if node == nil {
+		return nil, false
 	}
 
-	return nil, false
+	// Handle leaf node
+	if node.nodeType == NodeTypeLeaf {
+		// Check if the remaining key matches the prefix
+		keyPart := key[depth:]
+		if bytes.Equal(node.prefix, keyPart) {
+			return node.value, true
+		}
+		return nil, false
+	}
+
+	// Handle inner node - check prefix
+	if len(node.prefix) > 0 {
+		keyPart := key[depth:]
+		if len(keyPart) < len(node.prefix) {
+			return nil, false
+		}
+		if !bytes.Equal(node.prefix, keyPart[:len(node.prefix)]) {
+			return nil, false
+		}
+		depth += len(node.prefix)
+	}
+
+	// Find next byte and recurse
+	if depth >= len(key) {
+		// Key ends at this node
+		if node.value != nil {
+			return node.value, true
+		}
+		return nil, false
+	}
+
+	nextByte := key[depth]
+	childIdx := a.findChild(node, nextByte)
+	if childIdx < 0 {
+		return nil, false
+	}
+
+	return a.lookupRecursive(node.children[childIdx], key, depth+1)
 }
 
 // Serialize serializes the ART to binary format
@@ -854,4 +1179,572 @@ func encodeStringKey(value string) []byte {
 	encoded[len(value)] = nullTerminator
 
 	return encoded
+}
+
+// =============================================================================
+// Composite Key Encoding/Decoding
+// =============================================================================
+// Composite keys are used for multi-column indexes. They are encoded by
+// concatenating the encoded representations of each column value in order.
+// This preserves lexicographic ordering for the entire composite key.
+//
+// Encoding format:
+// For each column value, the value is encoded using the type-specific encoding
+// (encodeKey), then all encoded parts are concatenated. Variable-length types
+// (VARCHAR, BLOB) use null-termination so they can be distinguished in the
+// concatenated result.
+//
+// Example:
+//   Index on (a INT, b VARCHAR, c INT)
+//   Values: [5, "hello", 10]
+//   Encoded: encodeKey(5) + encodeKey("hello") + encodeKey(10)
+//          = [4 bytes] + [6 bytes (5+null)] + [4 bytes]
+//          = 14 bytes total
+//
+// Range scan use cases:
+//   1. Full composite key: WHERE a=5 AND b='hello' AND c=10
+//      Lower: encode([5, "hello", 10])
+//      Upper: encode([5, "hello", 10])
+//      Both inclusive
+//
+//   2. Prefix with range: WHERE a=5 AND b>='hello'
+//      Lower: encode([5, "hello"])
+//      Upper: ComputePrefixUpperBound(encode([5])) or nil
+//
+//   3. Prefix only: WHERE a=5 (any b, c values)
+//      Lower: encode([5])
+//      Upper: ComputePrefixUpperBound(encode([5]))
+// =============================================================================
+
+// EncodeCompositeKey encodes multiple values into a single comparable key.
+// The encoding preserves lexicographic ordering for the entire composite.
+//
+// Parameters:
+//   - values: The values to encode (one per index column)
+//   - types: The types of each value (must match length of values)
+//
+// Returns:
+//   - []byte: The encoded composite key
+//   - error: If encoding fails for any value
+//
+// Example:
+//
+//	key, err := EncodeCompositeKey(
+//	    []any{int32(5), "hello"},
+//	    []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+//	)
+func EncodeCompositeKey(values []any, types []dukdb.Type) ([]byte, error) {
+	if len(values) != len(types) {
+		return nil, fmt.Errorf("values length (%d) does not match types length (%d)", len(values), len(types))
+	}
+
+	var result []byte
+
+	for i, v := range values {
+		encoded, err := encodeValue(v, types[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode value at index %d: %w", i, err)
+		}
+		result = append(result, encoded...)
+	}
+
+	return result, nil
+}
+
+// encodeValue encodes a single value based on its type.
+// This converts a Go value to its byte representation suitable for ART indexing.
+//
+//nolint:gocyclo,mnd // Complex type handling requires many cases
+func encodeValue(value any, keyType dukdb.Type) ([]byte, error) {
+	if value == nil {
+		// NULL values encode as a special marker
+		// Using 0x00 as NULL marker (comes before all other values lexicographically)
+		return []byte{0x00}, nil
+	}
+
+	// Convert value to bytes based on type
+	var rawBytes []byte
+
+	switch keyType {
+	case dukdb.TYPE_BOOLEAN:
+		b, ok := value.(bool)
+		if !ok {
+			return nil, fmt.Errorf("expected bool for TYPE_BOOLEAN, got %T", value)
+		}
+		if b {
+			rawBytes = []byte{0x01}
+		} else {
+			rawBytes = []byte{0x00}
+		}
+
+	case dukdb.TYPE_TINYINT:
+		var v int8
+		switch val := value.(type) {
+		case int8:
+			v = val
+		case int:
+			v = int8(val)
+		case int16:
+			v = int8(val)
+		case int32:
+			v = int8(val)
+		case int64:
+			v = int8(val)
+		default:
+			return nil, fmt.Errorf("expected int8 for TYPE_TINYINT, got %T", value)
+		}
+		rawBytes = []byte{byte(v)}
+
+	case dukdb.TYPE_SMALLINT:
+		var v int16
+		switch val := value.(type) {
+		case int16:
+			v = val
+		case int:
+			v = int16(val)
+		case int8:
+			v = int16(val)
+		case int32:
+			v = int16(val)
+		case int64:
+			v = int16(val)
+		default:
+			return nil, fmt.Errorf("expected int16 for TYPE_SMALLINT, got %T", value)
+		}
+		rawBytes = make([]byte, 2)
+		binary.LittleEndian.PutUint16(rawBytes, uint16(v))
+
+	case dukdb.TYPE_INTEGER:
+		var v int32
+		switch val := value.(type) {
+		case int32:
+			v = val
+		case int:
+			v = int32(val)
+		case int8:
+			v = int32(val)
+		case int16:
+			v = int32(val)
+		case int64:
+			v = int32(val)
+		default:
+			return nil, fmt.Errorf("expected int32 for TYPE_INTEGER, got %T", value)
+		}
+		rawBytes = make([]byte, 4)
+		binary.LittleEndian.PutUint32(rawBytes, uint32(v))
+
+	case dukdb.TYPE_BIGINT:
+		var v int64
+		switch val := value.(type) {
+		case int64:
+			v = val
+		case int:
+			v = int64(val)
+		case int8:
+			v = int64(val)
+		case int16:
+			v = int64(val)
+		case int32:
+			v = int64(val)
+		default:
+			return nil, fmt.Errorf("expected int64 for TYPE_BIGINT, got %T", value)
+		}
+		rawBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(rawBytes, uint64(v))
+
+	case dukdb.TYPE_UTINYINT:
+		v, ok := value.(uint8)
+		if !ok {
+			return nil, fmt.Errorf("expected uint8 for TYPE_UTINYINT, got %T", value)
+		}
+		rawBytes = []byte{v}
+
+	case dukdb.TYPE_USMALLINT:
+		v, ok := value.(uint16)
+		if !ok {
+			return nil, fmt.Errorf("expected uint16 for TYPE_USMALLINT, got %T", value)
+		}
+		rawBytes = make([]byte, 2)
+		binary.LittleEndian.PutUint16(rawBytes, v)
+
+	case dukdb.TYPE_UINTEGER:
+		v, ok := value.(uint32)
+		if !ok {
+			return nil, fmt.Errorf("expected uint32 for TYPE_UINTEGER, got %T", value)
+		}
+		rawBytes = make([]byte, 4)
+		binary.LittleEndian.PutUint32(rawBytes, v)
+
+	case dukdb.TYPE_UBIGINT:
+		v, ok := value.(uint64)
+		if !ok {
+			return nil, fmt.Errorf("expected uint64 for TYPE_UBIGINT, got %T", value)
+		}
+		rawBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(rawBytes, v)
+
+	case dukdb.TYPE_FLOAT:
+		v, ok := value.(float32)
+		if !ok {
+			return nil, fmt.Errorf("expected float32 for TYPE_FLOAT, got %T", value)
+		}
+		rawBytes = make([]byte, 4)
+		binary.LittleEndian.PutUint32(rawBytes, math.Float32bits(v))
+
+	case dukdb.TYPE_DOUBLE:
+		v, ok := value.(float64)
+		if !ok {
+			return nil, fmt.Errorf("expected float64 for TYPE_DOUBLE, got %T", value)
+		}
+		rawBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(rawBytes, math.Float64bits(v))
+
+	case dukdb.TYPE_VARCHAR:
+		var str string
+		switch val := value.(type) {
+		case string:
+			str = val
+		case []byte:
+			str = string(val)
+		default:
+			return nil, fmt.Errorf("expected string for TYPE_VARCHAR, got %T", value)
+		}
+		rawBytes = []byte(str)
+
+	case dukdb.TYPE_BLOB:
+		v, ok := value.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("expected []byte for TYPE_BLOB, got %T", value)
+		}
+		rawBytes = v
+
+	case dukdb.TYPE_DATE:
+		// DATE is stored as int32 days since epoch
+		v, ok := value.(int32)
+		if !ok {
+			return nil, fmt.Errorf("expected int32 for TYPE_DATE, got %T", value)
+		}
+		rawBytes = make([]byte, 4)
+		binary.LittleEndian.PutUint32(rawBytes, uint32(v))
+
+	case dukdb.TYPE_TIME, dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS:
+		// Time/Timestamp stored as int64 microseconds
+		v, ok := value.(int64)
+		if !ok {
+			return nil, fmt.Errorf("expected int64 for temporal type, got %T", value)
+		}
+		rawBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(rawBytes, uint64(v))
+
+	default:
+		// For other types, try to convert to bytes
+		if b, ok := value.([]byte); ok {
+			rawBytes = b
+		} else {
+			return nil, fmt.Errorf("unsupported type for composite key encoding: %v", keyType)
+		}
+	}
+
+	// Apply type-specific encoding for sort order
+	return encodeKey(rawBytes, keyType)
+}
+
+// DecodeCompositeKey decodes a composite key back to its component values.
+// This is primarily useful for testing and debugging.
+//
+// Parameters:
+//   - key: The encoded composite key bytes
+//   - types: The types of each component (determines how to split and decode)
+//
+// Returns:
+//   - []any: The decoded values
+//   - error: If decoding fails
+//
+// Note: This function requires knowledge of the exact types to correctly split
+// the concatenated key. Variable-length types (VARCHAR, BLOB) are null-terminated.
+//
+//nolint:gocyclo,mnd // Complex type handling requires many cases
+func DecodeCompositeKey(key []byte, types []dukdb.Type) ([]any, error) {
+	result := make([]any, len(types))
+	offset := 0
+
+	for i, keyType := range types {
+		if offset >= len(key) {
+			return nil, fmt.Errorf("key too short: expected %d components, ran out at component %d", len(types), i)
+		}
+
+		// Check for NULL marker
+		if key[offset] == 0x00 && (keyType == dukdb.TYPE_VARCHAR || keyType == dukdb.TYPE_BLOB) {
+			// Could be null terminator for empty string or NULL - assume empty for now
+			// This is a limitation of the current encoding
+		}
+
+		var encodedLen int
+		var decoded []byte
+		var err error
+
+		switch keyType {
+		case dukdb.TYPE_BOOLEAN:
+			encodedLen = 1
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = decoded[0] != 0
+			}
+
+		case dukdb.TYPE_TINYINT:
+			encodedLen = 1
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = int8(decoded[0])
+			}
+
+		case dukdb.TYPE_SMALLINT:
+			encodedLen = 2
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for SMALLINT at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = int16(binary.LittleEndian.Uint16(decoded))
+			}
+
+		case dukdb.TYPE_INTEGER, dukdb.TYPE_DATE:
+			encodedLen = 4
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for INTEGER at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = int32(binary.LittleEndian.Uint32(decoded))
+			}
+
+		case dukdb.TYPE_BIGINT, dukdb.TYPE_TIME, dukdb.TYPE_TIMESTAMP,
+			dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS:
+			encodedLen = 8
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for BIGINT at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = int64(binary.LittleEndian.Uint64(decoded))
+			}
+
+		case dukdb.TYPE_UTINYINT:
+			encodedLen = 1
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = decoded[0]
+			}
+
+		case dukdb.TYPE_USMALLINT:
+			encodedLen = 2
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for USMALLINT at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = binary.LittleEndian.Uint16(decoded)
+			}
+
+		case dukdb.TYPE_UINTEGER:
+			encodedLen = 4
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for UINTEGER at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = binary.LittleEndian.Uint32(decoded)
+			}
+
+		case dukdb.TYPE_UBIGINT:
+			encodedLen = 8
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for UBIGINT at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = binary.LittleEndian.Uint64(decoded)
+			}
+
+		case dukdb.TYPE_FLOAT:
+			encodedLen = 4
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for FLOAT at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = math.Float32frombits(binary.LittleEndian.Uint32(decoded))
+			}
+
+		case dukdb.TYPE_DOUBLE:
+			encodedLen = 8
+			if offset+encodedLen > len(key) {
+				return nil, fmt.Errorf("key too short for DOUBLE at component %d", i)
+			}
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				result[i] = math.Float64frombits(binary.LittleEndian.Uint64(decoded))
+			}
+
+		case dukdb.TYPE_VARCHAR, dukdb.TYPE_BLOB:
+			// Variable length: find null terminator
+			nullPos := -1
+			for j := offset; j < len(key); j++ {
+				if key[j] == 0x00 {
+					nullPos = j
+					break
+				}
+			}
+			if nullPos == -1 {
+				return nil, fmt.Errorf("no null terminator found for VARCHAR/BLOB at component %d", i)
+			}
+			encodedLen = nullPos - offset + 1 // Include null terminator
+			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)
+			if err == nil {
+				if keyType == dukdb.TYPE_VARCHAR {
+					result[i] = string(decoded)
+				} else {
+					result[i] = decoded
+				}
+			}
+
+		default:
+			return nil, fmt.Errorf("unsupported type for composite key decoding: %v", keyType)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode component %d: %w", i, err)
+		}
+
+		offset += encodedLen
+	}
+
+	return result, nil
+}
+
+// ComputePrefixUpperBound returns the first key lexicographically > prefix.
+// This is used for prefix range scans where we want all keys starting with prefix.
+//
+// Parameters:
+//   - prefix: The prefix to compute the upper bound for
+//
+// Returns:
+//   - []byte: The upper bound (prefix + 1 at the last incrementable byte)
+//   - nil if the prefix is all 0xFF bytes (no upper bound possible)
+//
+// Example:
+//
+//	ComputePrefixUpperBound([]byte{0x80, 0x00, 0x05}) => []byte{0x80, 0x00, 0x06}
+//	ComputePrefixUpperBound([]byte{0x80, 0xFF}) => []byte{0x81}
+//	ComputePrefixUpperBound([]byte{0xFF, 0xFF}) => nil
+func ComputePrefixUpperBound(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil // No prefix means scan to end
+	}
+
+	// Find the rightmost byte that can be incremented
+	upper := make([]byte, len(prefix))
+	copy(upper, prefix)
+
+	for i := len(upper) - 1; i >= 0; i-- {
+		if upper[i] < 0xFF {
+			upper[i]++
+			return upper[:i+1]
+		}
+	}
+
+	// All bytes are 0xFF, no upper bound possible (scan to end)
+	return nil
+}
+
+// EncodeCompositeKeyPrefix encodes a prefix of a composite key.
+// This is useful when you have equality predicates on only some columns.
+//
+// Parameters:
+//   - values: The prefix values to encode (fewer than total index columns)
+//   - types: The types of each prefix value
+//
+// Returns:
+//   - []byte: The encoded prefix
+//   - error: If encoding fails
+//
+// Example:
+//
+//	// Index on (a INT, b VARCHAR, c INT)
+//	// Query: WHERE a = 5 (match any b, c)
+//	prefix, _ := EncodeCompositeKeyPrefix([]any{5}, []dukdb.Type{dukdb.TYPE_INTEGER})
+func EncodeCompositeKeyPrefix(values []any, types []dukdb.Type) ([]byte, error) {
+	return EncodeCompositeKey(values, types)
+}
+
+// CompositeRangeBounds computes the lower and upper bounds for a composite key range scan.
+// This handles the common case of equality on prefix columns with a range on the next column.
+//
+// Parameters:
+//   - equalityValues: Values for columns with equality predicates (prefix)
+//   - equalityTypes: Types of the equality columns
+//   - rangeLower: Lower bound value for the range column (nil for unbounded)
+//   - rangeUpper: Upper bound value for the range column (nil for unbounded)
+//   - rangeType: Type of the range column
+//   - lowerInclusive: Whether the lower bound is inclusive
+//   - upperInclusive: Whether the upper bound is inclusive
+//
+// Returns:
+//   - lower: Encoded lower bound
+//   - upper: Encoded upper bound
+//   - error: If encoding fails
+//
+// Example:
+//
+//	// Index on (a INT, b INT)
+//	// Query: WHERE a = 5 AND b BETWEEN 10 AND 20
+//	lower, upper, _ := CompositeRangeBounds(
+//	    []any{5}, []dukdb.Type{dukdb.TYPE_INTEGER},  // a = 5
+//	    10, 20, dukdb.TYPE_INTEGER,                   // b BETWEEN 10 AND 20
+//	    true, true,                                    // both inclusive
+//	)
+func CompositeRangeBounds(
+	equalityValues []any,
+	equalityTypes []dukdb.Type,
+	rangeLower, rangeUpper any,
+	rangeType dukdb.Type,
+	_, _ bool,
+) (lower, upper []byte, err error) {
+	// Encode the prefix from equality predicates
+	prefix, err := EncodeCompositeKey(equalityValues, equalityTypes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to encode equality prefix: %w", err)
+	}
+
+	// Encode lower bound
+	// Note: We must copy prefix before appending to avoid slice aliasing issues
+	if rangeLower != nil {
+		lowerRangeEncoded, encErr := encodeValue(rangeLower, rangeType)
+		if encErr != nil {
+			return nil, nil, fmt.Errorf("failed to encode range lower bound: %w", encErr)
+		}
+		lower = make([]byte, len(prefix)+len(lowerRangeEncoded))
+		copy(lower, prefix)
+		copy(lower[len(prefix):], lowerRangeEncoded)
+	} else {
+		lower = make([]byte, len(prefix))
+		copy(lower, prefix)
+	}
+
+	// Encode upper bound
+	if rangeUpper != nil {
+		upperRangeEncoded, encErr := encodeValue(rangeUpper, rangeType)
+		if encErr != nil {
+			return nil, nil, fmt.Errorf("failed to encode range upper bound: %w", encErr)
+		}
+		upper = make([]byte, len(prefix)+len(upperRangeEncoded))
+		copy(upper, prefix)
+		copy(upper[len(prefix):], upperRangeEncoded)
+	} else {
+		// Upper bound is first key > prefix
+		upper = ComputePrefixUpperBound(prefix)
+	}
+
+	return lower, upper, nil
 }

@@ -7,7 +7,10 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/parser"
+	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/storage/index"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1570,5 +1573,605 @@ func TestPhysicalIndexScan_ResidualFilterWithNoMatches(t *testing.T) {
 	for i := 0; i < chunk.Count(); i++ {
 		filterVal := chunk.GetValue(i, 1).(string)
 		assert.NotEqual(t, "nonexistent", filterVal)
+	}
+}
+
+// =============================================================================
+// Executor-Level Index Not Found Error Tests
+// =============================================================================
+
+// TestExecuteIndexScan_IndexNotFoundInStorage tests the error handling when
+// an index is not found in storage during execution. This simulates the scenario
+// where an index is dropped between planning and execution (TOCTOU race).
+func TestExecuteIndexScan_IndexNotFoundInStorage(t *testing.T) {
+	// Create storage and table
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	_, err := stor.CreateTable("toctou_test", columnTypes)
+	require.NoError(t, err)
+
+	// Create table definition
+	tableDef := catalog.NewTableDef("toctou_test", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	})
+
+	// Create index definition (but don't create the actual index in storage!)
+	// This simulates the case where index exists in catalog but not in storage
+	indexDef := catalog.NewIndexDef("idx_toctou", "main", "toctou_test", []string{"id"}, false)
+
+	// Create catalog and executor
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create lookup key
+	lookupKeys := []binder.BoundExpr{
+		&binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
+	}
+
+	// Create PhysicalIndexScan plan - note: no index is created in storage
+	plan := &planner.PhysicalIndexScan{
+		Schema:      "main",
+		TableName:   "toctou_test",
+		Alias:       "toctou_test",
+		TableDef:    tableDef,
+		IndexName:   "idx_toctou",
+		IndexDef:    indexDef,
+		LookupKeys:  lookupKeys,
+		Projections: nil,
+		IsIndexOnly: false,
+	}
+
+	// Execute the index scan - should fail because index is not in storage
+	_, err = exec.executeIndexScan(ctx, plan)
+	require.Error(t, err, "Should return error when index not found in storage")
+
+	// Verify error message includes all context
+	errMsg := err.Error()
+	assert.Contains(t, errMsg, "idx_toctou", "Error should include index name")
+	assert.Contains(t, errMsg, "main", "Error should include schema name")
+	assert.Contains(t, errMsg, "toctou_test", "Error should include table name")
+	assert.Contains(t, errMsg, "not found", "Error should indicate index not found")
+	assert.Contains(t, errMsg, "dropped", "Error should suggest the index may have been dropped")
+}
+
+// =============================================================================
+// Range Scan Tests
+// =============================================================================
+
+// TestRangeScan_OperatorConfiguration tests that the range scan operator is configured correctly.
+func TestRangeScan_OperatorConfiguration(t *testing.T) {
+	// Create storage and table
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+	}
+	_, err := stor.CreateTable("range_config_test", columnTypes)
+	require.NoError(t, err)
+
+	// Create ART index
+	artIdx := index.NewART(dukdb.TYPE_INTEGER)
+
+	// Create table definition
+	tableDef := catalog.NewTableDef("range_config_test", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	})
+
+	// Create index definition
+	indexDef := catalog.NewIndexDef("idx_range_id", "main", "range_config_test", []string{"id"}, false)
+
+	// Create executor and context
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Test with IsRangeScan = true
+	scanOp, err := NewPhysicalIndexScanOperatorWithConfig(IndexScanConfig{
+		TableName:        "range_config_test",
+		Schema:           "main",
+		TableDef:         tableDef,
+		IndexName:        "idx_range_id",
+		IndexDef:         indexDef,
+		ARTIndex:         artIdx,
+		IsRangeScan:      true,
+		LowerBound:       &binder.BoundLiteral{Value: int32(3), ValType: dukdb.TYPE_INTEGER},
+		UpperBound:       &binder.BoundLiteral{Value: int32(7), ValType: dukdb.TYPE_INTEGER},
+		LowerInclusive:   true,
+		UpperInclusive:   true,
+		RangeColumnIndex: 0,
+		Projections:      nil,
+		IsIndexOnly:      false,
+		Storage:          stor,
+		Executor:         exec,
+		Ctx:              ctx,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, scanOp)
+
+	// Verify configuration
+	assert.True(t, scanOp.IsRangeScan(), "Should be configured as range scan")
+	assert.NotNil(t, scanOp.GetARTIndex(), "Should have ART index")
+	assert.Equal(t, "idx_range_id", scanOp.GetIndexName(), "Should have correct index name")
+}
+
+// TestRangeScan_PointLookupConfiguration tests that point lookups are not range scans.
+func TestRangeScan_PointLookupConfiguration(t *testing.T) {
+	// Create storage and table
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
+	_, err := stor.CreateTable("point_lookup_test", columnTypes)
+	require.NoError(t, err)
+
+	// Create HashIndex for point lookups
+	hashIdx := storage.NewHashIndex("idx_point", "point_lookup_test", []string{"id"}, false)
+
+	tableDef := catalog.NewTableDef("point_lookup_test", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	})
+	indexDef := catalog.NewIndexDef("idx_point", "main", "point_lookup_test", []string{"id"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create point lookup (not range scan)
+	scanOp, err := NewPhysicalIndexScanOperatorWithConfig(IndexScanConfig{
+		TableName:   "point_lookup_test",
+		Schema:      "main",
+		TableDef:    tableDef,
+		IndexName:   "idx_point",
+		IndexDef:    indexDef,
+		Index:       hashIdx,
+		ARTIndex:    nil, // No ART for point lookups
+		IsRangeScan: false,
+		LookupKeys: []binder.BoundExpr{
+			&binder.BoundLiteral{Value: int32(5), ValType: dukdb.TYPE_INTEGER},
+		},
+		Projections: nil,
+		IsIndexOnly: false,
+		Storage:     stor,
+		Executor:    exec,
+		Ctx:         ctx,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, scanOp)
+
+	// Verify it's NOT a range scan
+	assert.False(t, scanOp.IsRangeScan(), "Should NOT be configured as range scan")
+	assert.Nil(t, scanOp.GetARTIndex(), "Should NOT have ART index for point lookups")
+}
+
+// TestRangeScan_NilARTIndex tests that range scan returns error when ART index is nil.
+func TestRangeScan_NilARTIndex(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
+	_, err := stor.CreateTable("range_nil", columnTypes)
+	require.NoError(t, err)
+
+	tableDef := catalog.NewTableDef("range_nil", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	})
+	indexDef := catalog.NewIndexDef("idx_nil", "main", "range_nil", []string{"id"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create range scan operator with nil ART index
+	scanOp, err := NewPhysicalIndexScanOperatorWithConfig(IndexScanConfig{
+		TableName:      "range_nil",
+		Schema:         "main",
+		TableDef:       tableDef,
+		IndexName:      "idx_nil",
+		IndexDef:       indexDef,
+		ARTIndex:       nil, // nil ART index
+		IsRangeScan:    true,
+		LowerBound:     &binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
+		UpperBound:     nil,
+		LowerInclusive: true,
+		UpperInclusive: false,
+		Projections:    nil,
+		IsIndexOnly:    false,
+		Storage:        stor,
+		Executor:       exec,
+		Ctx:            ctx,
+	})
+	require.NoError(t, err)
+
+	// Execution should fail with error about nil ART index
+	_, err = scanOp.Next()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "range scan requires an ART index")
+}
+
+// TestRangeScan_SetARTIndex tests the SetARTIndex method.
+func TestRangeScan_SetARTIndex(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR}
+	_, err := stor.CreateTable("range_set", columnTypes)
+	require.NoError(t, err)
+
+	tableDef := catalog.NewTableDef("range_set", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
+	})
+	indexDef := catalog.NewIndexDef("idx_set", "main", "range_set", []string{"id"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create range scan without ART index initially
+	scanOp, err := NewPhysicalIndexScanOperatorWithConfig(IndexScanConfig{
+		TableName:      "range_set",
+		Schema:         "main",
+		TableDef:       tableDef,
+		IndexName:      "idx_set",
+		IndexDef:       indexDef,
+		ARTIndex:       nil, // No ART index initially
+		IsRangeScan:    true,
+		LowerBound:     &binder.BoundLiteral{Value: int32(2), ValType: dukdb.TYPE_INTEGER},
+		UpperBound:     &binder.BoundLiteral{Value: int32(4), ValType: dukdb.TYPE_INTEGER},
+		LowerInclusive: true,
+		UpperInclusive: true,
+		Projections:    nil,
+		IsIndexOnly:    false,
+		Storage:        stor,
+		Executor:       exec,
+		Ctx:            ctx,
+	})
+	require.NoError(t, err)
+
+	// Verify no ART index initially
+	assert.Nil(t, scanOp.GetARTIndex())
+
+	// Create and set ART index
+	artIdx := index.NewART(dukdb.TYPE_INTEGER)
+
+	scanOp.SetARTIndex(artIdx)
+
+	// Verify ART index is now set
+	assert.NotNil(t, scanOp.GetARTIndex())
+	assert.Equal(t, artIdx, scanOp.GetARTIndex())
+}
+
+// TestEncodeKeyValue tests the key encoding functions for various types.
+func TestEncodeKeyValue(t *testing.T) {
+	// Test int encoding preserves order
+	key1 := encodeKeyValue(int32(1))
+	key2 := encodeKeyValue(int32(2))
+	key3 := encodeKeyValue(int32(3))
+
+	assert.Less(t, string(key1), string(key2), "1 should encode less than 2")
+	assert.Less(t, string(key2), string(key3), "2 should encode less than 3")
+
+	// Test negative numbers
+	keyNeg := encodeKeyValue(int32(-1))
+	keyZero := encodeKeyValue(int32(0))
+	keyPos := encodeKeyValue(int32(1))
+
+	assert.Less(t, string(keyNeg), string(keyZero), "-1 should encode less than 0")
+	assert.Less(t, string(keyZero), string(keyPos), "0 should encode less than 1")
+
+	// Test int64
+	key64_1 := encodeKeyValue(int64(1000000))
+	key64_2 := encodeKeyValue(int64(2000000))
+	assert.Less(t, string(key64_1), string(key64_2))
+
+	// Test string encoding
+	keyA := encodeKeyValue("apple")
+	keyB := encodeKeyValue("banana")
+	assert.Less(t, string(keyA), string(keyB), "apple should encode less than banana")
+
+	// Test nil returns nil
+	assert.Nil(t, encodeKeyValue(nil))
+}
+
+// =============================================================================
+// Residual Filter Tests with executeIndexScan
+// =============================================================================
+// These tests verify that residual filters are correctly applied after index lookups.
+// The residual filter is applied in executeIndexScan() regardless of whether the
+// underlying scan uses point lookups (HashIndex) or range scans (ART).
+
+// TestExecuteIndexScan_ResidualFilter_PointLookup tests that residual filters
+// are correctly applied after point lookup index scans.
+// Scenario: Index on 'department_id', query WHERE department_id = 10 AND status = 'active'
+func TestExecuteIndexScan_ResidualFilter_PointLookup(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER, // id
+		dukdb.TYPE_INTEGER, // department_id (indexed)
+		dukdb.TYPE_VARCHAR, // status (residual filter)
+	}
+	table, err := stor.CreateTable("employees_residual", columnTypes)
+	require.NoError(t, err)
+
+	// Insert test data
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), "active"}))   // matches both
+	require.NoError(t, table.AppendRow([]any{int32(2), int32(10), "inactive"})) // matches index, fails residual
+	require.NoError(t, table.AppendRow([]any{int32(3), int32(10), "active"}))   // matches both
+	require.NoError(t, table.AppendRow([]any{int32(4), int32(20), "active"}))   // fails index
+	require.NoError(t, table.AppendRow([]any{int32(5), int32(10), "pending"}))  // matches index, fails residual
+
+	// Create hash index on department_id
+	hashIdx := storage.NewHashIndex("idx_dept_residual", "employees_residual", []string{"department_id"}, false)
+	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(0)))
+	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(1)))
+	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(2)))
+	require.NoError(t, hashIdx.Insert([]any{int32(20)}, storage.RowID(3)))
+	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(4)))
+
+	// Register the index in storage
+	require.NoError(t, stor.CreateIndex("main", hashIdx))
+
+	tableDef := catalog.NewTableDef("employees_residual", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("department_id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("status", dukdb.TYPE_VARCHAR),
+	})
+	indexDef := catalog.NewIndexDef("idx_dept_residual", "main", "employees_residual", []string{"department_id"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create PhysicalIndexScan plan with residual filter (status = 'active')
+	plan := &planner.PhysicalIndexScan{
+		TableName: "employees_residual",
+		Schema:    "main",
+		TableDef:  tableDef,
+		IndexName: "idx_dept_residual",
+		IndexDef:  indexDef,
+		LookupKeys: []binder.BoundExpr{
+			&binder.BoundLiteral{Value: int32(10), ValType: dukdb.TYPE_INTEGER},
+		},
+		ResidualFilter: &binder.BoundBinaryExpr{
+			Left:  &binder.BoundColumnRef{Column: "status", Table: "", ColType: dukdb.TYPE_VARCHAR, ColumnIdx: 2},
+			Op:    parser.OpEq,
+			Right: &binder.BoundLiteral{Value: "active", ValType: dukdb.TYPE_VARCHAR},
+		},
+	}
+
+	// Execute the index scan
+	result, err := exec.executeIndexScan(ctx, plan)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Without residual filter, index returns 4 rows (dept=10)
+	// With residual filter (status='active'), only 2 rows should remain
+	assert.Equal(t, 2, len(result.Rows), "Residual filter should reduce 4 rows to 2")
+
+	// Verify all returned rows have status='active'
+	for _, row := range result.Rows {
+		assert.Equal(t, "active", row["status"], "All rows should have status='active'")
+	}
+}
+
+// TestExecuteIndexScan_ResidualFilter_MultiplePredicates tests residual filter
+// with multiple predicates combined with AND.
+// Scenario: Index on 'category', query WHERE category = 'A' AND price > 100 AND stock > 0
+func TestExecuteIndexScan_ResidualFilter_MultiplePredicates(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER, // id
+		dukdb.TYPE_VARCHAR, // category (indexed)
+		dukdb.TYPE_INTEGER, // price (residual)
+		dukdb.TYPE_INTEGER, // stock (residual)
+	}
+	table, err := stor.CreateTable("products_residual", columnTypes)
+	require.NoError(t, err)
+
+	// Insert test data
+	require.NoError(t, table.AppendRow([]any{int32(1), "A", int32(150), int32(5)}))  // passes all
+	require.NoError(t, table.AppendRow([]any{int32(2), "A", int32(80), int32(10)}))  // fails price
+	require.NoError(t, table.AppendRow([]any{int32(3), "A", int32(200), int32(0)}))  // fails stock
+	require.NoError(t, table.AppendRow([]any{int32(4), "B", int32(120), int32(3)}))  // fails index
+	require.NoError(t, table.AppendRow([]any{int32(5), "A", int32(110), int32(2)}))  // passes all
+	require.NoError(t, table.AppendRow([]any{int32(6), "A", int32(50), int32(0)}))   // fails both residual
+
+	// Create hash index on category
+	hashIdx := storage.NewHashIndex("idx_cat_residual", "products_residual", []string{"category"}, false)
+	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(0)))
+	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(1)))
+	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(2)))
+	require.NoError(t, hashIdx.Insert([]any{"B"}, storage.RowID(3)))
+	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(4)))
+	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(5)))
+
+	require.NoError(t, stor.CreateIndex("main", hashIdx))
+
+	tableDef := catalog.NewTableDef("products_residual", []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("category", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("price", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("stock", dukdb.TYPE_INTEGER),
+	})
+	indexDef := catalog.NewIndexDef("idx_cat_residual", "main", "products_residual", []string{"category"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Create PhysicalIndexScan plan with complex residual filter
+	// (price > 100 AND stock > 0)
+	plan := &planner.PhysicalIndexScan{
+		TableName: "products_residual",
+		Schema:    "main",
+		TableDef:  tableDef,
+		IndexName: "idx_cat_residual",
+		IndexDef:  indexDef,
+		LookupKeys: []binder.BoundExpr{
+			&binder.BoundLiteral{Value: "A", ValType: dukdb.TYPE_VARCHAR},
+		},
+		ResidualFilter: &binder.BoundBinaryExpr{
+			Left: &binder.BoundBinaryExpr{
+				Left:  &binder.BoundColumnRef{Column: "price", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+				Op:    parser.OpGt,
+				Right: &binder.BoundLiteral{Value: int32(100), ValType: dukdb.TYPE_INTEGER},
+			},
+			Op: parser.OpAnd,
+			Right: &binder.BoundBinaryExpr{
+				Left:  &binder.BoundColumnRef{Column: "stock", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 3},
+				Op:    parser.OpGt,
+				Right: &binder.BoundLiteral{Value: int32(0), ValType: dukdb.TYPE_INTEGER},
+			},
+		},
+	}
+
+	// Execute the index scan
+	result, err := exec.executeIndexScan(ctx, plan)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Index returns 5 rows (category='A')
+	// Residual filter (price > 100 AND stock > 0) keeps only 2 rows
+	assert.Equal(t, 2, len(result.Rows), "Residual filter should reduce 5 rows to 2")
+
+	// Verify all returned rows satisfy the residual predicates
+	for _, row := range result.Rows {
+		price := row["price"].(int32)
+		stock := row["stock"].(int32)
+		assert.Greater(t, price, int32(100), "All rows should have price > 100")
+		assert.Greater(t, stock, int32(0), "All rows should have stock > 0")
+	}
+}
+
+// TestExecuteIndexScan_ResidualFilter_NoMatches tests the case where index finds
+// rows but all are filtered out by the residual filter.
+func TestExecuteIndexScan_ResidualFilter_NoMatches(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER, // key
+		dukdb.TYPE_VARCHAR, // filter_col
+	}
+	table, err := stor.CreateTable("no_match_residual", columnTypes)
+	require.NoError(t, err)
+
+	// All rows have key=1 but none have filter_col='target'
+	require.NoError(t, table.AppendRow([]any{int32(1), "x"}))
+	require.NoError(t, table.AppendRow([]any{int32(1), "y"}))
+	require.NoError(t, table.AppendRow([]any{int32(1), "z"}))
+
+	hashIdx := storage.NewHashIndex("idx_key_nomatch", "no_match_residual", []string{"key"}, false)
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(0)))
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(1)))
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(2)))
+
+	require.NoError(t, stor.CreateIndex("main", hashIdx))
+
+	tableDef := catalog.NewTableDef("no_match_residual", []*catalog.ColumnDef{
+		catalog.NewColumnDef("key", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("filter_col", dukdb.TYPE_VARCHAR),
+	})
+	indexDef := catalog.NewIndexDef("idx_key_nomatch", "main", "no_match_residual", []string{"key"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Residual filter = "filter_col = 'target'" (matches nothing)
+	plan := &planner.PhysicalIndexScan{
+		TableName: "no_match_residual",
+		Schema:    "main",
+		TableDef:  tableDef,
+		IndexName: "idx_key_nomatch",
+		IndexDef:  indexDef,
+		LookupKeys: []binder.BoundExpr{
+			&binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
+		},
+		ResidualFilter: &binder.BoundBinaryExpr{
+			Left:  &binder.BoundColumnRef{Column: "filter_col", Table: "", ColType: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+			Op:    parser.OpEq,
+			Right: &binder.BoundLiteral{Value: "target", ValType: dukdb.TYPE_VARCHAR},
+		},
+	}
+
+	result, err := exec.executeIndexScan(ctx, plan)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Index returns 3 rows, but residual filter matches none
+	assert.Equal(t, 0, len(result.Rows), "Residual filter should filter out all rows")
+}
+
+// TestExecuteIndexScan_ResidualFilter_CompositeIndexPartialMatch tests residual filter
+// when only part of a composite index is matched.
+// Scenario: Index on (a, b), query WHERE a = 1 AND c = 3
+// Only 'a = 1' uses the index, 'c = 3' becomes residual filter.
+func TestExecuteIndexScan_ResidualFilter_CompositeIndexPartialMatch(t *testing.T) {
+	stor := storage.NewStorage()
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER, // a (indexed)
+		dukdb.TYPE_INTEGER, // b (indexed but not in query)
+		dukdb.TYPE_INTEGER, // c (not indexed, residual filter)
+	}
+	table, err := stor.CreateTable("composite_partial", columnTypes)
+	require.NoError(t, err)
+
+	// Insert test data
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), int32(3)})) // matches a=1 AND c=3
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(20), int32(5)})) // matches a=1, fails c=3
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(30), int32(3)})) // matches a=1 AND c=3
+	require.NoError(t, table.AppendRow([]any{int32(2), int32(40), int32(3)})) // fails a=1
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(50), int32(7)})) // matches a=1, fails c=3
+
+	// Create single-column index on 'a' to simulate partial composite match
+	hashIdx := storage.NewHashIndex("idx_a_partial", "composite_partial", []string{"a"}, false)
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(0)))
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(1)))
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(2)))
+	require.NoError(t, hashIdx.Insert([]any{int32(2)}, storage.RowID(3)))
+	require.NoError(t, hashIdx.Insert([]any{int32(1)}, storage.RowID(4)))
+
+	require.NoError(t, stor.CreateIndex("main", hashIdx))
+
+	tableDef := catalog.NewTableDef("composite_partial", []*catalog.ColumnDef{
+		catalog.NewColumnDef("a", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("b", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("c", dukdb.TYPE_INTEGER),
+	})
+	indexDef := catalog.NewIndexDef("idx_a_partial", "main", "composite_partial", []string{"a"}, false)
+
+	cat := catalog.NewCatalog()
+	exec := NewExecutor(cat, stor)
+	ctx := &ExecutionContext{Context: context.Background()}
+
+	// Residual filter: c = 3
+	plan := &planner.PhysicalIndexScan{
+		TableName: "composite_partial",
+		Schema:    "main",
+		TableDef:  tableDef,
+		IndexName: "idx_a_partial",
+		IndexDef:  indexDef,
+		LookupKeys: []binder.BoundExpr{
+			&binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
+		},
+		ResidualFilter: &binder.BoundBinaryExpr{
+			Left:  &binder.BoundColumnRef{Column: "c", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+			Op:    parser.OpEq,
+			Right: &binder.BoundLiteral{Value: int32(3), ValType: dukdb.TYPE_INTEGER},
+		},
+	}
+
+	result, err := exec.executeIndexScan(ctx, plan)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Index returns 4 rows (a=1), residual filter (c=3) keeps 2
+	assert.Equal(t, 2, len(result.Rows), "Residual filter should reduce 4 rows to 2")
+
+	// Verify all returned rows have c=3
+	for _, row := range result.Rows {
+		c := row["c"].(int32)
+		assert.Equal(t, int32(3), c, "All rows should have c=3")
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/storage/index"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
@@ -500,6 +501,7 @@ func (e *Executor) executeScan(
 
 // executeIndexScan executes a PhysicalIndexScan plan node.
 // It uses the index to look up matching row IDs and fetches the corresponding rows.
+// For range scans, it uses an ART index; for point lookups, it uses a HashIndex.
 func (e *Executor) executeIndexScan(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalIndexScan,
@@ -510,30 +512,60 @@ func (e *Executor) executeIndexScan(
 		return nil, dukdb.ErrTableNotFound
 	}
 
-	// Get the index from storage
-	index := e.storage.GetIndex(plan.Schema, plan.IndexName)
-	if index == nil {
+	// Get the HashIndex from storage (used for point lookups)
+	// This can fail if the index was dropped between planning and execution (TOCTOU race)
+	hashIndex := e.storage.GetIndex(plan.Schema, plan.IndexName)
+	if hashIndex == nil && !plan.IsRangeScan {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("index %q not found", plan.IndexName),
+			Msg: fmt.Sprintf(
+				"index %q not found in schema %q for table %q during execution; "+
+					"the index may have been dropped after query planning",
+				plan.IndexName, plan.Schema, plan.TableName,
+			),
 		}
 	}
 
-	// Create the index scan operator
-	indexScanOp, err := NewPhysicalIndexScanOperator(
-		plan.TableName,
-		plan.Schema,
-		plan.TableDef,
-		plan.IndexName,
-		plan.IndexDef,
-		index,
-		plan.LookupKeys,
-		plan.Projections,
-		plan.IsIndexOnly,
-		e.storage,
-		e,
-		ctx,
-	)
+	// For range scans, we need an ART index
+	// The ART index is typically created alongside the HashIndex when the index is built
+	// For now, we create an ART index from the HashIndex data if needed
+	var artIndex *index.ART
+	if plan.IsRangeScan {
+		// Get or create ART index for range scans
+		artIndex = e.getOrCreateARTIndex(plan, hashIndex)
+		if artIndex == nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg: fmt.Sprintf(
+					"ART index required for range scan on index %q but could not be created",
+					plan.IndexName,
+				),
+			}
+		}
+	}
+
+	// Create the index scan operator with full configuration
+	indexScanOp, err := NewPhysicalIndexScanOperatorWithConfig(IndexScanConfig{
+		TableName:        plan.TableName,
+		Schema:           plan.Schema,
+		TableDef:         plan.TableDef,
+		IndexName:        plan.IndexName,
+		IndexDef:         plan.IndexDef,
+		Index:            hashIndex,
+		ARTIndex:         artIndex,
+		LookupKeys:       plan.LookupKeys,
+		IsRangeScan:      plan.IsRangeScan,
+		LowerBound:       plan.LowerBound,
+		UpperBound:       plan.UpperBound,
+		LowerInclusive:   plan.LowerInclusive,
+		UpperInclusive:   plan.UpperInclusive,
+		RangeColumnIndex: plan.RangeColumnIndex,
+		Projections:      plan.Projections,
+		IsIndexOnly:      plan.IsIndexOnly,
+		Storage:          e.storage,
+		Executor:         e,
+		Ctx:              ctx,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -596,6 +628,104 @@ func (e *Executor) executeIndexScan(
 	}
 
 	return result, nil
+}
+
+// getOrCreateARTIndex retrieves or creates an ART index for range scans.
+// It creates an ART index from the table data using ALL indexed columns to form
+// composite keys. This is necessary because HashIndex uses hashed keys and can't
+// support range scans.
+//
+// For composite indexes (e.g., (category, price)), the key is the concatenation
+// of all encoded column values, ensuring unique keys and proper ordering.
+func (e *Executor) getOrCreateARTIndex(plan *planner.PhysicalIndexScan, _ *storage.HashIndex) *index.ART {
+	// Validate input
+	if plan.IndexDef == nil || len(plan.IndexDef.Columns) == 0 || plan.TableDef == nil {
+		return nil
+	}
+
+	// Find the column indices for ALL index columns (for composite key)
+	indexColIndices := make([]int, 0, len(plan.IndexDef.Columns))
+	for _, idxColName := range plan.IndexDef.Columns {
+		for i, col := range plan.TableDef.Columns {
+			if strings.EqualFold(col.Name, idxColName) {
+				indexColIndices = append(indexColIndices, i)
+				break
+			}
+		}
+	}
+
+	if len(indexColIndices) != len(plan.IndexDef.Columns) {
+		return nil // Not all index columns found in table
+	}
+
+	// Determine key type from the first column (used for ART encoding hints)
+	// For composite indexes, the ART treats the key as a byte sequence
+	keyType := dukdb.TYPE_BLOB
+	if len(indexColIndices) == 1 {
+		// Single column index - use the actual column type
+		keyType = plan.TableDef.Columns[indexColIndices[0]].Type
+		if keyType == dukdb.TYPE_ANY {
+			keyType = dukdb.TYPE_BIGINT
+		}
+	}
+
+	// Create a new ART index
+	art := index.NewART(keyType)
+
+	// Get the table to scan for building the ART
+	table, ok := e.storage.GetTable(plan.TableName)
+	if !ok {
+		return art // Return empty ART if table not found
+	}
+
+	// Scan the table and build the ART index using the TableScanner
+	// This correctly handles the rowIDMap which may have non-sequential RowIDs
+	scanner := table.Scan()
+	for {
+		chunk := scanner.Next()
+		if chunk == nil {
+			break
+		}
+
+		// Process each row in the chunk
+		for i := 0; i < chunk.Count(); i++ {
+			// Get the RowID for this row from the scanner
+			rowIDPtr := scanner.GetRowID(i)
+			if rowIDPtr == nil {
+				continue
+			}
+			rowID := *rowIDPtr
+
+			// Build the composite key from ALL index columns
+			var compositeKey []byte
+			allColumnsValid := true
+			for _, colIdx := range indexColIndices {
+				if colIdx >= chunk.ColumnCount() {
+					allColumnsValid = false
+					break
+				}
+				keyVal := chunk.GetValue(i, colIdx)
+				if keyVal == nil {
+					allColumnsValid = false
+					break
+				}
+				encodedPart := encodeKeyValue(keyVal)
+				if encodedPart == nil {
+					allColumnsValid = false
+					break
+				}
+				compositeKey = append(compositeKey, encodedPart...)
+			}
+
+			if allColumnsValid && len(compositeKey) > 0 {
+				// Use InsertEncoded since encodeKeyValue already produces
+				// properly encoded keys for lexicographic ordering
+				_ = art.InsertEncoded(compositeKey, uint64(rowID))
+			}
+		}
+	}
+
+	return art
 }
 
 func (e *Executor) executeVirtualTableScan(
@@ -1711,6 +1841,11 @@ func (e *Executor) executeInsert(
 			OpType:    UndoInsert,
 			RowIDs:    insertedRowIDs,
 		})
+
+		// Update all indexes on this table with the newly inserted rows
+		if err := e.updateIndexesForInsert(plan.Table, plan.TableDef, allInsertedValues, startRowID); err != nil {
+			return nil, fmt.Errorf("failed to update indexes: %w", err)
+		}
 	}
 
 	// WAL logging: Log INSERT entry AFTER successful insertion
@@ -1747,6 +1882,68 @@ func (e *Executor) executeInsert(
 	return &ExecutionResult{
 		RowsAffected: rowsAffected,
 	}, nil
+}
+
+// updateIndexesForInsert updates all indexes on a table with newly inserted rows.
+// tableName: the name of the table
+// tableDef: the table definition with column info
+// values: the inserted row values (each []any corresponds to one row)
+// startRowID: the RowID of the first inserted row
+func (e *Executor) updateIndexesForInsert(tableName string, tableDef *catalog.TableDef, values [][]any, startRowID uint64) error {
+	// Get the schema (default to "main")
+	schema := "main"
+	if tableDef != nil && tableDef.Schema != "" {
+		schema = tableDef.Schema
+	}
+
+	// Get all indexes for this table
+	indexes := e.storage.GetIndexesForTable(schema, tableName)
+	if len(indexes) == 0 {
+		return nil
+	}
+
+	// Build column name to index mapping for efficient lookup
+	colNameToIdx := make(map[string]int)
+	if tableDef != nil {
+		for i, col := range tableDef.Columns {
+			colNameToIdx[strings.ToLower(col.Name)] = i
+		}
+	}
+
+	// For each index, update with all inserted rows
+	for _, idx := range indexes {
+		// Find column indices for this index
+		colIndices := make([]int, len(idx.Columns))
+		for i, colName := range idx.Columns {
+			colIdx, ok := colNameToIdx[strings.ToLower(colName)]
+			if !ok {
+				// Column not found - skip this index
+				continue
+			}
+			colIndices[i] = colIdx
+		}
+
+		// Insert each row into the index
+		for rowOffset, rowValues := range values {
+			// Build the key from indexed columns
+			key := make([]any, len(colIndices))
+			for i, colIdx := range colIndices {
+				if colIdx < len(rowValues) {
+					key[i] = rowValues[colIdx]
+				}
+			}
+
+			// Calculate RowID for this row
+			rowID := storage.RowID(startRowID + uint64(rowOffset))
+
+			// Insert into index
+			if err := idx.Insert(key, rowID); err != nil {
+				return fmt.Errorf("failed to insert into index %s: %w", idx.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (e *Executor) executeCreateTable(

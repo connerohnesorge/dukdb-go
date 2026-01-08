@@ -24,10 +24,15 @@ type CostConstants struct {
 // DefaultCostConstants returns the default cost constants optimized for
 // in-memory query execution. These values are based on PostgreSQL's cost
 // model with adjustments for dukdb-go's architecture.
+//
+// Key differences from PostgreSQL disk-based defaults:
+// - RandomPageCost is set to 1.1 (vs 4.0 for disk) since in-memory random
+//   access is nearly as fast as sequential access
+// - This makes index scans more viable for selective queries
 func DefaultCostConstants() CostConstants {
 	return CostConstants{
 		SeqPageCost:     1.0,
-		RandomPageCost:  4.0,
+		RandomPageCost:  1.1,  // Low for in-memory (PostgreSQL disk default is 4.0)
 		CPUTupleCost:    0.01,
 		CPUOperatorCost: 0.0025,
 		HashBuildCost:   0.02,
@@ -336,6 +341,9 @@ func (m *CostModel) costScan(rows, pages float64) PlanCost {
 // It considers the selectivity (fraction of rows to return), table statistics,
 // and whether this is an index-only scan (no heap access needed).
 //
+// This method handles point lookups (equality predicates). For range scans,
+// use EstimateIndexRangeScanCost instead.
+//
 // Parameters:
 //   - selectivity: Fraction of rows expected to match (0.0-1.0)
 //   - tableRows: Total number of rows in the table
@@ -481,6 +489,197 @@ func (m *CostModel) ShouldUseIndexScan(
 	seqCost := m.EstimateSeqScanCost(tableRows, tablePages, selectivity)
 
 	return indexCost.TotalCost < seqCost.TotalCost
+}
+
+// EstimateIndexRangeScanCost calculates the estimated cost for an index range scan.
+// Range scans iterate over a range of keys in the index, typically used for
+// predicates like <, >, <=, >=, or BETWEEN.
+//
+// Range scans differ from point lookups in several ways:
+//   - Higher startup cost due to seeking to the range boundary
+//   - Need to iterate through multiple index entries
+//   - Rows are typically not clustered, leading to more random I/O
+//
+// Parameters:
+//   - selectivity: Fraction of rows expected to match (0.0-1.0)
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - isIndexOnly: True if all needed columns are in the index (no heap access)
+//
+// Formula:
+//   - Startup cost = IndexLookupCost (seek to range boundary)
+//   - Index iteration cost = estimatedRows * IndexTupleCost
+//   - For index-only scan: totalCost = startup + indexIterationCost
+//   - For regular scan: totalCost = startup + indexIterationCost + heapCost + tupleCost
+//     where heapCost considers random access patterns for range scans
+//
+// Range scans typically have higher cost than point lookups because:
+//  1. Multiple tuples must be fetched from potentially scattered heap locations
+//  2. Index iteration overhead is higher than direct lookup
+//  3. More CPU time spent on bound checking during iteration
+func (m *CostModel) EstimateIndexRangeScanCost(
+	selectivity float64,
+	tableRows int64,
+	tablePages int64,
+	isIndexOnly bool,
+) PlanCost {
+	// Ensure minimum values
+	if tableRows < 1 {
+		tableRows = 1
+	}
+	if tablePages < 1 {
+		tablePages = 1
+	}
+	if selectivity < 0 {
+		selectivity = 0
+	}
+	if selectivity > 1 {
+		selectivity = 1
+	}
+
+	estimatedRows := float64(tableRows) * selectivity
+	if estimatedRows < 1 {
+		estimatedRows = 1
+	}
+
+	// Startup cost includes seeking to range boundary
+	// Range scans have slightly higher startup cost than point lookups
+	// due to the need to find the starting position in the sorted index
+	startupCost := m.constants.IndexLookupCost
+
+	// Index iteration cost: each entry in range needs to be scanned
+	// This is similar to point lookup but applied to each row in range
+	indexIterationCost := estimatedRows * m.constants.IndexTupleCost
+
+	// Additional cost for range bound checking during iteration
+	// Each row requires checking if it's still within the upper bound
+	boundCheckCost := estimatedRows * m.constants.CPUOperatorCost
+
+	if isIndexOnly {
+		// Index-only scan: no heap access needed
+		totalCost := startupCost + indexIterationCost + boundCheckCost
+
+		return PlanCost{
+			StartupCost: startupCost,
+			TotalCost:   totalCost,
+			OutputRows:  estimatedRows,
+			OutputWidth: widthDefault,
+		}
+	}
+
+	// Regular index range scan: need to access heap for each row
+	// Range scans typically have poor locality since rows in a range
+	// may be scattered across many heap pages (unlike clustered indexes)
+	//
+	// The correlation factor models how scattered the heap accesses are:
+	// - 0.0 = perfectly clustered (sequential access pattern)
+	// - 1.0 = completely random (worst case)
+	// For range scans without clustering, we assume moderate to high randomness
+	const correlationFactor = 0.8
+
+	// Calculate effective random page accesses
+	// Use Mackert-Lohman formula approximation for index selectivity
+	// Random pages = min(estimatedRows, tablePages) for worst case
+	// Apply correlation factor to model partial clustering
+	maxRandomPages := math.Min(estimatedRows, float64(tablePages))
+	effectiveRandomPages := maxRandomPages * correlationFactor
+
+	// Sequential access component for any clustering benefit
+	sequentialPages := maxRandomPages * (1 - correlationFactor)
+
+	// Total heap access cost
+	heapCost := effectiveRandomPages*m.constants.RandomPageCost +
+		sequentialPages*m.constants.SeqPageCost
+
+	// CPU cost for processing each tuple from heap
+	tupleCost := estimatedRows * m.constants.CPUTupleCost
+
+	totalCost := startupCost + indexIterationCost + boundCheckCost + heapCost + tupleCost
+
+	return PlanCost{
+		StartupCost: startupCost,
+		TotalCost:   totalCost,
+		OutputRows:  estimatedRows,
+		OutputWidth: widthDefault,
+	}
+}
+
+// ShouldUseIndexRangeScan compares the estimated costs of index range scan vs
+// sequential scan and returns true if index range scan is expected to be cheaper.
+//
+// This method encapsulates the access method selection logic for range predicates.
+// Range scans are typically beneficial when:
+//   - Selectivity is low to moderate (small fraction of rows match)
+//   - Table is large (many pages to scan sequentially)
+//   - Index-only scan is possible (eliminates heap access)
+//
+// Range scans have a higher breakeven selectivity threshold than point lookups
+// because they must iterate through index entries and typically have worse
+// heap access locality.
+//
+// Parameters:
+//   - selectivity: Fraction of rows expected to match (0.0-1.0)
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - isIndexOnly: True if all needed columns are in the index
+//
+// Returns true if index range scan should be used, false for sequential scan.
+func (m *CostModel) ShouldUseIndexRangeScan(
+	selectivity float64,
+	tableRows int64,
+	tablePages int64,
+	isIndexOnly bool,
+) bool {
+	rangeScanCost := m.EstimateIndexRangeScanCost(selectivity, tableRows, tablePages, isIndexOnly)
+	seqCost := m.EstimateSeqScanCost(tableRows, tablePages, selectivity)
+
+	return rangeScanCost.TotalCost < seqCost.TotalCost
+}
+
+// CompareAccessMethods compares all available access methods (sequential scan,
+// index point lookup, index range scan) and returns the method with lowest cost.
+//
+// This is a convenience method that helps the optimizer choose between:
+//   - Sequential scan (always available)
+//   - Index point lookup (for equality predicates)
+//   - Index range scan (for range predicates like <, >, BETWEEN)
+//
+// Parameters:
+//   - selectivity: Fraction of rows expected to match (0.0-1.0)
+//   - tableRows: Total number of rows in the table
+//   - tablePages: Total number of pages in the table
+//   - isIndexOnly: True if all needed columns are in the index
+//   - isRangeScan: True if the predicate is a range (vs equality)
+//
+// Returns:
+//   - method: "SeqScan", "IndexScan", or "IndexRangeScan"
+//   - cost: The estimated cost of the chosen method
+func (m *CostModel) CompareAccessMethods(
+	selectivity float64,
+	tableRows int64,
+	tablePages int64,
+	isIndexOnly bool,
+	isRangeScan bool,
+) (method string, cost PlanCost) {
+	seqCost := m.EstimateSeqScanCost(tableRows, tablePages, selectivity)
+	bestMethod := "SeqScan"
+	bestCost := seqCost
+
+	if isRangeScan {
+		rangeCost := m.EstimateIndexRangeScanCost(selectivity, tableRows, tablePages, isIndexOnly)
+		if rangeCost.TotalCost < bestCost.TotalCost {
+			bestMethod = "IndexRangeScan"
+			bestCost = rangeCost
+		}
+	} else {
+		indexCost := m.EstimateIndexScanCost(selectivity, tableRows, tablePages, isIndexOnly)
+		if indexCost.TotalCost < bestCost.TotalCost {
+			bestMethod = "IndexScan"
+			bestCost = indexCost
+		}
+	}
+
+	return bestMethod, bestCost
 }
 
 // costFilter calculates the cost of a filter operation.

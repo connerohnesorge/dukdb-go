@@ -2,11 +2,13 @@ package executor
 
 import (
 	"fmt"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
@@ -132,13 +134,15 @@ func (e *Executor) executeCreateIndex(
 		}
 	}
 
-	// Validate columns exist in the table
+	// Validate columns exist in the table and get column indices
+	var colIndices []int
 	if plan.TableDef != nil {
 		for _, colName := range plan.Columns {
 			found := false
-			for _, col := range plan.TableDef.Columns {
-				if col.Name == colName {
+			for i, col := range plan.TableDef.Columns {
+				if strings.EqualFold(col.Name, colName) {
 					found = true
+					colIndices = append(colIndices, i)
 					break
 				}
 			}
@@ -151,12 +155,29 @@ func (e *Executor) executeCreateIndex(
 		}
 	}
 
-	// Create index definition
+	// Create index definition in catalog
 	indexDef := catalog.NewIndexDef(plan.Index, plan.Schema, plan.Table, plan.Columns, plan.IsUnique)
 
 	// Add to catalog
 	if err := e.catalog.CreateIndexInSchema(plan.Schema, indexDef); err != nil {
 		return nil, err
+	}
+
+	// Create the physical HashIndex structure
+	hashIndex := storage.NewHashIndex(plan.Index, plan.Table, plan.Columns, plan.IsUnique)
+
+	// Populate the index with existing table data
+	if err := e.populateIndex(plan.Table, hashIndex, colIndices); err != nil {
+		// Rollback catalog change
+		_ = e.catalog.DropIndexInSchema(plan.Schema, plan.Index)
+		return nil, fmt.Errorf("failed to populate index: %w", err)
+	}
+
+	// Store the index in storage
+	if err := e.storage.CreateIndex(plan.Schema, hashIndex); err != nil {
+		// Rollback catalog change
+		_ = e.catalog.DropIndexInSchema(plan.Schema, plan.Index)
+		return nil, fmt.Errorf("failed to store index: %w", err)
 	}
 
 	// Write WAL entry
@@ -169,13 +190,59 @@ func (e *Executor) executeCreateIndex(
 			IsUnique: plan.IsUnique,
 		}
 		if err := e.wal.WriteEntry(entry); err != nil {
-			// Rollback catalog change
+			// Rollback storage and catalog changes
+			_ = e.storage.DropIndex(plan.Schema, plan.Index)
 			_ = e.catalog.DropIndexInSchema(plan.Schema, plan.Index)
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
 	}
 
 	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// populateIndex populates an index with existing rows from a table.
+func (e *Executor) populateIndex(tableName string, index *storage.HashIndex, colIndices []int) error {
+	// Get the table from storage
+	table, ok := e.storage.GetTable(tableName)
+	if !ok {
+		// Table might be empty or not exist, which is fine for index creation
+		return nil
+	}
+
+	// Create a scanner to iterate through the table
+	scanner := table.Scan()
+
+	// Iterate through all chunks
+	for {
+		chunk := scanner.Next()
+		if chunk == nil {
+			break
+		}
+
+		// Insert each row into the index
+		rowCount := chunk.Count()
+		for row := 0; row < rowCount; row++ {
+			// Build the key from the indexed columns
+			key := make([]any, len(colIndices))
+			for i, colIdx := range colIndices {
+				key[i] = chunk.GetValue(row, colIdx)
+			}
+
+			// Get the RowID for this row in the chunk
+			rowID := scanner.GetRowID(row)
+			if rowID == nil {
+				// Skip rows without RowID (shouldn't happen, but be safe)
+				continue
+			}
+
+			// Insert into index
+			if err := index.Insert(key, *rowID); err != nil {
+				return fmt.Errorf("failed to insert row %d into index: %w", row, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // executeDropIndex executes a DROP INDEX statement.
@@ -194,6 +261,9 @@ func (e *Executor) executeDropIndex(
 			Msg:  fmt.Sprintf("index %s.%s does not exist", plan.Schema, plan.Index),
 		}
 	}
+
+	// Drop from storage (ignore errors since index might not have been stored)
+	_ = e.storage.DropIndex(plan.Schema, plan.Index)
 
 	// Drop from catalog
 	if err := e.catalog.DropIndexInSchema(plan.Schema, plan.Index); err != nil {
