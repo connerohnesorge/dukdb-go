@@ -12,28 +12,38 @@ The dukdb-go project has a solid foundation for cost-based optimization with ~5,
 
 ## What Changes
 
-### Phase 1: Statistics Foundation
-- **ADDED**: Statistics persistence to on-disk metadata
-- **ADDED**: Auto-update statistics trigger after DML threshold
+**Implementation Strategy**: All features implemented together as complete optimizer overhaul. No incremental releases.
+
+**DuckDB Parity Goal**: Match DuckDB v1.4.3 optimizer behavior exactly across all areas.
+
+### Statistics Persistence and Auto-Update
+- **ADDED**: Statistics persistence in DuckDB-compatible binary format
+- **ADDED**: Auto-update statistics trigger matching DuckDB behavior
 - **ADDED**: Incremental statistics updates for large tables
 - **ADDED**: Statistics loading on database open
+- **ADDED**: Migration support for older statistics formats
 
-### Phase 2: Subquery Optimization
+### Subquery Decorrelation (Full DuckDB v1.4.3 Parity)
 - **ADDED**: Subquery decorrelation (FlattenDependentJoin algorithm)
-- **ADDED**: Correlated EXISTS, SCALAR, and ANY subquery support
+- **ADDED**: EXISTS, NOT EXISTS, SCALAR subqueries
+- **ADDED**: IN, NOT IN, ANY/ALL subqueries
+- **ADDED**: Multi-level correlation support
 - **ADDED**: LATERAL join support
+- **ADDED**: Correlated CTEs
 - **ADDED**: Correlated column tracking
 
-### Phase 3: Advanced Optimizations
+### Predicate Pushdown and Multi-Column Statistics
 - **ADDED**: Predicate pushdown into table scans
-- **ADDED**: Filter pushdown past joins
-- **ADDED**: Multi-column statistics
-- **ADDED**: Cross-predicate selectivity estimation
+- **ADDED**: Filter pushdown past joins (matching DuckDB filter_pushdown.cpp)
+- **ADDED**: Complex AND/OR filter tree handling
+- **ADDED**: Multi-column statistics with joint NDV
+- **ADDED**: Cross-predicate selectivity estimation matching DuckDB heuristics
 
-### Phase 4: Runtime Adaptation
+### Cardinality Learning and Adaptive Optimization
 - **ADDED**: Cardinality learning (track actual vs estimate)
-- **ADDED**: Adaptive cost constants
-- **ADDED**: Runtime feedback for future estimates
+- **ADDED**: Conservative N-observation threshold before applying corrections
+- **ADDED**: Adaptive cost constants based on runtime feedback
+- **ADDED**: Bounded memory usage for historical corrections
 
 ## Impact
 
@@ -51,4 +61,15 @@ The dukdb-go project has a solid foundation for cost-based optimization with ~5,
 
 ## Priority
 
-**HIGH** - The cost-based optimizer is critical for query performance. Without these enhancements, complex queries will have suboptimal plans.
+**CRITICAL** - Full DuckDB v1.4.3 optimizer parity required. All phases are critical and must be implemented together.
+
+**Primary Concern**: Avoiding partial/lazy implementations. This change requires:
+- Complete feature implementation (not incremental)
+- 60/40+ testing-to-implementation effort ratio
+- Triple validation: correctness, EXPLAIN comparison, cardinality estimates
+- DuckDB source code reference in all complex functions
+
+**Quality Bar**:
+- Match DuckDB query performance on TPC-H benchmark
+- Pass all three validation methods (see design.md)
+- Zero semantic differences from DuckDB behavior

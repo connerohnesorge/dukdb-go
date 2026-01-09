@@ -209,50 +209,241 @@ To prevent incomplete "looks done but has gaps" implementations:
 
 ## Implementation Plan
 
-### Phase 1: Statistics (2-3 weeks)
+**Delivery Strategy**: All phases implemented together, merged as complete optimizer overhaul. No incremental releases to prevent partial implementations.
+
+### Phase 1: Statistics Persistence and Auto-Update
 
 ```
 internal/optimizer/
-├── stats_persistence.go  # Save/load statistics to catalog
-├── stats_auto_update.go  # Track modifications, trigger ANALYZE
-└── stats_incremental.go  # Incremental updates for large tables
+├── stats_persistence.go  # DuckDB binary format serialization/deserialization
+├── stats_auto_update.go  # Modification tracking, threshold-based ANALYZE trigger
+└── stats_incremental.go  # Large table incremental sampling
 ```
 
-### Phase 2: Subquery (3-4 weeks)
+**DuckDB Reference Files**:
+- `references/duckdb/src/storage/statistics/base_statistics.cpp`
+- `references/duckdb/src/storage/statistics/numeric_statistics.cpp`
+- `references/duckdb/src/storage/statistics/string_statistics.cpp`
 
-```
-internal/optimizer/
-├── subquery_decorrelate.go  # FlattenDependentJoin algorithm
-├── correlated_tracker.go    # Track correlated columns
-└── lateral_join.go          # LATERAL subquery execution
-```
-
-### Phase 3: Optimizations (4-5 weeks)
+### Phase 2: Subquery Decorrelation (Full DuckDB v1.4.3 Parity)
 
 ```
 internal/optimizer/
-├── filter_pushdown.go      # Push filters to scans
-├── multi_column_stats.go   # Cross-predicate statistics
-└── predicate_selectivity.go # Advanced selectivity estimation
+├── subquery_decorrelate.go  # FlattenDependentJoin, unnesting algorithms
+├── correlated_tracker.go    # Correlated column identification and tracking
+└── lateral_join.go          # LATERAL subquery support
 ```
 
-### Phase 4: Learning (2-3 weeks)
+**DuckDB Reference Files**:
+- `references/duckdb/src/optimizer/unnest_rewriter.cpp`
+- `references/duckdb/src/optimizer/decorrelate.cpp`
+- `references/duckdb/src/planner/subquery/flatten_dependent_join.cpp`
+
+**Required Subquery Support** (DuckDB v1.4.3 Feature Checklist):
+- [ ] EXISTS correlated subqueries
+- [ ] NOT EXISTS correlated subqueries
+- [ ] SCALAR correlated subqueries (single value)
+- [ ] IN correlated subqueries
+- [ ] NOT IN correlated subqueries
+- [ ] ANY/ALL correlated subqueries
+- [ ] Multi-level correlation (outer -> middle -> inner)
+- [ ] LATERAL joins
+- [ ] Correlated CTEs
+- [ ] Recursive CTEs with correlation (if supported by DuckDB v1.4.3)
+- [ ] Mixed correlation patterns (multiple outer references)
+
+### Phase 3: Predicate Pushdown and Multi-Column Statistics
 
 ```
 internal/optimizer/
-├── cardinality_learner.go  # Runtime feedback
-└── adaptive_cost.go        # Adaptive cost constants
+├── filter_pushdown.go       # Filter pushdown to scans and past joins
+├── multi_column_stats.go    # Joint NDV, column pair statistics
+└── predicate_selectivity.go  # Cross-predicate correlation estimates
 ```
 
-## Effort Estimate
+**DuckDB Reference Files**:
+- `references/duckdb/src/optimizer/filter_pushdown.cpp`
+- `references/duckdb/src/optimizer/column_binding_replacer.cpp`
+- `references/duckdb/src/storage/statistics/distinct_statistics.cpp`
 
-| Phase | Effort | Dependencies |
-|-------|--------|--------------|
-| Phase 1: Statistics | 2-3 weeks | Storage layer |
-| Phase 2: Subquery | 3-4 weeks | Binder, Parser |
-| Phase 3: Optimizations | 4-5 weeks | Planner |
-| Phase 4: Learning | 2-3 weeks | None |
-| **Total** | **11-15 weeks** | |
+**Filter Pushdown Feature Checklist**:
+- [ ] Push filters to table scans
+- [ ] Push filters past inner joins
+- [ ] Preserve filters for outer joins (left/right/full)
+- [ ] Handle complex AND/OR filter trees
+- [ ] Respect filter dependencies on join columns
+- [ ] Push filters into subqueries when safe
+- [ ] Maintain predicate equivalence
+
+**Multi-Column Statistics Checklist**:
+- [ ] Collect joint NDV for column pairs
+- [ ] HyperLogLog for large cardinality estimation (if DuckDB uses it)
+- [ ] Detect correlated columns during ANALYZE
+- [ ] Match DuckDB heuristics for which column pairs to track
+- [ ] Integrate with cardinality estimation
+
+### Phase 4: Cardinality Learning and Adaptive Optimization
+
+```
+internal/optimizer/
+├── cardinality_learner.go  # Track actual vs estimated, compute corrections
+└── adaptive_cost.go         # Adjust cost constants based on runtime data
+```
+
+**DuckDB Reference**: Research if DuckDB has similar adaptive features. If not, implement conservative approach.
+
+**Cardinality Learning Checklist**:
+- [ ] Track actual row counts per operator
+- [ ] Compare actual vs estimated cardinalities
+- [ ] Compute correction multipliers after N observations
+- [ ] Apply corrections to future estimates
+- [ ] Bound memory usage (evict old corrections)
+- [ ] Adaptive cost constants based on execution timing
+
+## Testing and Validation Strategy
+
+**Testing Effort**: 60% testing, 40% implementation (more testing than coding)
+
+### Triple Validation Requirement
+
+Every optimizer enhancement MUST pass all three validation methods:
+
+#### 1. Correctness Testing with DuckDB
+
+```bash
+# For every test query:
+# 1. Run query on DuckDB CLI (references/duckdb/duckdb)
+# 2. Run same query on dukdb-go
+# 3. Compare results (row-by-row, order-independent)
+
+# Example test case:
+duckdb_result=$(duckdb test.db "SELECT * FROM t WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.id = t.id)")
+dukdb_result=$(./dukdb-go-cli test.db "SELECT * FROM t WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.id = t.id)")
+diff <(echo "$duckdb_result" | sort) <(echo "$dukdb_result" | sort) || echo "FAIL"
+```
+
+**Test Coverage Requirements**:
+- All subquery types from checklist (EXISTS, SCALAR, IN, ANY/ALL, etc.)
+- Edge cases: empty subqueries, NULL handling, multi-level correlation
+- Complex queries from TPC-H benchmark
+- Queries with mixed optimization opportunities
+
+#### 2. EXPLAIN Output Comparison
+
+```bash
+# Compare query plans between systems
+duckdb test.db "EXPLAIN SELECT ..." > duckdb_plan.txt
+./dukdb-go-cli test.db "EXPLAIN SELECT ..." > dukdb_plan.txt
+
+# Plans don't need to be identical in formatting, but should have:
+# - Same join order
+# - Same join types (HASH JOIN, MERGE JOIN, etc.)
+# - Same filter placement
+# - Similar cardinality estimates (within reasonable margin)
+```
+
+**Plan Comparison Checklist**:
+- [ ] Join order matches DuckDB
+- [ ] Join algorithm selection matches (hash vs merge vs nested loop)
+- [ ] Filters pushed to same level
+- [ ] Subqueries decorrelated identically
+- [ ] Index usage matches (when applicable)
+
+#### 3. Cardinality Estimate Comparison
+
+```bash
+# Use EXPLAIN ANALYZE to compare estimated vs actual cardinalities
+duckdb test.db "EXPLAIN ANALYZE SELECT ..."
+./dukdb-go-cli test.db "EXPLAIN ANALYZE SELECT ..."
+
+# Compare:
+# - Estimated row counts at each operator
+# - Should be within 2x of DuckDB estimates (or better)
+# - Actual row counts should match exactly (correctness requirement)
+```
+
+**Cardinality Validation**:
+- Track estimate accuracy over TPC-H queries
+- Compare selectivity factors for common predicates
+- Ensure statistics collection produces similar histograms
+
+### Test Database Generation
+
+```bash
+# Create test databases using DuckDB CLI for validation
+cd references/duckdb
+./duckdb test.db <<EOF
+CREATE TABLE t1 (id INT, value VARCHAR);
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+ANALYZE t1;
+.save test.db
+EOF
+
+# Now use test.db for correctness comparison
+```
+
+### TPC-H Benchmark Requirement
+
+**Goal**: Match DuckDB performance on TPC-H queries (within 10-20% variance)
+
+```bash
+# Run TPC-H benchmark suite
+./run-tpch-benchmark.sh duckdb > duckdb-results.txt
+./run-tpch-benchmark.sh dukdb-go > dukdb-results.txt
+
+# Compare execution times per query
+# Acceptable: dukdb-go within 0.8x to 1.2x of DuckDB times
+```
+
+**Performance Acceptance Criteria**:
+- No query should be >2x slower than DuckDB
+- Average across all queries within 10-20% of DuckDB
+- Some queries may be faster due to Go-specific optimizations
+
+### Test Organization
+
+```
+internal/optimizer/
+├── optimizer_test.go           # Unit tests for optimizer components
+├── subquery_correctness_test.go # DuckDB comparison tests for subqueries
+├── filter_pushdown_test.go     # Filter optimization tests
+├── statistics_test.go          # Statistics persistence/loading tests
+└── testdata/
+    ├── duckdb_databases/       # Test DBs generated by DuckDB CLI
+    ├── expected_plans/         # Golden EXPLAIN output from DuckDB
+    └── tpch/                   # TPC-H queries and expected results
+```
+
+### Inline Documentation Requirements
+
+Every complex function MUST include:
+
+```go
+// DecorrelateSCALARSubquery converts a SCALAR correlated subquery to a LEFT OUTER JOIN.
+//
+// DuckDB Reference: references/duckdb/src/optimizer/unnest_rewriter.cpp::UnnestSCALAR
+//
+// Algorithm:
+// 1. Identify correlated columns (columns referencing outer query)
+// 2. Create LEFT OUTER JOIN with subquery (preserves NULL for no match)
+// 3. Add LIMIT 1 if subquery could return multiple rows (SCALAR semantics)
+// 4. Replace subquery reference with join column reference
+//
+// Example transformation:
+//   SELECT (SELECT t2.val FROM t2 WHERE t2.id = t1.id) FROM t1
+//   =>
+//   SELECT t2.val FROM t1 LEFT OUTER JOIN (SELECT id, val FROM t2 LIMIT 1) t2 ON t2.id = t1.id
+func (d *Decorrelator) DecorrelateSCALARSubquery(subquery *ast.SelectStmt) (*PhysicalPlan, error) {
+    // ... implementation ...
+}
+```
+
+**Documentation Must Include**:
+- DuckDB reference file and function name
+- High-level algorithm explanation
+- Example transformation (before/after SQL)
+- Edge cases and NULL handling
+- Cardinality impact
 
 ## Resolved Questions
 
