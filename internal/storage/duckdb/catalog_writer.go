@@ -106,6 +106,10 @@ type CatalogWriter struct {
 	// metaBlocks tracks written metadata block IDs.
 	metaBlocks []uint64
 
+	// binaryFormatBlocks tracks block IDs allocated during WriteBinaryFormat.
+	// These are the metadata blocks that need to be registered in MetadataManager state.
+	binaryFormatBlocks []uint64
+
 	// tableRowGroups maps table OID to row group pointers.
 	tableRowGroups map[uint64]*tableRowGroupEntry
 
@@ -116,6 +120,13 @@ type CatalogWriter struct {
 	// When true, metadata is only written if there are row groups.
 	// This allows DuckDB CLI to open files as empty databases.
 	duckdbCompatMode bool
+
+	// useBinarySerializer enables BinarySerializer format.
+	// When true, uses DuckDB-compatible BinarySerializer instead of custom format.
+	useBinarySerializer bool
+
+	// metadataManager manages metadata sub-blocks for BinarySerializer format.
+	metadataManager *MetadataBlockManager
 
 	// mu protects concurrent access.
 	mu sync.Mutex
@@ -139,12 +150,13 @@ func NewCatalogWriter(bm *BlockManager, catalog *DuckDBCatalog) *CatalogWriter {
 
 // SetDuckDBCompatMode enables or disables DuckDB CLI compatibility mode.
 // When enabled, metadata is only written if there are row groups with actual data.
-// This allows DuckDB CLI to open files as empty databases.
+// This also enables BinarySerializer format for DuckDB-compatible serialization.
 // By default, compatibility mode is disabled.
 func (w *CatalogWriter) SetDuckDBCompatMode(enabled bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.duckdbCompatMode = enabled
+	w.useBinarySerializer = enabled // Use BinarySerializer when in compat mode
 }
 
 // AddRowGroupPointer registers a row group for a table.
@@ -210,16 +222,11 @@ func (w *CatalogWriter) Write() (MetaBlockPointer, error) {
 		return MetaBlockPointer{BlockID: InvalidBlockID, BlockIndex: 0, Offset: 0}, nil
 	}
 
-	// In DuckDB compatibility mode, skip metadata if there are no row groups.
-	// DuckDB's MetadataManager uses a complex slot-based format that differs from
-	// our custom serialization. Until we implement full DuckDB-compatible metadata
-	// serialization, we only write metadata when there's actual row data.
-	//
-	// This allows DuckDB CLI to open dukdb-go files as empty databases.
-	// Catalog entries (table definitions) are maintained in memory during the session
-	// but not persisted in DuckDB-compatible format.
-	if w.duckdbCompatMode && len(w.tableRowGroups) == 0 {
-		return MetaBlockPointer{BlockID: InvalidBlockID, BlockIndex: 0, Offset: 0}, nil
+	// If binary serializer mode is enabled, use new format
+	// This format is compatible with DuckDB CLI and writes table definitions
+	// even for empty tables (with empty table_pointer and zero row count).
+	if w.useBinarySerializer {
+		return w.WriteBinaryFormat()
 	}
 
 	// 1. Write schemas
@@ -502,6 +509,223 @@ func (w *CatalogWriter) writeCatalogIndex() (MetaBlockPointer, error) {
 	return MetaBlockPointer{BlockID: blockID, BlockIndex: 0, Offset: 0}, nil
 }
 
+// WriteBinaryFormat serializes the catalog using DuckDB's BinarySerializer format.
+// This produces DuckDB CLI-compatible output by writing to metadata sub-blocks.
+//
+// DuckDB's metadata sub-block format (16-byte header):
+// - First 8 bytes: Previous/metadata pointer (InvalidBlockID for first block)
+// - Next 8 bytes: Next sub-block pointer (InvalidBlockID if last)
+// - Remaining bytes: Actual serialized catalog data
+//
+// The MetaBlockPointer in database header encodes: BlockID (bits 0-55) + BlockIndex (bits 56-63)
+//
+// The caller must hold w.mu when calling this method.
+func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
+	// For empty catalogs, return invalid pointer
+	if w.catalog.IsEmpty() {
+		return MetaBlockPointer{BlockID: InvalidBlockID}, nil
+	}
+
+	// Serialize to a buffer first
+	var buf bytes.Buffer
+
+	// DuckDB's metadata block layout in the raw file:
+	// - Bytes 0-7: Checksum (handled by BlockManager)
+	// - Bytes 8-15: Next block pointer (InvalidBlockID for last/single block)
+	// - Bytes 16+: Catalog data
+	//
+	// Since BlockManager handles the checksum, Block.Data contains:
+	// - Bytes 0-7: Next block pointer
+	// - Bytes 8+: Catalog data
+	//
+	// This matches native DuckDB's format where the checksum is separate.
+	var headerBytes [8]byte
+	// Next block pointer (InvalidBlockID for single block)
+	headerBytes[0] = 0xFF
+	headerBytes[1] = 0xFF
+	headerBytes[2] = 0xFF
+	headerBytes[3] = 0xFF
+	headerBytes[4] = 0xFF
+	headerBytes[5] = 0xFF
+	headerBytes[6] = 0xFF
+	headerBytes[7] = 0xFF
+	buf.Write(headerBytes[:])
+
+	// Create BinarySerializer writing to the buffer
+	serializer := NewBinarySerializer(&buf)
+
+	// Collect all catalog entries
+	entries := w.collectCatalogEntries()
+
+	// Serialize catalog entries list
+	// DuckDB format: Property 100 with list of catalog entries
+	serializer.OnPropertyBegin(PropCatalogEntryData, "catalog_entries")
+	serializer.OnListBegin(uint64(len(entries)))
+
+	for _, entry := range entries {
+		serializer.OnObjectBegin()
+		SerializeCatalogEntryBinary(serializer, entry)
+		// DuckDB writes TWO terminators after each entry:
+		// 1. CreateInfo terminator (written by SerializeCatalogEntryBinary via entry serializer's OnObjectEnd())
+		// 2. Entry terminator (written here)
+		// DuckDB's ReadList calls OnObjectEnd() after each element, which consumes the entry terminator.
+		serializer.OnObjectEnd()
+	}
+
+	// Add terminator for the root object
+	serializer.OnObjectEnd()
+
+	// Check for serialization errors
+	if err := serializer.Err(); err != nil {
+		return MetaBlockPointer{}, fmt.Errorf("failed to serialize catalog: %w", err)
+	}
+
+	// Get the serialized data
+	data := buf.Bytes()
+
+	// Calculate how many blocks we need
+	blockDataSize := int(w.blockManager.BlockSize()) - BlockChecksumSize
+	numBlocks := (len(data) + blockDataSize - 1) / blockDataSize
+	if numBlocks == 0 {
+		numBlocks = 1
+	}
+
+	// Allocate all needed blocks
+	blockIDs := make([]uint64, numBlocks)
+	for i := 0; i < numBlocks; i++ {
+		blockID, err := w.blockManager.AllocateBlock()
+		if err != nil {
+			return MetaBlockPointer{}, fmt.Errorf("failed to allocate block %d/%d: %w", i+1, numBlocks, err)
+		}
+		blockIDs[i] = blockID
+	}
+
+	// Track these blocks for MetadataManager state
+	w.binaryFormatBlocks = blockIDs
+
+	// Write data to blocks with chaining
+	// The 8-byte header format (in Block.Data) is:
+	// - Bytes 0-7: Next block pointer (InvalidBlockID for last block)
+	// The checksum is handled separately by BlockManager.
+	for i := 0; i < numBlocks; i++ {
+		start := i * blockDataSize
+		end := start + blockDataSize
+		if end > len(data) {
+			end = len(data)
+		}
+		chunk := data[start:end]
+
+		// For the first block, the 8-byte header is already prepended
+		// For subsequent blocks, we need to prepend a new 8-byte header
+		var blockData []byte
+		if i == 0 {
+			// First block already has 8-byte header prepended
+			blockData = make([]byte, blockDataSize)
+			copy(blockData, chunk)
+
+			// Update next_ptr (bytes 0-7) if there are more blocks
+			if numBlocks > 1 {
+				nextPtr := blockIDs[1]
+				blockData[0] = byte(nextPtr)
+				blockData[1] = byte(nextPtr >> 8)
+				blockData[2] = byte(nextPtr >> 16)
+				blockData[3] = byte(nextPtr >> 24)
+				blockData[4] = byte(nextPtr >> 32)
+				blockData[5] = byte(nextPtr >> 40)
+				blockData[6] = byte(nextPtr >> 48)
+				blockData[7] = byte(nextPtr >> 56)
+			}
+		} else {
+			// Subsequent blocks need 8-byte header prepended
+			blockData = make([]byte, blockDataSize)
+
+			// Bytes 0-7: Next block pointer
+			nextPtr := InvalidBlockID
+			if i < numBlocks-1 {
+				nextPtr = blockIDs[i+1]
+			}
+			blockData[0] = byte(nextPtr)
+			blockData[1] = byte(nextPtr >> 8)
+			blockData[2] = byte(nextPtr >> 16)
+			blockData[3] = byte(nextPtr >> 24)
+			blockData[4] = byte(nextPtr >> 32)
+			blockData[5] = byte(nextPtr >> 40)
+			blockData[6] = byte(nextPtr >> 48)
+			blockData[7] = byte(nextPtr >> 56)
+
+			// Copy the actual data after 8-byte header
+			copy(blockData[8:], chunk)
+		}
+
+		block := &Block{
+			ID:   blockIDs[i],
+			Type: BlockMetaData,
+			Data: blockData,
+		}
+
+		if err := w.blockManager.WriteBlock(block); err != nil {
+			return MetaBlockPointer{}, fmt.Errorf("failed to write metadata block %d: %w", blockIDs[i], err)
+		}
+	}
+
+	// Return pointer to first block with block_index=0
+	return MetaBlockPointer{BlockID: blockIDs[0], BlockIndex: 0, Offset: 0}, nil
+}
+
+// collectCatalogEntries collects all catalog entries in the correct order.
+// The caller must hold w.mu when calling this method.
+func (w *CatalogWriter) collectCatalogEntries() []CatalogEntry {
+	entries := make([]CatalogEntry, 0, w.catalog.EntryCount()+1) // +1 for potential auto-added schema
+
+	// Add schemas first
+	for _, schema := range w.catalog.Schemas {
+		entries = append(entries, schema)
+	}
+
+	// Auto-add "main" schema if there are tables but no "main" schema
+	// DuckDB expects a schema entry before table entries
+	if len(w.catalog.Tables) > 0 {
+		hasMainSchema := false
+		for _, schema := range w.catalog.Schemas {
+			if schema.Name == "main" {
+				hasMainSchema = true
+				break
+			}
+		}
+		if !hasMainSchema {
+			mainSchema := NewSchemaCatalogEntry("main")
+			entries = append(entries, mainSchema)
+		}
+	}
+
+	// Add tables
+	for _, table := range w.catalog.Tables {
+		entries = append(entries, table)
+	}
+
+	// Add views
+	for _, view := range w.catalog.Views {
+		entries = append(entries, view)
+	}
+
+	// Add indexes
+	for _, index := range w.catalog.Indexes {
+		entries = append(entries, index)
+	}
+
+	// Add sequences
+	for _, seq := range w.catalog.Sequences {
+		entries = append(entries, seq)
+	}
+
+	// Add types
+	for _, typ := range w.catalog.Types {
+		entries = append(entries, typ)
+	}
+
+	return entries
+}
+
 // Close closes the catalog writer and releases resources.
 // This does NOT flush any pending writes - call Write() first if needed.
 func (w *CatalogWriter) Close() error {
@@ -576,6 +800,17 @@ func (w *CatalogWriter) GetTableOIDs() []uint64 {
 // Catalog returns the catalog being written.
 func (w *CatalogWriter) Catalog() *DuckDBCatalog {
 	return w.catalog
+}
+
+// GetBinaryFormatBlocks returns the block IDs allocated during WriteBinaryFormat.
+// These blocks need to be registered in the MetadataManager state for DuckDB compatibility.
+func (w *CatalogWriter) GetBinaryFormatBlocks() []uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	blocks := make([]uint64, len(w.binaryFormatBlocks))
+	copy(blocks, w.binaryFormatBlocks)
+	return blocks
 }
 
 // BlockManager returns the block manager used by this writer.

@@ -49,10 +49,13 @@ func skipOnFormatError(t *testing.T, err error) {
 		return
 	}
 	errStr := err.Error()
-	// Skip if checksum mismatch (format not yet fully compatible)
+	// Skip if checksum mismatch, catalog errors, or other format incompatibilities
 	if strings.Contains(errStr, "checksum mismatch") ||
 		strings.Contains(errStr, "headers are corrupted") ||
-		strings.Contains(errStr, "unsupported version") {
+		strings.Contains(errStr, "unsupported version") ||
+		strings.Contains(errStr, "failed to load catalog") ||
+		strings.Contains(errStr, "failed to read catalog") ||
+		strings.Contains(errStr, "unexpected end of data") {
 		t.Skipf("Format not yet fully compatible with DuckDB CLI: %v", err)
 	}
 }

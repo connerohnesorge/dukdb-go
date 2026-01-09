@@ -25,6 +25,17 @@ var (
 
 // FileHeader represents the DuckDB file header stored at offset 0-4095.
 // The file header contains magic bytes and version information.
+//
+// DuckDB MainHeader format:
+// - Offset 0-7: Block header storage (checksum stored here)
+// - Offset 8-11: Magic bytes "DUCK" (4 bytes)
+// - Offset 12-19: Version number (8 bytes)
+// - Offset 20-51: Flags[4] (4 × 8 = 32 bytes)
+// - Offset 52-83: Library git desc / version string (32 bytes)
+// - Offset 84-115: Library git hash (32 bytes)
+// - Offset 116-123: Encryption metadata (8 bytes)
+// - Offset 124-139: DB identifier (16 bytes)
+// - Offset 140-147: Encrypted canary (8 bytes)
 type FileHeader struct {
 	// BlockHeaderStorage is reserved space for block manager (first 8 bytes).
 	BlockHeaderStorage [8]byte
@@ -33,11 +44,27 @@ type FileHeader struct {
 	Magic [4]byte
 
 	// Version is the storage format version number.
-	// Version 67 corresponds to DuckDB v1.4.3.
+	// Version 64 corresponds to DuckDB v1.x.
 	Version uint64
 
 	// Flags contains feature flags for the database file.
-	Flags uint64
+	// DuckDB uses 4 flag fields, but we only use the first one.
+	Flags [4]uint64
+
+	// LibraryVersion is the version string (e.g., "v1.0.0") - 32 bytes max
+	LibraryVersion [32]byte
+
+	// LibraryGitHash is the git commit hash - 32 bytes max
+	LibraryGitHash [32]byte
+
+	// EncryptionMetadata is encryption info (8 bytes)
+	EncryptionMetadata [8]byte
+
+	// DBIdentifier is a unique database identifier (16 bytes)
+	DBIdentifier [16]byte
+
+	// EncryptedCanary is for encryption validation (8 bytes)
+	EncryptedCanary [8]byte
 }
 
 // DatabaseHeader represents a database header block (at offset 4096 or 8192).
@@ -253,7 +280,11 @@ func checksumRemainder(data []byte) uint64 {
 const DatabaseHeaderDataSize = 56
 
 // FileHeaderDataSize is the size of the FileHeader data that follows the block header storage.
-const FileHeaderDataSize = 20 // Magic(4) + Version(8) + Flags(8) = 20 bytes
+// Format: Magic(4) + Version(8) + Flags[4](32) + LibVersion(32) + GitHash(32) + EncMeta(8) + DBId(16) + Canary(8)
+const FileHeaderDataSize = 4 + 8 + 32 + 32 + 32 + 8 + 16 + 8 // = 140 bytes
+
+// LibraryVersionString is the version string written to new database files.
+const LibraryVersionString = "dukdb-go"
 
 // ReadFileHeader reads the file header from offset 0.
 func ReadFileHeader(r io.ReaderAt) (*FileHeader, error) {
@@ -268,7 +299,7 @@ func ReadFileHeader(r io.ReaderAt) (*FileHeader, error) {
 
 	header := &FileHeader{}
 
-	// Copy block header storage (first 8 bytes)
+	// Copy block header storage (first 8 bytes) - contains checksum
 	copy(header.BlockHeaderStorage[:], data[0:8])
 
 	// Copy magic bytes (offset 8-11)
@@ -277,8 +308,25 @@ func ReadFileHeader(r io.ReaderAt) (*FileHeader, error) {
 	// Read version (offset 12-19)
 	header.Version = binary.LittleEndian.Uint64(data[12:20])
 
-	// Read flags (offset 20-27)
-	header.Flags = binary.LittleEndian.Uint64(data[20:28])
+	// Read flags[4] (offset 20-51)
+	for i := 0; i < 4; i++ {
+		header.Flags[i] = binary.LittleEndian.Uint64(data[20+i*8 : 28+i*8])
+	}
+
+	// Read library version (offset 52-83)
+	copy(header.LibraryVersion[:], data[52:84])
+
+	// Read library git hash (offset 84-115)
+	copy(header.LibraryGitHash[:], data[84:116])
+
+	// Read encryption metadata (offset 116-123)
+	copy(header.EncryptionMetadata[:], data[116:124])
+
+	// Read DB identifier (offset 124-139)
+	copy(header.DBIdentifier[:], data[124:140])
+
+	// Read encrypted canary (offset 140-147)
+	copy(header.EncryptedCanary[:], data[140:148])
 
 	return header, nil
 }
@@ -295,10 +343,25 @@ func WriteFileHeader(w io.WriterAt, header *FileHeader) error {
 	// Write version (offset 12-19)
 	binary.LittleEndian.PutUint64(data[12:20], header.Version)
 
-	// Write flags (offset 20-27)
-	binary.LittleEndian.PutUint64(data[20:28], header.Flags)
+	// Write flags[4] (offset 20-51)
+	for i := 0; i < 4; i++ {
+		binary.LittleEndian.PutUint64(data[20+i*8:28+i*8], header.Flags[i])
+	}
 
-	// Rest is zero-padded (already zero from make)
+	// Write library version (offset 52-83)
+	copy(data[52:84], header.LibraryVersion[:])
+
+	// Write library git hash (offset 84-115)
+	copy(data[84:116], header.LibraryGitHash[:])
+
+	// Write encryption metadata (offset 116-123)
+	copy(data[116:124], header.EncryptionMetadata[:])
+
+	// Write DB identifier (offset 124-139)
+	copy(data[124:140], header.DBIdentifier[:])
+
+	// Write encrypted canary (offset 140-147)
+	copy(data[140:148], header.EncryptedCanary[:])
 
 	// Compute checksum over the data portion (bytes 8 onwards)
 	// This matches DuckDB's ChecksumAndWrite behavior for the main header
@@ -319,9 +382,9 @@ func WriteFileHeader(w io.WriterAt, header *FileHeader) error {
 func NewFileHeader() *FileHeader {
 	header := &FileHeader{
 		Version: CurrentVersion,
-		Flags:   0,
 	}
 	copy(header.Magic[:], MagicBytes)
+	copy(header.LibraryVersion[:], LibraryVersionString)
 	return header
 }
 
@@ -437,6 +500,10 @@ func IsValidBlockID(blockID uint64) bool {
 	return blockID != InvalidBlockID
 }
 
+// SerializationCompatibilityVersion is the serialization compatibility value
+// for DuckDB version 64. In DuckDB's format, version 64 uses serialization_compatibility = 1.
+const SerializationCompatibilityVersion uint64 = 1
+
 // NewDatabaseHeader creates a new database header with default values.
 func NewDatabaseHeader() *DatabaseHeader {
 	return &DatabaseHeader{
@@ -446,7 +513,7 @@ func NewDatabaseHeader() *DatabaseHeader {
 		BlockCount:                 0,
 		BlockAllocSize:             DefaultBlockSize,
 		VectorSize:                 DefaultVectorSize,
-		SerializationCompatibility: CurrentVersion,
+		SerializationCompatibility: SerializationCompatibilityVersion,
 	}
 }
 

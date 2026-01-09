@@ -85,7 +85,7 @@ func TestFileHeader(t *testing.T) {
 		require.NotNil(t, header)
 		assert.Equal(t, [4]byte{'D', 'U', 'C', 'K'}, header.Magic)
 		assert.Equal(t, CurrentVersion, header.Version)
-		assert.Equal(t, uint64(0), header.Flags)
+		assert.Equal(t, [4]uint64{0, 0, 0, 0}, header.Flags)
 	})
 
 	t.Run("ValidateFileHeader valid", func(t *testing.T) {
@@ -142,7 +142,7 @@ func TestFileHeaderReadWrite(t *testing.T) {
 
 		// Write header
 		original := NewFileHeader()
-		original.Flags = 0x1234567890ABCDEF
+		original.Flags[0] = 0x1234567890ABCDEF
 		// Note: BlockHeaderStorage is not preserved - it contains the computed checksum
 
 		err = WriteFileHeader(f, original)
@@ -208,7 +208,7 @@ func TestDatabaseHeader(t *testing.T) {
 		assert.Equal(t, uint64(0), header.BlockCount)
 		assert.Equal(t, DefaultBlockSize, header.BlockAllocSize)
 		assert.Equal(t, DefaultVectorSize, header.VectorSize)
-		assert.Equal(t, CurrentVersion, header.SerializationCompatibility)
+		assert.Equal(t, SerializationCompatibilityVersion, header.SerializationCompatibility)
 	})
 
 	t.Run("ValidateDatabaseHeader valid", func(t *testing.T) {

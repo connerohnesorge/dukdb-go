@@ -53,15 +53,18 @@ func TestDebugMultiTable(t *testing.T) {
 	t.Logf("Field %d, count %d", fieldID, count)
 
 	for i := uint64(0); i < count; i++ {
-		startOffset := reader.offset
-		t.Logf("Entry %d starting at offset %d, next bytes: %x", i, startOffset, reader.data[startOffset:min(startOffset+20, len(reader.data))])
+		startOffset := reader.offset()
+		data := reader.data()
+		t.Logf("Entry %d starting at offset %d, next bytes: %x", i, startOffset, data[startOffset:min(startOffset+20, len(data))])
 		entry, err := reader.ReadCatalogEntry()
-		endOffset := reader.offset
+		endOffset := reader.offset()
 		t.Logf("Entry %d ended at offset %d", i, endOffset)
 		if err != nil {
 			t.Logf("Entry %d failed: %v", i, err)
 			if reader.remaining() > 20 {
-				t.Logf("  Next bytes: %x", reader.data[reader.offset:reader.offset+20])
+				data := reader.data()
+				offset := reader.offset()
+				t.Logf("  Next bytes: %x", data[offset:offset+20])
 			}
 			break
 		}

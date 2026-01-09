@@ -630,7 +630,7 @@ func (w *DuckDBWriter) checkpointLocked() error {
 		BlockCount:                 w.blockManager.BlockCount(),
 		BlockAllocSize:             w.blockManager.BlockSize(),
 		VectorSize:                 DefaultVectorSize,
-		SerializationCompatibility: CurrentVersion,
+		SerializationCompatibility: SerializationCompatibilityVersion,
 	}
 
 	offset := GetHeaderOffset(w.headerSlot)

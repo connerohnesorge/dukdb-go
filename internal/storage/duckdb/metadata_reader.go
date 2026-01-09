@@ -6,24 +6,146 @@ import (
 	"unsafe"
 )
 
-// MetadataReader reads catalog entries from DuckDB metadata blocks.
-// It understands DuckDB's BinarySerializer format which uses:
-// - uint16 field IDs before each value
-// - 0xFFFF as object terminator
-// - varint (LEB128) encoding for integers and lengths
-type MetadataReader struct {
+// MetadataBlockReader implements io.Reader for chained metadata blocks.
+// It handles reading across multiple 256KB blocks linked by next-block pointers.
+//
+// DuckDB's catalog metadata format uses full 256KB blocks:
+// - Raw file has: [checksum:8][next_ptr:8][data:~262KB]
+// - BlockManager strips checksum, so Block.Data has: [next_ptr:8][data:~262KB]
+// - The MetaBlockPointer in the database header encodes block_id (bits 0-55) + block_index (bits 56-63)
+// - For catalog metadata, block_index is typically 0
+type MetadataBlockReader struct {
 	blockManager *BlockManager
-	data         []byte
-	offset       int
+	data         []byte // Current block's data (after header)
+	offset       int    // Current position within data
 	nextBlockID  uint64 // Next block in chain, InvalidBlockID if none
+}
 
-	// Allow peeking 1 field ahead
+// MetadataBlockHeaderSize is the size of the header at the start of Block.Data.
+// This contains just the next_ptr (8 bytes). The checksum is handled separately by BlockManager.
+const MetadataBlockHeaderSize = 8
+
+// NewMetadataBlockReader creates a new MetadataBlockReader starting at the given block.
+// The startBlockID is an encoded MetaBlockPointer. For catalog metadata, the block_index
+// is typically 0, so we read from the start of the full 256KB block.
+func NewMetadataBlockReader(bm *BlockManager, startBlockID uint64) (*MetadataBlockReader, error) {
+	// Decode the MetaBlockPointer to get block_id
+	ptr := DecodeMetaBlockPointer(startBlockID)
+
+	// Read the storage block
+	block, err := bm.ReadBlock(ptr.BlockID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata block %d: %w", ptr.BlockID, err)
+	}
+
+	if len(block.Data) < MetadataBlockHeaderSize {
+		return nil, fmt.Errorf("metadata block too small: %d bytes", len(block.Data))
+	}
+
+	// Note: BlockManager.ReadBlock() already stripped the block checksum (first 8 bytes of raw block).
+	// For metadata blocks, the structure is:
+	//   Raw block: [checksum:8][next_ptr:8][catalog_data:remaining]
+	// After BlockManager strips checksum:
+	//   Block.Data: [next_ptr:8][catalog_data:remaining]
+	//
+	// So Block.Data[0:8] contains the next-block ID, and Block.Data[8:] contains the actual catalog data.
+
+	// Read next block pointer (8 bytes, little-endian) from the start of Block.Data
+	nextBlockID := uint64(block.Data[0]) |
+		uint64(block.Data[1])<<8 |
+		uint64(block.Data[2])<<16 |
+		uint64(block.Data[3])<<24 |
+		uint64(block.Data[4])<<32 |
+		uint64(block.Data[5])<<40 |
+		uint64(block.Data[6])<<48 |
+		uint64(block.Data[7])<<56
+
+	r := &MetadataBlockReader{
+		blockManager: bm,
+		data:         block.Data[MetadataBlockHeaderSize:], // Data after next_ptr
+		offset:       0,
+		nextBlockID:  nextBlockID,
+	}
+
+	return r, nil
+}
+
+// Read implements io.Reader, reading from chained metadata blocks.
+func (r *MetadataBlockReader) Read(p []byte) (n int, err error) {
+	for n < len(p) {
+		// Check if current block is exhausted
+		if r.offset >= len(r.data) {
+			// Try to load next block
+			if r.nextBlockID == InvalidBlockID {
+				// No more blocks
+				if n == 0 {
+					return 0, io.EOF
+				}
+				return n, nil
+			}
+
+			// Load next block
+			if err := r.loadNextBlock(); err != nil {
+				if n == 0 {
+					return 0, err
+				}
+				return n, nil
+			}
+		}
+
+		// Copy what we can from current block
+		toCopy := min(len(p)-n, len(r.data)-r.offset)
+		copy(p[n:], r.data[r.offset:r.offset+toCopy])
+		r.offset += toCopy
+		n += toCopy
+	}
+
+	return n, nil
+}
+
+// loadNextBlock loads the next block in the chain.
+func (r *MetadataBlockReader) loadNextBlock() error {
+	if r.nextBlockID == InvalidBlockID {
+		return io.EOF
+	}
+
+	block, err := r.blockManager.ReadBlock(r.nextBlockID)
+	if err != nil {
+		return fmt.Errorf("failed to read next metadata block %d: %w", r.nextBlockID, err)
+	}
+
+	if len(block.Data) < MetadataBlockHeaderSize {
+		return fmt.Errorf("metadata block too small: %d bytes", len(block.Data))
+	}
+
+	// Read next block pointer (first 8 bytes)
+	r.nextBlockID = uint64(block.Data[0]) |
+		uint64(block.Data[1])<<8 |
+		uint64(block.Data[2])<<16 |
+		uint64(block.Data[3])<<24 |
+		uint64(block.Data[4])<<32 |
+		uint64(block.Data[5])<<40 |
+		uint64(block.Data[6])<<48 |
+		uint64(block.Data[7])<<56
+
+	// Data starts after the 8-byte next_ptr header
+	r.data = block.Data[MetadataBlockHeaderSize:]
+	r.offset = 0
+
+	return nil
+}
+
+// MetadataReader reads catalog entries from DuckDB metadata blocks.
+// It uses BinaryDeserializer for reading primitives and maintains
+// compatibility with the existing catalog reading logic.
+type MetadataReader struct {
+	deserializer *BinaryDeserializer
+	blockReader  *MetadataBlockReader
+
+	// Allow peeking 1 field ahead (for backward compatibility)
 	hasBufferedField bool
 	bufferedField    uint16
 }
-
-// MetadataBlockHeaderSize is the size of the next-block pointer at the start of each metadata block.
-const MetadataBlockHeaderSize = 8
 
 // ddbFieldTerminator marks the end of an object in DuckDB's binary format.
 const ddbFieldTerminator uint16 = 0xFFFF
@@ -237,111 +359,39 @@ const (
 
 // NewMetadataReader creates a new metadata reader starting at the given block.
 func NewMetadataReader(bm *BlockManager, startBlockID uint64) (*MetadataReader, error) {
-	block, err := bm.ReadBlock(startBlockID)
+	// Create the block reader that handles block chaining
+	blockReader, err := NewMetadataBlockReader(bm, startBlockID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata block %d: %w", startBlockID, err)
+		return nil, err
 	}
 
-	if len(block.Data) < MetadataBlockHeaderSize {
-		return nil, fmt.Errorf("metadata block too small: %d bytes", len(block.Data))
-	}
+	// Create a BinaryDeserializer on top of the block reader
+	deserializer := NewBinaryDeserializer(blockReader)
 
-	r := &MetadataReader{
-		blockManager: bm,
-		data:         block.Data,
-		offset:       MetadataBlockHeaderSize, // Skip the next-block pointer
-	}
-
-	// Read next block pointer (8 bytes, little-endian)
-	r.nextBlockID = uint64(block.Data[0]) |
-		uint64(block.Data[1])<<8 |
-		uint64(block.Data[2])<<16 |
-		uint64(block.Data[3])<<24 |
-		uint64(block.Data[4])<<32 |
-		uint64(block.Data[5])<<40 |
-		uint64(block.Data[6])<<48 |
-		uint64(block.Data[7])<<56
-
-	return r, nil
+	return &MetadataReader{
+		deserializer: deserializer,
+		blockReader:  blockReader,
+	}, nil
 }
 
-// remaining returns the number of bytes remaining in the current block.
+// Helper methods for test code to access internal state
+// These provide backward compatibility with test code that accessed internal fields
+
+// offset returns the current offset in the block reader (for debugging).
+func (r *MetadataReader) offset() int {
+	return r.blockReader.offset
+}
+
+// data returns the current block data (for debugging).
+func (r *MetadataReader) data() []byte {
+	return r.blockReader.data
+}
+
+// remaining returns bytes remaining in current block (for debugging).
 func (r *MetadataReader) remaining() int {
-	return len(r.data) - r.offset
+	return len(r.blockReader.data) - r.blockReader.offset
 }
 
-// loadNextBlock loads the next block in the chain if available.
-func (r *MetadataReader) loadNextBlock() error {
-	if r.nextBlockID == InvalidBlockID {
-		return io.EOF
-	}
-
-	block, err := r.blockManager.ReadBlock(r.nextBlockID)
-	if err != nil {
-		return fmt.Errorf("failed to read next metadata block %d: %w", r.nextBlockID, err)
-	}
-
-	if len(block.Data) < MetadataBlockHeaderSize {
-		return fmt.Errorf("metadata block too small: %d bytes", len(block.Data))
-	}
-
-	r.data = block.Data
-	r.offset = MetadataBlockHeaderSize
-
-	// Read next block pointer
-	r.nextBlockID = uint64(block.Data[0]) |
-		uint64(block.Data[1])<<8 |
-		uint64(block.Data[2])<<16 |
-		uint64(block.Data[3])<<24 |
-		uint64(block.Data[4])<<32 |
-		uint64(block.Data[5])<<40 |
-		uint64(block.Data[6])<<48 |
-		uint64(block.Data[7])<<56
-
-	return nil
-}
-
-// readByte reads a single byte, loading the next block if needed.
-func (r *MetadataReader) readByte() (byte, error) {
-	if r.remaining() < 1 {
-		if err := r.loadNextBlock(); err != nil {
-			return 0, err
-		}
-	}
-	b := r.data[r.offset]
-	r.offset++
-	return b, nil
-}
-
-// readBytes reads n bytes, potentially spanning multiple blocks.
-func (r *MetadataReader) readBytes(n int) ([]byte, error) {
-	result := make([]byte, n)
-	pos := 0
-
-	for pos < n {
-		if r.remaining() == 0 {
-			if err := r.loadNextBlock(); err != nil {
-				return nil, err
-			}
-		}
-
-		toCopy := min(n-pos, r.remaining())
-		copy(result[pos:], r.data[r.offset:r.offset+toCopy])
-		r.offset += toCopy
-		pos += toCopy
-	}
-
-	return result, nil
-}
-
-// readRawFieldID reads a uint16 field ID directly from the stream.
-func (r *MetadataReader) readRawFieldID() (uint16, error) {
-	data, err := r.readBytes(2)
-	if err != nil {
-		return 0, err
-	}
-	return uint16(data[0]) | uint16(data[1])<<8, nil
-}
 
 // ReadFieldID reads a uint16 field ID, consuming any buffered field first.
 func (r *MetadataReader) ReadFieldID() (uint16, error) {
@@ -351,9 +401,9 @@ func (r *MetadataReader) ReadFieldID() (uint16, error) {
 // PeekField returns the next field ID without consuming it.
 func (r *MetadataReader) PeekField() (uint16, error) {
 	if !r.hasBufferedField {
-		field, err := r.readRawFieldID()
-		if err != nil {
-			return 0, err
+		field, ok := r.deserializer.PeekFieldID()
+		if !ok {
+			return 0, r.deserializer.Err()
 		}
 		r.bufferedField = field
 		r.hasBufferedField = true
@@ -363,114 +413,99 @@ func (r *MetadataReader) PeekField() (uint16, error) {
 
 // ConsumeField consumes a buffered field.
 func (r *MetadataReader) ConsumeField() {
-	r.hasBufferedField = false
+	if r.hasBufferedField {
+		r.hasBufferedField = false
+		// Actually consume from deserializer
+		r.deserializer.ReadFieldID()
+	}
 }
 
 // NextField reads and returns the next field ID.
 func (r *MetadataReader) NextField() (uint16, error) {
 	if r.hasBufferedField {
 		r.hasBufferedField = false
+		// Need to consume from deserializer since we peeked
+		r.deserializer.ReadFieldID()
 		return r.bufferedField, nil
 	}
-	return r.readRawFieldID()
+	fieldID := r.deserializer.ReadFieldID()
+	if err := r.deserializer.Err(); err != nil {
+		return 0, err
+	}
+	return fieldID, nil
 }
 
 // ReadVarint reads a variable-length integer (LEB128 encoded).
 func (r *MetadataReader) ReadVarint() (uint64, error) {
-	var result uint64
-	var shift uint
-
-	for {
-		b, err := r.readByte()
-		if err != nil {
-			return 0, err
-		}
-
-		result |= uint64(b&0x7F) << shift
-		if b&0x80 == 0 {
-			break
-		}
-		shift += 7
+	val := r.deserializer.ReadUint64()
+	if err := r.deserializer.Err(); err != nil {
+		return 0, err
 	}
-
-	return result, nil
+	return val, nil
 }
 
-// ReadSignedVarint reads a signed variable-length integer (signed LEB128).
+// ReadSignedVarint reads a signed variable-length integer (zigzag+varint).
 func (r *MetadataReader) ReadSignedVarint() (int64, error) {
-	var result int64
-	var shift uint
-
-	for {
-		b, err := r.readByte()
-		if err != nil {
-			return 0, err
-		}
-
-		result |= int64(b&0x7F) << shift
-		shift += 7
-
-		if b&0x80 == 0 {
-			// Sign extend if negative
-			if shift < 64 && (b&0x40) != 0 {
-				result |= ^int64(0) << shift
-			}
-			break
-		}
+	val := r.deserializer.ReadInt64()
+	if err := r.deserializer.Err(); err != nil {
+		return 0, err
 	}
-
-	return result, nil
+	return val, nil
 }
 
 // ReadString reads a varint-length prefixed string.
 func (r *MetadataReader) ReadString() (string, error) {
-	length, err := r.ReadVarint()
-	if err != nil {
+	str := r.deserializer.ReadString()
+	if err := r.deserializer.Err(); err != nil {
 		return "", err
 	}
-
-	if length == 0 {
-		return "", nil
-	}
-
-	data, err := r.readBytes(int(length))
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
+	return str, nil
 }
 
 // ReadUint8 reads a varint-encoded uint8.
 func (r *MetadataReader) ReadUint8() (uint8, error) {
-	v, err := r.ReadVarint()
-	return uint8(v), err
+	val := r.deserializer.ReadUint8()
+	if err := r.deserializer.Err(); err != nil {
+		return 0, err
+	}
+	return val, nil
 }
 
 // ReadBool reads a single byte as a boolean.
 func (r *MetadataReader) ReadBool() (bool, error) {
-	b, err := r.readByte()
-	return b != 0, err
+	val := r.deserializer.ReadBool()
+	if err := r.deserializer.Err(); err != nil {
+		return false, err
+	}
+	return val, nil
 }
 
 // ReadFloat32 reads a 4-byte float.
 func (r *MetadataReader) ReadFloat32() (float32, error) {
-	data, err := r.readBytes(4)
-	if err != nil {
+	// BinaryDeserializer doesn't have ReadFloat32, so we read bytes directly
+	bytes := r.deserializer.ReadBytes()
+	if err := r.deserializer.Err(); err != nil {
 		return 0, err
 	}
-	bits := uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24
+	if len(bytes) != 4 {
+		return 0, fmt.Errorf("expected 4 bytes for float32, got %d", len(bytes))
+	}
+	bits := uint32(bytes[0]) | uint32(bytes[1])<<8 | uint32(bytes[2])<<16 | uint32(bytes[3])<<24
 	return *(*float32)((unsafe.Pointer)(&bits)), nil
 }
 
 // ReadFloat64 reads an 8-byte double.
 func (r *MetadataReader) ReadFloat64() (float64, error) {
-	data, err := r.readBytes(8)
-	if err != nil {
+	// BinaryDeserializer doesn't have ReadFloat64, so we read bytes directly
+	bytes := r.deserializer.ReadBytes()
+	if err := r.deserializer.Err(); err != nil {
 		return 0, err
 	}
-	bits := uint64(data[0]) | uint64(data[1])<<8 | uint64(data[2])<<16 | uint64(data[3])<<24 |
-		uint64(data[4])<<32 | uint64(data[5])<<40 | uint64(data[6])<<48 | uint64(data[7])<<56
+	if len(bytes) != 8 {
+		return 0, fmt.Errorf("expected 8 bytes for float64, got %d", len(bytes))
+	}
+	bits := uint64(bytes[0]) | uint64(bytes[1])<<8 | uint64(bytes[2])<<16 | uint64(bytes[3])<<24 |
+		uint64(bytes[4])<<32 | uint64(bytes[5])<<40 | uint64(bytes[6])<<48 | uint64(bytes[7])<<56
 	return *(*float64)((unsafe.Pointer)(&bits)), nil
 }
 
@@ -583,13 +618,10 @@ func (r *MetadataReader) ReadCatalogEntries() ([]CatalogEntry, error) {
 	entries := make([]CatalogEntry, 0, count)
 
 	for i := uint64(0); i < count; i++ {
-		startOffset := r.offset
 		entry, err := r.ReadCatalogEntry()
 		if err != nil {
-			// Log the error for debugging but try to continue
-			// The catalog format may have variations we don't handle perfectly yet
-			_ = fmt.Sprintf("warning: failed to read entry %d at offset %d: %v", i, startOffset, err)
-			break
+			// Return the error instead of swallowing it
+			return nil, fmt.Errorf("failed to read entry %d: %w", i, err)
 		}
 		if entry != nil {
 			entries = append(entries, entry)
@@ -683,31 +715,32 @@ func (r *MetadataReader) skipStorageMetadata() error {
 	// We use a simple approach: scan byte-by-byte looking for field 99.
 	// This is safe because field 99 (0x63 0x00) is a unique marker that
 	// only appears at the start of catalog entries.
+
+	// Since we're now using BinaryDeserializer, we need to access the underlying
+	// block reader to peek at raw bytes. For now, use a simpler approach:
+	// Keep peeking field IDs until we find field 99 or hit EOF.
 	for {
-		if r.remaining() < 2 {
-			// Try to load more data
-			if err := r.loadNextBlock(); err != nil {
-				// End of data is OK here
-				return nil
-			}
+		fieldID, err := r.PeekField()
+		if err != nil {
+			// EOF or other error - end of metadata
+			return nil
 		}
 
-		// Peek at the next two bytes to check for field 99
-		if r.offset+1 < len(r.data) {
-			low := r.data[r.offset]
-			high := r.data[r.offset+1]
-			field := uint16(low) | uint16(high)<<8
-
-			if field == ddbFieldCatalogType {
-				// Found the next catalog entry - don't consume it
-				// Clear any buffered field since we're repositioning
-				r.hasBufferedField = false
-				return nil
-			}
+		if fieldID == ddbFieldCatalogType {
+			// Found the next catalog entry - don't consume it
+			// Clear any buffered field since we're at the right position
+			return nil
 		}
 
-		// Skip one byte and continue scanning
-		r.offset++
+		// Consume this field ID and skip one byte
+		r.ConsumeField()
+		// Try to read a byte to skip forward
+		_ = r.deserializer.ReadUint8()
+		// Ignore errors, we'll keep trying until we find field 99 or EOF
+		if r.deserializer.Err() != nil {
+			// Clear the error and return - we're at the end
+			return nil
+		}
 	}
 }
 
@@ -768,7 +801,7 @@ func (r *MetadataReader) readCreateInfo(info *CreateInfo) error {
 		}
 
 		if err != nil {
-			return err
+			return fmt.Errorf("readCreateInfo: field %d error: %w", fieldID, err)
 		}
 	}
 

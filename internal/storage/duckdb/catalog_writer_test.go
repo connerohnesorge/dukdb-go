@@ -727,3 +727,167 @@ func TestCatalogWriter_GeneratedColumn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, mbp.IsValid())
 }
+
+// Test WriteBinaryFormat with empty catalog
+func TestCatalogWriter_WriteBinaryFormat_EmptyCatalog(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+	writer := NewCatalogWriter(bm, catalog)
+	writer.SetDuckDBCompatMode(true) // Enable BinarySerializer
+
+	mbp, err := writer.Write()
+	assert.NoError(t, err)
+	assert.False(t, mbp.IsValid(), "empty catalog should return invalid pointer")
+	assert.Equal(t, InvalidBlockID, mbp.BlockID)
+}
+
+// Test WriteBinaryFormat with schema
+func TestCatalogWriter_WriteBinaryFormat_WithSchema(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+	schema := NewSchemaCatalogEntry("test_schema")
+	catalog.AddSchema(schema)
+
+	writer := NewCatalogWriter(bm, catalog)
+	writer.SetDuckDBCompatMode(true) // Enable BinarySerializer
+
+	mbp, err := writer.Write()
+	assert.NoError(t, err)
+	assert.True(t, mbp.IsValid(), "catalog with entries should return valid pointer")
+	assert.NotEqual(t, InvalidBlockID, mbp.BlockID)
+}
+
+// Test WriteBinaryFormat with table
+func TestCatalogWriter_WriteBinaryFormat_WithTable(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+	table := NewTableCatalogEntry("users")
+	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
+	table.AddColumn(ColumnDefinition{Name: "name", Type: TypeVarchar})
+	catalog.AddTable(table)
+
+	writer := NewCatalogWriter(bm, catalog)
+	writer.SetDuckDBCompatMode(true) // Enable BinarySerializer
+
+	mbp, err := writer.Write()
+	assert.NoError(t, err)
+	assert.True(t, mbp.IsValid())
+	assert.NotEqual(t, InvalidBlockID, mbp.BlockID)
+}
+
+// Test WriteBinaryFormat with multiple entry types
+func TestCatalogWriter_WriteBinaryFormat_MultipleEntries(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+
+	// Add schema
+	schema := NewSchemaCatalogEntry("main")
+	catalog.AddSchema(schema)
+
+	// Add table
+	table := NewTableCatalogEntry("users")
+	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
+	table.AddColumn(ColumnDefinition{Name: "email", Type: TypeVarchar})
+	catalog.AddTable(table)
+
+	// Add view
+	view := NewViewCatalogEntry("active_users", "SELECT * FROM users WHERE active = true")
+	catalog.AddView(view)
+
+	// Add index
+	index := NewIndexCatalogEntry("idx_users_email", "users")
+	index.ColumnIDs = []uint64{1}
+	catalog.AddIndex(index)
+
+	// Add sequence
+	seq := NewSequenceCatalogEntry("user_id_seq")
+	catalog.AddSequence(seq)
+
+	// Add type
+	enumType := NewEnumTypeCatalogEntry("status", []string{"active", "inactive"})
+	catalog.AddType(enumType)
+
+	writer := NewCatalogWriter(bm, catalog)
+	writer.SetDuckDBCompatMode(true) // Enable BinarySerializer
+
+	mbp, err := writer.Write()
+	assert.NoError(t, err)
+	assert.True(t, mbp.IsValid())
+	assert.NotEqual(t, InvalidBlockID, mbp.BlockID)
+}
+
+// Test SetDuckDBCompatMode enables BinarySerializer
+func TestCatalogWriter_SetDuckDBCompatMode_EnablesBinarySerializer(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+	table := NewTableCatalogEntry("test")
+	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
+	catalog.AddTable(table)
+
+	writer := NewCatalogWriter(bm, catalog)
+
+	// Initially should not use BinarySerializer
+	assert.False(t, writer.useBinarySerializer)
+
+	// Enable compat mode should enable BinarySerializer
+	writer.SetDuckDBCompatMode(true)
+	assert.True(t, writer.duckdbCompatMode)
+	assert.True(t, writer.useBinarySerializer)
+
+	// Disable compat mode should disable BinarySerializer
+	writer.SetDuckDBCompatMode(false)
+	assert.False(t, writer.duckdbCompatMode)
+	assert.False(t, writer.useBinarySerializer)
+}
+
+// Test collectCatalogEntries ordering
+func TestCatalogWriter_CollectCatalogEntries_Ordering(t *testing.T) {
+	bm, cleanup := testBlockManagerSetup(t)
+	defer cleanup()
+
+	catalog := NewDuckDBCatalog()
+
+	// Add entries in non-standard order
+	table := NewTableCatalogEntry("users")
+	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
+	catalog.AddTable(table)
+
+	schema := NewSchemaCatalogEntry("main")
+	catalog.AddSchema(schema)
+
+	view := NewViewCatalogEntry("v1", "SELECT 1")
+	catalog.AddView(view)
+
+	index := NewIndexCatalogEntry("idx1", "users")
+	catalog.AddIndex(index)
+
+	seq := NewSequenceCatalogEntry("seq1")
+	catalog.AddSequence(seq)
+
+	typ := NewEnumTypeCatalogEntry("status", []string{"active"})
+	catalog.AddType(typ)
+
+	writer := NewCatalogWriter(bm, catalog)
+
+	// Collect entries
+	entries := writer.collectCatalogEntries()
+
+	// Verify order: schemas, tables, views, indexes, sequences, types
+	require.Len(t, entries, 6)
+	assert.Equal(t, CatalogSchemaEntry, entries[0].Type())
+	assert.Equal(t, CatalogTableEntry, entries[1].Type())
+	assert.Equal(t, CatalogViewEntry, entries[2].Type())
+	assert.Equal(t, CatalogIndexEntry, entries[3].Type())
+	assert.Equal(t, CatalogSequenceEntry, entries[4].Type())
+	assert.Equal(t, CatalogTypeEntry, entries[5].Type())
+}
