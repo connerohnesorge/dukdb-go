@@ -8,7 +8,7 @@
 ## 2. PRAGMA Handler Implementation
 
 - [ ] 2.1 Add checkpoint_threshold column to duck
-- [ ] 2.2db.settings table schema Implement PhysicalCheckpointThreshold executor in `internal/executor/physical_maintenance.go`
+- [ ] 2.2 db.settings table schema Implement PhysicalCheckpointThreshold executor in `internal/executor/physical_maintenance.go`
 - [ ] 2.3 Add threshold reading logic for SET operations
 - [ ] 2.4 Write integration tests for PRAGMA checkpoint_threshold
 
