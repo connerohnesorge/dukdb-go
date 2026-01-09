@@ -928,7 +928,7 @@ func (p *LogicalPivot) OutputColumns() []ColumnBinding {
 
 // formatPivotColumnName creates a column name for a pivot result column.
 func formatPivotColumnName(funcName, alias string, pivotValue any) string {
-	valStr := ""
+	var valStr string
 	switch v := pivotValue.(type) {
 	case string:
 		valStr = v

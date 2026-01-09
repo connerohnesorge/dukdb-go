@@ -155,7 +155,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_TIMESTAMP,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.TIMESTAMP, dt.ID())
-				ts := dt.(*arrow.TimestampType)
+				ts, ok := dt.(*arrow.TimestampType)
+				require.True(t, ok, "expected *arrow.TimestampType")
 				assert.Equal(t, arrow.Microsecond, ts.Unit)
 			},
 		},
@@ -164,7 +165,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_TIMESTAMP_S,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.TIMESTAMP, dt.ID())
-				ts := dt.(*arrow.TimestampType)
+				ts, ok := dt.(*arrow.TimestampType)
+				require.True(t, ok, "expected *arrow.TimestampType")
 				assert.Equal(t, arrow.Second, ts.Unit)
 			},
 		},
@@ -173,7 +175,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_TIMESTAMP_MS,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.TIMESTAMP, dt.ID())
-				ts := dt.(*arrow.TimestampType)
+				ts, ok := dt.(*arrow.TimestampType)
+				require.True(t, ok, "expected *arrow.TimestampType")
 				assert.Equal(t, arrow.Millisecond, ts.Unit)
 			},
 		},
@@ -182,7 +185,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_TIMESTAMP_NS,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.TIMESTAMP, dt.ID())
-				ts := dt.(*arrow.TimestampType)
+				ts, ok := dt.(*arrow.TimestampType)
+				require.True(t, ok, "expected *arrow.TimestampType")
 				assert.Equal(t, arrow.Nanosecond, ts.Unit)
 			},
 		},
@@ -191,7 +195,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_TIMESTAMP_TZ,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.TIMESTAMP, dt.ID())
-				ts := dt.(*arrow.TimestampType)
+				ts, ok := dt.(*arrow.TimestampType)
+				require.True(t, ok, "expected *arrow.TimestampType")
 				assert.Equal(t, arrow.Microsecond, ts.Unit)
 				assert.Equal(t, "UTC", ts.TimeZone)
 			},
@@ -210,7 +215,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_HUGEINT,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.DECIMAL128, dt.ID())
-				dec := dt.(*arrow.Decimal128Type)
+				dec, ok := dt.(*arrow.Decimal128Type)
+				require.True(t, ok, "expected *arrow.Decimal128Type")
 				assert.Equal(t, int32(38), dec.Precision)
 				assert.Equal(t, int32(0), dec.Scale)
 			},
@@ -235,7 +241,8 @@ func TestDuckDBTypeToArrow_AllPrimitiveTypes(t *testing.T) {
 			duckType: dukdb.TYPE_UUID,
 			arrowCheck: func(t *testing.T, dt arrow.DataType) {
 				assert.Equal(t, arrow.FIXED_SIZE_BINARY, dt.ID())
-				fsb := dt.(*arrow.FixedSizeBinaryType)
+				fsb, ok := dt.(*arrow.FixedSizeBinaryType)
+				require.True(t, ok, "expected *arrow.FixedSizeBinaryType")
 				assert.Equal(t, 16, fsb.ByteWidth)
 			},
 		},
@@ -752,8 +759,10 @@ func TestRecordBatchToDataChunk_List(t *testing.T) {
 	bldr := array.NewRecordBuilder(alloc, schema)
 	defer bldr.Release()
 
-	listBldr := bldr.Field(0).(*array.ListBuilder)
-	valBldr := listBldr.ValueBuilder().(*array.Int64Builder)
+	listBldr, ok := bldr.Field(0).(*array.ListBuilder)
+	require.True(t, ok, "expected *array.ListBuilder")
+	valBldr, ok := listBldr.ValueBuilder().(*array.Int64Builder)
+	require.True(t, ok, "expected *array.Int64Builder")
 
 	// Row 0: [1, 2, 3]
 	listBldr.Append(true)
@@ -808,9 +817,12 @@ func TestRecordBatchToDataChunk_Struct(t *testing.T) {
 	bldr := array.NewRecordBuilder(alloc, schema)
 	defer bldr.Release()
 
-	structBldr := bldr.Field(0).(*array.StructBuilder)
-	xBldr := structBldr.FieldBuilder(0).(*array.Int32Builder)
-	yBldr := structBldr.FieldBuilder(1).(*array.StringBuilder)
+	structBldr, ok := bldr.Field(0).(*array.StructBuilder)
+	require.True(t, ok, "expected *array.StructBuilder")
+	xBldr, ok := structBldr.FieldBuilder(0).(*array.Int32Builder)
+	require.True(t, ok, "expected *array.Int32Builder")
+	yBldr, ok := structBldr.FieldBuilder(1).(*array.StringBuilder)
+	require.True(t, ok, "expected *array.StringBuilder")
 
 	// Row 0: {x: 10, y: "hello"}
 	structBldr.Append(true)
@@ -858,9 +870,12 @@ func TestRecordBatchToDataChunk_Map(t *testing.T) {
 	bldr := array.NewRecordBuilder(alloc, schema)
 	defer bldr.Release()
 
-	mapBldr := bldr.Field(0).(*array.MapBuilder)
-	keyBldr := mapBldr.KeyBuilder().(*array.StringBuilder)
-	valBldr := mapBldr.ItemBuilder().(*array.Int32Builder)
+	mapBldr, ok := bldr.Field(0).(*array.MapBuilder)
+	require.True(t, ok, "expected *array.MapBuilder")
+	keyBldr, ok := mapBldr.KeyBuilder().(*array.StringBuilder)
+	require.True(t, ok, "expected *array.StringBuilder")
+	valBldr, ok := mapBldr.ItemBuilder().(*array.Int32Builder)
+	require.True(t, ok, "expected *array.Int32Builder")
 
 	// Row 0: {"a": 1, "b": 2}
 	mapBldr.Append(true)
@@ -962,11 +977,13 @@ func TestDataChunkToRecordBatch_AllTypes(t *testing.T) {
 	assert.Equal(t, int64(12), record.NumCols())
 
 	// Verify some values
-	boolCol := record.Column(0).(*array.Boolean)
+	boolCol, ok := record.Column(0).(*array.Boolean)
+	require.True(t, ok, "expected *array.Boolean")
 	assert.Equal(t, true, boolCol.Value(0))
 	assert.Equal(t, false, boolCol.Value(1))
 
-	strCol := record.Column(11).(*array.String)
+	strCol, ok := record.Column(11).(*array.String)
+	require.True(t, ok, "expected *array.String")
 	assert.Equal(t, "hello", strCol.Value(0))
 	assert.Equal(t, "world", strCol.Value(1))
 }

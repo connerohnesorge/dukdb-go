@@ -2587,7 +2587,7 @@ func (b *Binder) bindUnpivotTableRef(ref parser.TableRef) (*BoundTableRef, error
 
 // formatPivotColumnName creates a column name for a pivot result column.
 func formatPivotColumnName(alias string, pivotValue any) string {
-	valStr := ""
+	var valStr string
 	switch v := pivotValue.(type) {
 	case string:
 		valStr = v

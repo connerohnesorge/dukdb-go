@@ -1422,7 +1422,7 @@ func (e *Executor) computeGroupingBitmask(
 	var bitmask int64 = 0
 	for i, arg := range gc.Args {
 		// Check if this column is NOT in the current grouping set
-		key := ""
+		var key string
 		if arg.Table != "" {
 			key = arg.Table + "." + arg.Column
 		} else {

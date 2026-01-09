@@ -164,7 +164,10 @@ func ArrowTypeToDuckDB(dt arrow.DataType) (dukdb.Type, error) {
 	case arrow.TIME32, arrow.TIME64:
 		return dukdb.TYPE_TIME, nil
 	case arrow.TIMESTAMP:
-		tsType := dt.(*arrow.TimestampType)
+		tsType, ok := dt.(*arrow.TimestampType)
+		if !ok {
+			return dukdb.TYPE_TIMESTAMP, nil
+		}
 		switch tsType.Unit {
 		case arrow.Second:
 			return dukdb.TYPE_TIMESTAMP_S, nil
@@ -179,7 +182,10 @@ func ArrowTypeToDuckDB(dt arrow.DataType) (dukdb.Type, error) {
 	case arrow.INTERVAL_MONTHS, arrow.INTERVAL_DAY_TIME, arrow.INTERVAL_MONTH_DAY_NANO:
 		return dukdb.TYPE_INTERVAL, nil
 	case arrow.FIXED_SIZE_BINARY:
-		fsb := dt.(*arrow.FixedSizeBinaryType)
+		fsb, ok := dt.(*arrow.FixedSizeBinaryType)
+		if !ok {
+			return dukdb.TYPE_BLOB, nil
+		}
 		if fsb.ByteWidth == uuidByteLength {
 			return dukdb.TYPE_UUID, nil
 		}
@@ -328,7 +334,10 @@ func extractArrowValue(arr arrow.Array, idx int) any {
 		return time.UnixMicro(val).UTC()
 	case *array.Timestamp:
 		ts := a.Value(idx)
-		tsType := a.DataType().(*arrow.TimestampType)
+		tsType, ok := a.DataType().(*arrow.TimestampType)
+		if !ok {
+			return time.UnixMicro(int64(ts)).UTC()
+		}
 		switch tsType.Unit {
 		case arrow.Second:
 			return time.Unix(int64(ts), 0).UTC()
@@ -410,7 +419,10 @@ func extractFixedSizeListValue(a *array.FixedSizeList, idx int) []any {
 
 // extractStructValue extracts a struct value from an Arrow Struct array.
 func extractStructValue(a *array.Struct, idx int) map[string]any {
-	structType := a.DataType().(*arrow.StructType)
+	structType, ok := a.DataType().(*arrow.StructType)
+	if !ok {
+		return nil
+	}
 	result := make(map[string]any)
 	for i, field := range structType.Fields() {
 		fieldArr := a.Field(i)
@@ -641,7 +653,10 @@ func appendValueToBuilder(builder array.Builder, val any, dt arrow.DataType) err
 		if !ok {
 			return fmt.Errorf("expected time.Time, got %T", val)
 		}
-		tsType := dt.(*arrow.TimestampType)
+		tsType, ok := dt.(*arrow.TimestampType)
+		if !ok {
+			return fmt.Errorf("expected *arrow.TimestampType, got %T", dt)
+		}
 		var ts arrow.Timestamp
 		switch tsType.Unit {
 		case arrow.Second:

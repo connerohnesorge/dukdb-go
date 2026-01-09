@@ -85,7 +85,7 @@ func (e *Executor) executePivotPlan(
 		// Add group by column values
 		keyValues := groupKeys[key]
 		for i, expr := range p.GroupBy {
-			colName := ""
+			var colName string
 			if colRef, ok := expr.(*binder.BoundColumnRef); ok {
 				colName = colRef.Column
 			} else {
