@@ -173,23 +173,39 @@ Future work (Phase 3):
 
 ### Decision 3: Filter Pushdown Strategy
 
-**Status**: Pending
+**Status**: Approved
 
-Options:
-1. Push all filters to scan level (simplest)
-2. Push filters based on selectivity (more complex)
-3. Push filters only if index available (most selective)
+**Decision**: Match DuckDB v1.4.3 filter pushdown behavior exactly.
 
-**Recommendation**: Start with Option 1, evolve to Option 2 based on performance data.
+Implementation will follow DuckDB source code in `references/duckdb/src/optimizer/filter_pushdown.cpp` to ensure full parity. This includes:
+- Push filters to scan level when safe
+- Push filters past joins based on column dependencies
+- Handle complex AND/OR filter trees correctly
+- Preserve filter semantics for outer joins
 
 ## Risks / Trade-offs
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Statistics persistence complexity | Medium | Start simple, add features incrementally |
-| Subquery decorrelation correctness | High | Extensive testing with correlated subqueries |
-| Performance regression | Medium | Benchmark before/after, gradual rollout |
-| Memory usage for learning | Low | Configurable history size |
+| **Partial/lazy implementations** | **CRITICAL** | Require DuckDB v1.4.3 feature completeness checklist (see below), 60/40+ testing-to-code ratio, peer review before merge |
+| Subquery decorrelation correctness | High | Triple validation: EXPLAIN comparison, correctness testing, cardinality estimates vs DuckDB |
+| Statistics format reverse engineering | High | Read DuckDB source code directly, validate with DuckDB-generated databases |
+| Performance regression on simple queries | Medium | TPC-H benchmark parity requirement, profile optimization overhead |
+| Code complexity and maintenance | Medium | Comprehensive inline documentation, architectural comments explaining DuckDB parity |
+| Memory usage for learning | Low | Conservative N-observation threshold before applying corrections |
+
+### Critical: Avoiding Partial Implementations
+
+To prevent incomplete "looks done but has gaps" implementations:
+
+1. **Feature Completeness Checklist**: Every DuckDB v1.4.3 optimizer feature must be explicitly checked off (see Implementation Plan below)
+2. **Triple Validation**: All features must pass:
+   - Correctness testing (same results as DuckDB)
+   - EXPLAIN output comparison (same plans as DuckDB)
+   - Cardinality estimate comparison (same estimates as DuckDB)
+3. **No Incremental Shipping**: All phases implemented together, merged as complete optimizer overhaul
+4. **60/40+ Testing Ratio**: More effort on testing than implementation to catch gaps early
+5. **DuckDB Source Reference**: Every complex function must reference corresponding DuckDB source file in inline comments
 
 ## Implementation Plan
 
@@ -238,12 +254,40 @@ internal/optimizer/
 | Phase 4: Learning | 2-3 weeks | None |
 | **Total** | **11-15 weeks** | |
 
-## Open Questions
+## Resolved Questions
 
-1. Should we support statistics persistence in DuckDB format?
-2. What's the right auto-update threshold (10%, 20%, configurable)?
-3. Should subquery decorrelation be opt-in or always-on?
-4. How much history should cardinality learning keep?
+### 1. Statistics Persistence Format
+**Decision**: DuckDB-compatible binary format
+
+Read DuckDB source code in `references/duckdb/src/storage/statistics/` to reverse engineer the exact binary format. This enables:
+- Potential import of statistics from DuckDB databases
+- Exact parity with DuckDB behavior
+- Future compatibility as format evolves
+
+Implementation approach:
+- Study `references/duckdb/src/storage/statistics/base_statistics.cpp`
+- Create serialization/deserialization matching DuckDB format
+- Validate with test databases created by DuckDB CLI
+- Add version checking for format compatibility
+
+### 2. Auto-Update Statistics Threshold
+**Decision**: Match DuckDB CLI behavior
+
+Research exact threshold and batching behavior from `references/duckdb/src/optimizer/statistics/` to ensure identical auto-update behavior. No custom thresholds or configuration options - pure DuckDB parity.
+
+### 3. Subquery Decorrelation Behavior
+**Decision**: Match DuckDB CLI behavior, always enabled
+
+Study `references/duckdb/src/optimizer/unnest_rewriter.cpp` and related files to implement:
+- Full DuckDB v1.4.3 subquery decorrelation capabilities
+- Exact same fallback behavior when decorrelation not possible
+- All subquery types: EXISTS, SCALAR, IN, ANY/ALL, multi-level correlation
+- No opt-in/opt-out - always attempt decorrelation like DuckDB
+
+### 4. Cardinality Learning History Size
+**Decision**: After N observations (conservative approach)
+
+Require minimum sample size before applying corrections. Research DuckDB's adaptive optimizer settings if they have similar features. Conservative to avoid overfitting to outlier queries.
 
 ## References
 

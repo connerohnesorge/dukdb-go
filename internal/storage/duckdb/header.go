@@ -94,12 +94,40 @@ type BlockPointer struct {
 
 // MetaBlockPointer points to a metadata block containing serialized data.
 // Used in RowGroupPointer to reference column DataPointers.
+//
+// In DuckDB's format, the MetaBlock field in the database header stores a
+// packed 64-bit value combining BlockID (bits 0-55) and BlockIndex (bits 56-63).
+// The BlockIndex is used when multiple metadata entries share a block.
 type MetaBlockPointer struct {
-	// BlockID is the metadata block number.
+	// BlockID is the metadata block number (uses only bits 0-55 when encoded).
 	BlockID uint64
+
+	// BlockIndex is the index within the metadata block (uses bits 56-63 when encoded).
+	// This is typically 0 for the primary metadata entry.
+	BlockIndex uint8
 
 	// Offset is the byte offset within the metadata block.
 	Offset uint64
+}
+
+// Encode returns the packed 64-bit pointer for use in the database header.
+// DuckDB stores metadata pointers as: (block_id & 0x00FFFFFFFFFFFFFF) | (block_index << 56)
+// For invalid pointers (BlockID = InvalidBlockID), returns InvalidBlockID to preserve
+// the invalid state that DuckDB recognizes.
+func (mp MetaBlockPointer) Encode() uint64 {
+	if mp.BlockID == InvalidBlockID {
+		return InvalidBlockID
+	}
+	return (mp.BlockID & 0x00FFFFFFFFFFFFFF) | (uint64(mp.BlockIndex) << 56)
+}
+
+// DecodeMetaBlockPointer decodes a packed 64-bit pointer from the database header.
+func DecodeMetaBlockPointer(packed uint64) MetaBlockPointer {
+	return MetaBlockPointer{
+		BlockID:    packed & 0x00FFFFFFFFFFFFFF,
+		BlockIndex: uint8(packed >> 56),
+		Offset:     0,
+	}
 }
 
 // InvalidBlockPointer returns a block pointer that represents an invalid/null pointer.

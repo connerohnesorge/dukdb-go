@@ -112,6 +112,11 @@ type CatalogWriter struct {
 	// closed indicates whether the writer has been closed.
 	closed bool
 
+	// duckdbCompatMode enables DuckDB CLI compatibility mode.
+	// When true, metadata is only written if there are row groups.
+	// This allows DuckDB CLI to open files as empty databases.
+	duckdbCompatMode bool
+
 	// mu protects concurrent access.
 	mu sync.Mutex
 }
@@ -123,12 +128,23 @@ type CatalogWriter struct {
 //   - catalog: The DuckDBCatalog to serialize
 func NewCatalogWriter(bm *BlockManager, catalog *DuckDBCatalog) *CatalogWriter {
 	return &CatalogWriter{
-		blockManager:   bm,
-		catalog:        catalog,
-		metaBlocks:     make([]uint64, 0),
-		tableRowGroups: make(map[uint64]*tableRowGroupEntry),
-		closed:         false,
+		blockManager:     bm,
+		catalog:          catalog,
+		metaBlocks:       make([]uint64, 0),
+		tableRowGroups:   make(map[uint64]*tableRowGroupEntry),
+		closed:           false,
+		duckdbCompatMode: false,
 	}
+}
+
+// SetDuckDBCompatMode enables or disables DuckDB CLI compatibility mode.
+// When enabled, metadata is only written if there are row groups with actual data.
+// This allows DuckDB CLI to open files as empty databases.
+// By default, compatibility mode is disabled.
+func (w *CatalogWriter) SetDuckDBCompatMode(enabled bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.duckdbCompatMode = enabled
 }
 
 // AddRowGroupPointer registers a row group for a table.
@@ -191,7 +207,19 @@ func (w *CatalogWriter) Write() (MetaBlockPointer, error) {
 
 	// For empty catalogs, return an invalid pointer so DuckDB won't try to load metadata
 	if w.catalog.IsEmpty() {
-		return MetaBlockPointer{BlockID: InvalidBlockID, Offset: 0}, nil
+		return MetaBlockPointer{BlockID: InvalidBlockID, BlockIndex: 0, Offset: 0}, nil
+	}
+
+	// In DuckDB compatibility mode, skip metadata if there are no row groups.
+	// DuckDB's MetadataManager uses a complex slot-based format that differs from
+	// our custom serialization. Until we implement full DuckDB-compatible metadata
+	// serialization, we only write metadata when there's actual row data.
+	//
+	// This allows DuckDB CLI to open dukdb-go files as empty databases.
+	// Catalog entries (table definitions) are maintained in memory during the session
+	// but not persisted in DuckDB-compatible format.
+	if w.duckdbCompatMode && len(w.tableRowGroups) == 0 {
+		return MetaBlockPointer{BlockID: InvalidBlockID, BlockIndex: 0, Offset: 0}, nil
 	}
 
 	// 1. Write schemas
@@ -244,10 +272,17 @@ func (w *CatalogWriter) Write() (MetaBlockPointer, error) {
 // writeEntry writes a single catalog entry to a metadata block.
 // It serializes the entry, allocates a block, writes the data,
 // and tracks the block ID.
+//
+// DuckDB metadata block format:
+// - Bytes 0-7: Next block pointer (InvalidBlockID if last/only block)
+// - Bytes 8+: Serialized catalog entry
 func (w *CatalogWriter) writeEntry(entry CatalogEntry) error {
 	// Serialize entry
 	var buf bytes.Buffer
 	bw := NewBinaryWriter(&buf)
+
+	// First 8 bytes: next block pointer (InvalidBlockID = no more blocks)
+	bw.WriteUint64(InvalidBlockID)
 
 	if err := SerializeCatalogEntry(bw, entry); err != nil {
 		return fmt.Errorf("failed to serialize entry: %w", err)
@@ -302,6 +337,10 @@ func (w *CatalogWriter) writeTypeEntry(typeEntry *TypeCatalogEntry) error {
 // writeTableEntry writes table metadata including row group pointers.
 // Tables need special handling to include row group metadata that points
 // to where the table data is stored.
+//
+// DuckDB metadata block format:
+// - Bytes 0-7: Next block pointer (InvalidBlockID if last/only block)
+// - Bytes 8+: Serialized table entry data
 func (w *CatalogWriter) writeTableEntry(table *TableCatalogEntry, tableOID uint64) error {
 	// Serialize table entry
 	var tableBuf bytes.Buffer
@@ -320,6 +359,9 @@ func (w *CatalogWriter) writeTableEntry(table *TableCatalogEntry, tableOID uint6
 	// Create combined buffer with table data and row group pointer
 	var buf bytes.Buffer
 	bw := NewBinaryWriter(&buf)
+
+	// First 8 bytes: next block pointer (InvalidBlockID = no more blocks)
+	bw.WriteUint64(InvalidBlockID)
 
 	// Write the table entry data
 	bw.WriteBytes(tableBuf.Bytes())
@@ -351,6 +393,10 @@ func (w *CatalogWriter) writeTableEntry(table *TableCatalogEntry, tableOID uint6
 
 // writeRowGroupPointers writes all row group pointers for a table to a metadata block.
 // Returns the block ID where row group pointers are stored, or 0 if no row groups.
+//
+// DuckDB metadata block format:
+// - Bytes 0-7: Next block pointer (InvalidBlockID if last/only block)
+// - Bytes 8+: Row group pointer data
 func (w *CatalogWriter) writeRowGroupPointers(tableOID uint64) (uint64, error) {
 	entry, exists := w.tableRowGroups[tableOID]
 	if !exists || len(entry.rowGroups) == 0 {
@@ -360,6 +406,9 @@ func (w *CatalogWriter) writeRowGroupPointers(tableOID uint64) (uint64, error) {
 	// Serialize all row group pointers
 	var buf bytes.Buffer
 	bw := NewBinaryWriter(&buf)
+
+	// First 8 bytes: next block pointer (InvalidBlockID = no more blocks)
+	bw.WriteUint64(InvalidBlockID)
 
 	// Write number of row groups
 	bw.WriteUint64(uint64(len(entry.rowGroups)))
@@ -398,9 +447,17 @@ func (w *CatalogWriter) writeRowGroupPointers(tableOID uint64) (uint64, error) {
 // writeCatalogIndex writes the master catalog index block.
 // This block is what the database header MetaBlock points to.
 // It contains references to all catalog entry blocks.
+//
+// DuckDB metadata block format:
+// - Bytes 0-7: Next block pointer (InvalidBlockID if last/only block)
+// - Bytes 8+: Serialized catalog data
 func (w *CatalogWriter) writeCatalogIndex() (MetaBlockPointer, error) {
 	var buf bytes.Buffer
 	bw := NewBinaryWriter(&buf)
+
+	// First 8 bytes: next block pointer (InvalidBlockID = no more blocks)
+	// This is required by DuckDB's metadata block format
+	bw.WriteUint64(InvalidBlockID)
 
 	// Write catalog version/magic for validation
 	bw.WriteUint32(uint32(CurrentVersion))
@@ -442,7 +499,7 @@ func (w *CatalogWriter) writeCatalogIndex() (MetaBlockPointer, error) {
 		return MetaBlockPointer{}, fmt.Errorf("failed to write catalog index block: %w", err)
 	}
 
-	return MetaBlockPointer{BlockID: blockID, Offset: 0}, nil
+	return MetaBlockPointer{BlockID: blockID, BlockIndex: 0, Offset: 0}, nil
 }
 
 // Close closes the catalog writer and releases resources.

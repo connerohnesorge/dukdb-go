@@ -715,7 +715,9 @@ func (s *DuckDBStorage) Checkpoint() error {
 	}
 
 	// Write catalog with row group pointers
+	// Enable DuckDB compatibility mode so files can be opened by DuckDB CLI
 	catalogWriter := NewCatalogWriter(s.blockManager, s.catalog)
+	catalogWriter.SetDuckDBCompatMode(true)
 	for tableOID, rgps := range s.rowGroups {
 		for _, rgp := range rgps {
 			if err := catalogWriter.AddRowGroupPointer(tableOID, rgp); err != nil {
@@ -745,9 +747,11 @@ func (s *DuckDBStorage) Checkpoint() error {
 	}
 
 	// Create new database header
+	// MetaBlock must be encoded using DuckDB's packed format:
+	// bits 0-55 = block_id, bits 56-63 = block_index
 	dbHeader := &DatabaseHeader{
 		Iteration:                  iteration,
-		MetaBlock:                  metaBlock.BlockID,
+		MetaBlock:                  metaBlock.Encode(),
 		FreeList:                   InvalidBlockID,
 		BlockCount:                 s.blockManager.BlockCount(),
 		BlockAllocSize:             s.blockManager.BlockSize(),

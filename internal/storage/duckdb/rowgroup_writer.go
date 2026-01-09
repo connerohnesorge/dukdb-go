@@ -310,7 +310,7 @@ func (w *RowGroupWriter) writeColumn(colIdx int, data []any) (MetaBlockPointer, 
 		return MetaBlockPointer{}, fmt.Errorf("failed to write metadata block: %w", err)
 	}
 
-	return MetaBlockPointer{BlockID: metaBlockID, Offset: 0}, nil
+	return MetaBlockPointer{BlockID: metaBlockID, BlockIndex: 0, Offset: 0}, nil
 }
 
 // Close closes the writer, flushing any remaining data.
