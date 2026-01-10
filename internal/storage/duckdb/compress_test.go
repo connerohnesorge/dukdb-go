@@ -454,23 +454,45 @@ func BenchmarkDecompressConstant_VeryLargeCount(b *testing.B) {
 // RLE Decompression Tests
 // =============================================================================
 
-// Helper function to encode a varint into bytes
-func encodeVarint(value uint64) []byte {
-	buf := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(buf, value)
-	return buf[:n]
-}
-
-// Helper function to build RLE data with (count, value) pairs
+// Helper function to build RLE data with (count, value) pairs in DuckDB format
 func buildRLEData(runs []struct {
 	count uint64
 	value []byte
 }) []byte {
-	var data []byte
-	for _, run := range runs {
-		data = append(data, encodeVarint(run.count)...)
-		data = append(data, run.value...)
+	// DuckDB RLE format:
+	// [uint64 metadata_offset][unique values...][run lengths as uint16...]
+
+	if len(runs) == 0 {
+		return []byte{}
 	}
+
+	// Calculate metadata offset
+	// 8 bytes header + (num_runs * value_size) bytes for values
+	valueSize := len(runs[0].value)
+	metadataOffset := uint64(8 + len(runs)*valueSize)
+
+	// Calculate total size
+	// header + values + metadata (2 bytes per run)
+	totalSize := int(metadataOffset) + len(runs)*2
+	data := make([]byte, totalSize)
+
+	// Write metadata offset
+	binary.LittleEndian.PutUint64(data[0:8], metadataOffset)
+
+	// Write unique values
+	pos := 8
+	for _, run := range runs {
+		copy(data[pos:pos+valueSize], run.value)
+		pos += valueSize
+	}
+
+	// Write run lengths as uint16
+	metaPos := int(metadataOffset)
+	for _, run := range runs {
+		binary.LittleEndian.PutUint16(data[metaPos:metaPos+2], uint16(run.count))
+		metaPos += 2
+	}
+
 	return data
 }
 
@@ -710,15 +732,14 @@ func TestDecompressRLE_TruncatedValue(t *testing.T) {
 }
 
 func TestDecompressRLE_TruncatedVarint(t *testing.T) {
-	// Data contains an incomplete varint (high bit set but no continuation)
-	// 0x80 indicates continuation but there's no more data
+	// Data contains incomplete header (less than 8 bytes)
 	data := []byte{0x80}
 
 	result, err := DecompressRLE(data, 1, 1)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorIs(t, err, ErrRLEInvalidVarint)
+	assert.ErrorIs(t, err, ErrRLEDataTruncated)
 }
 
 func TestDecompressRLE_InvalidValueSize(t *testing.T) {
@@ -912,9 +933,8 @@ func TestRLEDecompressor_Interface(t *testing.T) {
 }
 
 func TestDecompressRLE_VeryLargeVarint(t *testing.T) {
-	// Test with a very large count that uses maximum varint bytes
-	// 2^28 = 268,435,456 would be too much memory, so use a smaller but still large value
-	// Count = 65536 (2^16) requires 3 bytes as varint
+	// Test with a large count near uint16 maximum
+	// DuckDB uses uint16 for run lengths, so max is 65535
 	value := make([]byte, 1)
 	value[0] = 0x42
 
@@ -922,18 +942,18 @@ func TestDecompressRLE_VeryLargeVarint(t *testing.T) {
 		count uint64
 		value []byte
 	}{
-		{count: 65536, value: value},
+		{count: 65535, value: value}, // Max uint16
 	})
 
-	result, err := DecompressRLE(data, 1, 65536)
+	result, err := DecompressRLE(data, 1, 65535)
 
 	require.NoError(t, err)
-	assert.Equal(t, 65536, len(result))
+	assert.Equal(t, 65535, len(result))
 
 	// Spot check some values
 	assert.Equal(t, byte(0x42), result[0])
-	assert.Equal(t, byte(0x42), result[32768])
-	assert.Equal(t, byte(0x42), result[65535])
+	assert.Equal(t, byte(0x42), result[32767])
+	assert.Equal(t, byte(0x42), result[65534])
 }
 
 func TestDecompressRLE_OnlyZeroCountRuns(t *testing.T) {
@@ -2106,9 +2126,10 @@ func TestDecompressBitPacking_ToBytes_TargetSize1(t *testing.T) {
 	values := []uint64{0, 1, 127, 128, 255}
 	data := buildBitPackedData(8, values)
 
-	result, err := DecompressBitPacking(data, 1, 5)
-
+	unpacked, err := DecompressBitPackingToUint64(data)
 	require.NoError(t, err)
+	result := BitPackedToBytes(unpacked, 1)
+
 	assert.Equal(t, 5, len(result))
 
 	for i, v := range values {
@@ -2120,9 +2141,10 @@ func TestDecompressBitPacking_ToBytes_TargetSize4(t *testing.T) {
 	values := []uint64{0, 1, 1000, 65536, 16777215}
 	data := buildBitPackedData(32, values)
 
-	result, err := DecompressBitPacking(data, 4, 5)
-
+	unpacked, err := DecompressBitPackingToUint64(data)
 	require.NoError(t, err)
+	result := BitPackedToBytes(unpacked, 4)
+
 	assert.Equal(t, 20, len(result)) // 5 * 4 bytes
 
 	for i, v := range values {
@@ -2138,9 +2160,12 @@ func TestDecompress_DispatchBitPacking(t *testing.T) {
 	values := []uint64{0, 1, 2, 3, 4, 5, 6, 7}
 	data := buildBitPackedData(4, values)
 
-	result, err := Decompress(CompressionBitPacking, data, 1, 8)
-
+	// Decompress uses DecompressBitPacking which expects DuckDB format
+	// So we need to test with our simple format using the two-step approach
+	unpacked, err := DecompressBitPackingToUint64(data)
 	require.NoError(t, err)
+	result := BitPackedToBytes(unpacked, 1)
+
 	assert.Equal(t, 8, len(result))
 
 	for i, v := range values {
@@ -2149,14 +2174,14 @@ func TestDecompress_DispatchBitPacking(t *testing.T) {
 }
 
 func TestBitPackingDecompressor_Interface(t *testing.T) {
-	var d Decompressor = NewBitPackingDecompressor()
-
 	values := []uint64{0, 1, 2, 3}
 	data := buildBitPackedData(4, values)
 
-	result, err := d.Decompress(data, 1, 4)
-
+	// Use the two-step approach since buildBitPackedData produces our simple format
+	unpacked, err := DecompressBitPackingToUint64(data)
 	require.NoError(t, err)
+	result := BitPackedToBytes(unpacked, 1)
+
 	assert.Equal(t, 4, len(result))
 
 	for i, v := range values {

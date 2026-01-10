@@ -401,6 +401,10 @@ type TableCatalogEntry struct {
 
 	// Constraints is the list of table constraints.
 	Constraints []Constraint
+
+	// StorageMetadata contains table storage information (row groups, total rows).
+	// This is populated when reading from DuckDB files.
+	StorageMetadata *StorageMetadata
 }
 
 // Type returns CatalogTableEntry.

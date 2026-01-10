@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/bits"
 )
 
@@ -335,6 +334,11 @@ func CompressRLE(data []byte, valueSize int) ([]byte, error) {
 // Returns (compressed data, true) if compression is beneficial (fewer runs than values).
 // Returns (nil, false) if RLE doesn't help (no runs or compression not beneficial).
 //
+// DuckDB RLE Format:
+//   - Bytes 0-7: metadata_offset (uint64) - offset to where run lengths start
+//   - Bytes 8+: unique values (one per run, type-sized)
+//   - Metadata at metadata_offset: run lengths (uint16 each)
+//
 // Parameters:
 //   - data: The raw data bytes (must be a multiple of valueSize)
 //   - valueSize: Size in bytes of each value
@@ -360,42 +364,75 @@ func TryCompressRLE(data []byte, valueSize int) ([]byte, bool) {
 		return nil, false
 	}
 
-	var buf bytes.Buffer
-	runCount := 0
+	// First pass: collect all runs (value + count)
+	type run struct {
+		value []byte
+		count uint16
+	}
+	runs := make([]run, 0)
 
 	i := 0
 	for i < len(data) {
 		// Get the current value
 		runValue := data[i : i+valueSize]
-		count := uint64(1)
+		count := uint16(1)
 		i += valueSize
 
 		// Find run length - count consecutive identical values
 		for i < len(data) && bytes.Equal(data[i:i+valueSize], runValue) {
 			count++
 			i += valueSize
+			// Prevent overflow of uint16
+			if count == 0xFFFF {
+				break
+			}
 		}
 
-		// Write run: [varint count][value]
-		writeUvarint(&buf, count)
-		buf.Write(runValue)
-		runCount++
+		// Store this run
+		runValueCopy := make([]byte, valueSize)
+		copy(runValueCopy, runValue)
+		runs = append(runs, run{value: runValueCopy, count: count})
 	}
+
+	runCount := len(runs)
 
 	// Only beneficial if we have fewer runs than values
 	if runCount >= valueCount {
 		return nil, false // RLE doesn't help
 	}
 
-	return buf.Bytes(), true
-}
+	// Second pass: build output in DuckDB format
+	var buf bytes.Buffer
 
-// writeUvarint writes a variable-length unsigned integer to a writer.
-// Uses the same encoding as binary.PutUvarint.
-func writeUvarint(w io.Writer, v uint64) {
-	var buf [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(buf[:], v)
-	_, _ = w.Write(buf[:n]) // Ignore error: writing to bytes.Buffer always succeeds
+	// Write 8-byte placeholder for metadata_offset (we'll update it later)
+	metadataOffsetPos := buf.Len()
+	binary.Write(&buf, binary.LittleEndian, uint64(0))
+
+	// Write all unique values
+	for _, r := range runs {
+		buf.Write(r.value)
+	}
+
+	// Calculate metadata offset (current position after all values)
+	metadataOffset := uint64(buf.Len())
+
+	// Write all run lengths as uint16
+	for _, r := range runs {
+		binary.Write(&buf, binary.LittleEndian, r.count)
+	}
+
+	// Update metadata_offset at the beginning
+	result := buf.Bytes()
+	binary.LittleEndian.PutUint64(result[metadataOffsetPos:], metadataOffset)
+
+	// Check if compression is actually beneficial (compressed size < original size)
+	originalSize := len(data)
+	compressedSize := len(result)
+	if compressedSize >= originalSize {
+		return nil, false // Compression increases size, not beneficial
+	}
+
+	return result, true
 }
 
 // rleCompressor implements the Compressor interface for RLE compression.

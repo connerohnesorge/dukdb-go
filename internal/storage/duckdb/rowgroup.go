@@ -64,6 +64,11 @@ type DataPointer struct {
 
 	// SegmentState contains segment-specific state including validity info.
 	SegmentState ColumnSegmentState
+
+	// ValidityPointer points to the validity mask data for this column.
+	// This is populated when the ColumnData has a nested validity child (field 101).
+	// The validity mask indicates which rows are NULL.
+	ValidityPointer *DataPointer
 }
 
 // ColumnSegmentState contains segment metadata including validity mask info.
@@ -75,6 +80,15 @@ type ColumnSegmentState struct {
 	// If HasValidityMask is true and ValidityBlock is invalid, the validity
 	// mask is inlined in StateData.
 	ValidityBlock BlockPointer
+
+	// ValidityCompression is the compression type for the validity column.
+	// Relevant when HasValidityMask is true and validity is stored separately.
+	ValidityCompression CompressionType
+
+	// ValidityHasNull indicates whether the validity column's statistics
+	// report HasNull=true (meaning all values in this column are NULL).
+	// This is used when validity uses CONSTANT compression with block ID 127.
+	ValidityHasNull bool
 
 	// StateData contains additional compression-specific state.
 	// For segments with inlined validity masks, this contains the mask data.
@@ -165,6 +179,19 @@ func NewValidityMask(rowCount uint64) *ValidityMask {
 	return &ValidityMask{
 		data:     data,
 		allValid: true,
+		rowCount: rowCount,
+	}
+}
+
+// NewValidityMaskAllNull creates a new ValidityMask where all rows are NULL.
+// All bits are initialized to 0 (invalid/NULL).
+func NewValidityMaskAllNull(rowCount uint64) *ValidityMask {
+	wordCount := (rowCount + validityBitsPerWord - 1) / validityBitsPerWord
+	data := make([]uint64, wordCount) // All zeros by default in Go
+
+	return &ValidityMask{
+		data:     data,
+		allValid: false,
 		rowCount: rowCount,
 	}
 }

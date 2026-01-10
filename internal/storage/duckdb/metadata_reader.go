@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"unsafe"
@@ -26,10 +27,10 @@ type MetadataBlockReader struct {
 const MetadataBlockHeaderSize = 8
 
 // NewMetadataBlockReader creates a new MetadataBlockReader starting at the given block.
-// The startBlockID is an encoded MetaBlockPointer. For catalog metadata, the block_index
-// is typically 0, so we read from the start of the full 256KB block.
+// The startBlockID is an encoded MetaBlockPointer with block_id and block_index.
+// The block_index determines which 4KB sub-block within the 256KB block to start reading from.
 func NewMetadataBlockReader(bm *BlockManager, startBlockID uint64) (*MetadataBlockReader, error) {
-	// Decode the MetaBlockPointer to get block_id
+	// Decode the MetaBlockPointer to get block_id and block_index
 	ptr := DecodeMetaBlockPointer(startBlockID)
 
 	// Read the storage block
@@ -38,31 +39,48 @@ func NewMetadataBlockReader(bm *BlockManager, startBlockID uint64) (*MetadataBlo
 		return nil, fmt.Errorf("failed to read metadata block %d: %w", ptr.BlockID, err)
 	}
 
-	if len(block.Data) < MetadataBlockHeaderSize {
-		return nil, fmt.Errorf("metadata block too small: %d bytes", len(block.Data))
+	// Calculate the sub-block offset within the 256KB block
+	// Note: Block.Data already has the 8-byte checksum stripped
+	// But the checksum removal doesn't change internal offsets from DuckDB's perspective
+	//
+	// Raw block layout (on disk):
+	//   [checksum:8][sub-block 0: 4096-8 bytes][sub-block 1: 4096 bytes][...]
+	// After BlockManager strips checksum:
+	//   Block.Data: [sub-block 0 data: 4088 bytes][sub-block 1: 4096 bytes][...]
+	//
+	// Each sub-block has:
+	//   [next_ptr:8][content: remaining]
+	//
+	// For sub-block 0: starts at offset 0 in Block.Data (after checksum stripped)
+	// For sub-block N: starts at offset (N * 4096) - 8 in Block.Data
+
+	subBlockOffset := int(ptr.BlockIndex) * MetadataSubBlockSize
+	if ptr.BlockIndex > 0 {
+		// Adjust for the stripped checksum at the beginning
+		subBlockOffset -= BlockChecksumSize
 	}
 
-	// Note: BlockManager.ReadBlock() already stripped the block checksum (first 8 bytes of raw block).
-	// For metadata blocks, the structure is:
-	//   Raw block: [checksum:8][next_ptr:8][catalog_data:remaining]
-	// After BlockManager strips checksum:
-	//   Block.Data: [next_ptr:8][catalog_data:remaining]
-	//
-	// So Block.Data[0:8] contains the next-block ID, and Block.Data[8:] contains the actual catalog data.
+	if subBlockOffset < 0 || subBlockOffset+MetadataBlockHeaderSize > len(block.Data) {
+		return nil, fmt.Errorf("sub-block %d offset out of range in block %d", ptr.BlockIndex, ptr.BlockID)
+	}
 
-	// Read next block pointer (8 bytes, little-endian) from the start of Block.Data
-	nextBlockID := uint64(block.Data[0]) |
-		uint64(block.Data[1])<<8 |
-		uint64(block.Data[2])<<16 |
-		uint64(block.Data[3])<<24 |
-		uint64(block.Data[4])<<32 |
-		uint64(block.Data[5])<<40 |
-		uint64(block.Data[6])<<48 |
-		uint64(block.Data[7])<<56
+	// Read next block pointer from the sub-block header
+	nextBlockID := binary.LittleEndian.Uint64(block.Data[subBlockOffset : subBlockOffset+8])
+
+	// Data starts after the 8-byte next_ptr header in the sub-block
+	dataStart := subBlockOffset + MetadataBlockHeaderSize
+	dataEnd := subBlockOffset + MetadataSubBlockSize
+	if ptr.BlockIndex == 0 {
+		// Sub-block 0 is shorter because checksum was stripped
+		dataEnd = MetadataSubBlockSize - BlockChecksumSize
+	}
+	if dataEnd > len(block.Data) {
+		dataEnd = len(block.Data)
+	}
 
 	r := &MetadataBlockReader{
 		blockManager: bm,
-		data:         block.Data[MetadataBlockHeaderSize:], // Data after next_ptr
+		data:         block.Data[dataStart:dataEnd],
 		offset:       0,
 		nextBlockID:  nextBlockID,
 	}
@@ -359,10 +377,34 @@ const (
 
 // NewMetadataReader creates a new metadata reader starting at the given block.
 func NewMetadataReader(bm *BlockManager, startBlockID uint64) (*MetadataReader, error) {
+	return NewMetadataReaderWithOffset(bm, startBlockID, 0)
+}
+
+// NewMetadataReaderWithOffset creates a new metadata reader starting at the given block
+// and seeking to the specified offset.
+// The offset is relative to the start of the sub-block (INCLUDING the 8-byte header).
+// So an offset of 8 means the first byte of content, offset of 10 means 2 bytes into content.
+func NewMetadataReaderWithOffset(bm *BlockManager, startBlockID uint64, offset uint64) (*MetadataReader, error) {
 	// Create the block reader that handles block chaining
 	blockReader, err := NewMetadataBlockReader(bm, startBlockID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Skip to the specified offset
+	// The offset is relative to sub-block start (including header)
+	// Since BlockReader.data already starts at content (after header), we subtract the header size
+	if offset > 0 {
+		if offset < MetadataBlockHeaderSize {
+			return nil, fmt.Errorf("offset %d points into sub-block header (header is %d bytes)",
+				offset, MetadataBlockHeaderSize)
+		}
+		contentOffset := int(offset - MetadataBlockHeaderSize)
+		if contentOffset > len(blockReader.data) {
+			return nil, fmt.Errorf("offset %d exceeds sub-block data length %d (content offset %d)",
+				offset, len(blockReader.data)+MetadataBlockHeaderSize, contentOffset)
+		}
+		blockReader.offset = contentOffset
 	}
 
 	// Create a BinaryDeserializer on top of the block reader
@@ -401,6 +443,11 @@ func (r *MetadataReader) ReadFieldID() (uint16, error) {
 // PeekField returns the next field ID without consuming it.
 func (r *MetadataReader) PeekField() (uint16, error) {
 	if !r.hasBufferedField {
+		// Check for existing error first
+		if err := r.deserializer.Err(); err != nil {
+			return 0, err
+		}
+
 		field, ok := r.deserializer.PeekFieldID()
 		if !ok {
 			return 0, r.deserializer.Err()
@@ -413,11 +460,12 @@ func (r *MetadataReader) PeekField() (uint16, error) {
 
 // ConsumeField consumes a buffered field.
 func (r *MetadataReader) ConsumeField() {
-	if r.hasBufferedField {
-		r.hasBufferedField = false
-		// Actually consume from deserializer
-		r.deserializer.ReadFieldID()
+	if !r.hasBufferedField {
+		return
 	}
+	r.hasBufferedField = false
+	// Actually consume from deserializer
+	r.deserializer.ReadFieldID()
 }
 
 // NextField reads and returns the next field ID.
@@ -507,6 +555,43 @@ func (r *MetadataReader) ReadFloat64() (float64, error) {
 	bits := uint64(bytes[0]) | uint64(bytes[1])<<8 | uint64(bytes[2])<<16 | uint64(bytes[3])<<24 |
 		uint64(bytes[4])<<32 | uint64(bytes[5])<<40 | uint64(bytes[6])<<48 | uint64(bytes[7])<<56
 	return *(*float64)((unsafe.Pointer)(&bits)), nil
+}
+
+// SkipToField skips the serialization stream until it finds the specified field ID
+// at the current nesting level. This is useful for skipping complex nested structures.
+// After calling this, the reader is positioned at the beginning of the target field's value.
+// NOTE: This method directly manipulates the underlying block reader for efficiency.
+func (r *MetadataReader) SkipToField(targetFieldID uint16) error {
+	// Get direct access to the block data for efficient scanning
+	data := r.blockReader.data
+	maxBytes := 10000 // Maximum bytes to scan
+
+	// Convert targetFieldID to bytes (little-endian)
+	targetLow := byte(targetFieldID & 0xFF)
+	targetHigh := byte(targetFieldID >> 8)
+
+	scanned := 0
+	for scanned < maxBytes {
+		// Scan for the target field ID pattern
+		remaining := len(data) - r.blockReader.offset
+		if remaining < 2 {
+			return fmt.Errorf("reached end of data before finding field %d", targetFieldID)
+		}
+
+		// Check if current position has the target field ID
+		if data[r.blockReader.offset] == targetLow && data[r.blockReader.offset+1] == targetHigh {
+			// Found it! Advance past the field ID
+			r.blockReader.offset += 2
+			r.hasBufferedField = false // Clear any buffered field
+			return nil
+		}
+
+		// Advance one byte and continue scanning
+		r.blockReader.offset++
+		scanned++
+	}
+
+	return fmt.Errorf("exceeded maximum scan bytes (%d) while looking for field %d", maxBytes, targetFieldID)
 }
 
 // OnPropertyBegin starts reading a property with the given field ID.
@@ -695,51 +780,181 @@ func (r *MetadataReader) ReadCatalogEntry() (CatalogEntry, error) {
 
 	// After the catalog entry (e.g., CreateTableInfo), DuckDB may write additional
 	// storage metadata (row counts, block allocation, index data, etc.) that uses
-	// field IDs 100-109 range. We need to skip all of this until we reach either:
+	// field IDs 100-109 range. We read fields 101 and 102, skip others.
 	// - Field 99 (ddbFieldCatalogType): start of the next catalog entry
 	// - End of data
 	// The storage data may contain nested objects with their own terminators.
-	if err := r.skipStorageMetadata(); err != nil {
+	storageMeta, err := r.readStorageMetadata()
+	if err != nil {
 		return nil, err
+	}
+
+	// Attach storage metadata to table entries
+	if tableEntry, ok := entry.(*TableCatalogEntry); ok && storageMeta != nil {
+		tableEntry.StorageMetadata = storageMeta
 	}
 
 	return entry, nil
 }
 
-// skipStorageMetadata skips storage-related fields that appear after catalog entries.
-// DuckDB writes table storage info (row counts, block allocations, index metadata)
-// after the CreateTableInfo object. We skip everything until we find field 99
-// (the start of the next catalog entry) or reach the end of data.
-func (r *MetadataReader) skipStorageMetadata() error {
-	// The storage metadata can contain complex nested structures.
-	// We use a simple approach: scan byte-by-byte looking for field 99.
-	// This is safe because field 99 (0x63 0x00) is a unique marker that
-	// only appears at the start of catalog entries.
+// readMetaBlockPointer reads a MetaBlockPointer from a nested object.
+// The MetaBlockPointer is serialized as an object with:
+// - Field 100: block_pointer (uint64) - encoded as (block_id & 0x00FFFFFFFFFFFFFF) | (block_index << 56)
+// - Field 101: offset (uint32) - OPTIONAL (omitted if 0 due to WritePropertyWithDefault)
+// - Terminated with 0xFFFF
+func (r *MetadataReader) readMetaBlockPointer() (MetaBlockPointer, error) {
+	var ptr MetaBlockPointer
 
-	// Since we're now using BinaryDeserializer, we need to access the underlying
-	// block reader to peek at raw bytes. For now, use a simpler approach:
-	// Keep peeking field IDs until we find field 99 or hit EOF.
+	// Read field 100 (block_pointer)
+	if err := r.OnPropertyBegin(100); err != nil {
+		return ptr, fmt.Errorf("expected field 100 for block_pointer: %w", err)
+	}
+	blockPointer, err := r.ReadVarint()
+	if err != nil {
+		return ptr, fmt.Errorf("failed to read block_pointer: %w", err)
+	}
+
+	// Decode the packed block_pointer value
+	ptr.BlockID = blockPointer & 0x00FFFFFFFFFFFFFF
+	ptr.BlockIndex = uint8(blockPointer >> 56)
+
+	// Check if field 101 (offset) is present or if we have terminator
+	fieldID, err := r.PeekField()
+	if err != nil {
+		return ptr, fmt.Errorf("failed to peek after block_pointer: %w", err)
+	}
+
+	if fieldID == 101 {
+		// Read optional offset field
+		r.ConsumeField()
+		offset, err := r.ReadVarint()
+		if err != nil {
+			return ptr, fmt.Errorf("failed to read offset: %w", err)
+		}
+		ptr.Offset = offset
+		// After consuming field 101, need to peek again for terminator
+		fieldID, err = r.PeekField()
+		if err != nil {
+			return ptr, fmt.Errorf("failed to peek for terminator after offset: %w", err)
+		}
+	} else {
+		// Offset defaults to 0
+		ptr.Offset = 0
+	}
+
+	// Read terminator
+	if fieldID == ddbFieldTerminator {
+		r.ConsumeField()
+	} else {
+		return ptr, fmt.Errorf("expected MetaBlockPointer terminator (0xFFFF), got field %d", fieldID)
+	}
+
+	return ptr, nil
+}
+
+// StorageMetadata contains table storage information read from catalog entries.
+type StorageMetadata struct {
+	TablePointer MetaBlockPointer
+	TotalRows    uint64
+}
+
+// readStorageMetadata reads storage-related fields that appear after catalog entries.
+// DuckDB writes table storage info (row counts, block allocations, index metadata)
+// after the CreateTableInfo object. We read fields 101 and 102, skip others.
+//
+// Storage metadata fields (from SingleFileTableDataWriter::FinalizeTable):
+// - Field 101: table_pointer (MetaBlockPointer - nested object with terminator)
+// - Field 102: total_rows (idx_t/uint64 - varint)
+// - Field 103: index_pointers (vector<BlockPointer> - deprecated, array of structs)
+// - Field 104: index_storage_infos (vector<IndexStorageInfo> - array of nested objects)
+func (r *MetadataReader) readStorageMetadata() (*StorageMetadata, error) {
+	storageMeta := &StorageMetadata{
+		TablePointer: MetaBlockPointer{BlockID: InvalidBlockID},
+		TotalRows:    0,
+	}
 	for {
 		fieldID, err := r.PeekField()
 		if err != nil {
 			// EOF or other error - end of metadata
-			return nil
+			return storageMeta, nil
 		}
 
 		if fieldID == ddbFieldCatalogType {
-			// Found the next catalog entry - don't consume it
-			// Clear any buffered field since we're at the right position
-			return nil
+			// Found the next catalog entry (field 99) - don't consume it
+			return storageMeta, nil
 		}
 
-		// Consume this field ID and skip one byte
+		if fieldID == ddbFieldTerminator {
+			// Consume the terminator and continue
+			r.ConsumeField()
+			continue
+		}
+
+		// Field 0 can indicate padding/uninitialized data at end of metadata - treat as EOF
+		if fieldID == 0 {
+			return storageMeta, nil
+		}
+
+		// Consume the field ID
 		r.ConsumeField()
-		// Try to read a byte to skip forward
-		_ = r.deserializer.ReadUint8()
-		// Ignore errors, we'll keep trying until we find field 99 or EOF
-		if r.deserializer.Err() != nil {
-			// Clear the error and return - we're at the end
-			return nil
+
+		// Read the field value based on field ID
+		switch fieldID {
+		case 101:
+			// table_pointer: MetaBlockPointer - nested object with field 100 (block_pointer) and 101 (offset)
+			// Read the nested MetaBlockPointer object
+			tablePtr, readErr := r.readMetaBlockPointer()
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read table_pointer: %w", readErr)
+			}
+			storageMeta.TablePointer = tablePtr
+
+		case 102:
+			// total_rows: idx_t (uint64) - varint encoded
+			totalRows, readErr := r.ReadVarint()
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read total_rows: %w", readErr)
+			}
+			storageMeta.TotalRows = totalRows
+
+		case 103:
+			// index_pointers: vector<BlockPointer> - deprecated array
+			// Read array count
+			count, readErr := r.ReadVarint()
+			if readErr != nil {
+				return nil, readErr
+			}
+			// Each BlockPointer has 2 fields: block_id (uint64) and offset (uint32)
+			// Both are nested objects with terminators
+			for i := uint64(0); i < count; i++ {
+				if err := r.SkipToTerminator(); err != nil {
+					return nil, err
+				}
+			}
+
+		case 104:
+			// index_storage_infos: vector<IndexStorageInfo> - array of nested objects
+			// Read array count
+			count, readErr := r.ReadVarint()
+			if readErr != nil {
+				return nil, readErr
+			}
+			// Each IndexStorageInfo is a nested object with terminator
+			for i := uint64(0); i < count; i++ {
+				if err := r.SkipToTerminator(); err != nil {
+					return nil, err
+				}
+			}
+
+		default:
+			// Unknown field >= 100 - try to skip conservatively
+			// For fields in the 100+ range, they could be varints or nested objects
+			// Try reading a varint first (most common case)
+			if _, err := r.ReadVarint(); err != nil {
+				// If that fails, it might be a nested object
+				// Return the error - we can't safely skip unknown types
+				return nil, err
+			}
 		}
 	}
 }
@@ -1950,4 +2165,1171 @@ func ReadCatalogFromMetadata(bm *BlockManager, metaBlockID uint64) (*DuckDBCatal
 	}
 
 	return catalog, nil
+}
+
+// ReadColumnDataPointer reads ColumnData metadata from a MetaBlockPointer and extracts
+// the first DataPointer. ColumnData is the serialization format used in RowGroupPointer.data_pointers.
+//
+// ColumnData (PersistentColumnData) format in BinarySerializer:
+// - Field 100: data_pointers (vector<DataPointer>) - the actual segment pointers
+// - Field 101: validity (child ColumnData) - for nullable columns
+//
+// Each DataPointer has:
+// - Field 100: row_start (optional, usually 0 and omitted)
+// - Field 101: tuple_count
+// - Field 102: block_pointer (nested BlockPointer with fields 100, 101)
+// - Field 103: compression_type
+// - Field 104: statistics (optional)
+// - Field 105: segment_state (optional)
+// - Terminator 0xFFFF
+func ReadColumnDataPointer(bm *BlockManager, mbp MetaBlockPointer) (*DataPointer, error) {
+	// Create a metadata reader at the ColumnData location
+	encodedPointer := mbp.Encode()
+	reader, err := NewMetadataReaderWithOffset(bm, encodedPointer, mbp.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metadata reader for ColumnData: %w", err)
+	}
+
+	// Read Field 100: data_pointers (vector<DataPointer>)
+	if err := reader.OnPropertyBegin(100); err != nil {
+		return nil, fmt.Errorf("expected field 100 for data_pointers: %w", err)
+	}
+
+	// Read the count of data pointers
+	dataPointerCount, err := reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read data_pointers count: %w", err)
+	}
+
+	if dataPointerCount == 0 {
+		return nil, fmt.Errorf("ColumnData has no data_pointers")
+	}
+
+	// Read the first DataPointer
+	dp, err := readDataPointer(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read DataPointer: %w", err)
+	}
+
+	// Skip remaining DataPointers if count > 1
+	for i := uint64(1); i < dataPointerCount; i++ {
+		if _, err := readDataPointer(reader); err != nil {
+			return nil, fmt.Errorf("failed to skip DataPointer %d: %w", i, err)
+		}
+	}
+
+	// Check for field 101 (validity child ColumnData) or terminator
+	fieldID, err := reader.PeekField()
+	if err != nil {
+		// EOF or error, just return what we have
+		return dp, nil
+	}
+
+	if fieldID == 101 {
+		// Read field 101: validity child ColumnData
+		reader.ConsumeField()
+
+		// The validity is a nested ColumnData structure, read its data_pointers
+		validityDP, err := readValidityColumnData(reader)
+		if err != nil {
+			// Log but don't fail - validity is optional
+			// Some columns may not have validity even with has_null=true
+			return dp, nil
+		}
+		dp.ValidityPointer = validityDP
+
+		// Mark that this column has a validity mask
+		dp.SegmentState.HasValidityMask = true
+	}
+
+	return dp, nil
+}
+
+// readValidityColumnData reads a nested validity ColumnData structure.
+// Validity ColumnData format:
+// - Field 100: data_pointers (vector<DataPointer>) - validity mask location
+// - Terminator 0xFFFF
+func readValidityColumnData(reader *MetadataReader) (*DataPointer, error) {
+	// Read Field 100: data_pointers
+	if err := reader.OnPropertyBegin(100); err != nil {
+		return nil, fmt.Errorf("expected field 100 for validity data_pointers: %w", err)
+	}
+
+	// Read count
+	count, err := reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read validity data_pointers count: %w", err)
+	}
+
+	if count == 0 {
+		return nil, fmt.Errorf("validity ColumnData has no data_pointers")
+	}
+
+	// Read the first validity DataPointer
+	validityDP, err := readDataPointer(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read validity DataPointer: %w", err)
+	}
+
+	// Skip remaining DataPointers if count > 1
+	for i := uint64(1); i < count; i++ {
+		if _, err := readDataPointer(reader); err != nil {
+			// Just skip errors for additional pointers
+			break
+		}
+	}
+
+	// Skip to terminator
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			break
+		}
+		reader.ConsumeField()
+		if fieldID == ddbFieldTerminator {
+			break
+		}
+		// Skip unknown fields
+		if _, err := reader.ReadVarint(); err != nil {
+			break
+		}
+	}
+
+	return validityDP, nil
+}
+
+// readDataPointer reads a single DataPointer from the reader.
+// DataPointer format:
+// - Field 100: row_start (optional, default 0)
+// - Field 101: tuple_count
+// - Field 102: block_pointer (BlockPointer)
+// - Field 103: compression_type
+// - Field 104: statistics (optional)
+// - Field 105: segment_state (optional)
+// - Terminator 0xFFFF
+func readDataPointer(reader *MetadataReader) (*DataPointer, error) {
+	dp := &DataPointer{}
+
+	// Peek first field - could be 100 (row_start) or 101 (tuple_count) if row_start is omitted
+	fieldID, err := reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek first field: %w", err)
+	}
+
+	// Handle optional Field 100: row_start
+	if fieldID == 100 {
+		reader.ConsumeField()
+		dp.RowStart, err = reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read row_start: %w", err)
+		}
+		fieldID, err = reader.PeekField()
+		if err != nil {
+			return nil, fmt.Errorf("failed to peek after row_start: %w", err)
+		}
+	}
+
+	// Read Field 101: tuple_count
+	if fieldID != 101 {
+		return nil, fmt.Errorf("expected field 101 for tuple_count, got %d", fieldID)
+	}
+	reader.ConsumeField()
+	dp.TupleCount, err = reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tuple_count: %w", err)
+	}
+
+	// Read Field 102: block_pointer (nested BlockPointer)
+	if err := reader.OnPropertyBegin(102); err != nil {
+		return nil, fmt.Errorf("expected field 102 for block_pointer: %w", err)
+	}
+
+	// BlockPointer has field 100 (block_id) and optional field 101 (offset, defaults to 0)
+	if err := reader.OnPropertyBegin(100); err != nil {
+		return nil, fmt.Errorf("expected field 100 for block_id in BlockPointer: %w", err)
+	}
+	dp.Block.BlockID, err = reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read block_id: %w", err)
+	}
+
+	// Check for optional offset field or terminator
+	fieldID, err = reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek for offset in BlockPointer: %w", err)
+	}
+
+	if fieldID == 101 {
+		// Read optional offset field
+		reader.ConsumeField()
+		offset, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read offset: %w", err)
+		}
+		dp.Block.Offset = uint32(offset)
+
+		// Read terminator
+		fieldID, err = reader.PeekField()
+		if err != nil {
+			return nil, fmt.Errorf("failed to peek BlockPointer terminator: %w", err)
+		}
+	} else {
+		// No offset field, default to 0
+		dp.Block.Offset = 0
+	}
+
+	// Read BlockPointer terminator
+	if fieldID != ddbFieldTerminator {
+		return nil, fmt.Errorf("expected BlockPointer terminator, got field %d", fieldID)
+	}
+	reader.ConsumeField()
+
+	// Read Field 103: compression_type
+	if err := reader.OnPropertyBegin(103); err != nil {
+		return nil, fmt.Errorf("expected field 103 for compression_type: %w", err)
+	}
+	compressionType, err := reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read compression_type: %w", err)
+	}
+	dp.Compression = CompressionType(compressionType)
+
+	// Read remaining optional fields (statistics, segment_state) until terminator
+	for {
+		fieldID, err = reader.PeekField()
+		if err != nil {
+			return nil, fmt.Errorf("failed to peek for optional fields: %w", err)
+		}
+
+		if fieldID == ddbFieldTerminator {
+			reader.ConsumeField()
+			break
+		}
+
+		reader.ConsumeField()
+		switch fieldID {
+		case 104: // statistics
+			// Read statistics - important for CONSTANT compression
+			if err := readStatisticsInto(reader, &dp.Statistics); err != nil {
+				return nil, fmt.Errorf("failed to read statistics: %w", err)
+			}
+		case 105: // segment_state
+			// Read segment state for validity mask info
+			if err := readSegmentStateInto(reader, &dp.SegmentState); err != nil {
+				return nil, fmt.Errorf("failed to read segment_state: %w", err)
+			}
+		default:
+			// Unknown field, try to skip as varint
+			if _, err := reader.ReadVarint(); err != nil {
+				return nil, fmt.Errorf("failed to skip unknown field %d: %w", fieldID, err)
+			}
+		}
+	}
+
+	return dp, nil
+}
+
+// skipNestedStructure skips a nested BinarySerializer structure by reading until terminator.
+// This function handles the BinarySerializer format where objects are terminated by 0xFFFF.
+// Some fields may contain nested objects or lists which also need to be skipped.
+func skipNestedStructure(reader *MetadataReader) error {
+	// Read fields until we hit the terminator for this structure
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			// If we hit EOF while reading, just return - the structure may be at the end
+			return nil
+		}
+		reader.ConsumeField()
+
+		if fieldID == ddbFieldTerminator {
+			return nil
+		}
+
+		// Skip the field value
+		// Most statistics fields are simple varints or nested objects
+		switch fieldID {
+		case 103: // type_stats in BaseStatistics - nested object
+			// This is a nested object, recursively skip it
+			if err := skipNestedStructure(reader); err != nil {
+				return err
+			}
+		default:
+			// Try to read as varint - this works for most simple fields
+			// If it fails, we might have a more complex structure
+			if _, err := reader.ReadVarint(); err != nil {
+				// Try to recover by skipping until terminator
+				return skipToTerminator(reader)
+			}
+		}
+	}
+}
+
+// skipToTerminator reads and discards bytes until we find a terminator.
+// This is a recovery mechanism for unexpected field formats.
+func skipToTerminator(reader *MetadataReader) error {
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			return nil // EOF is acceptable
+		}
+		reader.ConsumeField()
+
+		if fieldID == ddbFieldTerminator {
+			return nil
+		}
+
+		// Try to skip any value as varint
+		_, _ = reader.ReadVarint()
+	}
+}
+
+// readStatisticsInto reads statistics from a nested structure into BaseStatistics.
+// Statistics format in BinarySerializer:
+// - Field 100: has_stats (bool)
+// - Field 101: has_null (bool)
+// - Field 102: type_stats (nested - contains min/max for numeric types)
+// - Terminator 0xFFFF
+//
+// For CONSTANT compression, the type_stats contains the constant value as min (and max).
+func readStatisticsInto(reader *MetadataReader, stats *BaseStatistics) error {
+	// Collect raw bytes for statistics data that we may need later
+	var rawStatBytes []byte
+
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			return nil // EOF is acceptable at end of statistics
+		}
+
+		if fieldID == ddbFieldTerminator {
+			reader.ConsumeField()
+			break
+		}
+
+		reader.ConsumeField()
+		switch fieldID {
+		case 100: // has_stats
+			val, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read has_stats: %w", err)
+			}
+			stats.HasStats = (val != 0)
+		case 101: // has_null
+			val, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read has_null: %w", err)
+			}
+			stats.HasNull = (val != 0)
+		case 102: // type_stats - contains min/max values
+			// Read the nested type_stats structure and extract min/max bytes
+			statBytes, err := readTypeStats(reader)
+			if err != nil {
+				return fmt.Errorf("failed to read type_stats: %w", err)
+			}
+			rawStatBytes = append(rawStatBytes, statBytes...)
+		default:
+			// Skip unknown field
+			if _, err := reader.ReadVarint(); err != nil {
+				// Try to skip to terminator
+				return skipToTerminator(reader)
+			}
+		}
+	}
+
+	if len(rawStatBytes) > 0 {
+		stats.StatData = rawStatBytes
+	}
+	return nil
+}
+
+// readTypeStats reads a type_stats nested structure and returns the raw min/max bytes.
+// NumericStats format in DuckDB BinarySerializer:
+// - Field 100: has_min (bool)
+// - Field 101: min_value (raw value, typically as varint for integers)
+// - Field 102: has_max (bool)
+// - Field 103: max_value (raw value)
+// - Terminator 0xFFFF
+func readTypeStats(reader *MetadataReader) ([]byte, error) {
+	var result []byte
+	var hasMin bool
+
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			return result, nil // EOF acceptable
+		}
+
+		if fieldID == ddbFieldTerminator {
+			reader.ConsumeField()
+			return result, nil
+		}
+
+		reader.ConsumeField()
+		switch fieldID {
+		case 100: // has_min
+			val, err := reader.ReadVarint()
+			if err != nil {
+				return result, err
+			}
+			hasMin = (val != 0)
+		case 101: // min_value - this is what we need for CONSTANT compression
+			if hasMin {
+				// Read the min value - for integers it's stored as a varint
+				val, err := reader.ReadVarint()
+				if err != nil {
+					return result, err
+				}
+				// Store as 4-byte little-endian (for int32 types)
+				// TODO: handle different sizes based on type
+				valBytes := make([]byte, 4)
+				valBytes[0] = byte(val)
+				valBytes[1] = byte(val >> 8)
+				valBytes[2] = byte(val >> 16)
+				valBytes[3] = byte(val >> 24)
+				result = append(result, valBytes...)
+			} else {
+				// Skip if no min
+				_, _ = reader.ReadVarint()
+			}
+		case 102: // has_max
+			_, err := reader.ReadVarint()
+			if err != nil {
+				return result, err
+			}
+		case 103: // max_value
+			// Skip max value (same as min for CONSTANT)
+			_, _ = reader.ReadVarint()
+		default:
+			// Skip unknown field
+			if _, err := reader.ReadVarint(); err != nil {
+				return result, skipToTerminator(reader)
+			}
+		}
+	}
+}
+
+// readStatValueBytes reads raw value bytes from statistics.
+// For numeric types, this is typically a fixed-size value (4 or 8 bytes).
+// The value is stored as raw bytes, not as a varint.
+func readStatValueBytes(reader *MetadataReader) ([]byte, error) {
+	// Statistics values are stored as raw bytes prefixed with a length
+	// Read the length
+	length, err := reader.ReadVarint()
+	if err != nil {
+		// Try reading as a fixed 4-byte value (common for int32)
+		// This is a fallback for older formats
+		result := make([]byte, 4)
+		for i := 0; i < 4; i++ {
+			b, err := reader.ReadUint8()
+			if err != nil {
+				return nil, err
+			}
+			result[i] = b
+		}
+		return result, nil
+	}
+
+	if length == 0 {
+		return nil, nil
+	}
+
+	// Read the raw bytes
+	result := make([]byte, length)
+	for i := uint64(0); i < length; i++ {
+		b, err := reader.ReadUint8()
+		if err != nil {
+			return result[:i], nil // Return what we have
+		}
+		result[i] = b
+	}
+	return result, nil
+}
+
+// readSegmentStateInto reads segment state from a nested structure.
+// SegmentState format in BinarySerializer:
+// - Field 100: has_validity_mask (bool)
+// - Field 101: validity_block_id (if has_validity_mask)
+// - Field 102: validity_offset (if has_validity_mask)
+// - Field 103: state_data_len + state_data bytes
+// - Terminator 0xFFFF
+func readSegmentStateInto(reader *MetadataReader, state *ColumnSegmentState) error {
+	for {
+		fieldID, err := reader.PeekField()
+		if err != nil {
+			return nil // EOF acceptable
+		}
+
+		if fieldID == ddbFieldTerminator {
+			reader.ConsumeField()
+			return nil
+		}
+
+		reader.ConsumeField()
+		switch fieldID {
+		case 100: // has_validity_mask
+			val, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read has_validity_mask: %w", err)
+			}
+			state.HasValidityMask = (val != 0)
+		case 101: // validity_block_id
+			blockID, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read validity_block_id: %w", err)
+			}
+			state.ValidityBlock.BlockID = blockID
+		case 102: // validity_offset
+			offset, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read validity_offset: %w", err)
+			}
+			state.ValidityBlock.Offset = uint32(offset)
+		case 103: // state_data
+			length, err := reader.ReadVarint()
+			if err != nil {
+				return fmt.Errorf("failed to read state_data length: %w", err)
+			}
+			if length > 0 {
+				state.StateData = make([]byte, length)
+				for i := uint64(0); i < length; i++ {
+					b, err := reader.ReadUint8()
+					if err != nil {
+						return fmt.Errorf("failed to read state_data byte %d: %w", i, err)
+					}
+					state.StateData[i] = b
+				}
+			}
+		default:
+			// Skip unknown field
+			if _, err := reader.ReadVarint(); err != nil {
+				return skipToTerminator(reader)
+			}
+		}
+	}
+}
+
+// ReadDataPointerFromMetadata reads a DataPointer from a MetaBlockPointer location.
+// The segment metadata is stored in BinarySerializer format, not as a simple binary struct.
+//
+// ColumnSegment format in BinarySerializer:
+// - Field 100: tuple_count (uint64 varint)
+// - Field 101: block_id (uint64 varint)
+// - Field 102: offset (uint32 varint)
+// - Field 103: compression_type (uint8 varint)
+// - Field 104: has_statistics (bool - stored as varint 0/1)
+// - If has_statistics:
+//   - Field 105: has_null (bool)
+//   - Field 106: null_count (uint64)
+//   - Field 107: distinct_count (uint64)
+//   - Field 108: stat_data_len (uint32) + stat_data bytes
+// - Field 109: has_validity_mask (bool)
+// - If has_validity_mask:
+//   - Field 110: validity_block_id (uint64)
+//   - Field 111: validity_offset (uint32)
+// - Field 112: state_data_len (uint32) + state_data bytes
+// - Terminator 0xFFFF
+func ReadDataPointerFromMetadata(bm *BlockManager, mbp MetaBlockPointer) (*DataPointer, error) {
+	// Create a metadata reader at the pointer location
+	encodedPointer := mbp.Encode()
+	reader, err := NewMetadataReaderWithOffset(bm, encodedPointer, mbp.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metadata reader: %w", err)
+	}
+
+	dp := &DataPointer{}
+
+	// Read Field 100: tuple_count
+	if err := reader.OnPropertyBegin(100); err != nil {
+		return nil, fmt.Errorf("expected field 100 for tuple_count: %w", err)
+	}
+	dp.TupleCount, err = reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tuple_count: %w", err)
+	}
+
+	// Read Field 101: block_id
+	if err := reader.OnPropertyBegin(101); err != nil {
+		return nil, fmt.Errorf("expected field 101 for block_id: %w", err)
+	}
+	dp.Block.BlockID, err = reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read block_id: %w", err)
+	}
+
+	// Read Field 102: offset
+	if err := reader.OnPropertyBegin(102); err != nil {
+		return nil, fmt.Errorf("expected field 102 for offset: %w", err)
+	}
+	offset, err := reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read offset: %w", err)
+	}
+	dp.Block.Offset = uint32(offset)
+
+	// Read Field 103: compression_type
+	if err := reader.OnPropertyBegin(103); err != nil {
+		return nil, fmt.Errorf("expected field 103 for compression_type: %w", err)
+	}
+	compressionType, err := reader.ReadVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read compression_type: %w", err)
+	}
+	dp.Compression = CompressionType(compressionType)
+
+	// Peek at next field to see if we have statistics
+	fieldID, err := reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek after compression_type: %w", err)
+	}
+
+	// Read Field 104: has_statistics (optional)
+	if fieldID == 104 {
+		reader.ConsumeField()
+		hasStats, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read has_statistics: %w", err)
+		}
+		dp.Statistics.HasStats = (hasStats != 0)
+
+		if dp.Statistics.HasStats {
+			// Read Field 105: has_null
+			if err := reader.OnPropertyBegin(105); err != nil {
+				return nil, fmt.Errorf("expected field 105 for has_null: %w", err)
+			}
+			hasNull, err := reader.ReadVarint()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read has_null: %w", err)
+			}
+			dp.Statistics.HasNull = (hasNull != 0)
+
+			// Read Field 106: null_count
+			if err := reader.OnPropertyBegin(106); err != nil {
+				return nil, fmt.Errorf("expected field 106 for null_count: %w", err)
+			}
+			dp.Statistics.NullCount, err = reader.ReadVarint()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read null_count: %w", err)
+			}
+
+			// Read Field 107: distinct_count
+			if err := reader.OnPropertyBegin(107); err != nil {
+				return nil, fmt.Errorf("expected field 107 for distinct_count: %w", err)
+			}
+			dp.Statistics.DistinctCount, err = reader.ReadVarint()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read distinct_count: %w", err)
+			}
+
+			// Peek for Field 108: stat_data_len
+			fieldID, err = reader.PeekField()
+			if err != nil {
+				return nil, fmt.Errorf("failed to peek for stat_data: %w", err)
+			}
+			if fieldID == 108 {
+				reader.ConsumeField()
+				statDataLen, err := reader.ReadVarint()
+				if err != nil {
+					return nil, fmt.Errorf("failed to read stat_data_len: %w", err)
+				}
+				if statDataLen > 0 {
+					dp.Statistics.StatData = make([]byte, statDataLen)
+					for i := uint64(0); i < statDataLen; i++ {
+						b, err := reader.ReadUint8()
+						if err != nil {
+							return nil, fmt.Errorf("failed to read stat_data byte %d: %w", i, err)
+						}
+						dp.Statistics.StatData[i] = b
+					}
+				}
+			}
+		}
+	}
+
+	// Peek for Field 109: has_validity_mask
+	fieldID, err = reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek for has_validity_mask: %w", err)
+	}
+
+	if fieldID == 109 {
+		reader.ConsumeField()
+		hasValidityMask, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read has_validity_mask: %w", err)
+		}
+		dp.SegmentState.HasValidityMask = (hasValidityMask != 0)
+
+		if dp.SegmentState.HasValidityMask {
+			// Read Field 110: validity_block_id
+			if err := reader.OnPropertyBegin(110); err != nil {
+				return nil, fmt.Errorf("expected field 110 for validity_block_id: %w", err)
+			}
+			dp.SegmentState.ValidityBlock.BlockID, err = reader.ReadVarint()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read validity_block_id: %w", err)
+			}
+
+			// Read Field 111: validity_offset
+			if err := reader.OnPropertyBegin(111); err != nil {
+				return nil, fmt.Errorf("expected field 111 for validity_offset: %w", err)
+			}
+			offset, err := reader.ReadVarint()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read validity_offset: %w", err)
+			}
+			dp.SegmentState.ValidityBlock.Offset = uint32(offset)
+		}
+	}
+
+	// Peek for Field 112: state_data_len
+	fieldID, err = reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek for state_data: %w", err)
+	}
+
+	if fieldID == 112 {
+		reader.ConsumeField()
+		stateDataLen, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read state_data_len: %w", err)
+		}
+		if stateDataLen > 0 {
+			dp.SegmentState.StateData = make([]byte, stateDataLen)
+			for i := uint64(0); i < stateDataLen; i++ {
+				b, err := reader.ReadUint8()
+				if err != nil {
+					return nil, fmt.Errorf("failed to read state_data byte %d: %w", i, err)
+				}
+				dp.SegmentState.StateData[i] = b
+			}
+		}
+	}
+
+	// Read terminator
+	fieldID, err = reader.PeekField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek for terminator: %w", err)
+	}
+	if fieldID != ddbFieldTerminator {
+		return nil, fmt.Errorf("expected terminator (0xFFFF), got field %d", fieldID)
+	}
+	reader.ConsumeField()
+
+	return dp, nil
+}
+
+// ReadRowGroupsFromTablePointer reads row group pointers from the table storage block.
+//
+// DuckDB's table data format at the tablePointer location:
+// 1. TableStatistics (BinarySerializer wrapped with Begin/End)
+// 2. row_group_count (raw uint64, 8 bytes - NOT varint!)
+// 3. For each row group: BinarySerializer wrapped RowGroupPointer
+//
+// Each RowGroupPointer object has:
+// - Field 100: row_start (uint64 varint)
+// - Field 101: tuple_count (uint64 varint)
+// - Field 102: data_pointers (vector<MetaBlockPointer>)
+// - Field 103: delete_pointers (vector<MetaBlockPointer>)
+// - Field 104: has_metadata_blocks (bool) - optional
+// - Field 105: extra_metadata_blocks (vector<idx_t>) - optional
+// - Terminator 0xFFFF
+func ReadRowGroupsFromTablePointer(bm *BlockManager, tablePointer MetaBlockPointer, totalRows uint64, columnCount int) ([]*RowGroupPointer, error) {
+	// Check if the table has any data
+	if tablePointer.BlockID == InvalidBlockID || totalRows == 0 {
+		return nil, nil
+	}
+
+	// Create a metadata reader starting at the table pointer location
+	// Note: The offset in the MetaBlockPointer must be handled specially since
+	// Encode() doesn't preserve the offset field
+	encodedPointer := tablePointer.Encode()
+	reader, err := NewMetadataReaderWithOffset(bm, encodedPointer, tablePointer.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metadata reader for table pointer: %w", err)
+	}
+
+	// Step 1: Skip TableStatistics
+	// TableStatistics is wrapped in BinarySerializer Begin/End
+	// We need to skip all nested structures until we find the outer terminator
+	if err := reader.skipTableStatistics(); err != nil {
+		return nil, fmt.Errorf("failed to skip TableStatistics: %w", err)
+	}
+
+	// Step 2: Read row_group_count as raw uint64 (8 bytes)
+	rowGroupCount, err := reader.readRawUint64()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read row_group_count: %w", err)
+	}
+
+	if rowGroupCount == 0 {
+		return nil, nil
+	}
+
+	// Step 3: Read each RowGroupPointer
+	// Each RowGroupPointer is wrapped in BinarySerializer Begin/End
+	var rowGroups []*RowGroupPointer
+
+	for i := uint64(0); i < rowGroupCount; i++ {
+
+		// Read Field 100: row_start
+		if err := reader.OnPropertyBegin(100); err != nil {
+			return nil, fmt.Errorf("expected field 100 for row_start in row group %d: %w", i, err)
+		}
+		rowStart, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read row_start in row group %d: %w", i, err)
+		}
+
+		// Read Field 101: tuple_count
+		if err := reader.OnPropertyBegin(101); err != nil {
+			return nil, fmt.Errorf("expected field 101 for tuple_count in row group %d: %w", i, err)
+		}
+		tupleCount, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tuple_count in row group %d: %w", i, err)
+		}
+
+		// Read Field 102: data_pointers (vector<MetaBlockPointer>)
+		if err := reader.OnPropertyBegin(102); err != nil {
+			return nil, fmt.Errorf("expected field 102 for data_pointers in row group %d: %w", i, err)
+		}
+		// Read the count of data pointers
+		dataPointerCount, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read data_pointers count in row group %d: %w", i, err)
+		}
+		dataPointers := make([]MetaBlockPointer, dataPointerCount)
+		for j := uint64(0); j < dataPointerCount; j++ {
+			ptr, readErr := reader.readMetaBlockPointer()
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read column %d segment pointer in row group %d: %w", j, i, readErr)
+			}
+			dataPointers[j] = ptr
+		}
+
+		// Read Field 103: delete_pointers (vector<MetaBlockPointer>)
+		if err := reader.OnPropertyBegin(103); err != nil {
+			return nil, fmt.Errorf("expected field 103 for delete_pointers in row group %d: %w", i, err)
+		}
+		// Read the count of delete pointers
+		deletePointerCount, err := reader.ReadVarint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read delete_pointers count in row group %d: %w", i, err)
+		}
+		// Skip delete pointers (we don't use them)
+		for j := uint64(0); j < deletePointerCount; j++ {
+			if _, readErr := reader.readMetaBlockPointer(); readErr != nil {
+				return nil, fmt.Errorf("failed to skip delete pointer %d in row group %d: %w", j, i, readErr)
+			}
+		}
+
+		// Skip remaining optional fields until terminator
+		// Fields 104 and 105 are optional
+		for {
+			fieldID, err := reader.PeekField()
+			if err != nil {
+				return nil, fmt.Errorf("failed to peek field after delete_pointers in row group %d: %w", i, err)
+			}
+			if fieldID == ddbFieldTerminator {
+				reader.ConsumeField() // Consume the terminator
+				break
+			}
+			// Skip this field
+			reader.ConsumeField()
+			switch fieldID {
+			case 104:
+				// bool - read as varint (1 byte typically)
+				_, _ = reader.ReadVarint()
+			case 105:
+				// vector<idx_t> - read count then skip
+				extraCount, _ := reader.ReadVarint()
+				for k := uint64(0); k < extraCount; k++ {
+					_, _ = reader.ReadVarint()
+				}
+			default:
+				// Unknown field - try to skip
+				_, _ = reader.ReadVarint()
+			}
+		}
+
+		rowGroup := &RowGroupPointer{
+			RowStart:     rowStart,
+			TupleCount:   tupleCount,
+			DataPointers: dataPointers,
+		}
+		rowGroups = append(rowGroups, rowGroup)
+	}
+
+	return rowGroups, nil
+}
+
+// skipTableStatisticsBytes reads data and finds the offset where row_group_count is located.
+// It returns the number of bytes from the current position to the row_group_count.
+//
+// TableStatistics is complex and contains nested structures including HyperLogLog data (~3KB per column).
+// Instead of trying to parse it, we search for the pattern that marks the end:
+// - 0xFF 0xFF (terminator)
+// - row_group_count as raw uint64 (8 bytes)
+// - Followed by Field 100 (0x64 0x00) which is the first field of RowGroupPointer
+//
+// We search for: [0xFF 0xFF][uint64 row_group_count][0x64][0x00] pattern.
+func (r *MetadataReader) skipTableStatistics() error {
+	minTableStatsSize := 50 // TableStatistics is at least this big
+
+	// We need to search in the block data
+	// First, search within the current block's data
+	data := r.blockReader.data
+	startOffset := r.blockReader.offset
+
+	// Search for the pattern: [0xFF 0xFF][uint64 row_group_count][0x64 0x00]
+	for i := startOffset + minTableStatsSize; i+12 < len(data); i++ {
+		// Look for 0xFF 0xFF terminator
+		if data[i] == 0xff && data[i+1] == 0xff {
+			// Check if followed by a valid row_group_count + Field 100
+			potentialCount := binary.LittleEndian.Uint64(data[i+2:])
+			if potentialCount >= 1 && potentialCount < 1000000 {
+				// Check if followed by Field 100 (0x64 0x00)
+				if data[i+10] == 0x64 && data[i+11] == 0x00 {
+					// Found it! Position reader at the row_group_count (i+2)
+					r.blockReader.offset = i + 2
+					return nil
+				}
+			}
+		}
+	}
+
+	// If not found in current block, we need to load more data
+	// This happens when TableStatistics spans multiple sub-blocks
+	// Load data from next blocks and search there
+
+	// Save the current data for searching across block boundaries
+	currentData := data
+
+	// Continue reading into subsequent blocks
+	for {
+		// Try to load next block
+		if r.blockReader.nextBlockID == InvalidBlockID {
+			break
+		}
+
+		oldDataLen := len(currentData)
+		if err := r.blockReader.loadNextBlock(); err != nil {
+			break
+		}
+
+		// Append new block's data
+		newData := r.blockReader.data
+		combinedData := make([]byte, oldDataLen+len(newData))
+		copy(combinedData, currentData)
+		copy(combinedData[oldDataLen:], newData)
+		currentData = combinedData
+
+		// Search in the combined data
+		for i := oldDataLen - 12; i+12 < len(currentData); i++ {
+			if i < minTableStatsSize {
+				continue
+			}
+			// Look for 0xFF 0xFF terminator
+			if currentData[i] == 0xff && currentData[i+1] == 0xff {
+				// Check if followed by a valid row_group_count + Field 100
+				potentialCount := binary.LittleEndian.Uint64(currentData[i+2:])
+				if potentialCount >= 1 && potentialCount < 1000000 {
+					// Check if followed by Field 100 (0x64 0x00)
+					if currentData[i+10] == 0x64 && currentData[i+11] == 0x00 {
+						// Found it! Calculate position within current block
+						posInNewBlock := i + 2 - oldDataLen
+						if posInNewBlock >= 0 {
+							r.blockReader.offset = posInNewBlock
+						} else {
+							// The row_group_count starts in the previous block
+							// This is a boundary case - the pattern spans blocks
+							// For now, handle by positioning at start and skipping
+							r.blockReader.offset = 0
+							skipBytes := posInNewBlock + len(r.blockReader.data)
+							r.blockReader.offset = skipBytes
+						}
+						return nil
+					}
+				}
+			}
+		}
+
+		// Limit how much we search to avoid infinite loops
+		if len(currentData) > 200*1024 {
+			break
+		}
+	}
+
+	return fmt.Errorf("could not find row_group_count pattern (searched %d bytes from offset %d)",
+		len(currentData), startOffset)
+}
+
+// skipTableStatsFieldValue skips the value of a field within TableStatistics.
+// This handles nested objects, vectors, etc.
+func (r *MetadataReader) skipTableStatsFieldValue(fieldID uint16) error {
+	// For most fields, we just read a varint or the field leads to a nested object
+	// We peek ahead to see if it's a nested object (next field starts with 100 or similar)
+	// vs a simple value.
+
+	// Actually, the challenge is that BinarySerializer format doesn't have explicit type markers.
+	// We have to know the schema to properly skip.
+	//
+	// For TableStatistics, the known structure is:
+	// Field 100: vector<shared_ptr<ColumnStatistics>> - has count, then nullable+object for each
+	// Field 101: optional unique_ptr<BlockingSample> - has nullable byte
+	//
+	// For now, let's use a simpler approach: just read through the data until we hit terminators
+
+	// Check the first byte to see if this is a nested structure
+	// - If it's a field ID (e.g., 0x64 0x00 for Field 100), we're entering a nested object
+	// - If it's a small value, it could be a count or bool
+
+	nextByte := r.blockReader.data[r.blockReader.offset]
+
+	// Vectors start with a count (varint)
+	// Nested objects start with a field ID (which is 2 bytes, e.g., 0x64 0x00)
+	// Nullable values start with a bool (0x00 or 0x01)
+
+	// For Field 100 (column_stats), it's a vector
+	if fieldID == 100 {
+		// Read vector count
+		count, err := r.ReadVarint()
+		if err != nil {
+			return fmt.Errorf("failed to read vector count: %w", err)
+		}
+		// Skip each element (each is shared_ptr<ColumnStatistics>)
+		for i := uint64(0); i < count; i++ {
+			// shared_ptr has nullable byte
+			present, err := r.ReadBool()
+			if err != nil {
+				return fmt.Errorf("failed to read nullable present: %w", err)
+			}
+			if present {
+				// Skip the object (ColumnStatistics) by reading until terminator
+				if err := r.skipNestedObject(); err != nil {
+					return fmt.Errorf("failed to skip ColumnStatistics: %w", err)
+				}
+			}
+		}
+		return nil
+	}
+
+	// For Field 101 (table_sample), it's optional unique_ptr
+	if fieldID == 101 {
+		// Optional with default - check if present
+		present, err := r.ReadBool()
+		if err != nil {
+			return fmt.Errorf("failed to read optional present: %w", err)
+		}
+		if present {
+			// Skip the ReservoirSample object
+			if err := r.skipNestedObject(); err != nil {
+				return fmt.Errorf("failed to skip ReservoirSample: %w", err)
+			}
+		}
+		return nil
+	}
+
+	// For unknown fields, try to read as varint
+	_, err := r.ReadVarint()
+	if err != nil {
+		// If varint fails, try to peek for nested object
+		nextFieldID, peekErr := r.PeekField()
+		if peekErr != nil {
+			return err
+		}
+		if nextFieldID < 300 && nextFieldID != ddbFieldTerminator {
+			// Looks like a nested object
+			return r.skipNestedObject()
+		}
+		return err
+	}
+	_ = nextByte // suppress unused warning
+	return nil
+}
+
+// skipNestedObject skips a BinarySerializer nested object until its terminator.
+func (r *MetadataReader) skipNestedObject() error {
+	for {
+		fieldID, err := r.PeekField()
+		if err != nil {
+			return fmt.Errorf("failed to peek field: %w", err)
+		}
+
+		if fieldID == ddbFieldTerminator {
+			r.ConsumeField()
+			return nil
+		}
+
+		r.ConsumeField()
+
+		// Skip this field's value
+		// This is recursive for nested objects
+		if err := r.skipAnyFieldValue(); err != nil {
+			return fmt.Errorf("failed to skip field %d: %w", fieldID, err)
+		}
+	}
+}
+
+// skipAnyFieldValue attempts to skip any type of field value.
+// This is best-effort and may not work for all complex types.
+func (r *MetadataReader) skipAnyFieldValue() error {
+	// Try to peek at what follows
+	if r.blockReader.offset >= len(r.blockReader.data) {
+		return io.EOF
+	}
+
+	nextByte := r.blockReader.data[r.blockReader.offset]
+
+	// Check if next bytes look like a field ID
+	if r.blockReader.offset+1 < len(r.blockReader.data) {
+		potentialFieldID := uint16(nextByte) | uint16(r.blockReader.data[r.blockReader.offset+1])<<8
+		if potentialFieldID == ddbFieldTerminator {
+			// Don't consume - let caller handle
+			return nil
+		}
+		if potentialFieldID >= 100 && potentialFieldID < 300 {
+			// This looks like a nested object, recurse
+			return r.skipNestedObject()
+		}
+	}
+
+	// Otherwise, assume it's a varint value
+	// But first check if it could be raw bytes (like HyperLogLog data)
+	if nextByte&0x80 != 0 {
+		// Has continuation bit - might be large varint or length-prefixed data
+		val, err := r.ReadVarint()
+		if err != nil {
+			return err
+		}
+		// If this varint is large and followed by non-field data, it might be a length prefix
+		if val > 100 && val < 10000 && r.blockReader.offset+int(val) < len(r.blockReader.data) {
+			// Check if data after val bytes looks like fields
+			checkOffset := r.blockReader.offset + int(val)
+			if checkOffset < len(r.blockReader.data)-1 {
+				potentialFieldID := uint16(r.blockReader.data[checkOffset]) | uint16(r.blockReader.data[checkOffset+1])<<8
+				if potentialFieldID == ddbFieldTerminator || (potentialFieldID >= 100 && potentialFieldID < 300) {
+					// This was a length-prefixed raw data block, skip it
+					r.blockReader.offset += int(val)
+					return nil
+				}
+			}
+		}
+		return nil
+	}
+
+	// Simple varint
+	_, err := r.ReadVarint()
+	return err
+}
+
+// readRawUint64 reads 8 bytes as a little-endian uint64 directly from the block reader.
+func (r *MetadataReader) readRawUint64() (uint64, error) {
+	if r.blockReader.offset+8 > len(r.blockReader.data) {
+		return 0, io.EOF
+	}
+	val := binary.LittleEndian.Uint64(r.blockReader.data[r.blockReader.offset:])
+	r.blockReader.offset += 8
+	return val, nil
 }

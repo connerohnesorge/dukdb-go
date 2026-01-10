@@ -672,31 +672,31 @@ func BenchmarkCompressConstant_RoundTrip(b *testing.B) {
 // ---------------------------------------------------------------------------
 
 func TestCompressRLE_ManyRuns(t *testing.T) {
-	// Create data with many runs: [42, 42, 42, 100, 100, 200]
-	// This is 6 values but only 3 runs, so RLE should help
+	// Create data with many runs to ensure RLE is beneficial
+	// Need more values to overcome the 8-byte header overhead
 	const valueSize = 4
-	data := make([]byte, 6*valueSize)
+	data := make([]byte, 20*valueSize)
 
-	// Run 1: 3x 42
-	binary.LittleEndian.PutUint32(data[0:], 42)
-	binary.LittleEndian.PutUint32(data[4:], 42)
-	binary.LittleEndian.PutUint32(data[8:], 42)
-	// Run 2: 2x 100
-	binary.LittleEndian.PutUint32(data[12:], 100)
-	binary.LittleEndian.PutUint32(data[16:], 100)
-	// Run 3: 1x 200
-	binary.LittleEndian.PutUint32(data[20:], 200)
+	// Run 1: 8x 42
+	for i := 0; i < 8; i++ {
+		binary.LittleEndian.PutUint32(data[i*valueSize:], 42)
+	}
+	// Run 2: 7x 100
+	for i := 8; i < 15; i++ {
+		binary.LittleEndian.PutUint32(data[i*valueSize:], 100)
+	}
+	// Run 3: 5x 200
+	for i := 15; i < 20; i++ {
+		binary.LittleEndian.PutUint32(data[i*valueSize:], 200)
+	}
 
 	compressed, ok := TryCompressRLE(data, valueSize)
 
 	require.True(t, ok, "compression should succeed for data with runs")
 	assert.NotNil(t, compressed)
-	// Compressed should be smaller than original (3 runs vs 6 values)
-	// Each run is: varint(count) + 4 bytes value
-	// Run 1: 1 byte (count 3) + 4 bytes = 5 bytes
-	// Run 2: 1 byte (count 2) + 4 bytes = 5 bytes
-	// Run 3: 1 byte (count 1) + 4 bytes = 5 bytes
-	// Total: 15 bytes vs original 24 bytes
+	// Compressed should be smaller than original (3 runs vs 20 values)
+	// DuckDB format: 8 (metadata_offset) + 3*4 (three values) + 3*2 (three run lengths) = 26 bytes
+	// Original: 20 * 4 = 80 bytes
 	assert.Less(t, len(compressed), len(data))
 }
 
@@ -732,9 +732,10 @@ func TestCompressRLE_SingleRun(t *testing.T) {
 
 	require.True(t, ok, "single run should compress")
 	assert.NotNil(t, compressed)
-	// Single run of 100 values should be: varint(100) + 4 bytes = ~5-6 bytes
+	// Single run of 100 values in DuckDB format:
+	// 8 (metadata_offset) + 4 (one value) + 2 (one run length) = 14 bytes
 	// vs original 400 bytes
-	assert.Less(t, len(compressed), 10)
+	assert.Equal(t, 14, len(compressed))
 }
 
 func TestCompressRLE_AlternatingValues(t *testing.T) {
@@ -860,9 +861,9 @@ func TestCompressRLE_ByteValues(t *testing.T) {
 
 	require.True(t, ok, "two runs of bytes should compress")
 	assert.NotNil(t, compressed)
-	// 2 runs: 1 byte count + 1 byte value each = 4 bytes total
+	// 2 runs in DuckDB format: 8 (metadata_offset) + 2*1 (two values) + 2*2 (two run lengths) = 14 bytes
 	// vs original 20 bytes
-	assert.Less(t, len(compressed), 10)
+	assert.Equal(t, 14, len(compressed))
 }
 
 // ---------------------------------------------------------------------------
@@ -870,22 +871,24 @@ func TestCompressRLE_ByteValues(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCompressRLE_RoundTrip_Basic(t *testing.T) {
-	// Create data with runs: [42, 42, 42, 100, 100]
+	// Create data with runs to ensure compression is beneficial
+	// [42, 42, 42, 42, 42, 100, 100, 100, 100]
 	const valueSize = 4
-	original := make([]byte, 5*valueSize)
+	original := make([]byte, 9*valueSize)
 
-	binary.LittleEndian.PutUint32(original[0:], 42)
-	binary.LittleEndian.PutUint32(original[4:], 42)
-	binary.LittleEndian.PutUint32(original[8:], 42)
-	binary.LittleEndian.PutUint32(original[12:], 100)
-	binary.LittleEndian.PutUint32(original[16:], 100)
+	for i := 0; i < 5; i++ {
+		binary.LittleEndian.PutUint32(original[i*valueSize:], 42)
+	}
+	for i := 5; i < 9; i++ {
+		binary.LittleEndian.PutUint32(original[i*valueSize:], 100)
+	}
 
 	// Compress
 	compressed, ok := TryCompressRLE(original, valueSize)
 	require.True(t, ok)
 
 	// Decompress
-	decompressed, err := DecompressRLE(compressed, valueSize, 5)
+	decompressed, err := DecompressRLE(compressed, valueSize, 9)
 	require.NoError(t, err)
 
 	// Verify round-trip
@@ -982,7 +985,8 @@ func TestCompressRLE_RoundTrip_Int64(t *testing.T) {
 }
 
 func TestCompressRLE_RoundTrip_LargeCount(t *testing.T) {
-	// Test with a large run count to ensure varint encoding works
+	// Test with a large run count to ensure the format handles large counts correctly
+	// When count > 65535 (uint16 max), it splits into multiple runs to avoid overflow
 	const count = 100000
 	const valueSize = 4
 	const value = uint32(0xCAFEBABE)
@@ -995,8 +999,9 @@ func TestCompressRLE_RoundTrip_LargeCount(t *testing.T) {
 	// Compress
 	compressed, ok := TryCompressRLE(original, valueSize)
 	require.True(t, ok)
-	// Should be very small: varint(100000) + 4 bytes = ~8 bytes total
-	assert.Less(t, len(compressed), 20)
+	// With 100000 values, splits into 2 runs (65535 + 34465):
+	// 8 (metadata_offset) + 2*4 (two values) + 2*2 (two run lengths) = 20 bytes
+	assert.Equal(t, 20, len(compressed))
 
 	// Decompress
 	decompressed, err := DecompressRLE(compressed, valueSize, count)
@@ -2040,9 +2045,10 @@ func TestCompressBitPacking_RoundTrip_SmallRange(t *testing.T) {
 	compressed, ok := TryCompressBitPackingFromBytes(original, valueSize)
 	require.True(t, ok)
 
-	// Decompress
-	decompressed, err := DecompressBitPacking(compressed, valueSize, count)
+	// Decompress using our simple format
+	values, err := DecompressBitPackingToUint64(compressed)
 	require.NoError(t, err)
+	decompressed := BitPackedToBytes(values, valueSize)
 
 	// Verify round-trip
 	assert.Equal(t, original, decompressed)
@@ -2057,9 +2063,10 @@ func TestCompressBitPacking_RoundTrip_AllZeros(t *testing.T) {
 	compressed, ok := TryCompressBitPackingFromBytes(original, valueSize)
 	require.True(t, ok)
 
-	// Decompress
-	decompressed, err := DecompressBitPacking(compressed, valueSize, count)
+	// Decompress using our simple format
+	values, err := DecompressBitPackingToUint64(compressed)
 	require.NoError(t, err)
+	decompressed := BitPackedToBytes(values, valueSize)
 
 	// Verify round-trip
 	assert.Equal(t, original, decompressed)
@@ -2079,9 +2086,10 @@ func TestCompressBitPacking_RoundTrip_SingleValue(t *testing.T) {
 	compressed, ok := TryCompressBitPackingFromBytes(original, valueSize)
 	require.True(t, ok)
 
-	// Decompress
-	decompressed, err := DecompressBitPacking(compressed, valueSize, count)
+	// Decompress using our simple format
+	values, err := DecompressBitPackingToUint64(compressed)
 	require.NoError(t, err)
+	decompressed := BitPackedToBytes(values, valueSize)
 
 	// Verify round-trip
 	assert.Equal(t, original, decompressed)
@@ -2114,9 +2122,10 @@ func TestCompressBitPacking_RoundTrip_VariousBitWidths(t *testing.T) {
 			compressed, ok := TryCompressBitPackingFromBytes(original, valueSize)
 			require.True(t, ok)
 
-			// Decompress
-			decompressed, err := DecompressBitPacking(compressed, valueSize, count)
+			// Decompress using our simple format
+			values, err := DecompressBitPackingToUint64(compressed)
 			require.NoError(t, err)
+			decompressed := BitPackedToBytes(values, valueSize)
 
 			// Verify round-trip
 			assert.Equal(t, original, decompressed)
@@ -2138,9 +2147,10 @@ func TestCompressBitPacking_RoundTrip_Int64(t *testing.T) {
 	compressed, ok := TryCompressBitPackingFromBytes(original, valueSize)
 	require.True(t, ok)
 
-	// Decompress
-	decompressed, err := DecompressBitPacking(compressed, valueSize, count)
+	// Decompress using our simple format
+	values, err := DecompressBitPackingToUint64(compressed)
 	require.NoError(t, err)
+	decompressed := BitPackedToBytes(values, valueSize)
 
 	// Verify round-trip
 	assert.Equal(t, original, decompressed)

@@ -43,6 +43,10 @@ func skipIfNoDuckDBCLI(t *testing.T) {
 
 // skipOnFormatError skips the test if the error is a known format compatibility issue.
 // This is used for interoperability tests where the format may not yet be fully compatible.
+//
+// TODO: Once row data reading is fully implemented and verified, this function can be
+// removed from tests that only verify catalog reading. For now, it's kept in place
+// because row data reading is not yet implemented (GAP-001).
 func skipOnFormatError(t *testing.T, err error) {
 	t.Helper()
 	if err == nil {

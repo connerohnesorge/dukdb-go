@@ -253,10 +253,11 @@ func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 	s.WriteProperty(PropCreateType, "type", uint8(CatalogTableEntry))
 
 	// Property 101: catalog name (REQUIRED for tables - DuckDB always writes this)
-	// Native DuckDB writes the database name here. Use "system" as default.
+	// Native DuckDB CLI writes "cli" as the catalog name when using the CLI.
+	// Using the same 3-character name ensures byte alignment matches native DuckDB files.
 	catalogName := table.Catalog
 	if catalogName == "" {
-		catalogName = "system" // Default catalog name for tables
+		catalogName = "cli" // Match native DuckDB CLI catalog name
 	}
 	s.WriteProperty(PropCreateCatalog, "catalog", catalogName)
 
@@ -329,7 +330,9 @@ func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 	// Property 203: query (optional, for CREATE TABLE AS)
 	// Not implemented for now as most tables are DDL-created
 
-	// Object terminator
+	// Object terminator for CreateTableInfo
+	// This ends property 100's object data. Properties 101, 102, 103 are
+	// SIBLING properties at the entry level, written by serializeTableDataPointer().
 	s.OnObjectEnd()
 }
 
@@ -459,6 +462,19 @@ func SerializeCreateTypeInfo(s *BinarySerializer, typ *TypeCatalogEntry) {
 	s.OnObjectEnd()
 }
 
+// TableStorageInfo contains the storage metadata for a table entry.
+// This is used when serializing table entries to write the correct
+// table_pointer and total_rows fields.
+type TableStorageInfo struct {
+	// TablePointer points to the table storage metadata block.
+	// For empty tables (no row groups), use InvalidBlockID.
+	TablePointer MetaBlockPointer
+
+	// TotalRows is the sum of all row group tuple counts.
+	// For empty tables, use 0.
+	TotalRows uint64
+}
+
 // SerializeCatalogEntryBinary serializes a single catalog entry using BinarySerializer.
 // This is the top-level serialization that wraps entry-specific data with property 99 (catalog_type)
 // and property 100 (entry data).
@@ -473,7 +489,15 @@ func SerializeCreateTypeInfo(s *BinarySerializer, typ *TypeCatalogEntry) {
 //
 // The entry data (property 100) contains the CreateInfo serialization specific to each
 // catalog entry type (schema, table, view, index, sequence, type).
-func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry) {
+//
+// For TABLE entries, tableStorageInfo parameter should contain the storage metadata with
+// the correct BlockIndex for this table's storage location. For multi-table databases,
+// each table gets its own sub-blocks:
+// - Table 0: BlockIndex=1 (sub-blocks 1-3 for 3-column table)
+// - Table 1: BlockIndex=4 (sub-blocks 4-6 for 3-column table)
+//
+// For other entry types, tableStorageInfo can be nil.
+func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry, tableStorageInfo *TableStorageInfo) {
 	// Property 99: catalog_type
 	s.WriteProperty(PropCatalogType, "catalog_type", uint8(entry.Type()))
 
@@ -500,8 +524,15 @@ func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry) {
 		// Property 103: index_pointers (empty list for forward compatibility)
 		// These are written by TableDataWriter::FinalizeTable in DuckDB.
 		//
-		// For empty tables (no row data), use invalid pointer and zero rows.
-		serializeTableDataPointer(s, e)
+		// Use the provided storage info which should have the correct BlockIndex
+		// for this table's storage location.
+		tablePointer := MetaBlockPointer{BlockID: 0, BlockIndex: 1, Offset: 8}
+		totalRows := uint64(0)
+		if tableStorageInfo != nil {
+			tablePointer = tableStorageInfo.TablePointer
+			totalRows = tableStorageInfo.TotalRows
+		}
+		serializeTableDataPointer(s, tablePointer, totalRows)
 
 	case *ViewCatalogEntry:
 		SerializeCreateViewInfo(s, e)
@@ -529,33 +560,48 @@ func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry) {
 //     - MESSAGE_TERMINATOR (0xFFFF)
 //   Property 102: total_rows (uint64)
 //   Property 103: index_pointers (empty list of BlockPointer for forward compatibility)
-func serializeTableDataPointer(s *BinarySerializer, table *TableCatalogEntry) {
+//
+// Parameters:
+//   - tablePointer: The MetaBlockPointer to the table storage metadata block.
+//     For empty tables (no row groups), use InvalidBlockID.
+//   - totalRows: The total number of rows in the table (sum of all row group tuple counts).
+//     For empty tables, use 0.
+func serializeTableDataPointer(s *BinarySerializer, tablePointer MetaBlockPointer, totalRows uint64) {
 	// Property 101: table_pointer (MetaBlockPointer)
-	// For tables with no row data, use INVALID_INDEX as block_pointer
-	// Native DuckDB writes the full MetaBlockPointer even for empty tables
+	// Native DuckDB uses 0x100000000000000 (2^56) as the block_pointer for empty tables.
+	// This encodes to block_id=0, block_index=1, pointing to table storage in sub-block 1.
+	// For multi-table databases, ALL tables share the same table_pointer (InvalidIndex).
+	// DuckDB always tries to load from this pointer, so valid data must exist there.
 	s.OnPropertyBegin(101, "table_pointer")
-	// MetaBlockPointer::Serialize writes:
-	// - WritePropertyWithDefault(100, "block_pointer", block_pointer) - default is 0, not INVALID_INDEX
-	// - WritePropertyWithDefault(101, "offset", offset) - default is 0
-	//
-	// For an empty table, block_pointer = INVALID_INDEX and offset = some value
+
 	// Native DuckDB uses 0x100000000000000 (2^56) as INVALID_INDEX for MetaBlockPointer
-	// (varint encodes as: 80 80 80 80 80 80 80 80 01 - 9 bytes)
-	const InvalidIndex = uint64(0x100000000000000)
-	s.WriteProperty(100, "block_pointer", InvalidIndex)
-	// Offset defaults to 0, but native DuckDB writes a non-zero offset
-	// Looking at native dump: offset = 8 (0x08) - this seems to be block-internal offset
-	s.WriteProperty(101, "offset", uint32(8))
+	// This encodes as: block_id = 0, block_index = 1 (since 2^56 >> 56 = 1)
+	// So it points to block 0, sub-block 1 where the table storage metadata lives.
+	// Encode the MetaBlockPointer with BlockIndex in the high byte
+	// DuckDB encodes: BlockID (bits 0-55) + BlockIndex (bits 56-63)
+	blockPointer := tablePointer.BlockID | (uint64(tablePointer.BlockIndex) << 56)
+	if tablePointer.BlockID == InvalidBlockID {
+		// For empty tables (no row groups), use the standard InvalidIndex
+		// which points to sub-block 1 of block 0 where empty table storage lives
+		blockPointer = 0x100000000000000 // InvalidIndex: block 0, sub-block 1
+	}
+
+	s.WriteProperty(100, "block_pointer", blockPointer)
+	// Offset defaults to 0, but native DuckDB writes offset=8 (after the next_ptr header)
+	s.WriteProperty(101, "offset", uint32(tablePointer.Offset))
 	s.OnObjectEnd() // MetaBlockPointer terminator
 
 	// Property 102: total_rows (uint64)
 	// For empty tables, write 0 rows
 	// DuckDB uses WriteProperty (not WithDefault), so this is always written
-	s.WriteProperty(102, "total_rows", uint64(0))
+	s.WriteProperty(102, "total_rows", totalRows)
 
 	// Property 103: index_pointers (empty list of BlockPointer for forward compatibility)
 	// DuckDB writes this as: serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
 	// where compat_block_pointers is an empty vector<BlockPointer>
 	s.OnPropertyBegin(103, "index_pointers")
 	s.OnListBegin(0) // Empty list
+
+	// NOTE: No terminator here! Properties 101-103 are siblings of property 100,
+	// and the entry object terminator is written by WriteBinaryFormat after this returns.
 }

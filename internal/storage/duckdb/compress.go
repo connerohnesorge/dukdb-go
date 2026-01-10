@@ -116,33 +116,24 @@ func DecompressConstant(data []byte, valueSize int, count uint64) ([]byte, error
 }
 
 // DecompressRLE decompresses run-length encoded data.
-// RLE compression stores sequences of repeated values as (count, value) pairs,
-// where count is encoded as a varint for space efficiency.
+// DuckDB RLE compression uses a format similar to bitpacking with metadata.
 //
-// Format: repeated (varint count, value bytes) pairs
-// Each run consists of:
-//   - A varint-encoded run count (number of times the value repeats)
-//   - The value bytes (size determined by valueSize parameter)
+// DuckDB RLE Format:
+//   - Bytes 0-7: metadata_offset (uint64) - offset to metadata from start
+//   - Bytes 8+: unique values (type-sized)
+//   - Metadata at metadata_offset: run lengths (uint16 each)
+//
+// The metadata contains run lengths in reverse order (last run first).
+// Each run length is stored as a uint16.
 //
 // Parameters:
-//   - data: The RLE compressed data containing (varint count, value) pairs
+//   - data: The RLE compressed data from DuckDB
 //   - valueSize: Size in bytes of each value (e.g., 4 for int32, 8 for int64)
-//   - count: Expected number of values after decompression (used for validation)
+//   - count: Expected number of values after decompression
 //
 // Returns:
 //   - []byte: Decompressed data containing count copies of expanded values
-//   - error: ErrInvalidValueSize if valueSize is not positive,
-//     ErrRLEInvalidVarint if varint decoding fails,
-//     ErrRLEDataTruncated if data ends before a complete run can be read
-//
-// Example:
-//
-//	// RLE data: run of 3x value 42 (int32), then run of 2x value 100 (int32)
-//	// varint(3) = 0x03, value 42 as int32 LE = [42, 0, 0, 0]
-//	// varint(2) = 0x02, value 100 as int32 LE = [100, 0, 0, 0]
-//	data := []byte{0x03, 42, 0, 0, 0, 0x02, 100, 0, 0, 0}
-//	result, err := DecompressRLE(data, 4, 5)
-//	// result contains: [42,0,0,0, 42,0,0,0, 42,0,0,0, 100,0,0,0, 100,0,0,0]
+//   - error: Decompression error
 func DecompressRLE(data []byte, valueSize int, count uint64) ([]byte, error) {
 	// Validate valueSize
 	if valueSize <= 0 {
@@ -151,50 +142,79 @@ func DecompressRLE(data []byte, valueSize int, count uint64) ([]byte, error) {
 
 	// Handle edge case of empty data
 	if len(data) == 0 {
-		// Empty data with count 0 is valid
 		if count == 0 {
 			return []byte{}, nil
 		}
-		// Empty data with non-zero count is invalid
 		return nil, fmt.Errorf("%w: expected %d values but got empty data",
 			ErrRLEDataTruncated, count)
 	}
 
-	r := bytes.NewReader(data)
-	var result []byte
-
-	// Pre-allocate result buffer if count is known
-	// This is an optimization hint; we'll grow if needed
-	if count > 0 {
-		result = make([]byte, 0, count*uint64(valueSize))
+	// Minimum: 8 bytes header
+	if len(data) < 8 {
+		return nil, fmt.Errorf("%w: need at least 8 bytes for RLE header, got %d",
+			ErrRLEDataTruncated, len(data))
 	}
 
-	for r.Len() > 0 {
-		// Read run count as varint
-		runCount, err := binary.ReadUvarint(r)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil, fmt.Errorf("%w: incomplete varint at end of data",
-					ErrRLEInvalidVarint)
-			}
-			return nil, fmt.Errorf("%w: %v", ErrRLEInvalidVarint, err)
-		}
+	// Handle edge case: zero count
+	if count == 0 {
+		return []byte{}, nil
+	}
 
-		// Read the value bytes (always present, even for count=0)
-		value := make([]byte, valueSize)
-		n, err := io.ReadFull(r, value)
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				return nil, fmt.Errorf("%w: expected %d value bytes, got %d",
-					ErrRLEDataTruncated, valueSize, n)
-			}
-			return nil, fmt.Errorf("%w: %v", ErrRLEDataTruncated, err)
-		}
+	// Read metadata_offset from first 8 bytes
+	metadataOffset := binary.LittleEndian.Uint64(data[0:8])
 
-		// Expand the run: append value runCount times
-		// (count=0 simply contributes nothing to the result)
-		for i := uint64(0); i < runCount; i++ {
-			result = append(result, value...)
+	// Validate metadata offset
+	if metadataOffset > uint64(len(data)) || metadataOffset < 8 {
+		return nil, fmt.Errorf("%w: invalid metadata offset %d for data length %d",
+			ErrRLEDataTruncated, metadataOffset, len(data))
+	}
+
+	// Read unique values from data between header and metadata
+	// Number of unique values = (metadataOffset - 8) / valueSize
+	valuesRegionSize := int(metadataOffset) - 8
+	if valuesRegionSize%valueSize != 0 {
+		return nil, fmt.Errorf("%w: values region size %d not divisible by valueSize %d",
+			ErrRLEDataTruncated, valuesRegionSize, valueSize)
+	}
+
+	numUniqueValues := valuesRegionSize / valueSize
+	uniqueValues := make([][]byte, numUniqueValues)
+
+	for i := 0; i < numUniqueValues; i++ {
+		offset := 8 + i*valueSize
+		uniqueValues[i] = data[offset : offset+valueSize]
+	}
+
+	// Read run lengths from metadata region
+	// Each run length is a uint16
+	metadataPos := int(metadataOffset)
+	runLengths := make([]uint16, numUniqueValues)
+
+	for i := 0; i < numUniqueValues; i++ {
+		if metadataPos+2 > len(data) {
+			return nil, fmt.Errorf("%w: not enough data for run length %d",
+				ErrRLEDataTruncated, i)
+		}
+		runLengths[i] = binary.LittleEndian.Uint16(data[metadataPos : metadataPos+2])
+		metadataPos += 2
+	}
+
+	// Allocate result buffer
+	result := make([]byte, count*uint64(valueSize))
+	resultPos := 0
+
+	// Expand runs: for each unique value, repeat it runLength times
+	for i := 0; i < numUniqueValues; i++ {
+		runLength := int(runLengths[i])
+		value := uniqueValues[i]
+
+		for j := 0; j < runLength; j++ {
+			if resultPos+valueSize > len(result) {
+				return nil, fmt.Errorf("%w: result buffer overflow at position %d",
+					ErrRLEDataTruncated, resultPos)
+			}
+			copy(result[resultPos:resultPos+valueSize], value)
+			resultPos += valueSize
 		}
 	}
 
@@ -333,30 +353,20 @@ func DecompressDictionary(data []byte, valueSize int, count uint64) ([]byte, err
 // Bit-packing stores integers using only the minimum number of bits needed,
 // reducing storage for small values.
 //
-// Format: [uint8 bitWidth][uint64 count][packed bits...]
-//
-// The packed bits are stored in little-endian order, where bits are extracted
-// starting from the least significant bit of each byte.
+// DuckDB Format uses type-sized frame of reference and width values.
 //
 // Parameters:
 //   - data: The bit-packed compressed data
 //   - valueSize: Size in bytes of each target value (1, 2, 4, or 8)
-//   - count: Expected number of values (used for validation, actual count is in data)
+//   - count: Number of values to decompress
 //
 // Returns:
 //   - []byte: Decompressed data as byte slice
 //   - error: ErrBitPackingDataTruncated if data is too short,
 //     ErrBitPackingInvalidBitWidth if bit width exceeds 64
-//
-// Example:
-//
-//	// Bit-pack 4 values [0, 1, 2, 3] using 2 bits each
-//	// Binary: 00, 01, 10, 11 -> packed as 0b11100100 = 0xE4
-//	data := []byte{2, 4, 0, 0, 0, 0, 0, 0, 0, 0xE4}  // bitWidth=2, count=4, packed byte
-//	result, err := DecompressBitPacking(data, 1, 4)
 func DecompressBitPacking(data []byte, valueSize int, count uint64) ([]byte, error) {
-	// Decompress to uint64 slice first
-	values, err := DecompressBitPackingToUint64(data)
+	// Decompress to uint64 slice using DuckDB format with provided count and type size
+	values, err := DecompressBitPackingDuckDB(data, count, valueSize)
 	if err != nil {
 		return nil, err
 	}
@@ -365,10 +375,260 @@ func DecompressBitPacking(data []byte, valueSize int, count uint64) ([]byte, err
 	return BitPackedToBytes(values, valueSize), nil
 }
 
-// DecompressBitPackingToUint64 decompresses bit-packed integers to uint64 slice.
-// This is the core decompression function that extracts bit-packed values.
+// DecompressBitPackingDuckDB decompresses DuckDB's bitpacking format.
 //
-// Format: [uint8 bitWidth][uint64 count][packed bits...]
+// DuckDB Bitpacking Segment Format:
+//   - Bytes 0-7: metadata_offset (uint64) - offset to metadata from block start
+//   - Bytes 8+: compressed data groups
+//   - Metadata at end (growing backwards from metadata_offset)
+//
+// Metadata entry (4 bytes each):
+//   - Bits 0-23: data offset within segment
+//   - Bits 24-31: mode (CONSTANT=2, CONSTANT_DELTA=3, DELTA_FOR=4, FOR=5)
+//
+// FOR mode data (values are type-sized, not fixed 8 bytes):
+//   - frame_of_reference (T bytes)
+//   - width (max(T, 1) bytes, but only low byte is meaningful)
+//   - packed bits
+//
+// Parameters:
+//   - data: The bit-packed compressed data from DuckDB
+//   - count: Number of values to decompress
+//   - typeSize: Size in bytes of each value (1, 2, 4, or 8)
+//
+// Returns:
+//   - []uint64: Unpacked values
+//   - error: Decompression error
+func DecompressBitPackingDuckDB(data []byte, count uint64, typeSize int) ([]uint64, error) {
+	// DuckDB bitpacking modes (from BitpackingMode enum)
+	const (
+		modeInvalid       = 0
+		modeAuto          = 1
+		modeConstant      = 2
+		modeConstantDelta = 3
+		modeDeltaFor      = 4
+		modeFor           = 5
+	)
+
+	// DuckDB metadata group size
+	const metadataGroupSize = 2048
+
+	// Normalize type size
+	if typeSize <= 0 {
+		typeSize = 8
+	}
+
+	// Minimum: 8 bytes header + 4 bytes metadata
+	if len(data) < 12 {
+		return nil, fmt.Errorf("%w: need at least 12 bytes for DuckDB bitpacking, got %d",
+			ErrBitPackingDataTruncated, len(data))
+	}
+
+	// Handle edge case: zero count
+	if count == 0 {
+		return []uint64{}, nil
+	}
+
+	// Read metadata_offset from first 8 bytes
+	metadataOffset := binary.LittleEndian.Uint64(data[0:8])
+
+	// Validate metadata offset
+	if metadataOffset > uint64(len(data)) || metadataOffset < 12 {
+		return nil, fmt.Errorf("%w: invalid metadata offset %d for data length %d",
+			ErrBitPackingDataTruncated, metadataOffset, len(data))
+	}
+
+	// Helper to read type-sized value
+	readTypedValue := func(offset int) uint64 {
+		switch typeSize {
+		case 1:
+			return uint64(data[offset])
+		case 2:
+			return uint64(binary.LittleEndian.Uint16(data[offset:]))
+		case 4:
+			return uint64(binary.LittleEndian.Uint32(data[offset:]))
+		default:
+			return binary.LittleEndian.Uint64(data[offset:])
+		}
+	}
+
+	// Width is stored in max(typeSize, 1) bytes but only low byte matters
+	widthSize := typeSize
+	if widthSize < 1 {
+		widthSize = 1
+	}
+
+	// Process all metadata groups
+	result := make([]uint64, count)
+	resultIdx := uint64(0)
+	metaPos := int(metadataOffset) - 4 // Start with last (chronologically first) metadata entry
+
+	for resultIdx < count && metaPos >= 8 {
+		// Read metadata entry
+		metaEncoded := binary.LittleEndian.Uint32(data[metaPos:])
+		mode := (metaEncoded >> 24) & 0xFF
+		dataOffset := metaEncoded & 0x00FFFFFF
+		groupDataStart := int(dataOffset)
+
+		// Calculate how many values in this group
+		groupCount := uint64(metadataGroupSize)
+		if resultIdx+groupCount > count {
+			groupCount = count - resultIdx
+		}
+
+		// Handle based on mode
+		var groupValues []uint64
+		var err error
+
+		switch mode {
+		case modeConstant:
+			// CONSTANT: all values are the same (typeSize bytes)
+			if groupDataStart+typeSize > len(data) {
+				return nil, fmt.Errorf("%w: constant data truncated", ErrBitPackingDataTruncated)
+			}
+			constantValue := readTypedValue(groupDataStart)
+			groupValues = make([]uint64, groupCount)
+			for i := range groupValues {
+				groupValues[i] = constantValue
+			}
+
+		case modeFor:
+			// FOR mode: frame_of_reference (T) + width (T) + packed bits
+			headerSize := typeSize + widthSize
+			if groupDataStart+headerSize > len(data) {
+				return nil, fmt.Errorf("%w: FOR header truncated", ErrBitPackingDataTruncated)
+			}
+			frameOfReference := readTypedValue(groupDataStart)
+			bitWidth := uint8(data[groupDataStart+typeSize])
+			packedData := data[groupDataStart+headerSize:]
+
+			if bitWidth > 64 {
+				return nil, fmt.Errorf("%w: %d (max 64)", ErrBitPackingInvalidBitWidth, bitWidth)
+			}
+
+			if bitWidth == 0 {
+				groupValues = make([]uint64, groupCount)
+				for i := range groupValues {
+					groupValues[i] = frameOfReference
+				}
+			} else {
+				groupValues, err = unpackBits(packedData, bitWidth, groupCount)
+				if err != nil {
+					return nil, err
+				}
+				for i := range groupValues {
+					groupValues[i] += frameOfReference
+				}
+			}
+
+		case modeDeltaFor:
+			// DELTA_FOR mode: frame_of_reference (T) + width (T) + delta_offset (T) + packed bits
+			headerSize := typeSize + widthSize + typeSize
+			if groupDataStart+headerSize > len(data) {
+				return nil, fmt.Errorf("%w: DELTA_FOR header truncated", ErrBitPackingDataTruncated)
+			}
+			frameOfReference := int64(readTypedValue(groupDataStart))
+			bitWidth := uint8(data[groupDataStart+typeSize])
+			deltaOffset := int64(readTypedValue(groupDataStart + typeSize + widthSize))
+			packedData := data[groupDataStart+headerSize:]
+
+			if bitWidth > 64 {
+				return nil, fmt.Errorf("%w: %d (max 64)", ErrBitPackingInvalidBitWidth, bitWidth)
+			}
+
+			deltas, err := unpackBits(packedData, bitWidth, groupCount)
+			if err != nil {
+				return nil, err
+			}
+
+			groupValues = make([]uint64, groupCount)
+			current := deltaOffset
+			for i := range deltas {
+				current += int64(deltas[i]) + frameOfReference
+				groupValues[i] = uint64(current)
+			}
+
+		case modeConstantDelta:
+			// CONSTANT_DELTA: frame_of_reference (T) + constant_delta (T)
+			headerSize := typeSize * 2
+			if groupDataStart+headerSize > len(data) {
+				return nil, fmt.Errorf("%w: CONSTANT_DELTA header truncated", ErrBitPackingDataTruncated)
+			}
+			frameOfReference := int64(readTypedValue(groupDataStart))
+			constantDelta := int64(readTypedValue(groupDataStart + typeSize))
+
+			groupValues = make([]uint64, groupCount)
+			current := frameOfReference
+			for i := range groupValues {
+				groupValues[i] = uint64(current)
+				current += constantDelta
+			}
+
+		default:
+			return nil, fmt.Errorf("%w: unknown bitpacking mode %d", ErrUnsupportedCompression, mode)
+		}
+
+		// Copy group values to result
+		copy(result[resultIdx:], groupValues)
+		resultIdx += groupCount
+
+		// Move to next metadata entry (growing backwards in memory)
+		metaPos -= 4
+	}
+
+	return result, nil
+}
+
+// unpackBits extracts count values of bitWidth bits each from packed data.
+func unpackBits(data []byte, bitWidth uint8, count uint64) ([]uint64, error) {
+	if count == 0 {
+		return []uint64{}, nil
+	}
+
+	if bitWidth == 0 {
+		return make([]uint64, count), nil
+	}
+
+	// Calculate expected packed data size
+	totalBits := uint64(bitWidth) * count
+	expectedBytes := (totalBits + 7) / 8
+
+	if uint64(len(data)) < expectedBytes {
+		return nil, fmt.Errorf("%w: need %d bytes for %d values at %d bits each, got %d",
+			ErrBitPackingDataTruncated, expectedBytes, count, bitWidth, len(data))
+	}
+
+	result := make([]uint64, count)
+	bitPos := 0
+
+	for i := uint64(0); i < count; i++ {
+		var value uint64
+
+		// Extract bitWidth bits for this value
+		for b := uint8(0); b < bitWidth; b++ {
+			byteIdx := bitPos / 8
+			bitIdx := bitPos % 8
+
+			if byteIdx >= len(data) {
+				return nil, fmt.Errorf("%w: unexpected end of data at bit position %d",
+					ErrBitPackingDataTruncated, bitPos)
+			}
+
+			// Extract bit from packed data (little-endian bit order)
+			if data[byteIdx]&(1<<bitIdx) != 0 {
+				value |= 1 << b
+			}
+			bitPos++
+		}
+		result[i] = value
+	}
+
+	return result, nil
+}
+
+// DecompressBitPackingToUint64 decompresses bit-packed integers to uint64 slice.
+// This uses the legacy format: [uint8 bitWidth][uint64 count][packed bits...]
+// Note: This is kept for backward compatibility. DuckDB files use DecompressBitPackingDuckDB.
 //
 // Parameters:
 //   - data: The bit-packed compressed data

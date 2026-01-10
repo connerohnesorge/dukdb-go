@@ -288,8 +288,14 @@ func (bm *BlockManager) WriteBlock(block *Block) error {
 	return nil
 }
 
+// MetadataBlockID is the block ID reserved for metadata (catalog + table storage).
+// DuckDB expects catalog and table storage metadata to be at block 0.
+const MetadataBlockID = uint64(0)
+
 // AllocateBlock allocates a new block for writing.
 // Returns a block ID from the free list if available, otherwise allocates new.
+// Note: Block 0 is reserved for metadata and will not be returned by this method.
+// Use AllocateMetadataBlock() to explicitly get block 0.
 func (bm *BlockManager) AllocateBlock() (uint64, error) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -300,17 +306,42 @@ func (bm *BlockManager) AllocateBlock() (uint64, error) {
 
 	// Try to get a block from the free list
 	if id, ok := bm.freeList.GetFreeBlock(); ok {
-		return id, nil
+		if id != MetadataBlockID { // Never return block 0 from regular allocation
+			return id, nil
+		}
 	}
 
 	// Allocate a new block ID
 	id := bm.blockCount
 	bm.blockCount++
 
+	// Skip block 0 if this is the first allocation - block 0 is reserved for metadata
+	if id == MetadataBlockID {
+		id = bm.blockCount
+		bm.blockCount++
+	}
+
 	// Mark it as used
 	bm.freeList.MarkUsed(id)
 
 	return id, nil
+}
+
+// AllocateMetadataBlock returns block 0, which is reserved for metadata.
+// This should only be called by CatalogWriter when writing catalog data.
+func (bm *BlockManager) AllocateMetadataBlock() uint64 {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+
+	// Ensure blockCount is at least 1 (block 0 is used)
+	if bm.blockCount == 0 {
+		bm.blockCount = 1
+	}
+
+	// Mark block 0 as used
+	bm.freeList.MarkUsed(MetadataBlockID)
+
+	return MetadataBlockID
 }
 
 // FreeBlock marks a block as free for future reuse.

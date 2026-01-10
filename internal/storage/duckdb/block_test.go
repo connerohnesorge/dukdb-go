@@ -386,19 +386,21 @@ func TestBlockManager(t *testing.T) {
 
 		bm := NewBlockManager(f, DefaultBlockSize, 10)
 
+		// Block 0 is reserved for metadata, so first allocation returns 1
 		id1, err := bm.AllocateBlock()
 		require.NoError(t, err)
-		assert.Equal(t, uint64(0), id1)
+		assert.Equal(t, uint64(1), id1, "first allocation should skip block 0 (reserved for metadata)")
 
 		id2, err := bm.AllocateBlock()
 		require.NoError(t, err)
-		assert.Equal(t, uint64(1), id2)
+		assert.Equal(t, uint64(2), id2)
 
 		id3, err := bm.AllocateBlock()
 		require.NoError(t, err)
-		assert.Equal(t, uint64(2), id3)
+		assert.Equal(t, uint64(3), id3)
 
-		assert.Equal(t, uint64(3), bm.BlockCount())
+		// Block count is 4 because we implicitly reserved block 0 + allocated 1,2,3
+		assert.Equal(t, uint64(4), bm.BlockCount())
 	})
 
 	t.Run("AllocateBlock reuses freed blocks", func(t *testing.T) {
@@ -407,19 +409,19 @@ func TestBlockManager(t *testing.T) {
 
 		bm := NewBlockManager(f, DefaultBlockSize, 10)
 
-		// Allocate some blocks
-		_, _ = bm.AllocateBlock() // 0
-		_, _ = bm.AllocateBlock() // 1
-		_, _ = bm.AllocateBlock() // 2
+		// Allocate some blocks (block 0 is reserved, so we get 1, 2, 3)
+		id1, _ := bm.AllocateBlock() // 1
+		id2, _ := bm.AllocateBlock() // 2
+		_, _ = bm.AllocateBlock()    // 3
 
-		// Free block 1
-		err := bm.FreeBlock(1)
+		// Free block 2
+		err := bm.FreeBlock(id2)
 		require.NoError(t, err)
 
-		// Next allocation should reuse block 1
+		// Next allocation should reuse block 2 (from free list)
 		id, err := bm.AllocateBlock()
 		require.NoError(t, err)
-		assert.Equal(t, uint64(1), id)
+		assert.Equal(t, id1+1, id) // should be block 2 (id1 was 1)
 	})
 
 	t.Run("WriteBlock and ReadBlock", func(t *testing.T) {

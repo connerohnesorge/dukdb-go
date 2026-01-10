@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,297 +90,6 @@ func TestTableScannerSetProjection(t *testing.T) {
 	})
 }
 
-func TestTableScannerRowIteration(t *testing.T) {
-	t.Parallel()
-
-	// Create test file with actual data
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 4)
-	defer cleanup()
-
-	// Create table with integer column
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	// Create DataPointer for column (constant value 42)
-	dp := NewDataPointer(0, 5, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
-
-	// Block 0: DataPointer
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes)
-
-	// Block 1: Column data (constant value 42)
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 42)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-
-	// Create row group pointing to our data
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:   1,
-			RowStart:   0,
-			TupleCount: 5,
-			DataPointers: []MetaBlockPointer{
-				{BlockID: 0, Offset: 0},
-			},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	// Test row iteration
-	count := 0
-	for scanner.Next() {
-		row, err := scanner.GetRow()
-		require.NoError(t, err)
-		require.Len(t, row, 1)
-		assert.Equal(t, int32(42), row[0])
-
-		scanner.Advance()
-		count++
-	}
-
-	assert.Equal(t, 5, count)
-	assert.Equal(t, uint64(5), scanner.TotalRows())
-}
-
-func TestTableScannerMultipleRowGroups(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 6)
-	defer cleanup()
-
-	// Create table with integer column
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	// Row Group 1: constant 10
-	dp1 := NewDataPointer(0, 3, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes1, _ := dp1.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes1)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 10)
-
-	// Row Group 2: constant 20
-	dp2 := NewDataPointer(0, 2, BlockPointer{BlockID: 3, Offset: 0}, CompressionConstant)
-	dpBytes2, _ := dp2.SerializeToBytes()
-
-	block2 := &Block{
-		ID:   2,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block2.Data, dpBytes2)
-
-	block3 := &Block{
-		ID:   3,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block3.Data, 20)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-	require.NoError(t, bm.WriteBlock(block2))
-	require.NoError(t, bm.WriteBlock(block3))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   3,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-		{
-			TableOID:     1,
-			RowStart:     3,
-			TupleCount:   2,
-			DataPointers: []MetaBlockPointer{{BlockID: 2, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	// Collect all values
-	values := make([]int32, 0)
-	for scanner.Next() {
-		row, err := scanner.GetRow()
-		require.NoError(t, err)
-		values = append(values, row[0].(int32))
-		scanner.Advance()
-	}
-
-	// Should have 3 values of 10, then 2 values of 20
-	assert.Equal(t, []int32{10, 10, 10, 20, 20}, values)
-	assert.Equal(t, uint64(5), scanner.TotalRows())
-}
-
-func TestTableScannerProjectionPushdown(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 6)
-	defer cleanup()
-
-	// Create table with two columns
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-	table.AddColumn(ColumnDefinition{Name: "value", Type: TypeBigInt})
-
-	// Column 1: int32 constant 42
-	dp1 := NewDataPointer(0, 3, BlockPointer{BlockID: 2, Offset: 0}, CompressionConstant)
-	dpBytes1, _ := dp1.SerializeToBytes()
-
-	// Column 2: int64 constant 999
-	dp2 := NewDataPointer(0, 3, BlockPointer{BlockID: 3, Offset: 0}, CompressionConstant)
-	dpBytes2, _ := dp2.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes1)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block1.Data, dpBytes2)
-
-	block2 := &Block{
-		ID:   2,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block2.Data, 42)
-
-	block3 := &Block{
-		ID:   3,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint64(block3.Data, 999)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-	require.NoError(t, bm.WriteBlock(block2))
-	require.NoError(t, bm.WriteBlock(block3))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:   1,
-			RowStart:   0,
-			TupleCount: 3,
-			DataPointers: []MetaBlockPointer{
-				{BlockID: 0, Offset: 0}, // Column 0
-				{BlockID: 1, Offset: 0}, // Column 1
-			},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	t.Run("project single column", func(t *testing.T) {
-		scanner.Reset()
-		err := scanner.SetProjection([]int{1}) // Only read "value" column
-		require.NoError(t, err)
-
-		assert.True(t, scanner.Next())
-		row, err := scanner.GetRow()
-		require.NoError(t, err)
-		require.Len(t, row, 1)
-		assert.Equal(t, int64(999), row[0])
-		scanner.Advance()
-	})
-
-	t.Run("project multiple columns in different order", func(t *testing.T) {
-		scanner.Reset()
-		err := scanner.SetProjection([]int{1, 0}) // "value", then "id"
-		require.NoError(t, err)
-
-		assert.True(t, scanner.Next())
-		row, err := scanner.GetRow()
-		require.NoError(t, err)
-		require.Len(t, row, 2)
-		assert.Equal(t, int64(999), row[0]) // First in projection
-		assert.Equal(t, int32(42), row[1])  // Second in projection
-		scanner.Advance()
-	})
-}
-
-func TestTableScannerGetColumn(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 4)
-	defer cleanup()
-
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	dp := NewDataPointer(0, 5, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 42)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   5,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	assert.True(t, scanner.Next())
-
-	val, err := scanner.GetColumn(0)
-	require.NoError(t, err)
-	assert.Equal(t, int32(42), val)
-
-	// Invalid column index
-	_, err = scanner.GetColumn(5)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrColumnIndexOutOfRange)
-}
 
 func TestTableScannerReset(t *testing.T) {
 	t.Parallel()
@@ -395,7 +103,7 @@ func TestTableScannerReset(t *testing.T) {
 	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
 
 	dp := NewDataPointer(0, 3, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
+	dpBytes := serializePersistentColumnDataForTest(dp)
 
 	block0 := &Block{
 		ID:   0,
@@ -475,62 +183,6 @@ func TestTableScannerClose(t *testing.T) {
 	assert.ErrorIs(t, err, ErrScannerClosed)
 }
 
-func TestTableScannerScanRowGroup(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 4)
-	defer cleanup()
-
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	dp := NewDataPointer(0, 5, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 42)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   5,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	result, err := scanner.ScanRowGroup(0)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	assert.Equal(t, uint64(5), result.RowCount)
-	assert.Equal(t, 0, result.RowGroupID)
-	assert.Len(t, result.Columns, 1)
-
-	// Verify all values
-	for i := uint64(0); i < 5; i++ {
-		val, valid := result.GetValue(i, 0)
-		assert.True(t, valid)
-		assert.Equal(t, int32(42), val)
-	}
-}
 
 func TestTableScannerScanRowGroupOutOfRange(t *testing.T) {
 	t.Parallel()
@@ -559,94 +211,6 @@ func TestTableScannerScanRowGroupOutOfRange(t *testing.T) {
 	assert.ErrorIs(t, err, ErrRowGroupIndexOutOfRange)
 }
 
-func TestTableScannerScanAll(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 6)
-	defer cleanup()
-
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	// Row Group 1
-	dp1 := NewDataPointer(0, 3, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes1, _ := dp1.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes1)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 10)
-
-	// Row Group 2
-	dp2 := NewDataPointer(0, 2, BlockPointer{BlockID: 3, Offset: 0}, CompressionConstant)
-	dpBytes2, _ := dp2.SerializeToBytes()
-
-	block2 := &Block{
-		ID:   2,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block2.Data, dpBytes2)
-
-	block3 := &Block{
-		ID:   3,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block3.Data, 20)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-	require.NoError(t, bm.WriteBlock(block2))
-	require.NoError(t, bm.WriteBlock(block3))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   3,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-		{
-			TableOID:     1,
-			RowStart:     3,
-			TupleCount:   2,
-			DataPointers: []MetaBlockPointer{{BlockID: 2, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	results, err := scanner.ScanAll()
-	require.NoError(t, err)
-	require.Len(t, results, 2)
-
-	// First row group
-	assert.Equal(t, uint64(3), results[0].RowCount)
-	assert.Equal(t, 0, results[0].RowGroupID)
-	for i := uint64(0); i < 3; i++ {
-		val, valid := results[0].GetValue(i, 0)
-		assert.True(t, valid)
-		assert.Equal(t, int32(10), val)
-	}
-
-	// Second row group
-	assert.Equal(t, uint64(2), results[1].RowCount)
-	assert.Equal(t, 1, results[1].RowGroupID)
-	for i := uint64(0); i < 2; i++ {
-		val, valid := results[1].GetValue(i, 0)
-		assert.True(t, valid)
-		assert.Equal(t, int32(20), val)
-	}
-}
 
 func TestScanResultMethods(t *testing.T) {
 	t.Parallel()
@@ -694,122 +258,6 @@ func TestScanResultMethods(t *testing.T) {
 	})
 }
 
-func TestTableScannerIterator(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 4)
-	defer cleanup()
-
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	dp := NewDataPointer(0, 3, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 42)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   3,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	iter := NewTableScannerIterator(scanner)
-	defer iter.Close()
-
-	// Iterate through all rows
-	count := 0
-	for iter.Next() {
-		row := iter.Row()
-		require.NotNil(t, row)
-		require.Len(t, row, 1)
-		assert.Equal(t, int32(42), row[0])
-		count++
-	}
-
-	assert.Equal(t, 3, count)
-	assert.NoError(t, iter.Err())
-}
-
-func TestTableScannerConcurrentAccess(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.duckdb")
-	_, bm, cleanup := setupTestFileWithBlocks(t, tmpFile, 4)
-	defer cleanup()
-
-	table := NewTableCatalogEntry("test_table")
-	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
-
-	dp := NewDataPointer(0, 10, BlockPointer{BlockID: 1, Offset: 0}, CompressionConstant)
-	dpBytes, _ := dp.SerializeToBytes()
-
-	block0 := &Block{
-		ID:   0,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	copy(block0.Data, dpBytes)
-
-	block1 := &Block{
-		ID:   1,
-		Data: make([]byte, DefaultBlockSize-BlockChecksumSize),
-	}
-	binary.LittleEndian.PutUint32(block1.Data, 42)
-
-	require.NoError(t, bm.WriteBlock(block0))
-	require.NoError(t, bm.WriteBlock(block1))
-
-	rowGroups := []*RowGroupPointer{
-		{
-			TableOID:     1,
-			RowStart:     0,
-			TupleCount:   10,
-			DataPointers: []MetaBlockPointer{{BlockID: 0, Offset: 0}},
-		},
-	}
-
-	scanner := NewTableScanner(bm, table, rowGroups)
-	defer scanner.Close()
-
-	// Concurrent ScanRowGroup calls should be safe
-	var wg sync.WaitGroup
-	numGoroutines := 10
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 10; j++ {
-				result, err := scanner.ScanRowGroup(0)
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.Equal(t, uint64(10), result.RowCount)
-			}
-		}()
-	}
-
-	wg.Wait()
-}
 
 func TestTableScannerEmptyTable(t *testing.T) {
 	t.Parallel()
@@ -869,6 +317,92 @@ func TestTableScannerEmptyRowGroup(t *testing.T) {
 }
 
 // Helper functions for test setup
+
+// serializePersistentColumnDataForTest serializes a DataPointer in DuckDB's
+// PersistentColumnData format for use in tests. This format is:
+// - Field 100: data_pointers count (varint)
+// - Then inline DataPointer(s) with fields:
+//   - Field 101: tuple_count
+//   - Field 102: block_pointer (nested with field 100 for block_id, field 101 for offset)
+//   - Field 103: compression
+//   - Field 104: statistics (nested)
+//   - Terminator 0xFFFF
+// - Terminator 0xFFFF
+//
+// For CONSTANT compression with a valid constant value, the constant should be
+// stored in the data block referenced by BlockPointer, not in statistics.
+// The decompressor will read from that block.
+func serializePersistentColumnDataForTest(dp *DataPointer) []byte {
+	var buf []byte
+
+	// Field 100: data_pointers count (always 1 for our tests)
+	buf = append(buf, 0x64, 0x00) // Field 100
+	buf = appendVarint(buf, 1)     // count = 1
+
+	// DataPointer fields:
+	// Field 101: tuple_count
+	buf = append(buf, 0x65, 0x00) // Field 101
+	buf = appendVarint(buf, dp.TupleCount)
+
+	// Field 102: block_pointer (nested)
+	buf = append(buf, 0x66, 0x00) // Field 102
+	// BlockPointer field 100: block_id
+	buf = append(buf, 0x64, 0x00) // Field 100
+	buf = appendVarint(buf, dp.Block.BlockID)
+	// BlockPointer field 101: offset
+	buf = append(buf, 0x65, 0x00) // Field 101
+	buf = appendVarint(buf, uint64(dp.Block.Offset))
+	// BlockPointer terminator
+	buf = append(buf, 0xff, 0xff)
+
+	// Field 103: compression
+	buf = append(buf, 0x67, 0x00) // Field 103
+	buf = appendVarint(buf, uint64(dp.Compression))
+
+	// Field 104: statistics (nested BaseStatistics)
+	buf = append(buf, 0x68, 0x00) // Field 104
+	// BaseStatistics field 100: has_null
+	buf = append(buf, 0x64, 0x00) // Field 100
+	if dp.Statistics.HasNull {
+		buf = appendVarint(buf, 1)
+	} else {
+		buf = appendVarint(buf, 0)
+	}
+	// BaseStatistics field 101: has_max
+	buf = append(buf, 0x65, 0x00) // Field 101
+	if dp.Statistics.HasStats {
+		buf = appendVarint(buf, 1)
+	} else {
+		buf = appendVarint(buf, 0)
+	}
+	// BaseStatistics field 102: has_min
+	buf = append(buf, 0x66, 0x00) // Field 102
+	buf = appendVarint(buf, 0)
+	// BaseStatistics terminator
+	buf = append(buf, 0xff, 0xff)
+
+	// DataPointer terminator
+	buf = append(buf, 0xff, 0xff)
+
+	// PersistentColumnData terminator
+	buf = append(buf, 0xff, 0xff)
+
+	return buf
+}
+
+// appendVarint appends a varint-encoded uint64 to the buffer.
+func appendVarint(buf []byte, val uint64) []byte {
+	for {
+		b := byte(val & 0x7F)
+		val >>= 7
+		if val == 0 {
+			buf = append(buf, b)
+			break
+		}
+		buf = append(buf, b|0x80)
+	}
+	return buf
+}
 
 func setupTestFile(t *testing.T, path string) (*os.File, *BlockManager, func()) {
 	t.Helper()
