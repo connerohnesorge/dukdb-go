@@ -179,6 +179,62 @@ INSERT INTO transforms VALUES ('(x, y) -> x * y');
 - JSON: `read_json()`, `read_json_auto()`, `read_ndjson()`
 - Parquet: `read_parquet()` with column projection
 - Excel: `read_excel()`, `read_excel_auto()` (parser support)
+- Iceberg: `iceberg_scan()` with time travel and partition pruning
+
+## Apache Iceberg Support
+
+dukdb-go provides native support for reading Apache Iceberg tables. See [docs/iceberg.md](docs/iceberg.md) for comprehensive documentation.
+
+### Key Features
+
+- Time travel queries (by snapshot ID or timestamp)
+- Partition pruning for efficient reads
+- Schema evolution support
+- Column projection
+- Cloud storage access (S3, GCS, Azure)
+
+### Quick Example
+
+```sql
+-- Read current snapshot
+SELECT * FROM iceberg_scan('/warehouse/sales');
+
+-- Time travel to a specific snapshot
+SELECT * FROM iceberg_scan('/warehouse/sales', snapshot_id := 1234567890);
+
+-- Time travel by timestamp
+SELECT * FROM iceberg_scan('/warehouse/sales',
+    timestamp := TIMESTAMP '2024-01-15 10:00:00');
+
+-- Get table metadata
+SELECT * FROM iceberg_metadata('/warehouse/sales');
+
+-- List snapshot history
+SELECT snapshot_id, timestamp_ms, operation
+FROM iceberg_snapshots('/warehouse/sales');
+```
+
+### Go API
+
+```go
+import "github.com/dukdb/dukdb-go/internal/io/iceberg"
+
+// Open an Iceberg table
+table, err := iceberg.OpenTable(ctx, "/warehouse/sales", nil)
+if err != nil {
+    log.Fatal(err)
+}
+defer table.Close()
+
+// Get metadata
+fmt.Printf("Snapshots: %d\n", len(table.Snapshots()))
+
+// Read with options
+reader, err := iceberg.NewReader(ctx, "/warehouse/sales", &iceberg.ReaderOptions{
+    SelectedColumns: []string{"id", "name"},
+    Limit:           1000,
+})
+```
 
 ## Cloud Storage
 
@@ -305,6 +361,9 @@ In WASM, the HTTP filesystem is fully supported. For S3/GCS/Azure access, use pr
 | TinyGo | Yes | No |
 | Cross-compilation | Easy | Complex |
 | API Compatibility | Compatible | Native |
+| Iceberg Tables | Yes | Via extension |
+| Parquet | Yes | Yes |
+| S3/GCS/Azure | Yes | Yes |
 
 ## Contributing
 

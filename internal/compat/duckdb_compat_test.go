@@ -36,7 +36,7 @@ import (
 
 	// Import official go-duckdb driver for comparison
 	// Note: This import requires CGO and will fail without it
-	_ "github.com/duckdb/duckdb-go"
+	_ "github.com/marcboeker/go-duckdb"
 )
 
 // openDukDB opens an in-memory dukdb-go database.

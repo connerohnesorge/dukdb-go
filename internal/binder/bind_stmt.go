@@ -1,6 +1,7 @@
 package binder
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/io/arrow"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
+	"github.com/dukdb/dukdb-go/internal/io/iceberg"
 	"github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/io/parquet"
 	"github.com/dukdb/dukdb-go/internal/parser"
@@ -594,6 +596,12 @@ func (b *Binder) inferTableFunctionSchema(
 	case "read_arrow_auto":
 		// read_arrow_auto uses auto-detection for file vs stream format
 		return b.inferArrowSchemaAuto(path, options)
+	case "iceberg_scan":
+		return b.inferIcebergScanSchema(path, options)
+	case "iceberg_metadata":
+		return b.inferIcebergMetadataSchema()
+	case "iceberg_snapshots":
+		return b.inferIcebergSnapshotsSchema()
 	default:
 		// For unknown table functions, return no columns
 		// The executor will handle the error
@@ -970,6 +978,114 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 	}
 
 	return columns, nil
+}
+
+// inferIcebergScanSchema reads an Iceberg table and infers its schema.
+func (b *Binder) inferIcebergScanSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Build reader options from options map
+	opts := iceberg.DefaultReaderOptions()
+
+	// Apply options from the query
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "columns":
+			switch v := val.(type) {
+			case []string:
+				opts.SelectedColumns = v
+			case []any:
+				cols := make([]string, 0, len(v))
+				for _, c := range v {
+					if s, ok := c.(string); ok {
+						cols = append(cols, s)
+					}
+				}
+				opts.SelectedColumns = cols
+			}
+		case "snapshot_id":
+			switch v := val.(type) {
+			case int64:
+				opts.SnapshotID = &v
+			case int:
+				snapshotID := int64(v)
+				opts.SnapshotID = &snapshotID
+			}
+		case "timestamp", "as_of_timestamp":
+			switch v := val.(type) {
+			case int64:
+				opts.Timestamp = &v
+			case int:
+				ts := int64(v)
+				opts.Timestamp = &ts
+			}
+		}
+	}
+
+	// Create the Iceberg reader
+	reader, err := iceberg.NewReader(context.Background(), path, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create Iceberg reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get Iceberg schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get Iceberg types: %v", err)
+	}
+
+	// Create column definitions
+	columns := make([]*catalog.ColumnDef, len(columnNames))
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns[i] = catalog.NewColumnDef(colName, colType)
+	}
+
+	return columns, nil
+}
+
+// inferIcebergMetadataSchema returns the schema for the iceberg_metadata table function.
+// This function returns metadata about data files in the Iceberg table.
+func (b *Binder) inferIcebergMetadataSchema() ([]*catalog.ColumnDef, error) {
+	return []*catalog.ColumnDef{
+		catalog.NewColumnDef("file_path", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("file_format", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("record_count", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("file_size_in_bytes", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("partition_data", dukdb.TYPE_VARCHAR), // JSON string
+		catalog.NewColumnDef("value_counts", dukdb.TYPE_VARCHAR),   // JSON string
+		catalog.NewColumnDef("null_value_counts", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("lower_bounds", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("upper_bounds", dukdb.TYPE_VARCHAR),
+	}, nil
+}
+
+// inferIcebergSnapshotsSchema returns the schema for the iceberg_snapshots table function.
+// This function returns information about snapshots in the Iceberg table.
+func (b *Binder) inferIcebergSnapshotsSchema() ([]*catalog.ColumnDef, error) {
+	return []*catalog.ColumnDef{
+		catalog.NewColumnDef("snapshot_id", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("parent_snapshot_id", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("timestamp_ms", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("timestamp", dukdb.TYPE_TIMESTAMP),
+		catalog.NewColumnDef("manifest_list", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("operation", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("summary", dukdb.TYPE_VARCHAR), // JSON string
+		catalog.NewColumnDef("added_data_files", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("deleted_data_files", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("added_records", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("deleted_records", dukdb.TYPE_BIGINT),
+	}, nil
 }
 
 func (b *Binder) bindJoin(

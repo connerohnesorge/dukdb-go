@@ -1,0 +1,92 @@
+{
+  "current-schema-id": 0,
+  "current-snapshot-id": 3000000002,
+  "default-spec-id": 0,
+  "format-version": 2,
+  "last-column-id": 3,
+  "last-partition-id": 999,
+  "last-updated-ms": 1700003600000,
+  "location": "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/iceberg/testdata/equality_deletes_table",
+  "partition-specs": [
+    {
+      "fields": [],
+      "spec-id": 0
+    }
+  ],
+  "properties": {
+    "write.delete.mode": "merge-on-read",
+    "write.format.default": "parquet"
+  },
+  "refs": {
+    "main": {
+      "snapshot-id": 3000000002,
+      "type": "branch"
+    }
+  },
+  "schemas": [
+    {
+      "fields": [
+        {
+          "id": 1,
+          "name": "id",
+          "required": true,
+          "type": "long"
+        },
+        {
+          "id": 2,
+          "name": "name",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "id": 3,
+          "name": "value",
+          "required": false,
+          "type": "double"
+        }
+      ],
+      "schema-id": 0,
+      "type": "struct"
+    }
+  ],
+  "snapshot-log": [
+    {
+      "snapshot-id": 3000000001,
+      "timestamp-ms": 1700000000000
+    },
+    {
+      "snapshot-id": 3000000002,
+      "timestamp-ms": 1700003600000
+    }
+  ],
+  "snapshots": [
+    {
+      "manifest-list": "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/iceberg/testdata/equality_deletes_table/metadata/snap-3000000001-manifest-list.avro",
+      "schema-id": 0,
+      "sequence-number": 1,
+      "snapshot-id": 3000000001,
+      "summary": {
+        "added-data-files": "1",
+        "added-records": "100",
+        "operation": "append"
+      },
+      "timestamp-ms": 1700000000000
+    },
+    {
+      "manifest-list": "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/iceberg/testdata/equality_deletes_table/metadata/snap-3000000002-manifest-list.avro",
+      "parent-snapshot-id": 3000000001,
+      "schema-id": 0,
+      "sequence-number": 2,
+      "snapshot-id": 3000000002,
+      "summary": {
+        "added-delete-files": "1",
+        "added-equality-delete-files": "1",
+        "added-equality-deletes": "5",
+        "operation": "delete",
+        "total-equality-deletes": "5"
+      },
+      "timestamp-ms": 1700003600000
+    }
+  ],
+  "table-uuid": "d4e5f6a7-b8c9-0123-defa-456789012345"
+}

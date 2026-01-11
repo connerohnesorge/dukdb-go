@@ -41,6 +41,13 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeReadArrow(ctx, plan)
 	case "read_arrow_auto":
 		return e.executeReadArrowAuto(ctx, plan)
+	// Iceberg table functions
+	case "iceberg_scan":
+		return e.executeIcebergScan(ctx, plan)
+	case "iceberg_metadata":
+		return e.executeIcebergMetadata(ctx, plan)
+	case "iceberg_snapshots":
+		return e.executeIcebergSnapshots(ctx, plan)
 	// Secret system functions
 	case "which_secret":
 		return e.executeWhichSecret(ctx, plan)
