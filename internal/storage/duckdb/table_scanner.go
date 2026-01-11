@@ -70,6 +70,9 @@ type TableScanner struct {
 	// columnTypes contains the logical type of each table column.
 	columnTypes []LogicalTypeID
 
+	// columnModifiers contains type modifiers for each column (for complex types).
+	columnModifiers []TypeModifiers
+
 	// currentRGIdx is the index of the current row group being scanned.
 	currentRGIdx int
 
@@ -96,22 +99,25 @@ func NewTableScanner(
 	table *TableCatalogEntry,
 	rowGroups []*RowGroupPointer,
 ) *TableScanner {
-	// Extract column types from table definition
+	// Extract column types and modifiers from table definition
 	columnTypes := make([]LogicalTypeID, len(table.Columns))
+	columnModifiers := make([]TypeModifiers, len(table.Columns))
 	for i, col := range table.Columns {
 		columnTypes[i] = col.Type
+		columnModifiers[i] = col.TypeModifiers
 	}
 
 	return &TableScanner{
-		blockManager: bm,
-		tableEntry:   table,
-		rowGroups:    rowGroups,
-		projection:   nil, // Default: read all columns
-		columnTypes:  columnTypes,
-		currentRGIdx: -1, // Not started yet
-		currentRowIdx: 0,
-		totalRows:    0,
-		closed:       false,
+		blockManager:    bm,
+		tableEntry:      table,
+		rowGroups:       rowGroups,
+		projection:      nil, // Default: read all columns
+		columnTypes:     columnTypes,
+		columnModifiers: columnModifiers,
+		currentRGIdx:    -1, // Not started yet
+		currentRowIdx:   0,
+		totalRows:       0,
+		closed:          false,
 	}
 }
 
@@ -345,9 +351,9 @@ func (s *TableScanner) ScanRowGroup(rgIdx int) (*ScanResult, error) {
 			ErrRowGroupIndexOutOfRange, rgIdx, len(s.rowGroups)-1)
 	}
 
-	// Create a reader for this row group
+	// Create a reader for this row group with type modifiers for complex types
 	rgp := s.rowGroups[rgIdx]
-	reader := NewRowGroupReader(s.blockManager, rgp, s.columnTypes)
+	reader := NewRowGroupReaderWithModifiers(s.blockManager, rgp, s.columnTypes, s.columnModifiers)
 
 	// Get the column indices to read
 	colIndices := s.getProjectedIndicesLocked()
@@ -437,11 +443,12 @@ func (s *TableScanner) advanceRowGroupLocked() bool {
 		return false // No more row groups
 	}
 
-	// Create new reader for next row group
-	s.currentReader = NewRowGroupReader(
+	// Create new reader for next row group with type modifiers for complex types
+	s.currentReader = NewRowGroupReaderWithModifiers(
 		s.blockManager,
 		s.rowGroups[s.currentRGIdx],
 		s.columnTypes,
+		s.columnModifiers,
 	)
 	s.currentRowIdx = 0
 

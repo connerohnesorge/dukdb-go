@@ -93,6 +93,18 @@ func (d *BinaryDeserializer) PeekFieldID() (uint16, bool) {
 	return fieldID, true
 }
 
+// PeekBytes peeks at the next n bytes for debugging.
+func (d *BinaryDeserializer) PeekBytes(n int) []byte {
+	if d.err != nil {
+		return nil
+	}
+	buf, err := d.r.Peek(n)
+	if err != nil {
+		return nil
+	}
+	return buf
+}
+
 // IsObjectEnd checks if the next field ID is the message terminator.
 // Consumes the terminator if found.
 func (d *BinaryDeserializer) IsObjectEnd() bool {
@@ -113,6 +125,24 @@ func (d *BinaryDeserializer) IsObjectEnd() bool {
 	}
 
 	return false
+}
+
+// ReadRawByte reads a single raw byte (not varint encoded).
+func (d *BinaryDeserializer) ReadRawByte() uint8 {
+	buf := d.readBytes(1)
+	if buf == nil {
+		return 0
+	}
+	return buf[0]
+}
+
+// ReadRawUint64 reads a raw little-endian uint64 (not varint encoded).
+func (d *BinaryDeserializer) ReadRawUint64() uint64 {
+	buf := d.readBytes(8)
+	if buf == nil {
+		return 0
+	}
+	return binary.LittleEndian.Uint64(buf)
 }
 
 // ReadUint8 reads a varint-encoded uint8.
@@ -306,6 +336,16 @@ func (d *BinaryDeserializer) SkipProperty() {
 	if err != nil {
 		d.err = err
 	}
+}
+
+// Skip skips n bytes from the input stream.
+func (d *BinaryDeserializer) Skip(n int) error {
+	if d.err != nil {
+		return d.err
+	}
+	// Read and discard n bytes
+	_ = d.readBytes(n)
+	return d.err
 }
 
 // OnObjectBegin marks the beginning of reading an object.

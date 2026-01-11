@@ -45,21 +45,22 @@ func TestMetadataBlockReader_BlockIndexHandling(t *testing.T) {
 	}
 
 	// Set up test data in different sub-blocks
-	// Sub-block 0: starts at offset 0 in Block.Data
-	// Sub-block 1: starts at offset 4088 in Block.Data (4096 - 8)
-	// Sub-block 2: starts at offset 8184 in Block.Data (2*4096 - 8)
+	// DuckDB's MetadataWriter uses 4088-byte segments:
+	// Sub-block 0: starts at offset 0 in Block.Data (0 * 4088)
+	// Sub-block 1: starts at offset 4088 in Block.Data (1 * 4088)
+	// Sub-block 2: starts at offset 8176 in Block.Data (2 * 4088)
 
 	// Sub-block 0: next_ptr (0xFFFFFFFFFFFFFFFF) + test data "BLOCK0"
 	copy(block.Data[0:8], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
 	copy(block.Data[8:14], []byte("BLOCK0"))
 
 	// Sub-block 1: next_ptr (0xFFFFFFFFFFFFFFFF) + test data "BLOCK1"
-	sb1Offset := 4088
+	sb1Offset := 4088 // 1 * 4088
 	copy(block.Data[sb1Offset:sb1Offset+8], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
 	copy(block.Data[sb1Offset+8:sb1Offset+14], []byte("BLOCK1"))
 
 	// Sub-block 2: next_ptr (0xFFFFFFFFFFFFFFFF) + test data "BLOCK2"
-	sb2Offset := 8184
+	sb2Offset := 8176 // 2 * 4088
 	copy(block.Data[sb2Offset:sb2Offset+8], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
 	copy(block.Data[sb2Offset+8:sb2Offset+14], []byte("BLOCK2"))
 

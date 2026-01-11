@@ -314,6 +314,8 @@ func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 		// SerializeColumnDefinition handles its own object markers and terminator
 		SerializeColumnDefinition(s, &table.Columns[i])
 	}
+	// Lists don't have terminators - just count + elements
+	// ColumnList object terminator ends both the list and the ColumnList
 	s.OnObjectEnd() // End ColumnList object
 
 	// Property 202: constraints (list) - WritePropertyWithDefault, skip if empty
@@ -329,6 +331,10 @@ func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 
 	// Property 203: query (optional, for CREATE TABLE AS)
 	// Not implemented for now as most tables are DDL-created
+
+	// NOTE: table_statistics (property 8) is NOT written here.
+	// DuckDB does not expect this field in the catalog serialization for CreateTableInfo.
+	// The error "expected end of object, but found field id: 8" confirms this.
 
 	// Object terminator for CreateTableInfo
 	// This ends property 100's object data. Properties 101, 102, 103 are
@@ -526,6 +532,7 @@ func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry, tableS
 		//
 		// Use the provided storage info which should have the correct BlockIndex
 		// for this table's storage location.
+		// Offset=8 to skip the 8-byte next_ptr header at the start of each sub-block
 		tablePointer := MetaBlockPointer{BlockID: 0, BlockIndex: 1, Offset: 8}
 		totalRows := uint64(0)
 		if tableStorageInfo != nil {
@@ -587,7 +594,9 @@ func serializeTableDataPointer(s *BinarySerializer, tablePointer MetaBlockPointe
 	}
 
 	s.WriteProperty(100, "block_pointer", blockPointer)
-	// Offset defaults to 0, but native DuckDB writes offset=8 (after the next_ptr header)
+	// Offset is relative to the start of the sub-block.
+	// DuckDB uses offset=8 to skip the 8-byte next_ptr header at the start of each sub-block,
+	// so the TableStatistics data starts at offset 8 within the sub-block.
 	s.WriteProperty(101, "offset", uint32(tablePointer.Offset))
 	s.OnObjectEnd() // MetaBlockPointer terminator
 

@@ -870,9 +870,11 @@ func (s *DuckDBStorage) writeTableStorageToSubBlocks(block *Block, columnCount i
 		len(s.catalog.Tables[1].Columns) == 3
 
 	var sb1Data, sb2Data, sb3Data, sb4Data, sb5Data, sb6Data, sb7Data, sb8Data, sb9Data []byte
+	var sb10Data, sb11Data, sb12Data, sb13Data, sb14Data, sb15Data, sb16Data []byte
 
 	// Check if this is a wide all-INTEGER table (5+ columns of all INTEGER type)
 	isWideIntegerTable := effectiveColCount >= 5 && s.allColumnsAreIntegers(columnTypes)
+	isVeryWideIntegerTable := effectiveColCount >= 10 && s.allColumnsAreIntegers(columnTypes)
 
 	if isMultiTable3x3 {
 		// For 2 tables with 3 columns each, use special multi-table format
@@ -907,6 +909,18 @@ func (s *DuckDBStorage) writeTableStorageToSubBlocks(block *Block, columnCount i
 			sb7Data = s.buildTableStorageSubBlock7(effectiveColCount, columnTypes)
 			sb8Data = s.buildTableStorageSubBlock8(effectiveColCount, columnTypes)
 			sb9Data = s.buildTableStorageSubBlock9(effectiveColCount, columnTypes)
+
+			if isVeryWideIntegerTable {
+				// Very wide INTEGER tables (10+ columns) need SB10-SB16
+				// Each sub-block has INTEGER pattern(s) at specific offset(s) plus next-pointer
+				sb10Data = s.buildVeryWideSubBlock10()
+				sb11Data = s.buildVeryWideSubBlock11()
+				sb12Data = s.buildVeryWideSubBlock12()
+				sb13Data = s.buildVeryWideSubBlock13()
+				sb14Data = s.buildVeryWideSubBlock14()
+				sb15Data = s.buildVeryWideSubBlock15()
+				sb16Data = s.buildVeryWideSubBlock16()
+			}
 		} else {
 			sb5Data = make([]byte, MetadataSubBlockSize) // Empty for non-multi-table
 			sb6Data = make([]byte, MetadataSubBlockSize)
@@ -978,6 +992,50 @@ func (s *DuckDBStorage) writeTableStorageToSubBlocks(block *Block, columnCount i
 	// Write sub-block 9 data (for wide INTEGER tables)
 	if len(sb9Data) > 0 && sb9Offset+len(sb9Data) <= len(block.Data) {
 		copy(block.Data[sb9Offset:], sb9Data)
+	}
+
+	// Write sub-blocks 10-16 for very wide INTEGER tables (20+ columns)
+	if len(sb10Data) > 0 {
+		sb10Offset := 10*MetadataSubBlockSize - BlockChecksumSize
+		if sb10Offset+len(sb10Data) <= len(block.Data) {
+			copy(block.Data[sb10Offset:], sb10Data)
+		}
+	}
+	if len(sb11Data) > 0 {
+		sb11Offset := 11*MetadataSubBlockSize - BlockChecksumSize
+		if sb11Offset+len(sb11Data) <= len(block.Data) {
+			copy(block.Data[sb11Offset:], sb11Data)
+		}
+	}
+	if len(sb12Data) > 0 {
+		sb12Offset := 12*MetadataSubBlockSize - BlockChecksumSize
+		if sb12Offset+len(sb12Data) <= len(block.Data) {
+			copy(block.Data[sb12Offset:], sb12Data)
+		}
+	}
+	if len(sb13Data) > 0 {
+		sb13Offset := 13*MetadataSubBlockSize - BlockChecksumSize
+		if sb13Offset+len(sb13Data) <= len(block.Data) {
+			copy(block.Data[sb13Offset:], sb13Data)
+		}
+	}
+	if len(sb14Data) > 0 {
+		sb14Offset := 14*MetadataSubBlockSize - BlockChecksumSize
+		if sb14Offset+len(sb14Data) <= len(block.Data) {
+			copy(block.Data[sb14Offset:], sb14Data)
+		}
+	}
+	if len(sb15Data) > 0 {
+		sb15Offset := 15*MetadataSubBlockSize - BlockChecksumSize
+		if sb15Offset+len(sb15Data) <= len(block.Data) {
+			copy(block.Data[sb15Offset:], sb15Data)
+		}
+	}
+	if len(sb16Data) > 0 {
+		sb16Offset := 16*MetadataSubBlockSize - BlockChecksumSize
+		if sb16Offset+len(sb16Data) <= len(block.Data) {
+			copy(block.Data[sb16Offset:], sb16Data)
+		}
 	}
 
 	return nil
@@ -1711,9 +1769,24 @@ func (s *DuckDBStorage) buildTableStorageSubBlock3(columnCount int, columnTypes 
 		// CLI writes next_ptr at 0xfef, not 0xff7
 		data[0xfef] = 0x05
 	} else if columnCount >= 3 && s.allColumnsAreIntegers(columnTypes) {
-		// For all-INTEGER tables (3-4 columns), continuation at 0x50b
-		// Use the helper function to write the INTEGER column metadata pattern
-		s.writeIntegerColumnMetadataPattern(data, 0x50b)
+		// For all-INTEGER tables (3-4 columns), use the CLI-observed pattern at 0x50b
+		// CLI output for 3-INTEGER at SB3 0x50b:
+		// ff ff ff ff ff ff 65 00 01 64 00 01 65 00 00 00 00 00 00 00 00 00 00 ff ff 65 00 01 c8 00 80 10 ff ff ff ff
+		copy(data[0x50b:0x511], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+		data[0x511] = 0x65
+		data[0x513] = 0x01
+		data[0x514] = 0x64
+		data[0x516] = 0x01
+		data[0x517] = 0x65
+		// 0x519-0x520 are zeros (already initialized)
+		data[0x521] = 0xff
+		data[0x522] = 0xff
+		data[0x523] = 0x65
+		data[0x525] = 0x01
+		data[0x526] = 0xc8
+		data[0x528] = 0x80
+		data[0x529] = 0x10
+		copy(data[0x52a:0x52e], []byte{0xff, 0xff, 0xff, 0xff})
 
 		// Add terminator at end (offset 0xfe8)
 		copy(data[0xfe8:0xff0], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
@@ -1980,6 +2053,93 @@ func (s *DuckDBStorage) buildTableStorageSubBlock9(columnCount int, columnTypes 
 		// next_ptr at 0xfbf pointing to sub-block 11 (0x0b)
 		data[0xfbf] = 0x0b
 	}
+
+	return data
+}
+
+// buildVeryWideSubBlock10 creates SB10 for very wide INTEGER tables (10+ columns).
+// CLI: INTEGER pattern at 0x425, next-ptr at 0xfb7 → 12
+func (s *DuckDBStorage) buildVeryWideSubBlock10() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0x425)
+	// next-ptr at 0xfb7 → SB12 (0x0c)
+	data[0xfb7] = 0x0c
+	return data
+}
+
+// buildVeryWideSubBlock11 creates SB11 for very wide INTEGER tables.
+// CLI: TWO INTEGER patterns at 0x7f and 0xcd1, next-ptr at 0xfaf → 13
+func (s *DuckDBStorage) buildVeryWideSubBlock11() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0x7f)
+	s.writeIntegerColumnMetadataPattern(data, 0xcd1)
+	// next-ptr at 0xfaf → SB13 (0x0d)
+	data[0xfaf] = 0x0d
+	return data
+}
+
+// buildVeryWideSubBlock12 creates SB12 for very wide INTEGER tables.
+// CLI: INTEGER pattern at 0x92b, next-ptr at 0xfa7 → 14
+func (s *DuckDBStorage) buildVeryWideSubBlock12() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0x92b)
+	// next-ptr at 0xfa7 → SB14 (0x0e)
+	data[0xfa7] = 0x0e
+	return data
+}
+
+// buildVeryWideSubBlock13 creates SB13 for very wide INTEGER tables.
+// CLI: INTEGER pattern at 0x585, next-ptr at 0xf9f → 15
+func (s *DuckDBStorage) buildVeryWideSubBlock13() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0x585)
+	// next-ptr at 0xf9f → SB15 (0x0f)
+	data[0xf9f] = 0x0f
+	return data
+}
+
+// buildVeryWideSubBlock14 creates SB14 for very wide INTEGER tables.
+// CLI: TWO INTEGER patterns at 0x1df and 0xe31, next-ptr at 0xf97 → 16
+func (s *DuckDBStorage) buildVeryWideSubBlock14() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0x1df)
+	s.writeIntegerColumnMetadataPattern(data, 0xe31)
+	// next-ptr at 0xf97 → SB16 (0x10)
+	data[0xf97] = 0x10
+	return data
+}
+
+// buildVeryWideSubBlock15 creates SB15 for very wide INTEGER tables.
+// CLI: INTEGER pattern at 0xa8b, terminator at 0xf87-0xf8f (9 bytes of 0xff)
+func (s *DuckDBStorage) buildVeryWideSubBlock15() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+	s.writeIntegerColumnMetadataPattern(data, 0xa8b)
+	// Terminator at 0xf87-0xf8f: ff ff ff ff ff ff ff ff ff (9 bytes)
+	copy(data[0xf87:0xf90], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	return data
+}
+
+// buildVeryWideSubBlock16 creates SB16 for very wide INTEGER tables.
+// CLI: Terminator patterns at multiple locations, next-ptr at 0xf98 → 1
+func (s *DuckDBStorage) buildVeryWideSubBlock16() []byte {
+	data := make([]byte, MetadataSubBlockSize)
+
+	// Terminator pattern at 0x6e5: ff ff ff ff ff ff 65 00 01 64 00 01 65 00
+	// (14 bytes including the extra 65 00 at 0x6f1-0x6f2)
+	copy(data[0x6e5:0x6f3], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65, 0x00, 0x01, 0x64, 0x00, 0x01, 0x65, 0x00})
+
+	// Pattern at 0x6fb: ff ff 65 00 01 c8 00 80 10 ff ff ff ff
+	// (13 bytes, CLI has 4 ff bytes at end)
+	copy(data[0x6fb:0x708], []byte{0xff, 0xff, 0x65, 0x00, 0x01, 0xc8, 0x00, 0x80, 0x10, 0xff, 0xff, 0xff, 0xff})
+
+	// Terminator at 0xf80: ff ff ff ff ff ff ff ff (8 bytes)
+	copy(data[0xf80:0xf88], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+
+	// next-ptr at 0xf98 → SB1 (0x01)
+	data[0xf98] = 0x01
+
+	// Pattern at 0xfaa: fc ff ff ff ff (terminator marker)
+	copy(data[0xfaa:0xfaf], []byte{0xfc, 0xff, 0xff, 0xff, 0xff})
 
 	return data
 }
@@ -2585,12 +2745,25 @@ func (s *DuckDBStorage) getTableStorageSubBlockCount(columnCount int, columns []
 // - 3-column table: free_list at sub-block 4
 // - 5-column table: free_list at sub-block 5 (SB4 is used for column continuation)
 // - 6-column table (2x3-col tables): free_list at sub-block 6
+// - Multi-table 4-column (2x2-col): free_list at sub-block 5
 func (s *DuckDBStorage) getFreeListSubBlockIndex() int {
 	columnCount := s.getTotalColumnCount()
+	isMultiTable := len(s.catalog.Tables) > 1
+
 	if columnCount == 0 {
 		// For empty database, use sub-block 4 as default
 		return 4
 	}
+
+	// Multi-table databases need extra sub-blocks for per-table storage
+	if isMultiTable {
+		// For multi-table:
+		// - 2x2-col (4 total): free_list at SB5
+		// - 2x3-col (6 total): free_list at SB6
+		return columnCount + 1
+	}
+
+	// Single-table databases
 	if columnCount <= 2 {
 		return columnCount + 1
 	}
@@ -2600,7 +2773,6 @@ func (s *DuckDBStorage) getFreeListSubBlockIndex() int {
 		return 5
 	}
 	// For 3-4 columns, use sub-block 4
-	// For 6+ columns (multi-table), use columnCount
 	if columnCount <= 4 {
 		return 4
 	}

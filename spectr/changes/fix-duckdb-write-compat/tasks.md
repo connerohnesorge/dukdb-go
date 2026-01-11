@@ -44,34 +44,34 @@
 
 ## Phase 6: Row Group Format
 
-- [ ] 6.1 Verify row group metadata structure: row count, column count, column metadata offsets
-- [ ] 6.2 Verify column segment format: compression type, data offset, data size
-- [ ] 6.3 Verify validity mask encoding for NULL values
-- [ ] 6.4 Verify string heap format for VARCHAR columns
-- [ ] 6.5 Verify dictionary compression format: dictionary + indices
-- [ ] 6.6 Add tests verifying row group bytes match DuckDB reference
+- [x] 6.1 Verify row group metadata structure: row count, column count, column metadata offsets
+- [x] 6.2 Verify column segment format: compression type, data offset, data size
+- [x] 6.3 Verify validity mask encoding for NULL values
+- [x] 6.4 Verify string heap format for VARCHAR columns
+- [x] 6.5 Verify dictionary compression format: dictionary + indices
+- [x] 6.6 Add tests verifying row group bytes match DuckDB reference
 
 ## Phase 7: Compression Encoding
 
-- [ ] 7.1 Verify CONSTANT compression output format
-- [ ] 7.2 Verify RLE compression output format
-- [ ] 7.3 Verify DICTIONARY compression: dictionary encoding, index bit width
-- [ ] 7.4 Verify BITPACKING compression: bit width selection, packing order
-- [ ] 7.5 Verify PFOR-DELTA compression if used
-- [ ] 7.6 Add compression round-trip tests comparing with DuckDB
+- [x] 7.1 Verify CONSTANT compression output format
+- [x] 7.2 Verify RLE compression output format
+- [x] 7.3 Verify DICTIONARY compression: dictionary encoding, index bit width
+- [x] 7.4 Verify BITPACKING compression: bit width selection, packing order
+- [x] 7.5 Verify PFOR-DELTA compression if used
+- [x] 7.6 Add compression round-trip tests comparing with DuckDB
 
 ## Phase 8: Integration Testing
 
 - [x] 8.1 Create test: dukdb-go creates file → DuckDB CLI runs `SHOW TABLES` → verify output
-- [ ] 8.2 Create test: dukdb-go creates file → DuckDB CLI runs `SELECT *` → verify data
+- [x] 8.2 Create test: dukdb-go creates file → DuckDB CLI runs `SELECT *` → verify data
 - [x] 8.3 Create test: dukdb-go creates file → DuckDB CLI runs `DESCRIBE` → verify schema
-- [ ] 8.4 Create round-trip test: dukdb-go → DuckDB CLI modify → dukdb-go read → verify
+- [x] 8.4 Create round-trip test: dukdb-go → DuckDB CLI modify → dukdb-go read → verify
 - [x] 8.5 Test with various table configurations: single column, many columns, many rows
 
 ## Phase 9: Cleanup and Documentation
 
-- [ ] 9.1 Remove `skipOnFormatError` from all passing write tests
-- [ ] 9.2 Update gap-analysis.md: GAP-001 status to IMPLEMENTED
+- [x] 9.1 Remove `skipOnFormatError` from all passing write tests
+- [x] 9.2 Update gap-analysis.md: GAP-001 status to IMPLEMENTED
 - [ ] 9.3 Document any remaining limitations or version requirements
 - [ ] 9.4 Add CI job for write compatibility testing
 - [ ] 9.5 Update duckdb-storage-format spec with implementation notes

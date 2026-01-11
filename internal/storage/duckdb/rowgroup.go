@@ -69,6 +69,21 @@ type DataPointer struct {
 	// This is populated when the ColumnData has a nested validity child (field 101).
 	// The validity mask indicates which rows are NULL.
 	ValidityPointer *DataPointer
+
+	// ChildPointer points to child column data for complex types (LIST, STRUCT, MAP).
+	// For LIST types: this contains the list element data
+	// For STRUCT types: this contains the first field's data (use ChildPointers for all)
+	// This is populated when the ColumnData has a nested child (field 102).
+	ChildPointer *DataPointer
+
+	// ChildPointers contains all child column data pointers for STRUCT types.
+	// Each element corresponds to a struct field in order.
+	// For LIST/MAP types, this is nil (they use single ChildPointer).
+	ChildPointers []*DataPointer
+
+	// ChildTypeID stores the logical type of child elements for LIST types.
+	// This is needed to properly decode child column values.
+	ChildTypeID LogicalTypeID
 }
 
 // ColumnSegmentState contains segment metadata including validity mask info.

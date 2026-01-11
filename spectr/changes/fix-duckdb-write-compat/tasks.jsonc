@@ -204,73 +204,73 @@
       "id": "6.1",
       "section": "Phase 6: Row Group Format",
       "description": "Verify row group metadata structure: row count, column count, column metadata offsets",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Phase 6: Row Group Format",
       "description": "Verify column segment format: compression type, data offset, data size",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Phase 6: Row Group Format",
       "description": "Verify validity mask encoding for NULL values",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Phase 6: Row Group Format",
       "description": "Verify string heap format for VARCHAR columns",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
       "section": "Phase 6: Row Group Format",
       "description": "Verify dictionary compression format: dictionary + indices",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.6",
       "section": "Phase 6: Row Group Format",
       "description": "Add tests verifying row group bytes match DuckDB reference",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.1",
       "section": "Phase 7: Compression Encoding",
       "description": "Verify CONSTANT compression output format",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Phase 7: Compression Encoding",
       "description": "Verify RLE compression output format",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Phase 7: Compression Encoding",
       "description": "Verify DICTIONARY compression: dictionary encoding, index bit width",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.4",
       "section": "Phase 7: Compression Encoding",
       "description": "Verify BITPACKING compression: bit width selection, packing order",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.5",
       "section": "Phase 7: Compression Encoding",
       "description": "Verify PFOR-DELTA compression if used",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.6",
       "section": "Phase 7: Compression Encoding",
       "description": "Add compression round-trip tests comparing with DuckDB",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.1",
@@ -282,7 +282,7 @@
       "id": "8.2",
       "section": "Phase 8: Integration Testing",
       "description": "Create test: dukdb-go creates file → DuckDB CLI runs `SELECT *` → verify data",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
@@ -294,7 +294,7 @@
       "id": "8.4",
       "section": "Phase 8: Integration Testing",
       "description": "Create round-trip test: dukdb-go → DuckDB CLI modify → dukdb-go read → verify",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.5",
@@ -306,13 +306,13 @@
       "id": "9.1",
       "section": "Phase 9: Cleanup and Documentation",
       "description": "Remove `skipOnFormatError` from all passing write tests",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "Phase 9: Cleanup and Documentation",
       "description": "Update gap-analysis.md: GAP-001 status to IMPLEMENTED",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",

@@ -10,7 +10,7 @@ This document identifies all missing features, contradictory behaviors, and gaps
 
 | Gap ID | Feature | Current Status | Impact |
 |--------|---------|----------------|--------|
-| GAP-001 | Native DuckDB File Format (.duckdb) | NOT IMPLEMENTED | Cannot read/write DuckDB database files |
+| GAP-001 | Native DuckDB File Format (.duckdb) | READ: IMPLEMENTED, WRITE: IN PROGRESS | Can read DuckDB CLI-generated files |
 | GAP-002 | Cost-Based Query Optimization | NOT IMPLEMENTED | Poor query performance for complex queries |
 | GAP-003 | Statistics Collection (ANALYZE) | NOT IMPLEMENTED | No cardinality estimation |
 | GAP-004 | Parallel Query Execution | NOT IMPLEMENTED | Single-threaded execution only |
@@ -146,7 +146,7 @@ This document identifies all missing features, contradictory behaviors, and gaps
 
 | Gap ID | Feature | Status |
 |--------|---------|--------|
-| GAP-FMT-001 | DuckDB native format (.duckdb) | NOT IMPLEMENTED |
+| GAP-FMT-001 | DuckDB native format (.duckdb) | READ: IMPLEMENTED, WRITE: IN PROGRESS |
 | GAP-FMT-002 | CSV read/write | IMPLEMENTED |
 | GAP-FMT-003 | JSON/NDJSON read/write | IMPLEMENTED |
 | GAP-FMT-004 | Parquet read/write | IMPLEMENTED |

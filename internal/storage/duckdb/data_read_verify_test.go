@@ -1395,7 +1395,6 @@ func mustParseTimestampNanos(s string) time.Time {
 // TestReadListValues tests reading LIST column values with various element types.
 // This test verifies LIST(INTEGER) and LIST(VARCHAR) with nested values and empty lists.
 func TestReadListValues(t *testing.T) {
-	t.Skip("Complex types (LIST/STRUCT/MAP) not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with LIST values
@@ -1486,7 +1485,6 @@ func TestReadListValues(t *testing.T) {
 // TestReadStructValues tests reading STRUCT column values with named fields.
 // This test verifies STRUCT with simple fields, nested structs, and NULL handling.
 func TestReadStructValues(t *testing.T) {
-	t.Skip("Complex types (LIST/STRUCT/MAP) not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with STRUCT values
@@ -1581,7 +1579,6 @@ func TestReadStructValues(t *testing.T) {
 // TestReadMapValues tests reading MAP column values with various key/value types.
 // This test verifies MAP(VARCHAR, INTEGER) with multiple entries, empty maps, and NULL.
 func TestReadMapValues(t *testing.T) {
-	t.Skip("Complex types (LIST/STRUCT/MAP) not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with MAP values
@@ -1667,7 +1664,6 @@ func TestReadMapValues(t *testing.T) {
 // TestReadNestedComplexTypes tests reading nested complex types.
 // This test verifies LIST(STRUCT) and MAP(VARCHAR, LIST(INTEGER)).
 func TestReadNestedComplexTypes(t *testing.T) {
-	t.Skip("Complex types (LIST/STRUCT/MAP) not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with nested complex types
@@ -2130,7 +2126,6 @@ func TestReadMixedNullValues(t *testing.T) {
 // This test verifies that NULL elements in LISTs and NULL fields in STRUCTs
 // are correctly handled.
 func TestReadNullInComplexTypes(t *testing.T) {
-	t.Skip("Complex types (LIST/STRUCT/MAP) not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with NULL elements in complex types
@@ -2300,7 +2295,6 @@ func TestReadConstantCompression(t *testing.T) {
 // This test verifies that columns with long runs of repeated values use RLE
 // compression and are correctly decoded.
 func TestReadRLECompression(t *testing.T) {
-	t.Skip("Dictionary compression for VARCHAR not yet implemented (DuckDB auto-uses dictionary for strings)")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with long runs of values:
@@ -2393,7 +2387,7 @@ func TestReadRLECompression(t *testing.T) {
 // compression and are correctly decoded. DuckDB uses dictionary compression
 // for low-cardinality string columns.
 func TestReadDictionaryCompression(t *testing.T) {
-	t.Skip("Dictionary compression for VARCHAR not yet implemented")
+	// Dictionary compression for VARCHAR is now implemented
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with 10000 rows with only 3 distinct values
@@ -2596,7 +2590,6 @@ func TestReadBitpackingCompression(t *testing.T) {
 // TestReadMixedCompression tests reading tables where different columns use different compression.
 // This test verifies that mixed compression algorithms in a single table are correctly handled.
 func TestReadMixedCompression(t *testing.T) {
-	t.Skip("Dictionary compression for VARCHAR not yet implemented (DuckDB auto-uses dictionary for strings)")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with three columns using different compression:
@@ -2698,7 +2691,6 @@ func TestReadMixedCompression(t *testing.T) {
 // Note: We do not test DuckDB's enforcement of NOT NULL (that's DuckDB CLI's job),
 // only that we correctly read the constraint metadata.
 func TestReadNullableVsNonNullableColumn(t *testing.T) {
-	t.Skip("CONSTANT compression with NULLs - validity child metadata parsing not yet implemented")
 	skipIfNoDuckDBCLI(t)
 
 	// Create test file with both nullable and non-nullable columns
@@ -3062,7 +3054,6 @@ func TestReadManyColumns(t *testing.T) {
 // This test verifies empty string, single char, and long string (10KB) byte preservation.
 func TestReadExtremeStringLengths(t *testing.T) {
 	skipIfNoDuckDBCLI(t)
-	t.Skip("Long string decoding causes slice bounds error - not yet implemented")
 
 	// Generate a long string (10KB = 10240 chars)
 	longString := make([]byte, 10240)

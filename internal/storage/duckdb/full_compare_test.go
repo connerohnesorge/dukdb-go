@@ -11,7 +11,7 @@ import (
 
 func TestFullFileCompare(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create Go-generated file
 	goPath := filepath.Join(tmpDir, "go.duckdb")
 	storage, err := CreateDuckDBStorage(goPath, nil)

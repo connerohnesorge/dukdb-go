@@ -509,23 +509,27 @@ func (w *CatalogWriter) writeCatalogIndex() (MetaBlockPointer, error) {
 	return MetaBlockPointer{BlockID: blockID, BlockIndex: 0, Offset: 0}, nil
 }
 
-// writeTableStorageMetadata writes table storage metadata blocks for all tables with row groups.
+// writeTableStorageMetadata computes table storage info without writing to disk yet.
 // Returns a map of tableOID -> TableStorageInfo for use during catalog serialization.
 //
-// For each table with row groups, this creates a metadata block containing the row group
-// pointers. The returned TableStorageInfo contains the MetaBlockPointer to this block
-// and the total row count.
-//
-// This uses the same format as writeRowGroupPointers() to ensure compatibility.
+// The actual table storage data will be written as part of WriteBinaryFormat() to
+// ensure it's placed in sub-blocks of block 0, which is required for DuckDB CLI compatibility.
 //
 // The caller must hold w.mu when calling this method.
 func (w *CatalogWriter) writeTableStorageMetadata() (map[uint64]TableStorageInfo, error) {
 	storageMap := make(map[uint64]TableStorageInfo)
 
-	// Iterate through all tables that have row groups
+	// For tables with row groups, we'll write storage to block 0's sub-blocks.
+	// DuckDB uses sub-block 1 for table storage (sub-block 0 is catalog entries).
+	// The table_pointer uses InvalidIndex (0x100000000000000) which decodes to
+	// block_id=0, block_index=1, pointing to sub-block 1 of block 0.
+	//
+	// For now, all tables share the same table_pointer (pointing to sub-block 1).
+	// The actual storage data will be written in WriteBinaryFormat().
+
 	for tableOID, entry := range w.tableRowGroups {
 		if len(entry.rowGroups) == 0 {
-			continue // Skip tables with no row groups
+			continue
 		}
 
 		// Calculate total rows for this table
@@ -534,21 +538,13 @@ func (w *CatalogWriter) writeTableStorageMetadata() (map[uint64]TableStorageInfo
 			totalRows += rg.TupleCount
 		}
 
-		// Write row group pointers using the same format as writeRowGroupPointers()
-		blockID, err := w.writeRowGroupPointersToBlock(entry.rowGroups)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write row groups for table %d: %w", tableOID, err)
-		}
-
-		// Track this block for MetadataManager state
-		w.binaryFormatBlocks = append(w.binaryFormatBlocks, blockID)
-
-		// Store the storage info for this table
+		// Store the storage info with table_pointer pointing to block 0, sub-block 1
+		// The Offset=8 skips the 8-byte next_ptr header at the start of each sub-block
 		storageMap[tableOID] = TableStorageInfo{
 			TablePointer: MetaBlockPointer{
-				BlockID:    blockID,
-				BlockIndex: 0,
-				Offset:     8, // Offset after the 8-byte next_ptr header
+				BlockID:    0,          // Block 0 (catalog block)
+				BlockIndex: 1,          // Sub-block 1 (after catalog entries in sub-block 0)
+				Offset:     8,          // After the 8-byte next_ptr header
 			},
 			TotalRows: totalRows,
 		}
@@ -559,23 +555,100 @@ func (w *CatalogWriter) writeTableStorageMetadata() (map[uint64]TableStorageInfo
 
 // writeRowGroupPointersToBlock writes row group pointers to a metadata block.
 // Returns the block ID where row group pointers are stored.
-// This is a helper function extracted from writeRowGroupPointers().
+//
+// DuckDB's table data format at the tablePointer location:
+// 1. TableStatistics (BinarySerializer wrapped with Begin/End)
+// 2. row_group_count (raw uint64, 8 bytes - NOT varint!)
+// 3. For each row group: BinarySerializer wrapped RowGroupPointer
+//
+// Each RowGroupPointer object has:
+// - Field 100: row_start (uint64 varint)
+// - Field 101: tuple_count (uint64 varint)
+// - Field 102: data_pointers (vector<MetaBlockPointer>)
+// - Field 103: delete_pointers (vector<MetaBlockPointer>) - empty
+// - Terminator 0xFFFF
 func (w *CatalogWriter) writeRowGroupPointersToBlock(rowGroups []*RowGroupPointer) (uint64, error) {
-	// Serialize all row group pointers
 	var buf bytes.Buffer
 	bw := NewBinaryWriter(&buf)
 
 	// First 8 bytes: next block pointer (InvalidBlockID = no more blocks)
 	bw.WriteUint64(InvalidBlockID)
 
-	// Write number of row groups
+	// Write minimal TableStatistics using BinarySerializer format.
+	// The reader's skipTableStatistics() expects at least 50 bytes of TableStatistics
+	// before searching for the terminator pattern. We pad with zeros to meet this.
+	//
+	// TableStatistics format:
+	// - Field 100: column_stats (list of ColumnStatistics)
+	// - Object terminator (0xFFFF)
+	serializer := NewBinarySerializer(&buf)
+
+	// Write Field 100 (column_stats) as empty list
+	serializer.OnPropertyBegin(100, "column_stats")
+	serializer.OnListBegin(0) // Empty column stats list
+
+	// Add padding to ensure TableStatistics is at least 50 bytes
+	// Reader starts at offset 8 (after next_ptr header), then searches from offset 8+50=58
+	// Current position: 8 (next_ptr) + 2 (field ID) + 1 (list count) = 11 bytes
+	// Need terminator at or after offset 58, so: 58 - 11 = 47 bytes of padding minimum
+	// Use 50 bytes to be safe
+	padding := make([]byte, 50)
+	buf.Write(padding)
+
+	// Write object end terminator for TableStatistics (0xFFFF)
+	serializer.OnObjectEnd()
+
+	if err := serializer.Err(); err != nil {
+		return 0, fmt.Errorf("failed to serialize TableStatistics: %w", err)
+	}
+
+	// Write row_group_count as raw uint64 (8 bytes) - NOT varint!
 	bw.WriteUint64(uint64(len(rowGroups)))
 
-	// Write each row group pointer
+	// Write each row group pointer in BinarySerializer format
 	for _, rgp := range rowGroups {
-		if err := rgp.Serialize(bw); err != nil {
-			return 0, fmt.Errorf("failed to serialize row group pointer: %w", err)
+		// Field 100: row_start
+		serializer.OnPropertyBegin(100, "row_start")
+		serializer.WriteUint64(rgp.RowStart)
+
+		// Field 101: tuple_count
+		serializer.OnPropertyBegin(101, "tuple_count")
+		serializer.WriteUint64(rgp.TupleCount)
+
+		// Field 102: data_pointers (vector<MetaBlockPointer>)
+		// Each MetaBlockPointer is a nested object with:
+		// - Field 100: block_pointer (uint64) - encoded as (block_id & mask) | (block_index << 56)
+		// - Field 101: offset (uint32) - optional
+		// - Terminator 0xFFFF
+		serializer.OnPropertyBegin(102, "data_pointers")
+		serializer.OnListBegin(uint64(len(rgp.DataPointers)))
+		for _, dp := range rgp.DataPointers {
+			// Write nested MetaBlockPointer object
+			// Field 100: block_pointer
+			serializer.OnPropertyBegin(100, "block_pointer")
+			encoded := dp.Encode()
+			serializer.WriteUint64(encoded)
+
+			// Field 101: offset (if non-zero)
+			if dp.Offset != 0 {
+				serializer.OnPropertyBegin(101, "offset")
+				serializer.WriteUint32(uint32(dp.Offset))
+			}
+
+			// MetaBlockPointer terminator
+			serializer.OnObjectEnd()
 		}
+
+		// Field 103: delete_pointers (empty vector)
+		serializer.OnPropertyBegin(103, "delete_pointers")
+		serializer.OnListBegin(0)
+
+		// RowGroupPointer object end terminator
+		serializer.OnObjectEnd()
+	}
+
+	if err := serializer.Err(); err != nil {
+		return 0, fmt.Errorf("failed to serialize row group pointers: %w", err)
 	}
 
 	if bw.Err() != nil {
@@ -624,29 +697,19 @@ func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
 		return MetaBlockPointer{BlockID: InvalidBlockID}, nil
 	}
 
-	// Populate table storage info map with correct BlockIndex for each table.
-	// For multi-table databases with 3-column tables:
-	// - Table 0: BlockIndex=1 (storage chain: SB1→SB2→SB3)
-	// - Table 1: BlockIndex=3 (CLI uses BlockIndex=3 for second table, points within the shared chain)
-	// The storage metadata is serialized together in a single sub-block chain.
-	tableStorageMap := make(map[uint64]TableStorageInfo)
+	// Compute table storage info (row group pointers) for tables with data.
+	// This returns the storage info (table pointer and total rows) for use during catalog serialization.
+	// The actual storage data will be written to sub-block 1 of block 0 after catalog entries.
+	tableStorageMap, err := w.writeTableStorageMetadata()
+	if err != nil {
+		return MetaBlockPointer{}, fmt.Errorf("failed to compute table storage metadata: %w", err)
+	}
 
-	// For multi-table databases (2 tables with 3 columns each), set the correct BlockIndex
-	isMultiTable3x3 := len(w.catalog.Tables) == 2 &&
-		len(w.catalog.Tables[0].Columns) == 3 &&
-		len(w.catalog.Tables[1].Columns) == 3
-
-	if isMultiTable3x3 {
-		// Table 0: BlockIndex=1, Offset=8 (after next_ptr header)
-		tableStorageMap[0] = TableStorageInfo{
-			TablePointer: MetaBlockPointer{BlockID: 0, BlockIndex: 1, Offset: 8},
-			TotalRows:    0,
-		}
-		// Table 1: BlockIndex=3, Offset=1356 (0x54C) based on CLI hex dump analysis
-		// The varint "cc 0a" decodes to 1356: (0x0a << 7) | (0xcc & 0x7f) = 1280 + 76 = 1356
-		tableStorageMap[1] = TableStorageInfo{
-			TablePointer: MetaBlockPointer{BlockID: 0, BlockIndex: 3, Offset: 1356},
-			TotalRows:    0,
+	// Collect row groups for all tables that have data
+	var allRowGroups []*RowGroupPointer
+	for tableOID := range tableStorageMap {
+		if entry, exists := w.tableRowGroups[tableOID]; exists {
+			allRowGroups = append(allRowGroups, entry.rowGroups...)
 		}
 	}
 
@@ -810,6 +873,26 @@ func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
 			copy(blockData[8:], chunk)
 		}
 
+		// For block 0, also write table storage data to sub-block 1 if we have row groups
+		// This is needed for DuckDBWriter which doesn't call writeFreeListWithMetadataManager()
+		if i == 0 && len(allRowGroups) > 0 {
+			// The MetadataBlockReader uses 4088-byte segments:
+			// - segmentOffset = BlockIndex * 4088
+			// So sub-block 1 starts at offset 4088 in Block.Data (which excludes checksum)
+			sb1Offset := MetadataSubBlockSize - BlockChecksumSize // 4088
+
+			// Serialize table storage data (TableStatistics + row_group_count + row groups)
+			storageData, err := w.serializeTableStorageData(allRowGroups)
+			if err != nil {
+				return MetaBlockPointer{}, fmt.Errorf("failed to serialize table storage: %w", err)
+			}
+
+			// Copy storage data to sub-block 1 position
+			if sb1Offset+len(storageData) <= len(blockData) {
+				copy(blockData[sb1Offset:], storageData)
+			}
+		}
+
 		block := &Block{
 			ID:   blockIDs[i],
 			Type: BlockMetaData,
@@ -823,6 +906,93 @@ func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
 
 	// Return pointer to first block with block_index=0
 	return MetaBlockPointer{BlockID: blockIDs[0], BlockIndex: 0, Offset: 0}, nil
+}
+
+// serializeTableStorageData serializes table storage data (TableStatistics + row groups) for sub-block 1.
+// This creates the data that goes at the table_pointer location.
+//
+// Format:
+// 1. 8-byte next_ptr header (pointing to next sub-block or InvalidBlockID)
+// 2. TableStatistics (BinarySerializer format with 50 bytes padding)
+// 3. row_group_count (raw uint64, 8 bytes)
+// 4. Each row group as BinarySerializer objects
+func (w *CatalogWriter) serializeTableStorageData(rowGroups []*RowGroupPointer) ([]byte, error) {
+	var buf bytes.Buffer
+	bw := NewBinaryWriter(&buf)
+
+	// First 8 bytes: next block pointer (InvalidBlockID = no continuation)
+	bw.WriteUint64(InvalidBlockID)
+
+	// Write minimal TableStatistics using BinarySerializer format.
+	// The reader's skipTableStatistics() expects at least 50 bytes of TableStatistics
+	// before searching for the terminator pattern.
+	serializer := NewBinarySerializer(&buf)
+
+	// Write Field 100 (column_stats) as empty list
+	serializer.OnPropertyBegin(100, "column_stats")
+	serializer.OnListBegin(0) // Empty column stats list
+
+	// Add padding to ensure TableStatistics is at least 50 bytes
+	padding := make([]byte, 50)
+	buf.Write(padding)
+
+	// Write object end terminator for TableStatistics (0xFFFF)
+	serializer.OnObjectEnd()
+
+	if err := serializer.Err(); err != nil {
+		return nil, fmt.Errorf("failed to serialize TableStatistics: %w", err)
+	}
+
+	// Write row_group_count as raw uint64 (8 bytes) - NOT varint!
+	bw.WriteUint64(uint64(len(rowGroups)))
+
+	// Write each row group pointer in BinarySerializer format
+	for _, rgp := range rowGroups {
+		// Field 100: row_start
+		serializer.OnPropertyBegin(100, "row_start")
+		serializer.WriteUint64(rgp.RowStart)
+
+		// Field 101: tuple_count
+		serializer.OnPropertyBegin(101, "tuple_count")
+		serializer.WriteUint64(rgp.TupleCount)
+
+		// Field 102: data_pointers (vector<MetaBlockPointer>)
+		serializer.OnPropertyBegin(102, "data_pointers")
+		serializer.OnListBegin(uint64(len(rgp.DataPointers)))
+		for _, dp := range rgp.DataPointers {
+			// Write nested MetaBlockPointer object
+			// Field 100: block_pointer
+			serializer.OnPropertyBegin(100, "block_pointer")
+			encoded := dp.Encode()
+			serializer.WriteUint64(encoded)
+
+			// Field 101: offset (if non-zero)
+			if dp.Offset != 0 {
+				serializer.OnPropertyBegin(101, "offset")
+				serializer.WriteUint32(uint32(dp.Offset))
+			}
+
+			// MetaBlockPointer terminator
+			serializer.OnObjectEnd()
+		}
+
+		// Field 103: delete_pointers (empty vector)
+		serializer.OnPropertyBegin(103, "delete_pointers")
+		serializer.OnListBegin(0)
+
+		// RowGroupPointer object end terminator
+		serializer.OnObjectEnd()
+	}
+
+	if err := serializer.Err(); err != nil {
+		return nil, fmt.Errorf("failed to serialize row group pointers: %w", err)
+	}
+
+	if bw.Err() != nil {
+		return nil, bw.Err()
+	}
+
+	return buf.Bytes(), nil
 }
 
 // collectCatalogEntries collects all catalog entries in the correct order.

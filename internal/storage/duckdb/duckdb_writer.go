@@ -606,6 +606,7 @@ func (w *DuckDBWriter) checkpointLocked() error {
 
 	// 2. Write catalog with row group pointers
 	catalogWriter := NewCatalogWriter(w.blockManager, w.catalog)
+	catalogWriter.SetDuckDBCompatMode(true) // Enable BinarySerializer for DuckDB CLI compatibility
 	for tableOID, rgps := range w.tableRowGroups {
 		for _, rgp := range rgps {
 			if err := catalogWriter.AddRowGroupPointer(tableOID, rgp); err != nil {

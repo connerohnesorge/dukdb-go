@@ -39,19 +39,32 @@ func VarIntEncode(w io.Writer, value uint64) error {
 
 // VarIntDecode decodes a variable-length encoded unsigned integer.
 // This matches DuckDB's BinarySerializer::VarIntDecode format (LEB128).
+//
+// IMPORTANT: DuckDB's decoder does NOT enforce a 10-byte limit. It continues
+// reading until it finds a byte without the continuation bit (< 0x80).
+// When shifts exceed 63 bits, the bits are simply lost (they don't fit in uint64).
+// This is necessary for compatibility with DuckDB files that may have extra
+// continuation bytes embedded (e.g., from sub-block next-pointers).
 func VarIntDecode(r io.Reader) (uint64, error) {
 	var result uint64
 	var shift uint
 	buf := make([]byte, 1)
 
 	for {
-		if _, err := r.Read(buf); err != nil {
+		n, err := r.Read(buf)
+		if err != nil {
 			return 0, err
+		}
+		if n == 0 {
+			return 0, io.ErrUnexpectedEOF
 		}
 		b := buf[0]
 
-		// Add the lower 7 bits to the result
-		result |= uint64(b&varIntDataMask) << shift
+		// Add the lower 7 bits to the result (only if shift < 64)
+		if shift < 64 {
+			result |= uint64(b&varIntDataMask) << shift
+		}
+		// Bits shifted beyond 63 are silently discarded (matches DuckDB behavior)
 
 		// If MSB is 0, this is the last byte
 		if b&varIntContinuationMask == 0 {
@@ -59,11 +72,6 @@ func VarIntDecode(r io.Reader) (uint64, error) {
 		}
 
 		shift += varIntBitsPerByte
-
-		// Protect against overflow (max 10 bytes for uint64)
-		if shift >= varIntMaxShift {
-			return 0, io.ErrUnexpectedEOF
-		}
 	}
 
 	return result, nil
