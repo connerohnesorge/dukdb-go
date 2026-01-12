@@ -368,6 +368,8 @@ func (e *Executor) executeWithContext(
 		return e.executeAnalyze(execCtx, p)
 	case *planner.PhysicalCheckpoint:
 		return e.executeCheckpoint(execCtx, p)
+	case *planner.PhysicalIcebergScan:
+		return e.executePhysicalIcebergScan(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

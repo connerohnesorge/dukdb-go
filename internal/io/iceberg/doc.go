@@ -49,6 +49,7 @@
 //   - [SchemaMapper]: Maps Iceberg types to DuckDB types
 //   - [SnapshotSelector]: Handles time travel snapshot selection
 //   - [PartitionSpec]: Evaluates partition transforms
+//   - [RESTCatalog]: REST catalog client with OAuth2 support
 //
 // # Usage Patterns
 //
@@ -138,6 +139,41 @@
 //	fmt.Printf("Rows after pruning: %d\n", plan.EstimatedRowCount)
 //	fmt.Printf("Data files to read: %d\n", len(plan.DataFiles))
 //
+// ## REST Catalog
+//
+// Use [RESTCatalog] to access tables via the Iceberg REST catalog API:
+//
+//	// With OAuth2 client credentials
+//	catalog, err := iceberg.NewRESTCatalog(ctx, &iceberg.RESTCatalogOptions{
+//	    URI:        "https://catalog.example.com",
+//	    Credential: "client_id:client_secret",
+//	    Scope:      "catalog",
+//	})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer catalog.Close()
+//
+//	// List namespaces
+//	namespaces, err := catalog.ListNamespaces(ctx, nil)
+//
+//	// List tables in a namespace
+//	tables, err := catalog.ListTables(ctx, []string{"production"})
+//
+//	// Load table metadata
+//	table, err := catalog.LoadTable(ctx, []string{"production"}, "events")
+//
+// With a pre-existing bearer token:
+//
+//	catalog, err := iceberg.NewRESTCatalog(ctx, &iceberg.RESTCatalogOptions{
+//	    URI:   "https://catalog.example.com",
+//	    Token: "your-bearer-token",
+//	})
+//
+// You can also parse catalog URIs in the format "iceberg://host/namespace/table":
+//
+//	catalogURI, namespace, table, err := iceberg.ParseCatalogURI("iceberg://catalog.example.com/prod/events")
+//
 // # Type Mapping
 //
 // Iceberg types are mapped to DuckDB types as follows:
@@ -199,15 +235,14 @@
 //   - Column projection
 //   - Schema evolution (read compatibility)
 //   - Local and cloud storage (S3, GCS, Azure via filesystem abstraction)
+//   - REST catalog with OAuth2 authentication
 //
 // # Limitations
 //
 // Current limitations (may be addressed in future versions):
 //
-//   - Delete files (positional and equality) not yet supported
 //   - ORC and AVRO data files not supported (Parquet only)
 //   - Write operations not supported (read-only)
-//   - REST catalog not yet integrated
 //   - Iceberg format v3 not supported
 //
 // # Performance Considerations

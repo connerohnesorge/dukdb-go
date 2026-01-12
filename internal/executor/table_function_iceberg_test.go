@@ -432,6 +432,130 @@ func TestSnapshotSummaryHelpers(t *testing.T) {
 	})
 }
 
+// TestDuckDBIcebergTables tests the duckdb_iceberg_tables table function.
+func TestDuckDBIcebergTables(t *testing.T) {
+	testdataPath := getTestIcebergTestDataPath(t)
+	if testdataPath == "" {
+		t.Skip("No Iceberg testdata directory available - run generate_fixtures.py to create")
+	}
+
+	// Update metadata locations for all test tables
+	for _, tableName := range []string{"simple_table", "time_travel_table", "positional_deletes_table", "equality_deletes_table"} {
+		tablePath := filepath.Join(testdataPath, tableName)
+		if _, err := os.Stat(tablePath); err == nil {
+			updateIcebergMetadataLocations(t, tablePath)
+		}
+	}
+
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	t.Run("discover all tables in directory", func(t *testing.T) {
+		sql := `SELECT * FROM duckdb_iceberg_tables('` + testdataPath + `')`
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err)
+
+		b := binder.NewBinder(cat)
+		bound, err := b.Bind(stmt)
+		require.NoError(t, err)
+
+		p := planner.NewPlanner(cat)
+		plan, err := p.Plan(bound)
+		require.NoError(t, err)
+
+		result, err := exec.Execute(context.Background(), plan, nil)
+		require.NoError(t, err)
+
+		// Verify expected columns
+		expectedColumns := []string{
+			"table_name",
+			"table_location",
+			"current_snapshot_id",
+			"last_updated_ms",
+			"format_version",
+			"partition_columns",
+		}
+		assert.Equal(t, expectedColumns, result.Columns, "Should have expected columns")
+
+		// Verify we found at least one table
+		assert.GreaterOrEqual(t, len(result.Rows), 1, "Should discover at least one Iceberg table")
+
+		// Check that we found simple_table
+		foundSimple := false
+		for _, row := range result.Rows {
+			tableName, ok := row["table_name"].(string)
+			if ok && tableName == "simple_table" {
+				foundSimple = true
+
+				// Verify other fields
+				tableLocation, ok := row["table_location"].(string)
+				assert.True(t, ok, "table_location should be string")
+				assert.Contains(t, tableLocation, "simple_table")
+
+				// format_version should be 1 or 2
+				formatVersion, ok := row["format_version"].(int32)
+				assert.True(t, ok, "format_version should be int32")
+				assert.True(t, formatVersion == 1 || formatVersion == 2, "format_version should be 1 or 2")
+
+				break
+			}
+		}
+		assert.True(t, foundSimple, "Should find simple_table in the discovered tables")
+	})
+
+	t.Run("discover single table", func(t *testing.T) {
+		simpleTablePath := filepath.Join(testdataPath, "simple_table")
+		sql := `SELECT * FROM duckdb_iceberg_tables('` + simpleTablePath + `')`
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err)
+
+		b := binder.NewBinder(cat)
+		bound, err := b.Bind(stmt)
+		require.NoError(t, err)
+
+		p := planner.NewPlanner(cat)
+		plan, err := p.Plan(bound)
+		require.NoError(t, err)
+
+		result, err := exec.Execute(context.Background(), plan, nil)
+		require.NoError(t, err)
+
+		// When pointing directly at a table, should return 1 result
+		assert.Equal(t, 1, len(result.Rows), "Should find exactly one table when pointing to table root")
+
+		row := result.Rows[0]
+		tableName := row["table_name"].(string)
+		assert.Equal(t, "simple_table", tableName)
+	})
+}
+
+// getTestIcebergTestDataPath returns the path to the testdata directory.
+// Returns empty string if no test data is available.
+func getTestIcebergTestDataPath(t *testing.T) string {
+	t.Helper()
+
+	// Get the path relative to this test file
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+
+	// Navigate from internal/executor to internal/io/iceberg/testdata
+	testdataPath := filepath.Join(filepath.Dir(currentFile), "..", "io", "iceberg", "testdata")
+	absPath, err := filepath.Abs(testdataPath)
+	if err != nil {
+		return ""
+	}
+
+	// Check if the directory exists
+	if _, err := os.Stat(absPath); err == nil {
+		return absPath
+	}
+
+	return ""
+}
+
 // getTestIcebergTablePath returns the path to the simple_table test fixture.
 // Returns empty string if no test table is available.
 func getTestIcebergTablePath(t *testing.T) string {

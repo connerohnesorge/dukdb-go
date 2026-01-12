@@ -1122,3 +1122,82 @@ func (*LogicalCheckpoint) logicalPlanNode() {}
 func (*LogicalCheckpoint) Children() []LogicalPlan { return nil }
 
 func (*LogicalCheckpoint) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Iceberg Logical Plan Nodes ----------
+
+// TimeTravelType indicates the type of time travel clause.
+type TimeTravelType int
+
+const (
+	// TimeTravelNone indicates no time travel.
+	TimeTravelNone TimeTravelType = iota
+	// TimeTravelSnapshot indicates time travel by snapshot ID.
+	TimeTravelSnapshot
+	// TimeTravelTimestamp indicates time travel by timestamp.
+	TimeTravelTimestamp
+	// TimeTravelBranch indicates time travel by branch name.
+	TimeTravelBranch
+	// TimeTravelVersion indicates time travel by metadata version.
+	TimeTravelVersion
+)
+
+// TimeTravelClause represents a time travel specification for Iceberg tables.
+type TimeTravelClause struct {
+	// Type indicates the type of time travel.
+	Type TimeTravelType
+	// SnapshotID is the snapshot ID for TimeTravelSnapshot.
+	SnapshotID *int64
+	// Timestamp is the timestamp (milliseconds since epoch) for TimeTravelTimestamp.
+	Timestamp *int64
+	// BranchName is the branch name for TimeTravelBranch.
+	BranchName string
+	// Version is the metadata version for TimeTravelVersion.
+	Version int
+}
+
+// LogicalIcebergScan represents a scan of an Apache Iceberg table.
+// It supports time travel, partition pruning, and column projection.
+type LogicalIcebergScan struct {
+	// TablePath is the path to the Iceberg table location.
+	TablePath string
+	// Alias is the table alias for column reference qualification.
+	Alias string
+	// Columns contains the columns to project (nil = all columns).
+	Columns []string
+	// Filter contains the filter predicate for partition pruning.
+	// This is pushed down to the Iceberg scan planner for partition pruning.
+	Filter binder.BoundExpr
+	// TimeTravel contains the time travel specification (nil = current snapshot).
+	TimeTravel *TimeTravelClause
+	// Options contains additional options for the Iceberg reader.
+	Options map[string]any
+	// columns caches the output column bindings.
+	columns []ColumnBinding
+	// ColumnTypes contains the types for each column (populated during planning).
+	ColumnTypes []dukdb.Type
+}
+
+func (*LogicalIcebergScan) logicalPlanNode() {}
+
+func (*LogicalIcebergScan) Children() []LogicalPlan { return nil }
+
+func (s *LogicalIcebergScan) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+
+	// Build column bindings from column names and types
+	if len(s.Columns) > 0 && len(s.ColumnTypes) == len(s.Columns) {
+		s.columns = make([]ColumnBinding, len(s.Columns))
+		for i, colName := range s.Columns {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    colName,
+				Type:      s.ColumnTypes[i],
+				ColumnIdx: i,
+			}
+		}
+	}
+
+	return s.columns
+}

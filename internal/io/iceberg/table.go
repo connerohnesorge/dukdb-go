@@ -18,11 +18,24 @@ type TableOptions struct {
 	// AsOfTimestamp specifies a timestamp to use for time travel (nil for current).
 	AsOfTimestamp *time.Time
 	// AllowMovedPaths allows reading tables that have been moved.
+	// When true, file paths in metadata are rewritten relative to the
+	// current table location instead of using absolute paths.
 	AllowMovedPaths bool
 	// MetadataCompressionCodec specifies the compression codec for metadata files.
+	// Supported values: "gzip", "zstd", "none" (or empty for auto-detection).
 	MetadataCompressionCodec string
 	// Filesystem specifies the filesystem to use (nil for auto-detection).
 	Filesystem filesystem.FileSystem
+	// Version specifies an explicit metadata version number to use.
+	// If set to a positive value, the reader will look for v{Version}.metadata.json.
+	// If 0 (default), the reader uses version-hint.text or scans for latest.
+	Version int
+	// UnsafeEnableVersionGuessing enables automatic version guessing when
+	// version-hint.text is missing. When enabled, the reader scans the
+	// metadata directory to find the highest version number.
+	// This is marked as "unsafe" because it may select an incomplete or
+	// corrupt metadata version if a write was interrupted.
+	UnsafeEnableVersionGuessing bool
 }
 
 // DefaultTableOptions returns the default table options.
@@ -63,8 +76,14 @@ func OpenTable(ctx context.Context, location string, opts *TableOptions) (*Table
 		fs = filesystem.NewLocalFileSystem("")
 	}
 
-	// Create metadata reader and read metadata
-	metadataReader := NewMetadataReader(fs)
+	// Create metadata reader with options
+	metadataOpts := MetadataReaderOptions{
+		Version:                     opts.Version,
+		AllowMovedPaths:             opts.AllowMovedPaths,
+		MetadataCompressionCodec:    opts.MetadataCompressionCodec,
+		UnsafeEnableVersionGuessing: opts.UnsafeEnableVersionGuessing,
+	}
+	metadataReader := NewMetadataReaderWithOptions(fs, metadataOpts)
 	metadata, err := metadataReader.ReadMetadata(ctx, location)
 	if err != nil {
 		return nil, err
@@ -109,8 +128,14 @@ func OpenTableFromMetadata(ctx context.Context, metadataPath string, opts *Table
 		fs = filesystem.NewLocalFileSystem("")
 	}
 
-	// Read metadata from specific path
-	metadataReader := NewMetadataReader(fs)
+	// Create metadata reader with options
+	metadataOpts := MetadataReaderOptions{
+		Version:                     opts.Version,
+		AllowMovedPaths:             opts.AllowMovedPaths,
+		MetadataCompressionCodec:    opts.MetadataCompressionCodec,
+		UnsafeEnableVersionGuessing: opts.UnsafeEnableVersionGuessing,
+	}
+	metadataReader := NewMetadataReaderWithOptions(fs, metadataOpts)
 	metadata, err := metadataReader.ReadMetadataFromPath(ctx, metadataPath)
 	if err != nil {
 		return nil, err

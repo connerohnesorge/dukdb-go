@@ -48,6 +48,8 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeIcebergMetadata(ctx, plan)
 	case "iceberg_snapshots":
 		return e.executeIcebergSnapshots(ctx, plan)
+	case "duckdb_iceberg_tables":
+		return e.executeIcebergTables(ctx, plan)
 	// Secret system functions
 	case "which_secret":
 		return e.executeWhichSecret(ctx, plan)

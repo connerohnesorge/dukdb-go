@@ -2417,3 +2417,426 @@ func TestParseBeginIsolationLevel(t *testing.T) {
 		})
 	}
 }
+
+// ---------- Time Travel Syntax Parser Tests ----------
+
+// TestParseTimeTravelBasic tests basic parsing success for time travel syntax
+func TestParseTimeTravelBasic(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+	}{
+		{
+			name:    "AS OF TIMESTAMP with string literal",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AS OF TIMESTAMP '2024-01-15 10:00:00'",
+			wantErr: false,
+		},
+		{
+			name:    "AS OF SNAPSHOT with integer",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AS OF SNAPSHOT 1234567890",
+			wantErr: false,
+		},
+		{
+			name:    "AS OF BRANCH with unquoted identifier",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AS OF BRANCH main",
+			wantErr: false,
+		},
+		{
+			name:    "AS OF BRANCH with quoted string",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AS OF BRANCH 'feature-branch'",
+			wantErr: false,
+		},
+		{
+			name:    "AT VERSION syntax",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AT (VERSION => 3)",
+			wantErr: false,
+		},
+		{
+			name:    "time travel with alias after",
+			sql:     "SELECT * FROM iceberg_scan('path/to/table') AS OF TIMESTAMP '2024-01-15' AS t",
+			wantErr: false,
+		},
+		{
+			name:    "time travel with WHERE clause",
+			sql:     "SELECT * FROM iceberg_scan('path') AS OF SNAPSHOT 123 WHERE id > 10",
+			wantErr: false,
+		},
+		{
+			name:    "time travel with ORDER BY and LIMIT",
+			sql:     "SELECT * FROM iceberg_scan('path') AS OF TIMESTAMP '2024-01-01' ORDER BY id LIMIT 10",
+			wantErr: false,
+		},
+		{
+			name:    "time travel with regular table",
+			sql:     "SELECT * FROM my_table AS OF TIMESTAMP '2024-01-15 10:00:00'",
+			wantErr: false,
+		},
+		{
+			name:    "time travel lowercase keywords",
+			sql:     "SELECT * FROM iceberg_scan('path') as of timestamp '2024-01-15'",
+			wantErr: false,
+		},
+		{
+			name:    "time travel mixed case",
+			sql:     "SELECT * FROM iceberg_scan('path') As Of Snapshot 123",
+			wantErr: false,
+		},
+		{
+			name:    "AT VERSION lowercase",
+			sql:     "SELECT * FROM iceberg_scan('path') at (version => 5)",
+			wantErr: false,
+		},
+		// Error cases
+		{
+			name:    "AS OF without type keyword",
+			sql:     "SELECT * FROM iceberg_scan('path') AS OF '2024-01-15'",
+			wantErr: true,
+		},
+		{
+			name:    "AS OF with invalid type",
+			sql:     "SELECT * FROM iceberg_scan('path') AS OF DATE '2024-01-15'",
+			wantErr: true,
+		},
+		{
+			name:    "AT without VERSION",
+			sql:     "SELECT * FROM iceberg_scan('path') AT (SNAPSHOT => 123)",
+			wantErr: true,
+		},
+		{
+			name:    "AT VERSION without =>",
+			sql:     "SELECT * FROM iceberg_scan('path') AT (VERSION 3)",
+			wantErr: true,
+		},
+		{
+			name:    "AT VERSION missing closing paren",
+			sql:     "SELECT * FROM iceberg_scan('path') AT (VERSION => 3",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && stmt == nil {
+				t.Error("Parse() returned nil statement")
+			}
+		})
+	}
+}
+
+// TestParseTimeTravelAST tests that AST nodes are correctly populated for time travel
+func TestParseTimeTravelAST(t *testing.T) {
+	t.Run("AS OF TIMESTAMP AST", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path/to/table') AS OF TIMESTAMP '2024-01-15 10:00:00'"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		if selectStmt.From == nil || len(selectStmt.From.Tables) != 1 {
+			t.Fatal("Expected 1 table in FROM clause")
+		}
+
+		tableRef := selectStmt.From.Tables[0]
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelTimestamp {
+			t.Errorf("Expected TimeTravelTimestamp, got %v", tableRef.TimeTravel.Type)
+		}
+
+		lit, ok := tableRef.TimeTravel.Value.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal value, got %T", tableRef.TimeTravel.Value)
+		}
+		if lit.Value != "2024-01-15 10:00:00" {
+			t.Errorf("Expected timestamp '2024-01-15 10:00:00', got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("AS OF SNAPSHOT AST", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path/to/table') AS OF SNAPSHOT 1234567890"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelSnapshot {
+			t.Errorf("Expected TimeTravelSnapshot, got %v", tableRef.TimeTravel.Type)
+		}
+
+		lit, ok := tableRef.TimeTravel.Value.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal value, got %T", tableRef.TimeTravel.Value)
+		}
+		if lit.Value != int64(1234567890) {
+			t.Errorf("Expected snapshot ID 1234567890, got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("AS OF BRANCH unquoted AST", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path/to/table') AS OF BRANCH main"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelBranch {
+			t.Errorf("Expected TimeTravelBranch, got %v", tableRef.TimeTravel.Type)
+		}
+
+		lit, ok := tableRef.TimeTravel.Value.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal value, got %T", tableRef.TimeTravel.Value)
+		}
+		if lit.Value != "main" {
+			t.Errorf("Expected branch 'main', got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("AS OF BRANCH quoted AST", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path/to/table') AS OF BRANCH 'feature-branch'"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelBranch {
+			t.Errorf("Expected TimeTravelBranch, got %v", tableRef.TimeTravel.Type)
+		}
+
+		lit, ok := tableRef.TimeTravel.Value.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal value, got %T", tableRef.TimeTravel.Value)
+		}
+		if lit.Value != "feature-branch" {
+			t.Errorf("Expected branch 'feature-branch', got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("AT VERSION AST", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path/to/table') AT (VERSION => 3)"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelVersion {
+			t.Errorf("Expected TimeTravelVersion, got %v", tableRef.TimeTravel.Type)
+		}
+
+		lit, ok := tableRef.TimeTravel.Value.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal value, got %T", tableRef.TimeTravel.Value)
+		}
+		if lit.Value != int64(3) {
+			t.Errorf("Expected version 3, got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("time travel with alias", func(t *testing.T) {
+		sql := "SELECT t.* FROM iceberg_scan('path') AS OF TIMESTAMP '2024-01-15' AS t"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.Alias != "t" {
+			t.Errorf("Expected alias 't', got '%s'", tableRef.Alias)
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelTimestamp {
+			t.Errorf("Expected TimeTravelTimestamp, got %v", tableRef.TimeTravel.Type)
+		}
+	})
+
+	t.Run("time travel with table function options", func(t *testing.T) {
+		sql := "SELECT * FROM iceberg_scan('path', allow_moved_paths=true) AS OF SNAPSHOT 123"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+
+		if tableRef.TableFunction == nil {
+			t.Fatal("Expected TableFunction in TableRef")
+		}
+
+		if tableRef.TimeTravel == nil {
+			t.Fatal("Expected TimeTravel clause in TableRef")
+		}
+
+		if tableRef.TimeTravel.Type != TimeTravelSnapshot {
+			t.Errorf("Expected TimeTravelSnapshot, got %v", tableRef.TimeTravel.Type)
+		}
+	})
+}
+
+// TestParseTimeTravelTypeString tests the String() method of TimeTravelType
+func TestParseTimeTravelTypeString(t *testing.T) {
+	tests := []struct {
+		typ      TimeTravelType
+		expected string
+	}{
+		{TimeTravelTimestamp, "TIMESTAMP"},
+		{TimeTravelSnapshot, "SNAPSHOT"},
+		{TimeTravelBranch, "BRANCH"},
+		{TimeTravelVersion, "VERSION"},
+		{TimeTravelType(99), "UNKNOWN"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			if got := tt.typ.String(); got != tt.expected {
+				t.Errorf("TimeTravelType.String() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTableExtractorTimeTravel tests that TableExtractor correctly extracts table names
+// from queries with time travel clauses
+func TestTableExtractorTimeTravel(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected []string
+	}{
+		{
+			name:     "iceberg_scan with time travel",
+			sql:      "SELECT * FROM iceberg_scan('path') AS OF TIMESTAMP '2024-01-15'",
+			expected: []string{"iceberg_scan"},
+		},
+		{
+			name:     "regular table with time travel",
+			sql:      "SELECT * FROM my_table AS OF SNAPSHOT 123",
+			expected: []string{"my_table"},
+		},
+		{
+			name:     "multiple tables with time travel",
+			sql:      "SELECT * FROM t1 AS OF TIMESTAMP '2024-01-15' JOIN t2 AS OF SNAPSHOT 123 ON t1.id = t2.id",
+			expected: []string{"t1", "t2"},
+		},
+		{
+			name:     "time travel with AT VERSION",
+			sql:      "SELECT * FROM iceberg_scan('path') AT (VERSION => 5)",
+			expected: []string{"iceberg_scan"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			extractor := NewTableExtractor(false)
+			selectStmt.Accept(extractor)
+			tables := extractor.GetTables()
+
+			if len(tables) != len(tt.expected) {
+				t.Errorf("Got %d tables %v, expected %d tables %v",
+					len(tables), tables, len(tt.expected), tt.expected)
+				return
+			}
+
+			for i, expected := range tt.expected {
+				if tables[i] != expected {
+					t.Errorf("Table %d: got %s, expected %s", i, tables[i], expected)
+				}
+			}
+		})
+	}
+}
+
+// TestCountParametersTimeTravel tests parameter counting in time travel queries
+func TestCountParametersTimeTravel(t *testing.T) {
+	tests := []struct {
+		name  string
+		sql   string
+		count int
+	}{
+		{
+			name:  "no parameters in time travel query",
+			sql:   "SELECT * FROM iceberg_scan('path') AS OF TIMESTAMP '2024-01-15'",
+			count: 0,
+		},
+		{
+			name:  "parameters in WHERE clause with time travel",
+			sql:   "SELECT * FROM iceberg_scan('path') AS OF SNAPSHOT 123 WHERE id = $1",
+			count: 1,
+		},
+		{
+			name:  "multiple parameters with time travel",
+			sql:   "SELECT * FROM iceberg_scan('path') AS OF TIMESTAMP '2024-01-15' WHERE x = $1 AND y = $2",
+			count: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			count := CountParameters(stmt)
+			if count != tt.count {
+				t.Errorf("CountParameters() = %v, want %v", count, tt.count)
+			}
+		})
+	}
+}

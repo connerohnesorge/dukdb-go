@@ -579,6 +579,22 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		return newRef, nil
 	}
 
+	// Check for time travel clause (AS OF ... or AT (...))
+	// This comes before the alias parsing since AS OF is different from AS alias
+	if p.isKeyword("AS") && p.peek().typ == tokenIdent && strings.EqualFold(p.peek().value, "OF") {
+		timeTravel, err := p.parseTimeTravelClause()
+		if err != nil {
+			return ref, err
+		}
+		ref.TimeTravel = timeTravel
+	} else if p.isKeyword("AT") {
+		timeTravel, err := p.parseTimeTravelAtClause()
+		if err != nil {
+			return ref, err
+		}
+		ref.TimeTravel = timeTravel
+	}
+
 	// Alias
 	if p.isKeyword("AS") {
 		p.advance()
@@ -594,11 +610,130 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
-		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") {
+		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
 		ref.Alias = p.advance().value
 	}
 
 	return ref, nil
+}
+
+// parseTimeTravelClause parses AS OF TIMESTAMP/SNAPSHOT/BRANCH syntax.
+// Syntax:
+//   - AS OF TIMESTAMP '2024-01-15 10:00:00'
+//   - AS OF SNAPSHOT 1234567890
+//   - AS OF BRANCH main
+func (p *parser) parseTimeTravelClause() (*TimeTravelClause, error) {
+	// Consume AS
+	if err := p.expectKeyword("AS"); err != nil {
+		return nil, err
+	}
+
+	// Consume OF
+	if err := p.expectKeyword("OF"); err != nil {
+		return nil, err
+	}
+
+	clause := &TimeTravelClause{}
+
+	// Determine the type: TIMESTAMP, SNAPSHOT, or BRANCH
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected TIMESTAMP, SNAPSHOT, or BRANCH after AS OF")
+	}
+
+	typeKeyword := strings.ToUpper(p.current().value)
+	switch typeKeyword {
+	case "TIMESTAMP":
+		p.advance()
+		clause.Type = TimeTravelTimestamp
+		// Parse the timestamp value (should be a string literal)
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		clause.Value = value
+
+	case "SNAPSHOT":
+		p.advance()
+		clause.Type = TimeTravelSnapshot
+		// Parse the snapshot ID (should be a numeric literal)
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		clause.Value = value
+
+	case "BRANCH":
+		p.advance()
+		clause.Type = TimeTravelBranch
+		// Parse the branch name (should be an identifier or string)
+		if p.current().typ == tokenString {
+			// Quoted branch name
+			value := p.advance().value
+			// Remove quotes
+			if len(value) >= 2 && (value[0] == '\'' || value[0] == '"') {
+				value = value[1 : len(value)-1]
+			}
+			clause.Value = &Literal{Value: value}
+		} else if p.current().typ == tokenIdent {
+			// Unquoted branch name
+			clause.Value = &Literal{Value: p.advance().value}
+		} else {
+			return nil, p.errorf("expected branch name after AS OF BRANCH")
+		}
+
+	default:
+		return nil, p.errorf("expected TIMESTAMP, SNAPSHOT, or BRANCH after AS OF, got %s", typeKeyword)
+	}
+
+	return clause, nil
+}
+
+// parseTimeTravelAtClause parses AT (VERSION => N) syntax.
+// Syntax: AT (VERSION => 3)
+func (p *parser) parseTimeTravelAtClause() (*TimeTravelClause, error) {
+	// Consume AT
+	if err := p.expectKeyword("AT"); err != nil {
+		return nil, err
+	}
+
+	// Expect opening parenthesis
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	clause := &TimeTravelClause{}
+
+	// Expect VERSION keyword
+	if !p.isKeyword("VERSION") {
+		return nil, p.errorf("expected VERSION after AT (")
+	}
+	p.advance()
+
+	// Expect => operator
+	if p.current().typ != tokenOperator || p.current().value != "=" {
+		return nil, p.errorf("expected => after VERSION")
+	}
+	p.advance()
+	if p.current().typ != tokenOperator || p.current().value != ">" {
+		return nil, p.errorf("expected => after VERSION")
+	}
+	p.advance()
+
+	clause.Type = TimeTravelVersion
+
+	// Parse the version number
+	value, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	clause.Value = value
+
+	// Expect closing parenthesis
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return clause, nil
 }
 
 // parseTablesample parses a TABLESAMPLE clause.

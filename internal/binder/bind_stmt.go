@@ -602,6 +602,8 @@ func (b *Binder) inferTableFunctionSchema(
 		return b.inferIcebergMetadataSchema()
 	case "iceberg_snapshots":
 		return b.inferIcebergSnapshotsSchema()
+	case "duckdb_iceberg_tables":
+		return b.inferIcebergTablesSchema()
 	default:
 		// For unknown table functions, return no columns
 		// The executor will handle the error
@@ -1085,6 +1087,19 @@ func (b *Binder) inferIcebergSnapshotsSchema() ([]*catalog.ColumnDef, error) {
 		catalog.NewColumnDef("deleted_data_files", dukdb.TYPE_BIGINT),
 		catalog.NewColumnDef("added_records", dukdb.TYPE_BIGINT),
 		catalog.NewColumnDef("deleted_records", dukdb.TYPE_BIGINT),
+	}, nil
+}
+
+// inferIcebergTablesSchema returns the schema for the duckdb_iceberg_tables table function.
+// This function discovers and returns information about Iceberg tables in a directory.
+func (b *Binder) inferIcebergTablesSchema() ([]*catalog.ColumnDef, error) {
+	return []*catalog.ColumnDef{
+		catalog.NewColumnDef("table_name", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("table_location", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("current_snapshot_id", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("last_updated_ms", dukdb.TYPE_BIGINT),
+		catalog.NewColumnDef("format_version", dukdb.TYPE_INTEGER),
+		catalog.NewColumnDef("partition_columns", dukdb.TYPE_VARCHAR),
 	}, nil
 }
 

@@ -81,6 +81,55 @@ type TableRef struct {
 	PivotRef      *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
 	UnpivotRef    *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
 	Lateral       bool              // LATERAL join (subquery can reference columns from outer scope)
+	TimeTravel    *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
+}
+
+// TimeTravelType represents the type of time travel specification.
+type TimeTravelType int
+
+const (
+	// TimeTravelTimestamp specifies time travel by timestamp.
+	// Example: AS OF TIMESTAMP '2024-01-15 10:00:00'
+	TimeTravelTimestamp TimeTravelType = iota
+
+	// TimeTravelSnapshot specifies time travel by snapshot ID.
+	// Example: AS OF SNAPSHOT 1234567890
+	TimeTravelSnapshot
+
+	// TimeTravelBranch specifies time travel by branch name (future use).
+	// Example: AS OF BRANCH main
+	TimeTravelBranch
+
+	// TimeTravelVersion specifies time travel by explicit version number.
+	// Example: AT (VERSION => 3)
+	TimeTravelVersion
+)
+
+// String returns the human-readable name of the time travel type.
+func (tt TimeTravelType) String() string {
+	switch tt {
+	case TimeTravelTimestamp:
+		return "TIMESTAMP"
+	case TimeTravelSnapshot:
+		return "SNAPSHOT"
+	case TimeTravelBranch:
+		return "BRANCH"
+	case TimeTravelVersion:
+		return "VERSION"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// TimeTravelClause represents a time travel specification for Iceberg tables.
+// Supports:
+//   - AS OF TIMESTAMP '2024-01-15 10:00:00' - time travel by timestamp
+//   - AS OF SNAPSHOT 1234567890 - time travel by snapshot ID
+//   - AS OF BRANCH main - time travel by branch name (future)
+//   - AT (VERSION => 3) - explicit version selection
+type TimeTravelClause struct {
+	Type  TimeTravelType // The type of time travel specification
+	Value Expr           // The value: timestamp string, snapshot ID (int), branch name (string), or version number (int)
 }
 
 // TableFunctionRef represents a table function call in a FROM clause.

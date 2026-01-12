@@ -12,6 +12,7 @@ import (
 	fileio "github.com/dukdb/dukdb-go/internal/io"
 	arrowio "github.com/dukdb/dukdb-go/internal/io/arrow"
 	csvio "github.com/dukdb/dukdb-go/internal/io/csv"
+	icebergio "github.com/dukdb/dukdb-go/internal/io/iceberg"
 	jsonio "github.com/dukdb/dukdb-go/internal/io/json"
 	parquetio "github.com/dukdb/dukdb-go/internal/io/parquet"
 	xlsxio "github.com/dukdb/dukdb-go/internal/io/xlsx"
@@ -283,6 +284,8 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 				return fileio.FormatArrowStream
 			case "XLSX", "EXCEL":
 				return fileio.FormatXLSX
+			case "ICEBERG":
+				return fileio.FormatIceberg
 			}
 		}
 	}
@@ -396,6 +399,12 @@ func createFileWriter(path string, format fileio.Format, options map[string]any)
 		opts := xlsxio.DefaultWriterOptions()
 		applyXLSXWriterOptions(opts, options)
 		return xlsxio.NewWriterToPath(path, opts)
+
+	case fileio.FormatIceberg:
+		opts := icebergio.DefaultWriterOptions()
+		opts.TableLocation = path
+		applyIcebergWriterOptions(opts, options)
+		return icebergio.NewWriter(context.Background(), opts)
 
 	default:
 		return nil, fmt.Errorf("unsupported format: %v", format)
@@ -609,6 +618,43 @@ func applyXLSXWriterOptions(opts *xlsxio.WriterOptions, options map[string]any) 
 	if timeFormat, ok := options["TIME_FORMAT"]; ok {
 		if tfStr, isStr := timeFormat.(string); isStr {
 			opts.TimeFormat = tfStr
+		}
+	}
+}
+
+// applyIcebergWriterOptions applies COPY options to Iceberg writer options.
+func applyIcebergWriterOptions(opts *icebergio.WriterOptions, options map[string]any) {
+	// Compression codec
+	if codec, ok := options["CODEC"]; ok {
+		if codecStr, isStr := codec.(string); isStr {
+			opts.CompressionCodec = strings.ToLower(codecStr)
+		}
+	}
+	if compression, ok := options["COMPRESSION"]; ok {
+		if compStr, isStr := compression.(string); isStr {
+			opts.CompressionCodec = strings.ToLower(compStr)
+		}
+	}
+	// Row group size
+	if rowGroupSize, ok := options["ROW_GROUP_SIZE"]; ok {
+		if rgs, isInt := rowGroupSize.(int64); isInt {
+			opts.RowGroupSize = int(rgs)
+		}
+	}
+	// Table properties
+	if props, ok := options["PROPERTIES"]; ok {
+		if propsMap, isMap := props.(map[string]string); isMap {
+			opts.Properties = propsMap
+		}
+	}
+	// Format version
+	if version, ok := options["FORMAT_VERSION"]; ok {
+		if versionInt, isInt := version.(int64); isInt {
+			if versionInt == 1 {
+				opts.FormatVersion = icebergio.FormatVersionV1
+			} else {
+				opts.FormatVersion = icebergio.FormatVersionV2
+			}
 		}
 	}
 }

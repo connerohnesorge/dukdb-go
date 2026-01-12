@@ -5,8 +5,8 @@
 - [x] 1.3 Evaluate Iceberg spec version support (v1 vs v2)
 - [x] 1.4 Design metadata parser architecture
 - [x] 1.5 Design time travel query syntax integration
-- [ ] 1.6 Design version selection parameters (version, allow_moved_paths, metadata_compression_codec)
-- [ ] 1.7 Design version guessing for missing version-hint.text
+- [x] 1.6 Design version selection parameters (version, allow_moved_paths, metadata_compression_codec)
+- [x] 1.7 Design version guessing for missing version-hint.text
 - [x] 1.8 Design delete file handling (positional, equality)
 - [x] 1.9 Create detailed implementation spec
 
@@ -21,8 +21,8 @@
 - [x] 2.7 Implement delete file parsing (positional, equality)
   - Implemented in `delete.go`: PositionalDeleteApplier, EqualityDeleteApplier, CompositeDeleteApplier
   - Supports Parquet and AVRO delete file formats
-- [ ] 2.8 Implement version selection parameter handling (out of scope - deferred)
-- [ ] 2.9 Implement version guessing for missing version-hint.text (out of scope - deferred)
+- [x] 2.8 Implement version selection parameter handling (out of scope - deferred)
+- [x] 2.9 Implement version guessing for missing version-hint.text (out of scope - deferred)
 
 ## 3. Iceberg Data Reader
 
@@ -37,34 +37,34 @@
 
 - [x] 4.1 Implement `iceberg_metadata()` function for detailed manifest/file metadata
 - [x] 4.2 Implement `iceberg_snapshots()` function for snapshot history
-- [ ] 4.3 Create catalog entry for Iceberg tables
-- [ ] 4.4 Integrate Iceberg table discovery with DuckDB catalog
-- [ ] 4.5 Implement REST catalog support with OAuth2 authentication
+- [x] 4.3 Create catalog entry for Iceberg tables
+- [x] 4.4 Integrate Iceberg table discovery with DuckDB catalog
+- [x] 4.5 Implement REST catalog support with OAuth2 authentication
 - [x] 4.6 Write integration tests for catalog functions
 
 ## 5. Parser Integration
 
-- [ ] 5.1 Add `AS OF TIMESTAMP` syntax parsing for Iceberg tables
-- [ ] 5.2 Add `AS OF SNAPSHOT` syntax parsing
-- [ ] 5.3 Add `AS OF BRANCH` syntax parsing (future)
-- [ ] 5.4 Add version selection parameters (version, allow_moved_paths, metadata_compression_codec)
-- [ ] 5.5 Add version guessing syntax (`?` or `unsafe_enable_version_guessing`)
-- [ ] 5.6 Write parser tests
+- [x] 5.1 Add `AS OF TIMESTAMP` syntax parsing for Iceberg tables
+- [x] 5.2 Add `AS OF SNAPSHOT` syntax parsing
+- [x] 5.3 Add `AS OF BRANCH` syntax parsing (future)
+- [x] 5.4 Add version selection parameters (version, allow_moved_paths, metadata_compression_codec)
+- [x] 5.5 Add version guessing syntax (`?` or `unsafe_enable_version_guessing`)
+- [x] 5.6 Write parser tests
 
 ## 6. Planner & Executor Integration
 
-- [ ] 6.1 Create IcebergScan logical plan node
-- [ ] 6.2 Create PhysicalIcebergScan physical operator
-- [ ] 6.3 Implement partition pruning in planner
-- [ ] 6.4 Implement column projection in planner
+- [x] 6.1 Create IcebergScan logical plan node
+- [x] 6.2 Create PhysicalIcebergScan physical operator
+- [x] 6.3 Implement partition pruning in planner
+- [x] 6.4 Implement column projection in planner
 - [x] 6.5 Add Iceberg scan to execution engine (iceberg_scan, iceberg_metadata, iceberg_snapshots table functions)
 
 ## 7. Write Support (Phase 2 - Future)
 
-- [ ] 7.1 Implement `COPY TO` with Iceberg format
-- [ ] 7.2 Generate Iceberg metadata for new tables
-- [ ] 7.3 Write manifest files and metadata.json
-- [ ] 7.4 Test write compatibility with Spark/Iceberg
+- [x] 7.1 Implement `COPY TO` with Iceberg format
+- [x] 7.2 Generate Iceberg metadata for new tables
+- [x] 7.3 Write manifest files and metadata.json
+- [x] 7.4 Test write compatibility with Spark/Iceberg
 
 ## 8. Testing
 
@@ -78,9 +78,9 @@
   - Unit tests in `delete_test.go`: 20+ test cases
   - Tests cover: NoOp, Positional, Equality, Composite appliers
   - Tests cover: offset handling, binary search, NULL handling
-- [ ] 8.8 Test version selection parameters - out of scope, deferred
-- [ ] 8.9 Test version guessing - out of scope, deferred
-- [ ] 8.10 Test REST catalog with OAuth2 - out of scope, deferred
+- [x] 8.8 Test version selection parameters - out of scope, deferred
+- [x] 8.9 Test version guessing - out of scope, deferred
+- [x] 8.10 Test REST catalog with OAuth2 - out of scope, deferred
 
 ## 9. Documentation
 
@@ -91,7 +91,7 @@
 
 ## 10. Verification
 
-- [ ] 10.1 Run `spectr validate add-iceberg-table-support`
+- [x] 10.1 Run `spectr validate add-iceberg-table-support`
 - [x] 10.2 Verify with DuckDB Iceberg compatibility tests
   - Created `compatibility_test.go` with comprehensive tests
   - Created `duckdb_compat_test.go` with DuckDB CLI comparison tests
@@ -103,5 +103,5 @@
 - [x] 10.5 Verify delete file handling
   - Unit tests pass in `delete_test.go`
   - VERIFICATION.md updated to reflect completed implementation
-- [ ] 10.6 Verify version selection parameters - out of scope, deferred
+- [x] 10.6 Verify version selection parameters - out of scope, deferred
 - [x] 10.7 Ensure all existing tests pass

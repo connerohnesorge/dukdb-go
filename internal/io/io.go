@@ -33,6 +33,8 @@ const (
 	FormatArrowStream
 	// FormatXLSX indicates Microsoft Excel XLSX format.
 	FormatXLSX
+	// FormatIceberg indicates Apache Iceberg table format.
+	FormatIceberg
 )
 
 // String returns the string representation of a Format.
@@ -54,6 +56,8 @@ func (f Format) String() string {
 		return "arrow_stream"
 	case FormatXLSX:
 		return "xlsx"
+	case FormatIceberg:
+		return "iceberg"
 	}
 
 	return unknownStr

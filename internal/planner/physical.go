@@ -2613,12 +2613,42 @@ func (p *Planner) createPhysicalPlan(
 			Force:    l.Force,
 		}, nil
 
+	case *LogicalIcebergScan:
+		return p.createPhysicalIcebergScan(l)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypePlanner,
 			Msg:  "unsupported logical plan node",
 		}
 	}
+}
+
+// createPhysicalIcebergScan converts a LogicalIcebergScan to a PhysicalIcebergScan.
+// It extracts partition filters and prepares column projection for the Iceberg reader.
+func (p *Planner) createPhysicalIcebergScan(l *LogicalIcebergScan) (PhysicalPlan, error) {
+	// Create the Iceberg planner for filter extraction
+	icebergPlanner := NewIcebergPlanner()
+
+	// Extract partition filters from the filter predicate
+	var partitionFilters []PartitionFilter
+	var residualFilter binder.BoundExpr
+
+	if l.Filter != nil {
+		partitionFilters, residualFilter = icebergPlanner.ExtractPartitionFilters(l.Filter)
+	}
+
+	return &PhysicalIcebergScan{
+		TablePath:        l.TablePath,
+		Alias:            l.Alias,
+		Columns:          l.Columns,
+		Filter:           l.Filter,
+		TimeTravel:       l.TimeTravel,
+		Options:          l.Options,
+		PartitionFilters: partitionFilters,
+		ResidualFilter:   residualFilter,
+		ColumnTypes:      l.ColumnTypes,
+	}, nil
 }
 
 // createPhysicalJoinFromHint creates a physical join node based on optimization hints.
@@ -3281,3 +3311,88 @@ func (*PhysicalCheckpoint) physicalPlanNode() {}
 func (*PhysicalCheckpoint) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalCheckpoint) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Iceberg Physical Plan Nodes ----------
+
+// PartitionFilter represents a filter that can be pushed to Iceberg partition pruning.
+type PartitionFilter struct {
+	// FieldName is the partition field name.
+	FieldName string
+	// Operator is the comparison operator ("=", "<", ">", "<=", ">=", "!=", "IN").
+	Operator string
+	// Value is the filter value (or slice for IN operator).
+	Value any
+	// Transform is the partition transform applied to this field (identity, year, month, day, hour, bucket, truncate).
+	Transform string
+	// TransformArg is the argument for bucket/truncate transforms.
+	TransformArg int
+}
+
+// ColumnStat contains column statistics for pruning decisions.
+type ColumnStat struct {
+	// ColumnName is the column name.
+	ColumnName string
+	// NullCount is the number of null values.
+	NullCount int64
+	// DistinctCount is the number of distinct values.
+	DistinctCount int64
+	// MinValue is the minimum value (if available).
+	MinValue any
+	// MaxValue is the maximum value (if available).
+	MaxValue any
+}
+
+// PhysicalIcebergScan represents a physical scan of an Apache Iceberg table.
+// It contains all the information needed to execute the scan with partition
+// pruning and column projection.
+type PhysicalIcebergScan struct {
+	// TablePath is the path to the Iceberg table location.
+	TablePath string
+	// Alias is the table alias for column reference qualification.
+	Alias string
+	// Columns contains the columns to project (nil = all columns).
+	Columns []string
+	// Filter contains the original filter predicate.
+	Filter binder.BoundExpr
+	// TimeTravel contains the time travel specification (nil = current snapshot).
+	TimeTravel *TimeTravelClause
+	// Options contains additional options for the Iceberg reader.
+	Options map[string]any
+	// PartitionFilters contains filters extracted for partition pruning.
+	PartitionFilters []PartitionFilter
+	// ColumnStats contains column statistics for additional pruning.
+	ColumnStats []ColumnStat
+	// ResidualFilter contains filters that cannot be pushed to partition pruning.
+	ResidualFilter binder.BoundExpr
+	// EstimatedRows is the estimated number of rows after pruning.
+	EstimatedRows int64
+	// ColumnTypes contains the types for each column (populated during planning).
+	ColumnTypes []dukdb.Type
+	// columns caches the output column bindings.
+	columns []ColumnBinding
+}
+
+func (*PhysicalIcebergScan) physicalPlanNode() {}
+
+func (*PhysicalIcebergScan) Children() []PhysicalPlan { return nil }
+
+func (s *PhysicalIcebergScan) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+
+	// Build column bindings from column names and types
+	if len(s.Columns) > 0 && len(s.ColumnTypes) == len(s.Columns) {
+		s.columns = make([]ColumnBinding, len(s.Columns))
+		for i, colName := range s.Columns {
+			s.columns[i] = ColumnBinding{
+				Table:     s.Alias,
+				Column:    colName,
+				Type:      s.ColumnTypes[i],
+				ColumnIdx: i,
+			}
+		}
+	}
+
+	return s.columns
+}

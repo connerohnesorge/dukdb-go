@@ -1,10 +1,12 @@
 package iceberg
 
 import (
+	"compress/gzip"
 	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -497,4 +499,243 @@ func TestNewMetadataReader(t *testing.T) {
 	// Test with nil filesystem - should use default
 	reader := NewMetadataReader(nil)
 	require.NotNil(t, reader)
+}
+
+func TestNewMetadataReaderWithOptions(t *testing.T) {
+	opts := MetadataReaderOptions{
+		Version:                     3,
+		AllowMovedPaths:             true,
+		MetadataCompressionCodec:    "gzip",
+		UnsafeEnableVersionGuessing: true,
+	}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+	require.NotNil(t, reader)
+	assert.Equal(t, 3, reader.opts.Version)
+	assert.True(t, reader.opts.AllowMovedPaths)
+	assert.Equal(t, "gzip", reader.opts.MetadataCompressionCodec)
+	assert.True(t, reader.opts.UnsafeEnableVersionGuessing)
+}
+
+func TestMetadataReader_ExplicitVersion(t *testing.T) {
+	// Create a temp directory with multiple metadata versions
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Write v1 metadata
+	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
+	require.NoError(t, err)
+
+	// Write v2 metadata with a different property to distinguish
+	v2Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "avro"`, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Test reading specific version 1
+	opts := MetadataReaderOptions{Version: 1}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+	metadata, err := reader.ReadMetadata(ctx, tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "parquet", metadata.Properties["write.format.default"])
+
+	// Test reading specific version 2
+	opts2 := MetadataReaderOptions{Version: 2}
+	reader2 := NewMetadataReaderWithOptions(nil, opts2)
+	metadata2, err := reader2.ReadMetadata(ctx, tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "avro", metadata2.Properties["write.format.default"])
+}
+
+func TestMetadataReader_ExplicitVersionNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Write only v1 metadata
+	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Try to read non-existent version 99
+	opts := MetadataReaderOptions{Version: 99}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+	_, err = reader.ReadMetadata(ctx, tmpDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "version 99 not found")
+}
+
+func TestMetadataReader_VersionGuessing(t *testing.T) {
+	// Create a temp directory without version-hint.text
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Write multiple metadata versions without version-hint.text
+	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
+	require.NoError(t, err)
+
+	v2Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "orc"`, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
+	require.NoError(t, err)
+
+	v3Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "avro"`, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v3.metadata.json"), []byte(v3Metadata), 0o644)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// With version guessing enabled, should find v3 (highest version)
+	opts := MetadataReaderOptions{UnsafeEnableVersionGuessing: true}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+	metadata, err := reader.ReadMetadata(ctx, tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "avro", metadata.Properties["write.format.default"])
+}
+
+func TestMetadataReader_VersionHintTakesPrecedence(t *testing.T) {
+	// Create a temp directory with version-hint.text
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Write multiple metadata versions
+	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	v1Metadata = strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "v1format"`, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
+	require.NoError(t, err)
+
+	v2Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	v2Metadata = strings.Replace(v2Metadata, `"write.format.default": "parquet"`, `"write.format.default": "v2format"`, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
+	require.NoError(t, err)
+
+	// Write version-hint.text pointing to v1
+	err = os.WriteFile(filepath.Join(metadataDir, "version-hint.text"), []byte("1"), 0o644)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Even with version guessing enabled, version-hint.text should take precedence
+	opts := MetadataReaderOptions{UnsafeEnableVersionGuessing: true}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+	metadata, err := reader.ReadMetadata(ctx, tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "v1format", metadata.Properties["write.format.default"])
+}
+
+func TestMetadataReader_DetectCompression(t *testing.T) {
+	reader := NewMetadataReader(nil)
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"v1.metadata.json", ""},
+		{"v1.metadata.json.gz", "gzip"},
+		{"v1.metadata.json.zst", "zstd"},
+		{"v1.metadata.json.lz4", "lz4"},
+		{"v1.metadata.json.snappy", "snappy"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			result := reader.detectCompression(tc.path)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestMetadataReader_DetectCompressionWithCodecOverride(t *testing.T) {
+	opts := MetadataReaderOptions{MetadataCompressionCodec: "zstd"}
+	reader := NewMetadataReaderWithOptions(nil, opts)
+
+	// Even for .gz extension, the configured codec should take precedence
+	result := reader.detectCompression("v1.metadata.json.gz")
+	assert.Equal(t, "zstd", result)
+}
+
+func TestCompressionExtension(t *testing.T) {
+	tests := []struct {
+		codec    string
+		expected string
+	}{
+		{"gzip", ".gz"},
+		{"gz", ".gz"},
+		{"zstd", ".zst"},
+		{"zstandard", ".zst"},
+		{"lz4", ".lz4"},
+		{"snappy", ".snappy"},
+		{"none", ""},
+		{"unknown", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.codec, func(t *testing.T) {
+			result := compressionExtension(tc.codec)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestMetadataReader_CompressedMetadata(t *testing.T) {
+	// Create a temp directory with compressed metadata
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Create gzip compressed metadata
+	metadataJSON := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+
+	// Write compressed file
+	compressedPath := filepath.Join(metadataDir, "v1.metadata.json.gz")
+	f, err := os.Create(compressedPath)
+	require.NoError(t, err)
+
+	gzWriter := gzip.NewWriter(f)
+	_, err = gzWriter.Write([]byte(metadataJSON))
+	require.NoError(t, err)
+	require.NoError(t, gzWriter.Close())
+	require.NoError(t, f.Close())
+
+	ctx := context.Background()
+
+	// Read using the compressed file directly
+	reader := NewMetadataReader(nil)
+	metadata, err := reader.ReadMetadataFromPath(ctx, compressedPath)
+	require.NoError(t, err)
+	assert.Equal(t, FormatVersionV2, metadata.Version)
+}
+
+func TestMetadataReader_FindMetadataFileForVersion(t *testing.T) {
+	tmpDir := t.TempDir()
+	metadataDir := filepath.Join(tmpDir, "metadata")
+	err := os.MkdirAll(metadataDir, 0o755)
+	require.NoError(t, err)
+
+	// Write v1 metadata
+	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
+	require.NoError(t, err)
+
+	reader := NewMetadataReader(nil)
+
+	// Test finding existing version
+	path, err := reader.findMetadataFileForVersion(metadataDir, 1)
+	require.NoError(t, err)
+	assert.Contains(t, path, "v1.metadata.json")
+
+	// Test finding non-existing version
+	_, err = reader.findMetadataFileForVersion(metadataDir, 99)
+	require.Error(t, err)
 }

@@ -49,4 +49,17 @@ var (
 
 	// ErrDeleteFileNotSupported indicates that delete files are not yet supported.
 	ErrDeleteFileNotSupported = errors.New("iceberg: delete files not yet supported")
+
+	// REST Catalog error types.
+
+	// ErrRESTCatalogAuth indicates an authentication error with the REST catalog.
+	ErrRESTCatalogAuth = errors.New("iceberg: REST catalog authentication failed")
+	// ErrRESTCatalogNotFound indicates the resource was not found in the REST catalog.
+	ErrRESTCatalogNotFound = errors.New("iceberg: REST catalog resource not found")
+	// ErrRESTCatalogRequest indicates a request error to the REST catalog.
+	ErrRESTCatalogRequest = errors.New("iceberg: REST catalog request failed")
+	// ErrRESTCatalogResponse indicates an invalid response from the REST catalog.
+	ErrRESTCatalogResponse = errors.New("iceberg: REST catalog invalid response")
+	// ErrRESTCatalogTokenExpired indicates the OAuth2 token has expired.
+	ErrRESTCatalogTokenExpired = errors.New("iceberg: REST catalog token expired")
 )

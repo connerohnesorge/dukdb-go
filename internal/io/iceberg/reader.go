@@ -46,6 +46,28 @@ type ReaderOptions struct {
 
 	// Filesystem specifies the filesystem to use (nil for auto-detection).
 	Filesystem filesystem.FileSystem
+
+	// Version specifies an explicit metadata version number to use.
+	// If set to a positive value, the reader will look for v{Version}.metadata.json.
+	// If 0 (default), the reader uses version-hint.text or scans for latest.
+	Version int
+
+	// AllowMovedPaths allows reading tables that have been relocated.
+	// When true, file paths in metadata are rewritten relative to the
+	// current table location instead of using absolute paths.
+	AllowMovedPaths bool
+
+	// MetadataCompressionCodec specifies the compression codec for metadata files.
+	// Supported values: "gzip", "zstd", "none" (or empty for auto-detection).
+	// When set, the reader will attempt to decompress metadata files accordingly.
+	MetadataCompressionCodec string
+
+	// UnsafeEnableVersionGuessing enables automatic version guessing when
+	// version-hint.text is missing. When enabled, the reader scans the
+	// metadata directory to find the highest version number.
+	// This is marked as "unsafe" because it may select an incomplete or
+	// corrupt metadata version if a write was interrupted.
+	UnsafeEnableVersionGuessing bool
 }
 
 // DefaultReaderOptions returns the default reader options.
@@ -109,9 +131,13 @@ func NewReader(ctx context.Context, tableLocation string, opts *ReaderOptions) (
 		fs = filesystem.NewLocalFileSystem("")
 	}
 
-	// Open the Iceberg table
+	// Open the Iceberg table with version selection options
 	tableOpts := &TableOptions{
-		Filesystem: fs,
+		Filesystem:                  fs,
+		Version:                     opts.Version,
+		AllowMovedPaths:             opts.AllowMovedPaths,
+		MetadataCompressionCodec:    opts.MetadataCompressionCodec,
+		UnsafeEnableVersionGuessing: opts.UnsafeEnableVersionGuessing,
 	}
 
 	table, err := OpenTable(ctx, tableLocation, tableOpts)
@@ -141,7 +167,11 @@ func NewReaderFromMetadata(ctx context.Context, metadataPath string, opts *Reade
 	}
 
 	tableOpts := &TableOptions{
-		Filesystem: fs,
+		Filesystem:                  fs,
+		Version:                     opts.Version,
+		AllowMovedPaths:             opts.AllowMovedPaths,
+		MetadataCompressionCodec:    opts.MetadataCompressionCodec,
+		UnsafeEnableVersionGuessing: opts.UnsafeEnableVersionGuessing,
 	}
 
 	table, err := OpenTableFromMetadata(ctx, metadataPath, tableOpts)

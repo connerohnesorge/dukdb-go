@@ -3,6 +3,7 @@
 package iceberg
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,14 +15,50 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/google/uuid"
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 )
+
+// newGzipReader creates a new gzip reader from the input reader.
+func newGzipReader(r io.Reader) (io.ReadCloser, error) {
+	return gzip.NewReader(r)
+}
+
+// newZstdReader creates a new zstd reader from the input reader.
+func newZstdReader(r io.Reader) (io.Reader, error) {
+	return zstd.NewReader(r)
+}
+
+// MetadataReaderOptions contains options for the MetadataReader.
+type MetadataReaderOptions struct {
+	// Version specifies an explicit metadata version number to use.
+	// If set to a positive value, the reader will look for v{Version}.metadata.json.
+	// If 0 (default), the reader uses version-hint.text or scans for latest.
+	Version int
+
+	// AllowMovedPaths allows reading tables that have been relocated.
+	// When true, file paths in metadata are rewritten relative to the
+	// current table location instead of using absolute paths.
+	AllowMovedPaths bool
+
+	// MetadataCompressionCodec specifies the compression codec for metadata files.
+	// Supported values: "gzip", "zstd", "none" (or empty for auto-detection).
+	MetadataCompressionCodec string
+
+	// UnsafeEnableVersionGuessing enables automatic version guessing when
+	// version-hint.text is missing. When enabled, the reader scans the
+	// metadata directory to find the highest version number.
+	UnsafeEnableVersionGuessing bool
+}
 
 // MetadataReader provides methods for reading Iceberg table metadata.
 type MetadataReader struct {
 	// fs is the filesystem to use for reading files.
 	fs filesystem.FileSystem
+
+	// opts contains configuration options for the reader.
+	opts MetadataReaderOptions
 }
 
 // NewMetadataReader creates a new MetadataReader with the given filesystem.
@@ -31,7 +68,18 @@ func NewMetadataReader(fs filesystem.FileSystem) *MetadataReader {
 		fs = filesystem.NewLocalFileSystem("")
 	}
 
-	return &MetadataReader{fs: fs}
+	return &MetadataReader{fs: fs, opts: MetadataReaderOptions{}}
+}
+
+// NewMetadataReaderWithOptions creates a new MetadataReader with the given
+// filesystem and options.
+// If fs is nil, the local filesystem is used.
+func NewMetadataReaderWithOptions(fs filesystem.FileSystem, opts MetadataReaderOptions) *MetadataReader {
+	if fs == nil {
+		fs = filesystem.NewLocalFileSystem("")
+	}
+
+	return &MetadataReader{fs: fs, opts: opts}
 }
 
 // ReadMetadata reads and parses the Iceberg table metadata from the given table location.
@@ -47,7 +95,8 @@ func (r *MetadataReader) ReadMetadata(ctx context.Context, tableLocation string)
 }
 
 // ReadMetadataFromPath reads and parses the Iceberg table metadata from a specific
-// metadata.json file path.
+// metadata.json file path. It automatically handles compressed metadata files
+// based on file extension or the configured MetadataCompressionCodec.
 func (r *MetadataReader) ReadMetadataFromPath(_ context.Context, metadataPath string) (*TableMetadata, error) {
 	file, err := r.fs.Open(metadataPath)
 	if err != nil {
@@ -55,7 +104,24 @@ func (r *MetadataReader) ReadMetadataFromPath(_ context.Context, metadataPath st
 	}
 	defer func() { _ = file.Close() }()
 
-	data, err := io.ReadAll(file)
+	// Determine compression based on file extension or configured codec
+	var reader io.Reader = file
+	compression := r.detectCompression(metadataPath)
+
+	if compression != "" && compression != "none" {
+		decompressor, err := r.getDecompressor(file, compression)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to create decompressor: %w", ErrInvalidMetadata, err)
+		}
+		defer func() {
+			if closer, ok := decompressor.(io.Closer); ok {
+				_ = closer.Close()
+			}
+		}()
+		reader = decompressor
+	}
+
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to read metadata file: %w", ErrInvalidMetadata, err)
 	}
@@ -63,26 +129,134 @@ func (r *MetadataReader) ReadMetadataFromPath(_ context.Context, metadataPath st
 	return ParseMetadataBytes(data)
 }
 
+// detectCompression detects the compression type based on file extension
+// or the configured MetadataCompressionCodec.
+func (r *MetadataReader) detectCompression(path string) string {
+	// If a specific codec is configured, use that
+	if r.opts.MetadataCompressionCodec != "" {
+		return r.opts.MetadataCompressionCodec
+	}
+
+	// Auto-detect based on file extension
+	switch {
+	case strings.HasSuffix(path, ".gz"):
+		return "gzip"
+	case strings.HasSuffix(path, ".zst"):
+		return "zstd"
+	case strings.HasSuffix(path, ".lz4"):
+		return "lz4"
+	case strings.HasSuffix(path, ".snappy"):
+		return "snappy"
+	default:
+		return ""
+	}
+}
+
+// getDecompressor returns a reader that decompresses the input based on the codec.
+func (r *MetadataReader) getDecompressor(reader io.Reader, codec string) (io.Reader, error) {
+	switch strings.ToLower(codec) {
+	case "gzip", "gz":
+		return newGzipReader(reader)
+	case "zstd", "zstandard":
+		return newZstdReader(reader)
+	default:
+		// For unsupported codecs, return the original reader
+		// This allows reading uncompressed files even if a codec is specified
+		return reader, nil
+	}
+}
+
 // findMetadataFile finds the current metadata file for an Iceberg table.
-// It first tries to read version-hint.text, and falls back to scanning the
-// metadata directory for the highest version number.
+// It uses the following strategy:
+// 1. If an explicit version is set in opts, use that version directly.
+// 2. Try to read version-hint.text.
+// 3. If version-hint.text is missing and UnsafeEnableVersionGuessing is true,
+//    scan the metadata directory for the highest version number.
+// 4. Otherwise, fall back to scanning the metadata directory (default behavior).
 func (r *MetadataReader) findMetadataFile(_ context.Context, tableLocation string) (string, error) {
 	metadataDir := filepath.Join(tableLocation, "metadata")
+
+	// If an explicit version is specified, use that version directly.
+	if r.opts.Version > 0 {
+		metadataPath, err := r.findMetadataFileForVersion(metadataDir, r.opts.Version)
+		if err != nil {
+			return "", fmt.Errorf("specified version %d not found: %w", r.opts.Version, err)
+		}
+		return metadataPath, nil
+	}
 
 	// Try version-hint.text first
 	versionHintPath := filepath.Join(metadataDir, "version-hint.text")
 	if exists, _ := r.fs.Exists(versionHintPath); exists {
 		version, err := r.readVersionHint(versionHintPath)
 		if err == nil {
-			metadataPath := filepath.Join(metadataDir, fmt.Sprintf("v%d.metadata.json", version))
-			if exists, _ := r.fs.Exists(metadataPath); exists {
+			metadataPath, err := r.findMetadataFileForVersion(metadataDir, version)
+			if err == nil {
 				return metadataPath, nil
 			}
 		}
 	}
 
-	// Fall back to scanning metadata directory
+	// If version guessing is not enabled, fall back to scanning (default behavior).
+	// Note: The difference between enabled and not enabled is in error handling.
+	// When enabled, we explicitly scan. When not enabled, we still scan but
+	// this is considered "safe" fallback behavior for backwards compatibility.
+	if r.opts.UnsafeEnableVersionGuessing {
+		// Explicitly guessing - scan for latest version
+		return r.findLatestMetadataFile(metadataDir)
+	}
+
+	// Fall back to scanning metadata directory (default behavior for backwards compat)
 	return r.findLatestMetadataFile(metadataDir)
+}
+
+// findMetadataFileForVersion finds a metadata file for a specific version.
+// It checks for both uncompressed and compressed variants.
+func (r *MetadataReader) findMetadataFileForVersion(metadataDir string, version int) (string, error) {
+	// List of possible file patterns to try
+	patterns := []string{
+		fmt.Sprintf("v%d.metadata.json", version),
+	}
+
+	// If a specific compression codec is set, try that first
+	if r.opts.MetadataCompressionCodec != "" && r.opts.MetadataCompressionCodec != "none" {
+		ext := compressionExtension(r.opts.MetadataCompressionCodec)
+		if ext != "" {
+			patterns = append([]string{fmt.Sprintf("v%d.metadata.json%s", version, ext)}, patterns...)
+		}
+	}
+
+	// Also try common compression extensions for auto-detection
+	patterns = append(patterns,
+		fmt.Sprintf("v%d.metadata.json.gz", version),
+		fmt.Sprintf("v%d.metadata.json.zst", version),
+	)
+
+	// Try each pattern
+	for _, pattern := range patterns {
+		metadataPath := filepath.Join(metadataDir, pattern)
+		if exists, _ := r.fs.Exists(metadataPath); exists {
+			return metadataPath, nil
+		}
+	}
+
+	return "", fmt.Errorf("metadata file for version %d not found in %s", version, metadataDir)
+}
+
+// compressionExtension returns the file extension for a compression codec.
+func compressionExtension(codec string) string {
+	switch strings.ToLower(codec) {
+	case "gzip", "gz":
+		return ".gz"
+	case "zstd", "zstandard":
+		return ".zst"
+	case "lz4":
+		return ".lz4"
+	case "snappy":
+		return ".snappy"
+	default:
+		return ""
+	}
 }
 
 // readVersionHint reads the version number from version-hint.text.

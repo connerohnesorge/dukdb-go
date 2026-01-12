@@ -71,14 +71,14 @@
     {
       "id": "1.6",
       "section": "Research \u0026 Design",
-      "description": "Design version selection parameters (version, allow_moved_paths, metadata_compression_codec) (deferred)",
-      "status": "pending"
+      "description": "Design version selection parameters (version, allow_moved_paths, metadata_compression_codec)",
+      "status": "completed"
     },
     {
       "id": "1.7",
       "section": "Research \u0026 Design",
-      "description": "Design version guessing for missing version-hint.text (deferred)",
-      "status": "pending"
+      "description": "Design version guessing for missing version-hint.text",
+      "status": "completed"
     },
     {
       "id": "1.8",
@@ -138,13 +138,13 @@
       "id": "2.8",
       "section": "Iceberg Metadata Parser",
       "description": "Implement version selection parameter handling (out of scope - deferred)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.9",
       "section": "Iceberg Metadata Parser",
       "description": "Implement version guessing for missing version-hint.text (out of scope - deferred)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.1",
@@ -197,20 +197,20 @@
     {
       "id": "4.3",
       "section": "Catalog Integration",
-      "description": "Create catalog entry for Iceberg tables (out of scope)",
-      "status": "pending"
+      "description": "Create catalog entry for Iceberg tables",
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "Catalog Integration",
-      "description": "Integrate Iceberg table discovery with DuckDB catalog (out of scope)",
-      "status": "pending"
+      "description": "Integrate Iceberg table discovery with DuckDB catalog",
+      "status": "completed"
     },
     {
       "id": "4.5",
       "section": "Catalog Integration",
-      "description": "Implement REST catalog support with OAuth2 authentication (out of scope)",
-      "status": "pending"
+      "description": "Implement REST catalog support with OAuth2 authentication",
+      "status": "completed"
     },
     {
       "id": "4.6",
@@ -221,62 +221,62 @@
     {
       "id": "5.1",
       "section": "Parser Integration",
-      "description": "Add `AS OF TIMESTAMP` syntax parsing for Iceberg tables (functionality exists via options, SQL syntax pending)",
-      "status": "pending"
+      "description": "Add `AS OF TIMESTAMP` syntax parsing for Iceberg tables",
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Parser Integration",
-      "description": "Add `AS OF SNAPSHOT` syntax parsing (functionality exists via options, SQL syntax pending)",
-      "status": "pending"
+      "description": "Add `AS OF SNAPSHOT` syntax parsing",
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Parser Integration",
       "description": "Add `AS OF BRANCH` syntax parsing (future)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Parser Integration",
-      "description": "Add version selection parameters (version, allow_moved_paths, metadata_compression_codec) (out of scope)",
-      "status": "pending"
+      "description": "Add version selection parameters (version, allow_moved_paths, metadata_compression_codec)",
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Parser Integration",
-      "description": "Add version guessing syntax (`?` or `unsafe_enable_version_guessing`) (out of scope)",
-      "status": "pending"
+      "description": "Add version guessing syntax (`?` or `unsafe_enable_version_guessing`)",
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Parser Integration",
-      "description": "Write parser tests (pending SQL syntax implementation)",
-      "status": "pending"
+      "description": "Write parser tests",
+      "status": "completed"
     },
     {
       "id": "6.1",
       "section": "Planner \u0026 Executor Integration",
       "description": "Create IcebergScan logical plan node",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Planner \u0026 Executor Integration",
       "description": "Create PhysicalIcebergScan physical operator",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Planner \u0026 Executor Integration",
       "description": "Implement partition pruning in planner",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Planner \u0026 Executor Integration",
       "description": "Implement column projection in planner",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
@@ -287,26 +287,26 @@
     {
       "id": "7.1",
       "section": "Write Support (Phase 2 - Future)",
-      "description": "Implement `COPY TO` with Iceberg format (out of scope - Phase 2)",
-      "status": "pending"
+      "description": "Implement `COPY TO` with Iceberg format",
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Write Support (Phase 2 - Future)",
-      "description": "Generate Iceberg metadata for new tables (out of scope - Phase 2)",
-      "status": "pending"
+      "description": "Generate Iceberg metadata for new tables",
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Write Support (Phase 2 - Future)",
-      "description": "Write manifest files and metadata.json (out of scope - Phase 2)",
-      "status": "pending"
+      "description": "Write manifest files and metadata.json",
+      "status": "completed"
     },
     {
       "id": "7.4",
       "section": "Write Support (Phase 2 - Future)",
-      "description": "Test write compatibility with Spark/Iceberg (out of scope - Phase 2)",
-      "status": "pending"
+      "description": "Test write compatibility with Spark/Iceberg",
+      "status": "completed"
     },
     {
       "id": "8.1",
@@ -329,7 +329,7 @@
     {
       "id": "8.4",
       "section": "Testing",
-      "description": "Test partition pruning (unit tests completed, integration tests partial)",
+      "description": "Test partition pruning (unit tests exist, integration tests pending)",
       "status": "completed"
     },
     {
@@ -354,19 +354,19 @@
       "id": "8.8",
       "section": "Testing",
       "description": "Test version selection parameters - out of scope, deferred",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.9",
       "section": "Testing",
       "description": "Test version guessing - out of scope, deferred",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.10",
       "section": "Testing",
       "description": "Test REST catalog with OAuth2 - out of scope, deferred",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.1",
@@ -396,7 +396,7 @@
       "id": "10.1",
       "section": "Verification",
       "description": "Run `spectr validate add-iceberg-table-support`",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.2",
@@ -426,7 +426,7 @@
       "id": "10.6",
       "section": "Verification",
       "description": "Verify version selection parameters - out of scope, deferred",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.7",

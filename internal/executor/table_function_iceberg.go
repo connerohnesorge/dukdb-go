@@ -21,8 +21,10 @@ import (
 //   - columns: []string - Column projection (which columns to read)
 //   - snapshot_id: int64 - Time travel by snapshot ID
 //   - timestamp: int64 - Time travel by timestamp (milliseconds since epoch)
+//   - version: int - Explicit metadata version number
 //   - allow_moved_paths: bool - Allow reading tables that have been moved
 //   - metadata_compression_codec: string - Compression codec for metadata files
+//   - unsafe_enable_version_guessing: bool - Enable auto-guessing of metadata version
 func (e *Executor) executeIcebergScan(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalTableFunctionScan,
@@ -77,15 +79,38 @@ func (e *Executor) executeIcebergScan(
 				opts.Limit = int64(v)
 			}
 
+		case "version":
+			// Explicit metadata version number
+			switch v := val.(type) {
+			case int64:
+				opts.Version = int(v)
+			case int:
+				opts.Version = v
+			}
+
 		case "allow_moved_paths":
-			// Allow reading tables that have been moved (currently a no-op, for API compatibility)
-			// This option is parsed but the actual functionality would require path rewriting
-			_ = val
+			// Allow reading tables that have been moved
+			switch v := val.(type) {
+			case bool:
+				opts.AllowMovedPaths = v
+			case string:
+				opts.AllowMovedPaths = strings.ToLower(v) == "true"
+			}
 
 		case "metadata_compression_codec":
-			// Compression codec for metadata files (currently a no-op, for API compatibility)
-			// The reader auto-detects compression based on file extension
-			_ = val
+			// Compression codec for metadata files
+			if s, ok := val.(string); ok {
+				opts.MetadataCompressionCodec = s
+			}
+
+		case "unsafe_enable_version_guessing":
+			// Enable auto-guessing of metadata version when version-hint.text is missing
+			switch v := val.(type) {
+			case bool:
+				opts.UnsafeEnableVersionGuessing = v
+			case string:
+				opts.UnsafeEnableVersionGuessing = strings.ToLower(v) == "true"
+			}
 		}
 	}
 
