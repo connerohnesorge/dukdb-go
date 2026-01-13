@@ -22,7 +22,6 @@ import (
 	"time"
 
 	_ "github.com/dukdb/dukdb-go"
-	_ "github.com/dukdb/dukdb-go/internal/engine"
 	"github.com/dukdb/dukdb-go/internal/io/iceberg"
 )
 

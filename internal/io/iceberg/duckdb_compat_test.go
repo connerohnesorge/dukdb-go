@@ -18,18 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	// DuckDB CLI path - this is the specific Nix store path for this environment.
-	// In CI/CD environments, this should be overridden via environment variable.
-	defaultDuckDBPath = "/nix/store/h877n4xpa1wjjlf9sgy17mp91vq48xxg-duckdb-1.4.3/bin/duckdb"
-)
-
 // getDuckDBPath returns the path to the DuckDB CLI.
+// It checks DUCKDB_PATH env var first, then looks in PATH.
 func getDuckDBPath() string {
 	if path := os.Getenv("DUCKDB_PATH"); path != "" {
 		return path
 	}
-	return defaultDuckDBPath
+	// Look for duckdb in PATH (works with nix develop)
+	if path, err := exec.LookPath("duckdb"); err == nil {
+		return path
+	}
+	return "duckdb" // Fallback, let exec handle the error
 }
 
 // isDuckDBAvailable checks if DuckDB CLI is available.

@@ -38,6 +38,42 @@
           exec
         ];
 
+      # DuckDB with iceberg extension pre-installed
+      # Uses official binary for ABI compatibility with extensions
+      duckdb-with-iceberg = pkgs.stdenv.mkDerivation rec {
+        pname = "duckdb-with-iceberg";
+        version = "1.4.3";
+
+        src = pkgs.fetchurl {
+          url = "https://github.com/duckdb/duckdb/releases/download/v${version}/duckdb_cli-linux-amd64.zip";
+          sha256 = "0z1gl5ck4i08v887ch9drqjk9311ll3xdvpv9psm78vi38a3d7ks";
+        };
+
+        icebergExt = pkgs.fetchurl {
+          url = "https://extensions.duckdb.org/v${version}/linux_amd64/iceberg.duckdb_extension.gz";
+          sha256 = "1scmyq8swpzhyx1sy448hp98s1f665nhbvrdznw6w41xhpf09nis";
+        };
+
+        nativeBuildInputs = [pkgs.unzip];
+
+        unpackPhase = "unzip $src";
+
+        installPhase = ''
+          mkdir -p $out/bin $out/extensions/v${version}/linux_amd64
+          cp duckdb $out/bin/.duckdb-unwrapped
+          chmod +x $out/bin/.duckdb-unwrapped
+
+          gunzip -c $icebergExt > $out/extensions/v${version}/linux_amd64/iceberg.duckdb_extension
+
+          cat > $out/bin/duckdb << WRAPPER
+          #!/usr/bin/env bash
+          export DUCKDB_EXTENSION_DIRECTORY="$out/extensions"
+          exec "$out/bin/.duckdb-unwrapped" "\$@"
+          WRAPPER
+          chmod +x $out/bin/duckdb
+        '';
+      };
+
       scripts = {
         lint = {
           exec = ''
@@ -103,7 +139,7 @@
             graphviz
             goreleaser
             gofumpt
-            duckdb
+            duckdb-with-iceberg
           ]
           ++ builtins.attrValues scriptPackages;
       };

@@ -1,0 +1,21 @@
+order_id,customer_id,product_id,product_name,category,quantity,unit_price,order_date,region,sales_rep
+1001,101,201,Laptop,Electronics,2,999.99,2023-01-05,North,Alice
+1002,102,202,Mouse,Accessories,5,29.99,2023-01-07,South,Bob
+1003,103,203,Keyboard,Accessories,3,79.99,2023-01-10,East,Charlie
+1004,104,204,Monitor,Electronics,1,399.99,2023-01-12,West,Diana
+1005,105,205,Headphones,Electronics,2,149.99,2023-01-15,North,Eve
+1006,106,206,Webcam,Electronics,1,89.99,2023-01-18,South,Frank
+1007,107,207,USB Hub,Accessories,4,49.99,2023-01-20,East,Grace
+1008,108,208,External HDD,Electronics,1,129.99,2023-01-22,West,Henry
+1009,109,209,Laptop Stand,Accessories,2,39.99,2023-01-25,North,Ivy
+1010,110,210,Graphics Tablet,Electronics,1,299.99,2023-01-28,South,Jack
+1011,101,211,Smartphone,Electronics,1,699.99,2023-02-02,East,Alice
+1012,102,212,Phone Case,Accessories,3,19.99,2023-02-05,West,Bob
+1013,103,213,Wireless Charger,Accessories,2,39.99,2023-02-08,North,Charlie
+1014,104,214,Smart Watch,Electronics,1,249.99,2023-02-10,South,Diana
+1015,105,215,Tablet,Electronics,1,449.99,2023-02-12,East,Eve
+1016,106,216,Stylus,Accessories,2,29.99,2023-02-15,West,Frank
+1017,107,217,Desk Lamp,Accessories,1,59.99,2023-02-18,North,Grace
+1018,108,218,Printer,Electronics,1,199.99,2023-02-20,South,Henry
+1019,109,219,Scanner,Electronics,1,179.99,2023-02-22,East,Ivy
+1020,110,220,Projector,Electronics,1,599.99,2023-02-25,West,Jack

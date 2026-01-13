@@ -1,0 +1,11 @@
+transaction_id,customer_code,product_sku,quantity,unit_cost,unit_price,timestamp,store_id,raw_receipt_data
+TXN001,CUST-101,SKU-LAPTOP-001,1,800.00,999.99,2023-01-05T14:30:00Z,STORE-N001,{discount: 5%, payment: card}
+TXN002,CUST-102,SKU-MOUSE-002,5,20.00,29.99,2023-01-05T14:35:00Z,STORE-S002,{discount: 0%, payment: cash}
+TXN003,CUST-103,SKU-KB-003,3,60.00,79.99,2023-01-06T10:15:00Z,STORE-E003,{discount: 10%, payment: card}
+TXN004,CUST-104,SKU-MON-004,1,300.00,399.99,2023-01-06T11:20:00Z,STORE-W004,{discount: 0%, payment: card}
+TXN005,CUST-105,SKU-HP-005,2,120.00,149.99,2023-01-07T09:45:00Z,STORE-N001,{discount: 15%, payment: card}
+TXN006,CUST-106,SKU-WEB-006,1,70.00,89.99,2023-01-07T13:20:00Z,STORE-S002,{discount: 0%, payment: cash}
+TXN007,CUST-107,SKU-HUB-007,4,35.00,49.99,2023-01-08T15:10:00Z,STORE-E003,{discount: 5%, payment: card}
+TXN008,CUST-108,SKU-HDD-008,1,100.00,129.99,2023-01-08T16:30:00Z,STORE-W004,{discount: 0%, payment: card}
+TXN009,CUST-109,SKU-STAND-009,2,30.00,39.99,2023-01-09T10:05:00Z,STORE-N001,{discount: 20%, payment: card}
+TXN010,CUST-110,SKU-TAB-010,1,240.00,299.99,2023-01-09T14:40:00Z,STORE-S002,{discount: 0%, payment: card}

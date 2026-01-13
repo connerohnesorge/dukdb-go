@@ -34,13 +34,14 @@ stop:
 
 # Subagent stop hook - runs when subagents finish
 subagentStop:
-  commands: {}
-  # Example:
-  # coder:
-  #   - run: "npm run lint"
-  #     showStdout: true
-  #     showCommand: true  # Show "Executing command X/Y: npm run lint" (default: true)
-  #     message: "Linting failed"
+  commands:
+    # Example:
+    coder:
+      - run: "tests"
+        showStdout: false
+        showStderr: false
+        showCommand: true # Show "Executing command X/Y: npm run lint" (default: true)
+        message: "Tests failed, fix them before via delegation."
   # test*:
   #   - run: "npm test"
   #     showStderr: true

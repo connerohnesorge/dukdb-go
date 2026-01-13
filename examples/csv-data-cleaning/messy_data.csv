@@ -1,0 +1,13 @@
+id,name,email,phone,age,salary,join_date,department
+1,John Doe,john.doe@email.com,555-1234,28,50000,2020-01-15,Engineering
+2,jane smith,jane.smith@email.com,(555) 234-5678,32,60000,2019-06-20,marketing
+3,Bob Johnson,bob.johnson@email,555.345.6789,45,75000,2021-03-10,Engineering
+4,alice  brown  ,ALICE.BROWN@EMAIL.COM,5554567890,29,55000,2022-11-25,  sales
+5,Charlie Wilson,charlie@email,123-456-7890,-5,45000,2023-13-45,Engineering
+6,diana prince,diana.prince@email.com,555-5678,25,48000,2023-01-15,HR
+7,  Ed Davis  ,ed.davis@email.com,555-6789,30,52000,2020-12-01,Engineering
+8,Frank Miller,frank.miller@email.com,555-7890,35,70000,2018-04-30,Marketing
+9,Grace Lee,grace.lee@email,555-8901,twenty-six,58000,2021-08-15,Sales
+10,Henry Clark,henry.clark@email.com,555-9012,40,65000,2019-10-20,Engineering
+11,,invalid@,555-0000,25,30000,2023-01-01,Engineering
+12,Test User,test@email.com,,30,,2022-06-15,
