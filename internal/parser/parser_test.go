@@ -643,6 +643,226 @@ func TestParseTypeName(t *testing.T) {
 	}
 }
 
+// TestTypeCastSyntax tests the PostgreSQL :: type cast syntax.
+// The :: operator is a postfix operator with very high precedence.
+func TestTypeCastSyntax(t *testing.T) {
+	tests := []struct {
+		name       string
+		sql        string
+		wantErr    bool
+		targetType dukdb.Type // Expected target type for the outermost cast
+	}{
+		{
+			name:       "simple string to integer cast",
+			sql:        "SELECT '123'::integer",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER,
+		},
+		{
+			name:       "simple string to int cast",
+			sql:        "SELECT '456'::int",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER,
+		},
+		{
+			name:       "string to text cast",
+			sql:        "SELECT '123'::text",
+			wantErr:    false,
+			targetType: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:       "string to varchar cast",
+			sql:        "SELECT 'hello'::varchar",
+			wantErr:    false,
+			targetType: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:       "varchar with size parameter",
+			sql:        "SELECT 'hello'::varchar(50)",
+			wantErr:    false,
+			targetType: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:       "numeric with precision and scale",
+			sql:        "SELECT 12.5::numeric(10,2)",
+			wantErr:    false,
+			targetType: dukdb.TYPE_DECIMAL,
+		},
+		{
+			name:       "decimal with precision and scale",
+			sql:        "SELECT 12.5::decimal(10,2)",
+			wantErr:    false,
+			targetType: dukdb.TYPE_DECIMAL,
+		},
+		{
+			name:       "chained casts string to text to integer",
+			sql:        "SELECT '123'::text::integer",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER,
+		},
+		{
+			name:       "column reference with cast",
+			sql:        "SELECT col::text FROM t",
+			wantErr:    false,
+			targetType: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:       "expression with cast",
+			sql:        "SELECT (1 + 2)::varchar",
+			wantErr:    false,
+			targetType: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:       "function result with cast",
+			sql:        "SELECT now()::date",
+			wantErr:    false,
+			targetType: dukdb.TYPE_DATE,
+		},
+		{
+			name:       "timestamp cast",
+			sql:        "SELECT '2024-01-15'::timestamp",
+			wantErr:    false,
+			targetType: dukdb.TYPE_TIMESTAMP,
+		},
+		{
+			name:       "boolean cast",
+			sql:        "SELECT 1::boolean",
+			wantErr:    false,
+			targetType: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:       "bigint cast",
+			sql:        "SELECT 123::bigint",
+			wantErr:    false,
+			targetType: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:       "double cast",
+			sql:        "SELECT 123::double",
+			wantErr:    false,
+			targetType: dukdb.TYPE_DOUBLE,
+		},
+		{
+			name:       "float cast",
+			sql:        "SELECT 123::float",
+			wantErr:    false,
+			targetType: dukdb.TYPE_FLOAT,
+		},
+		{
+			name:       "cast in arithmetic expression",
+			sql:        "SELECT 1 + '2'::integer",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER,
+		},
+		{
+			name:       "cast in WHERE clause",
+			sql:        "SELECT * FROM t WHERE col::integer > 5",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER,
+		},
+		{
+			name:       "multiple casts in expression",
+			sql:        "SELECT '1'::integer + '2'::integer",
+			wantErr:    false,
+			targetType: dukdb.TYPE_INTEGER, // This checks the second cast
+		},
+		{
+			name:       "uuid cast",
+			sql:        "SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid",
+			wantErr:    false,
+			targetType: dukdb.TYPE_UUID,
+		},
+		{
+			name:    "missing type after ::",
+			sql:     "SELECT '123'::",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if stmt == nil {
+				t.Error("Parse() returned nil statement")
+				return
+			}
+
+			// Verify the statement is a SELECT
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Errorf("Expected SelectStmt, got %T", stmt)
+				return
+			}
+
+			// Find a CastExpr in the columns (non-exhaustive check)
+			// We look for any cast expr with the expected target type
+			found := findCastExprWithType(selectStmt, tt.targetType)
+			if !found {
+				t.Errorf("Expected to find CastExpr with target type %v", tt.targetType)
+			}
+		})
+	}
+}
+
+// findCastExprWithType recursively searches for a CastExpr with the given target type.
+func findCastExprWithType(stmt *SelectStmt, targetType dukdb.Type) bool {
+	for _, col := range stmt.Columns {
+		if found := findCastInExpr(col.Expr, targetType); found {
+			return true
+		}
+	}
+	if stmt.Where != nil {
+		if found := findCastInExpr(stmt.Where, targetType); found {
+			return true
+		}
+	}
+	return false
+}
+
+// findCastInExpr recursively searches an expression for a CastExpr with the given target type.
+func findCastInExpr(expr Expr, targetType dukdb.Type) bool {
+	if expr == nil {
+		return false
+	}
+
+	switch e := expr.(type) {
+	case *CastExpr:
+		if e.TargetType == targetType {
+			return true
+		}
+		// Check nested expression
+		return findCastInExpr(e.Expr, targetType)
+	case *BinaryExpr:
+		return findCastInExpr(e.Left, targetType) || findCastInExpr(e.Right, targetType)
+	case *UnaryExpr:
+		return findCastInExpr(e.Expr, targetType)
+	case *FunctionCall:
+		for _, arg := range e.Args {
+			if findCastInExpr(arg, targetType) {
+				return true
+			}
+		}
+	case *CaseExpr:
+		if findCastInExpr(e.Operand, targetType) {
+			return true
+		}
+		for _, when := range e.Whens {
+			if findCastInExpr(when.Condition, targetType) || findCastInExpr(when.Result, targetType) {
+				return true
+			}
+		}
+		return findCastInExpr(e.Else, targetType)
+	}
+	return false
+}
+
 // Phase 1: WHERE Clause Integration - Parser Tests
 
 // Task 1.1: Verify parser correctly captures WHERE clauses in UpdateStmt AST nodes
@@ -2839,4 +3059,367 @@ func TestCountParametersTimeTravel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------- LIMIT ALL PostgreSQL Compatibility Tests ----------
+
+// TestLimitAllParsing tests PostgreSQL-compatible LIMIT ALL syntax
+func TestLimitAllParsing(t *testing.T) {
+	tests := []struct {
+		name       string
+		sql        string
+		wantErr    bool
+		wantLimit  bool  // whether stmt.Limit should be non-nil
+		wantOffset bool  // whether stmt.Offset should be non-nil
+		offsetVal  int64 // expected offset value if wantOffset is true
+	}{
+		{
+			name:       "LIMIT ALL alone",
+			sql:        "SELECT * FROM t LIMIT ALL",
+			wantErr:    false,
+			wantLimit:  false, // LIMIT ALL means no limit (nil)
+			wantOffset: false,
+		},
+		{
+			name:       "LIMIT ALL with OFFSET",
+			sql:        "SELECT * FROM t LIMIT ALL OFFSET 5",
+			wantErr:    false,
+			wantLimit:  false, // LIMIT ALL means no limit (nil)
+			wantOffset: true,
+			offsetVal:  5,
+		},
+		{
+			name:       "LIMIT ALL with OFFSET 0",
+			sql:        "SELECT * FROM t LIMIT ALL OFFSET 0",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: true,
+			offsetVal:  0,
+		},
+		{
+			name:       "normal LIMIT still works",
+			sql:        "SELECT * FROM t LIMIT 10",
+			wantErr:    false,
+			wantLimit:  true,
+			wantOffset: false,
+		},
+		{
+			name:       "normal LIMIT with OFFSET still works",
+			sql:        "SELECT * FROM t LIMIT 10 OFFSET 20",
+			wantErr:    false,
+			wantLimit:  true,
+			wantOffset: true,
+			offsetVal:  20,
+		},
+		{
+			name:       "LIMIT ALL lowercase",
+			sql:        "SELECT * FROM t limit all",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: false,
+		},
+		{
+			name:       "LIMIT ALL mixed case",
+			sql:        "SELECT * FROM t Limit All OFFSET 10",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: true,
+			offsetVal:  10,
+		},
+		{
+			name:       "LIMIT ALL with ORDER BY",
+			sql:        "SELECT * FROM t ORDER BY id LIMIT ALL",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: false,
+		},
+		{
+			name:       "LIMIT ALL with WHERE",
+			sql:        "SELECT * FROM t WHERE x > 5 LIMIT ALL",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: false,
+		},
+		{
+			name:       "LIMIT ALL with large OFFSET",
+			sql:        "SELECT * FROM t LIMIT ALL OFFSET 1000000",
+			wantErr:    false,
+			wantLimit:  false,
+			wantOffset: true,
+			offsetVal:  1000000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			// Check Limit
+			if tt.wantLimit && selectStmt.Limit == nil {
+				t.Error("Expected Limit to be non-nil")
+			}
+			if !tt.wantLimit && selectStmt.Limit != nil {
+				t.Errorf("Expected Limit to be nil, got %v", selectStmt.Limit)
+			}
+
+			// Check Offset
+			if tt.wantOffset {
+				if selectStmt.Offset == nil {
+					t.Error("Expected Offset to be non-nil")
+				} else {
+					offsetLit, ok := selectStmt.Offset.(*Literal)
+					if !ok {
+						t.Fatalf("Expected Literal for Offset, got %T", selectStmt.Offset)
+					}
+					if offsetLit.Value != tt.offsetVal {
+						t.Errorf("Expected offset value %d, got %v", tt.offsetVal, offsetLit.Value)
+					}
+				}
+			}
+			if !tt.wantOffset && selectStmt.Offset != nil {
+				t.Errorf("Expected Offset to be nil, got %v", selectStmt.Offset)
+			}
+		})
+	}
+}
+
+// TestLimitAllAST verifies the AST structure for LIMIT ALL queries
+func TestLimitAllAST(t *testing.T) {
+	t.Run("LIMIT ALL produces nil Limit", func(t *testing.T) {
+		sql := "SELECT * FROM t LIMIT ALL"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+
+		if selectStmt.Limit != nil {
+			t.Errorf("Expected Limit to be nil for LIMIT ALL, got %v", selectStmt.Limit)
+		}
+	})
+
+	t.Run("LIMIT ALL OFFSET 5 structure", func(t *testing.T) {
+		sql := "SELECT * FROM t LIMIT ALL OFFSET 5"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+
+		// Limit should be nil (LIMIT ALL)
+		if selectStmt.Limit != nil {
+			t.Errorf("Expected Limit to be nil for LIMIT ALL, got %v", selectStmt.Limit)
+		}
+
+		// Offset should be 5
+		if selectStmt.Offset == nil {
+			t.Fatal("Expected Offset to be non-nil")
+		}
+
+		offsetLit, ok := selectStmt.Offset.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for Offset, got %T", selectStmt.Offset)
+		}
+
+		if offsetLit.Value != int64(5) {
+			t.Errorf("Expected offset value 5, got %v", offsetLit.Value)
+		}
+	})
+
+	t.Run("normal LIMIT 10 still produces Limit node", func(t *testing.T) {
+		sql := "SELECT * FROM t LIMIT 10"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+
+		if selectStmt.Limit == nil {
+			t.Fatal("Expected Limit to be non-nil for normal LIMIT")
+		}
+
+		limitLit, ok := selectStmt.Limit.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for Limit, got %T", selectStmt.Limit)
+		}
+
+		if limitLit.Value != int64(10) {
+			t.Errorf("Expected limit value 10, got %v", limitLit.Value)
+		}
+	})
+}
+
+// TestILikeParsing tests PostgreSQL ILIKE operator parsing
+func TestILikeParsing(t *testing.T) {
+	t.Run("simple ILIKE", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM t WHERE name ILIKE '%john%'")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		binaryExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr in WHERE, got %T", selectStmt.Where)
+		}
+
+		if binaryExpr.Op != OpILike {
+			t.Errorf("Expected OpILike, got %v", binaryExpr.Op)
+		}
+	})
+
+	t.Run("simple NOT ILIKE", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM t WHERE name NOT ILIKE '%john%'")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		binaryExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr in WHERE, got %T", selectStmt.Where)
+		}
+
+		if binaryExpr.Op != OpNotILike {
+			t.Errorf("Expected OpNotILike, got %v", binaryExpr.Op)
+		}
+	})
+
+	t.Run("lowercase ilike keyword", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM t WHERE name ilike 'TEST'")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		binaryExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr in WHERE, got %T", selectStmt.Where)
+		}
+
+		if binaryExpr.Op != OpILike {
+			t.Errorf("Expected OpILike, got %v", binaryExpr.Op)
+		}
+	})
+
+	t.Run("ILIKE combined with AND", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM t WHERE a ILIKE 'x%' AND b = 1")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		// The WHERE should be a BinaryExpr with OpAnd
+		andExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr for AND in WHERE, got %T", selectStmt.Where)
+		}
+
+		if andExpr.Op != OpAnd {
+			t.Errorf("Expected OpAnd at top level, got %v", andExpr.Op)
+		}
+
+		// Left side should be ILIKE expression
+		ilikeExpr, ok := andExpr.Left.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr for ILIKE, got %T", andExpr.Left)
+		}
+
+		if ilikeExpr.Op != OpILike {
+			t.Errorf("Expected OpILike, got %v", ilikeExpr.Op)
+		}
+	})
+
+	t.Run("ILIKE with column reference", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM users WHERE email ILIKE '%@example.com'")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		binaryExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr in WHERE, got %T", selectStmt.Where)
+		}
+
+		if binaryExpr.Op != OpILike {
+			t.Errorf("Expected OpILike, got %v", binaryExpr.Op)
+		}
+
+		// Verify left side is a column reference
+		colRef, ok := binaryExpr.Left.(*ColumnRef)
+		if !ok {
+			t.Fatalf("Expected ColumnRef on left side, got %T", binaryExpr.Left)
+		}
+
+		if colRef.Column != "email" {
+			t.Errorf("Expected column 'email', got '%s'", colRef.Column)
+		}
+
+		// Verify right side is a literal
+		lit, ok := binaryExpr.Right.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal on right side, got %T", binaryExpr.Right)
+		}
+
+		if lit.Value != "%@example.com" {
+			t.Errorf("Expected pattern '%%@example.com', got '%v'", lit.Value)
+		}
+	})
+
+	t.Run("mixed case ILiKe keyword", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM t WHERE name ILiKe 'PATTERN'")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		binaryExpr, ok := selectStmt.Where.(*BinaryExpr)
+		if !ok {
+			t.Fatalf("Expected BinaryExpr in WHERE, got %T", selectStmt.Where)
+		}
+
+		if binaryExpr.Op != OpILike {
+			t.Errorf("Expected OpILike, got %v", binaryExpr.Op)
+		}
+	})
 }

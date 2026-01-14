@@ -321,13 +321,20 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 	// LIMIT
 	if p.isKeyword("LIMIT") {
 		p.advance()
-		limit, err := p.parseExpr()
-		if err != nil {
-			return nil, err
-		}
-		stmt.Limit = limit
 
-		// OFFSET
+		// PostgreSQL compatibility: LIMIT ALL means no limit (equivalent to omitting LIMIT)
+		if p.isKeyword("ALL") {
+			p.advance()
+			// stmt.Limit remains nil, which means "no limit"
+		} else {
+			limit, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Limit = limit
+		}
+
+		// OFFSET (valid after both LIMIT <n> and LIMIT ALL)
 		if p.isKeyword("OFFSET") {
 			p.advance()
 			offset, err := p.parseExpr()
@@ -3218,6 +3225,42 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		}, nil
 	}
 
+	// ILIKE (PostgreSQL case-insensitive LIKE)
+	if p.isKeyword("ILIKE") {
+		p.advance()
+		right, err := p.parseAddExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		return &BinaryExpr{
+			Left:  left,
+			Op:    OpILike,
+			Right: right,
+		}, nil
+	}
+
+	// NOT ILIKE (PostgreSQL case-insensitive NOT LIKE)
+	if p.isKeyword("NOT") &&
+		p.peek().typ == tokenIdent &&
+		strings.EqualFold(
+			p.peek().value,
+			"ILIKE",
+		) {
+		p.advance() // NOT
+		p.advance() // ILIKE
+		right, err := p.parseAddExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		return &BinaryExpr{
+			Left:  left,
+			Op:    OpNotILike,
+			Right: right,
+		}, nil
+	}
+
 	// Comparison operators
 	if p.current().typ == tokenOperator {
 		var op BinaryOp
@@ -3433,7 +3476,56 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 		}
 	}
 
-	return p.parsePrimaryExpr()
+	return p.parsePostfixExpr()
+}
+
+// parsePostfixExpr parses postfix operators, specifically the PostgreSQL :: type cast syntax.
+// The :: operator has very high precedence and binds tighter than arithmetic operators.
+// Syntax: expr::type, where type can include parameters like varchar(100), numeric(10,2)
+// Chaining is supported: '123'::text::integer
+func (p *parser) parsePostfixExpr() (Expr, error) {
+	expr, err := p.parsePrimaryExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	// Loop to handle chained casts like '123'::text::integer
+	for p.current().typ == tokenOperator && p.current().value == "::" {
+		p.advance() // consume ::
+
+		// Parse the type name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected type name after ::")
+		}
+		typeName := strings.ToUpper(p.advance().value)
+		targetType := parseTypeName(typeName)
+
+		// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
+		if p.current().typ == tokenLParen {
+			p.advance()
+			depth := 1
+			for depth > 0 && p.current().typ != tokenEOF {
+				if p.current().typ == tokenLParen {
+					depth++
+				} else if p.current().typ == tokenRParen {
+					depth--
+				}
+				if depth > 0 {
+					p.advance()
+				}
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+		}
+
+		expr = &CastExpr{
+			Expr:       expr,
+			TargetType: targetType,
+		}
+	}
+
+	return expr, nil
 }
 
 func (p *parser) parsePrimaryExpr() (Expr, error) {
