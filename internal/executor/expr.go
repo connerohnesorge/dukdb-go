@@ -319,6 +319,18 @@ func (e *Executor) evaluateBinaryExpr(
 	case parser.OpJSONText:
 		return extractJSONValue(left, right, true)
 
+	// Bitwise operators
+	case parser.OpBitwiseAnd:
+		return bitwiseAndValue(left, right)
+	case parser.OpBitwiseOr:
+		return bitwiseOrValue(left, right)
+	case parser.OpBitwiseXor:
+		return bitwiseXorValue(left, right)
+	case parser.OpShiftLeft:
+		return bitwiseShiftLeftValue(left, right)
+	case parser.OpShiftRight:
+		return bitwiseShiftRightValue(left, right)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -363,6 +375,8 @@ func (e *Executor) evaluateUnaryExpr(
 		return val == nil, nil
 	case parser.OpIsNotNull:
 		return val != nil, nil
+	case parser.OpBitwiseNot:
+		return bitwiseNotValue(val)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -400,6 +414,388 @@ func (e *Executor) evaluateFunctionCall(
 		}
 
 		return absValue(args[0])
+
+	// Rounding functions
+	case "ROUND":
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ROUND requires 1 or 2 arguments",
+			}
+		}
+		var decimals any
+		if len(args) == 2 {
+			decimals = args[1]
+		}
+		return roundValue(args[0], decimals)
+
+	case "CEIL", "CEILING":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "CEIL requires 1 argument",
+			}
+		}
+		return ceilValue(args[0])
+
+	case "FLOOR":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "FLOOR requires 1 argument",
+			}
+		}
+		return floorValue(args[0])
+
+	case "TRUNC", "TRUNCATE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TRUNC requires 1 argument",
+			}
+		}
+		return truncValue(args[0])
+
+	case "ROUND_EVEN":
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ROUND_EVEN requires 1 or 2 arguments",
+			}
+		}
+		var decimals any
+		if len(args) == 2 {
+			decimals = args[1]
+		}
+		return roundEvenValue(args[0], decimals)
+
+	case "EVEN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "EVEN requires 1 argument",
+			}
+		}
+		return evenValue(args[0])
+
+	// Scientific functions
+	case "SQRT":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SQRT requires 1 argument",
+			}
+		}
+		return sqrtValue(args[0])
+
+	case "CBRT":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "CBRT requires 1 argument",
+			}
+		}
+		return cbrtValue(args[0])
+
+	case "POW", "POWER":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "POW requires 2 arguments",
+			}
+		}
+		return powValue(args[0], args[1])
+
+	case "EXP":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "EXP requires 1 argument",
+			}
+		}
+		return expValue(args[0])
+
+	case "LN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LN requires 1 argument",
+			}
+		}
+		return lnValue(args[0])
+
+	case "LOG", "LOG10":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LOG10 requires 1 argument",
+			}
+		}
+		return log10Value(args[0])
+
+	case "LOG2":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LOG2 requires 1 argument",
+			}
+		}
+		return log2Value(args[0])
+
+	case "GAMMA":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "GAMMA requires 1 argument",
+			}
+		}
+		return gammaValue(args[0])
+
+	case "LGAMMA":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LGAMMA requires 1 argument",
+			}
+		}
+		return lgammaValue(args[0])
+
+	case "FACTORIAL":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "FACTORIAL requires 1 argument",
+			}
+		}
+		return factorialValue(args[0])
+
+	// Trigonometric functions
+	case "SIN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SIN requires 1 argument",
+			}
+		}
+		return sinValue(args[0])
+
+	case "COS":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "COS requires 1 argument",
+			}
+		}
+		return cosValue(args[0])
+
+	case "TAN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TAN requires 1 argument",
+			}
+		}
+		return tanValue(args[0])
+
+	case "COT":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "COT requires 1 argument",
+			}
+		}
+		return cotValue(args[0])
+
+	case "ASIN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ASIN requires 1 argument",
+			}
+		}
+		return asinValue(args[0])
+
+	case "ACOS":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ACOS requires 1 argument",
+			}
+		}
+		return acosValue(args[0])
+
+	case "ATAN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ATAN requires 1 argument",
+			}
+		}
+		return atanValue(args[0])
+
+	case "ATAN2":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ATAN2 requires 2 arguments",
+			}
+		}
+		return atan2Value(args[0], args[1])
+
+	case "DEGREES":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "DEGREES requires 1 argument",
+			}
+		}
+		return degreesValue(args[0])
+
+	case "RADIANS":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "RADIANS requires 1 argument",
+			}
+		}
+		return radiansValue(args[0])
+
+	case "PI":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "PI requires 0 arguments",
+			}
+		}
+		return piValue()
+
+	case "RANDOM", "RAND":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "RANDOM requires 0 arguments",
+			}
+		}
+		return randomValue()
+
+	case "SIGN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SIGN requires 1 argument",
+			}
+		}
+		return signValue(args[0])
+
+	case "GCD":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "GCD requires 2 arguments",
+			}
+		}
+		return gcdValue(args[0], args[1])
+
+	case "LCM":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LCM requires 2 arguments",
+			}
+		}
+		return lcmValue(args[0], args[1])
+
+	case "ISNAN":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ISNAN requires 1 argument",
+			}
+		}
+		return isnanValue(args[0])
+
+	case "ISINF":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ISINF requires 1 argument",
+			}
+		}
+		return isinfValue(args[0])
+
+	case "ISFINITE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ISFINITE requires 1 argument",
+			}
+		}
+		return isfiniteValue(args[0])
+
+	// Bitwise functions
+	case "BIT_COUNT":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "BIT_COUNT requires 1 argument",
+			}
+		}
+		return bitCountValue(args[0])
+
+	// Hyperbolic functions
+	case "SINH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SINH requires 1 argument",
+			}
+		}
+		return sinhValue(args[0])
+
+	case "COSH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "COSH requires 1 argument",
+			}
+		}
+		return coshValue(args[0])
+
+	case "TANH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TANH requires 1 argument",
+			}
+		}
+		return tanhValue(args[0])
+
+	case "ASINH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ASINH requires 1 argument",
+			}
+		}
+		return asinhValue(args[0])
+
+	case "ACOSH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ACOSH requires 1 argument",
+			}
+		}
+		return acoshValue(args[0])
+
+	case "ATANH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ATANH requires 1 argument",
+			}
+		}
+		return atanhValue(args[0])
 
 	case "UPPER":
 		if len(args) != 1 {

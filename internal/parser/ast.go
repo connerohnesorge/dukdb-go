@@ -610,6 +610,13 @@ const (
 	// JSON operators
 	OpJSONExtract // -> (JSON extract, returns JSON)
 	OpJSONText    // ->> (JSON extract as text, returns VARCHAR)
+
+	// Bitwise operators
+	OpBitwiseAnd   // & (bitwise AND)
+	OpBitwiseOr    // | (bitwise OR)
+	OpBitwiseXor   // ^ (bitwise XOR)
+	OpShiftLeft    // << (left shift)
+	OpShiftRight   // >> (right shift)
 )
 
 // UnaryExpr represents a unary expression (op a).
@@ -629,6 +636,7 @@ const (
 	OpPos
 	OpIsNull
 	OpIsNotNull
+	OpBitwiseNot // ~ (bitwise NOT)
 )
 
 // FunctionCall represents a function call.

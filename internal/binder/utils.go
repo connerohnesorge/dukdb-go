@@ -532,6 +532,79 @@ func inferFunctionResultType(
 	case "BIT_AND", "BIT_OR", "BIT_XOR":
 		return dukdb.TYPE_BIGINT
 
+	// Rounding functions - preserve input type for integers, return DOUBLE for floats
+	case "ROUND", "ROUND_EVEN":
+		// ROUND preserves integer types for integer inputs, returns DOUBLE for floats
+		if len(args) > 0 {
+			argType := args[0].ResultType()
+			if isIntegerType(argType) {
+				return argType
+			}
+		}
+		return dukdb.TYPE_DOUBLE
+	case "CEIL", "CEILING", "FLOOR", "TRUNC", "TRUNCATE":
+		// Rounding to whole number preserves integer types
+		if len(args) > 0 {
+			argType := args[0].ResultType()
+			if isIntegerType(argType) {
+				return argType
+			}
+		}
+		return dukdb.TYPE_DOUBLE
+	case "EVEN":
+		// EVEN always returns the same integer type as input
+		if len(args) > 0 {
+			argType := args[0].ResultType()
+			if isIntegerType(argType) {
+				return argType
+			}
+		}
+		return dukdb.TYPE_DOUBLE
+
+	// Scientific functions - always return DOUBLE
+	case "SQRT", "CBRT", "POW", "POWER", "EXP", "LN", "LOG", "LOG10", "LOG2":
+		return dukdb.TYPE_DOUBLE
+	case "GAMMA", "LGAMMA":
+		return dukdb.TYPE_DOUBLE
+
+	// FACTORIAL returns BIGINT (integer result)
+	case "FACTORIAL":
+		return dukdb.TYPE_BIGINT
+
+	// Trigonometric functions - always return DOUBLE
+	case "SIN", "COS", "TAN", "COT":
+		return dukdb.TYPE_DOUBLE
+	case "ASIN", "ACOS", "ATAN":
+		return dukdb.TYPE_DOUBLE
+	case "ATAN2":
+		return dukdb.TYPE_DOUBLE
+	case "DEGREES", "RADIANS":
+		return dukdb.TYPE_DOUBLE
+
+	// Hyperbolic functions - always return DOUBLE
+	case "SINH", "COSH", "TANH":
+		return dukdb.TYPE_DOUBLE
+	case "ASINH", "ACOSH", "ATANH":
+		return dukdb.TYPE_DOUBLE
+
+	// Utility functions
+	case "PI", "RANDOM", "RAND":
+		return dukdb.TYPE_DOUBLE
+	case "SIGN":
+		// SIGN returns INTEGER (-1, 0, or 1)
+		return dukdb.TYPE_INTEGER
+	case "GCD", "LCM":
+		// GCD/LCM work on integers and return BIGINT
+		return dukdb.TYPE_BIGINT
+	case "ISNAN", "ISINF", "ISFINITE":
+		// Boolean predicates
+		return dukdb.TYPE_BOOLEAN
+
+	// Bitwise function
+	case "BIT_COUNT":
+		// BIT_COUNT returns INTEGER (count of set bits)
+		return dukdb.TYPE_INTEGER
+
 	// JSON functions
 	case "JSON_EXTRACT":
 		return dukdb.TYPE_JSON
@@ -790,6 +863,73 @@ func getFunctionArgTypes(
 
 	// Bitwise aggregates
 	case "BIT_AND", "BIT_OR", "BIT_XOR":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_BIGINT}
+		}
+
+	// Rounding functions - accept numeric types
+	case "ROUND", "ROUND_EVEN":
+		// ROUND(value) or ROUND(value, decimals)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_INTEGER}
+		}
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "CEIL", "CEILING", "FLOOR", "TRUNC", "TRUNCATE", "EVEN":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+
+	// Scientific functions - require DOUBLE inputs
+	case "SQRT", "CBRT", "EXP", "LN", "LOG", "LOG10", "LOG2", "GAMMA", "LGAMMA":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "POW", "POWER":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE}
+		}
+	case "FACTORIAL":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_INTEGER}
+		}
+
+	// Trigonometric functions - require DOUBLE inputs
+	case "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "DEGREES", "RADIANS":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "ATAN2":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE}
+		}
+
+	// Hyperbolic functions - require DOUBLE inputs
+	case "SINH", "COSH", "TANH", "ASINH", "ACOSH", "ATANH":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+
+	// Utility functions
+	case "PI", "RANDOM", "RAND":
+		// No arguments needed
+		return nil
+	case "SIGN":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+	case "GCD", "LCM":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_BIGINT}
+		}
+	case "ISNAN", "ISINF", "ISFINITE":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
+
+	// Bitwise function
+	case "BIT_COUNT":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_BIGINT}
 		}

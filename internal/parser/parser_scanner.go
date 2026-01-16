@@ -262,8 +262,66 @@ func (p *parser) scanOperator() {
 			)
 
 			return
+		case "<<":
+			// Bitwise left shift
+			p.pos += 2
+			p.tokens = append(
+				p.tokens,
+				token{tokenShiftLeft, "<<", start},
+			)
+
+			return
+		case ">>":
+			// Bitwise right shift
+			p.pos += 2
+			p.tokens = append(
+				p.tokens,
+				token{tokenShiftRight, ">>", start},
+			)
+
+			return
 		}
 	}
+
+	// Handle single-character bitwise operators with specific tokens
+	ch := p.input[p.pos]
+	switch ch {
+	case '&':
+		p.tokens = append(
+			p.tokens,
+			token{tokenAmpersand, "&", start},
+		)
+		p.pos++
+
+		return
+	case '|':
+		// Single | is bitwise OR (|| is string concat, handled above)
+		p.tokens = append(
+			p.tokens,
+			token{tokenPipe, "|", start},
+		)
+		p.pos++
+
+		return
+	case '^':
+		p.tokens = append(
+			p.tokens,
+			token{tokenCaret, "^", start},
+		)
+		p.pos++
+
+		return
+	case '~':
+		p.tokens = append(
+			p.tokens,
+			token{tokenTilde, "~", start},
+		)
+		p.pos++
+
+		return
+	}
+
+	// Default: other operators
 	p.tokens = append(
 		p.tokens,
 		token{

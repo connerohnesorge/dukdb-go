@@ -16,6 +16,14 @@ const (
 	tokenStar
 	tokenDot
 	tokenParameter
+
+	// Bitwise operator tokens
+	tokenAmpersand   // & (bitwise AND)
+	tokenPipe        // | (bitwise OR) - distinct from || (string concatenation)
+	tokenCaret       // ^ (bitwise XOR)
+	tokenTilde       // ~ (bitwise NOT)
+	tokenShiftLeft   // << (left shift)
+	tokenShiftRight  // >> (right shift)
 )
 
 type token struct {
@@ -39,5 +47,8 @@ func isOperatorChar(ch byte) bool {
 		ch == '=' ||
 		ch == '!' ||
 		ch == '|' ||
-		ch == ':'
+		ch == ':' ||
+		ch == '&' || // bitwise AND
+		ch == '^' || // bitwise XOR
+		ch == '~' // bitwise NOT
 }

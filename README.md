@@ -8,6 +8,7 @@ Pure Go implementation of a DuckDB-compatible database driver.
 - **database/sql Compatible** - Standard Go database interface
 - **Cloud Storage** - Native support for S3, GCS, Azure, and HTTP/HTTPS
 - **Extended Type Support** - JSON, GEOMETRY, BIGNUM, VARIANT, LAMBDA types
+- **Math Functions** - 45+ mathematical functions for numerical analysis
 - **Spatial Functions** - 30+ ST_* functions for GIS operations
 - **JSON Operators** - Path extraction with `->` and `->>` operators
 - **Cross-Platform** - Works with TinyGo, WebAssembly, and standard Go
@@ -154,6 +155,129 @@ Store lambda expressions:
 CREATE TABLE transforms (expr LAMBDA);
 INSERT INTO transforms VALUES ('x -> x + 1');
 INSERT INTO transforms VALUES ('(x, y) -> x * y');
+```
+
+## Math Functions
+
+dukdb-go provides 45+ mathematical functions for numerical analysis and scientific computing. See [docs/math-functions.md](docs/math-functions.md) for comprehensive documentation.
+
+### Rounding Functions
+
+```sql
+-- Round to decimal places
+SELECT ROUND(3.14159, 2);        -- 3.14
+SELECT ROUND(2.5);               -- 3.0
+
+-- Banker's rounding (round half to even)
+SELECT ROUND_EVEN(2.5, 0);       -- 2.0
+SELECT ROUND_EVEN(3.5, 0);       -- 4.0
+
+-- Ceiling and floor
+SELECT CEIL(2.1);                -- 3.0
+SELECT FLOOR(2.9);               -- 2.0
+
+-- Truncate towards zero
+SELECT TRUNC(-2.9);              -- -2.0
+```
+
+### Scientific Functions
+
+```sql
+-- Square and cube roots
+SELECT SQRT(16);                 -- 4.0
+SELECT CBRT(27);                 -- 3.0
+
+-- Exponentiation and logarithms
+SELECT POW(2, 10);               -- 1024.0
+SELECT EXP(1);                   -- 2.718281828...
+SELECT LN(2.718281828);          -- ~1.0
+SELECT LOG10(100);               -- 2.0
+SELECT LOG2(8);                  -- 3.0
+
+-- Special functions
+SELECT FACTORIAL(5);             -- 120
+SELECT GAMMA(5);                 -- 24.0 (factorial of 4)
+```
+
+### Trigonometric Functions
+
+```sql
+-- Basic trig (input in radians)
+SELECT SIN(0);                   -- 0.0
+SELECT COS(0);                   -- 1.0
+SELECT TAN(PI() / 4);            -- ~1.0
+
+-- Inverse trig
+SELECT ASIN(1);                  -- ~1.5707... (PI/2)
+SELECT ATAN2(1, 1);              -- ~0.7853... (PI/4)
+
+-- Angle conversion
+SELECT DEGREES(PI());            -- 180.0
+SELECT RADIANS(180);             -- ~3.14159...
+```
+
+### Hyperbolic Functions
+
+```sql
+SELECT SINH(0);                  -- 0.0
+SELECT COSH(0);                  -- 1.0
+SELECT TANH(0);                  -- 0.0
+SELECT ASINH(0);                 -- 0.0
+```
+
+### Utility Functions
+
+```sql
+-- Constants
+SELECT PI();                     -- 3.141592653589793
+
+-- Random numbers
+SELECT RANDOM();                 -- Random value between 0 and 1
+
+-- Number theory
+SELECT GCD(12, 18);              -- 6
+SELECT LCM(4, 6);                -- 12
+
+-- Floating-point validation
+SELECT ISNAN(0.0/0.0);           -- true
+SELECT ISINF(1.0/0.0);           -- true
+SELECT ISFINITE(42.0);           -- true
+```
+
+### Bitwise Operations
+
+```sql
+-- Bitwise operators (integer types only)
+SELECT 5 & 3;                    -- 1 (AND)
+SELECT 5 | 3;                    -- 7 (OR)
+SELECT 5 ^ 3;                    -- 6 (XOR)
+SELECT ~5;                       -- -6 (NOT)
+
+-- Bit shifting
+SELECT 1 << 4;                   -- 16
+SELECT 16 >> 2;                  -- 4
+
+-- Count set bits
+SELECT BIT_COUNT(255);           -- 8
+```
+
+### Practical Examples
+
+```sql
+-- Financial: Round to currency
+SELECT ROUND(price * 1.0825, 2) AS total_with_tax FROM products;
+
+-- Scientific: Calculate distance
+SELECT SQRT(POW(x2 - x1, 2) + POW(y2 - y1, 2)) AS distance FROM points;
+
+-- Trigonometry: Convert coordinates
+SELECT
+    distance * COS(RADIANS(angle)) AS x,
+    distance * SIN(RADIANS(angle)) AS y
+FROM polar_coords;
+
+-- Bitwise: Check permission flags
+SELECT * FROM users WHERE permissions & 4 != 0; -- Has write permission
 ```
 
 ## Supported SQL Features

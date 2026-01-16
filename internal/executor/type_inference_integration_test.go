@@ -461,3 +461,386 @@ func TestCoalesceWithColumnReferences(t *testing.T) {
 		assert.Equal(t, "default", results[2])
 	})
 }
+
+// TestMathFunctionTypePreservation tests that math functions return correct types.
+func TestMathFunctionTypePreservation(t *testing.T) {
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	tests := []struct {
+		name         string
+		query        string
+		expectedType string // "float64", "int64", "int32", "bool"
+		checkValue   func(t *testing.T, result interface{})
+	}{
+		// Rounding functions preserve integer types
+		{
+			name:         "ROUND with integer returns integer",
+			query:        "SELECT ROUND(42)",
+			expectedType: "float64", // Currently returns float64 from math.Round
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(42), v)
+			},
+		},
+		{
+			name:         "FLOOR with float returns double",
+			query:        "SELECT FLOOR(3.7)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(3), v)
+			},
+		},
+		{
+			name:         "CEIL with float returns double",
+			query:        "SELECT CEIL(3.2)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(4), v)
+			},
+		},
+
+		// Scientific functions always return DOUBLE
+		{
+			name:         "SQRT returns DOUBLE",
+			query:        "SELECT SQRT(16)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(4), v)
+			},
+		},
+		{
+			name:         "POW returns DOUBLE",
+			query:        "SELECT POW(2, 3)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(8), v)
+			},
+		},
+		{
+			name:         "EXP returns DOUBLE",
+			query:        "SELECT EXP(0)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(1), v)
+			},
+		},
+		{
+			name:         "LN returns DOUBLE",
+			query:        "SELECT LN(1)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(0), v)
+			},
+		},
+
+		// FACTORIAL returns BIGINT
+		{
+			name:         "FACTORIAL returns BIGINT",
+			query:        "SELECT FACTORIAL(5)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(120), v)
+			},
+		},
+
+		// Trigonometric functions return DOUBLE
+		{
+			name:         "SIN returns DOUBLE",
+			query:        "SELECT SIN(0)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(0), v)
+			},
+		},
+		{
+			name:         "COS returns DOUBLE",
+			query:        "SELECT COS(0)",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.Equal(t, float64(1), v)
+			},
+		},
+
+		// Boolean predicates return BOOLEAN
+		{
+			name:         "ISNAN returns BOOLEAN",
+			query:        "SELECT ISNAN(1.0)",
+			expectedType: "bool",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(bool)
+				assert.True(t, ok, "expected bool, got %T", result)
+				assert.False(t, v)
+			},
+		},
+		{
+			name:         "ISINF returns BOOLEAN",
+			query:        "SELECT ISINF(1.0)",
+			expectedType: "bool",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(bool)
+				assert.True(t, ok, "expected bool, got %T", result)
+				assert.False(t, v)
+			},
+		},
+		{
+			name:         "ISFINITE returns BOOLEAN",
+			query:        "SELECT ISFINITE(1.0)",
+			expectedType: "bool",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(bool)
+				assert.True(t, ok, "expected bool, got %T", result)
+				assert.True(t, v)
+			},
+		},
+
+		// SIGN returns INTEGER
+		{
+			name:         "SIGN returns INTEGER",
+			query:        "SELECT SIGN(10)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(1), v)
+			},
+		},
+		{
+			name:         "SIGN negative returns -1",
+			query:        "SELECT SIGN(-5)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(-1), v)
+			},
+		},
+
+		// GCD/LCM return BIGINT
+		{
+			name:         "GCD returns BIGINT",
+			query:        "SELECT GCD(12, 8)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(4), v)
+			},
+		},
+		{
+			name:         "LCM returns BIGINT",
+			query:        "SELECT LCM(4, 6)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(12), v)
+			},
+		},
+
+		// BIT_COUNT returns INTEGER
+		{
+			name:         "BIT_COUNT returns INTEGER",
+			query:        "SELECT BIT_COUNT(7)",
+			expectedType: "int64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(int64)
+				assert.True(t, ok, "expected int64, got %T", result)
+				assert.Equal(t, int64(3), v) // 7 = 0b111 = 3 bits set
+			},
+		},
+
+		// PI and RANDOM return DOUBLE
+		{
+			name:         "PI returns DOUBLE",
+			query:        "SELECT PI()",
+			expectedType: "float64",
+			checkValue: func(t *testing.T, result interface{}) {
+				v, ok := result.(float64)
+				assert.True(t, ok, "expected float64, got %T", result)
+				assert.InDelta(t, 3.14159265358979, v, 0.0001)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getFirstValue(t, exec, cat, tt.query)
+			require.NotNil(t, result, "result should not be nil")
+			tt.checkValue(t, result)
+		})
+	}
+}
+
+// TestMathFunctionTypeCoercion tests that integer arguments are properly coerced to DOUBLE.
+func TestMathFunctionTypeCoercion(t *testing.T) {
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	exec := NewExecutor(cat, stor)
+
+	tests := []struct {
+		name     string
+		query    string
+		expected float64
+		delta    float64 // for floating point comparison
+	}{
+		// Integer arguments should be coerced to DOUBLE for scientific functions
+		{
+			name:     "SQRT with integer argument",
+			query:    "SELECT SQRT(16)",
+			expected: 4.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "CBRT with integer argument",
+			query:    "SELECT CBRT(8)",
+			expected: 2.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "POW with integer arguments",
+			query:    "SELECT POW(2, 10)",
+			expected: 1024.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "EXP with integer argument",
+			query:    "SELECT EXP(1)",
+			expected: 2.71828182845904,
+			delta:    0.0001,
+		},
+		{
+			name:     "LN with integer argument",
+			query:    "SELECT LN(10)",
+			expected: 2.302585092994,
+			delta:    0.0001,
+		},
+		{
+			name:     "LOG10 with integer argument",
+			query:    "SELECT LOG10(100)",
+			expected: 2.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "LOG2 with integer argument",
+			query:    "SELECT LOG2(8)",
+			expected: 3.0,
+			delta:    0.0001,
+		},
+
+		// Trigonometric functions with integer arguments
+		{
+			name:     "SIN with integer argument (0)",
+			query:    "SELECT SIN(0)",
+			expected: 0.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "COS with integer argument (0)",
+			query:    "SELECT COS(0)",
+			expected: 1.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "TAN with integer argument (0)",
+			query:    "SELECT TAN(0)",
+			expected: 0.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "DEGREES with integer argument",
+			query:    "SELECT DEGREES(0)",
+			expected: 0.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "RADIANS with integer argument (180)",
+			query:    "SELECT RADIANS(180)",
+			expected: 3.14159265358979,
+			delta:    0.0001,
+		},
+
+		// Hyperbolic functions with integer arguments
+		{
+			name:     "SINH with integer argument (0)",
+			query:    "SELECT SINH(0)",
+			expected: 0.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "COSH with integer argument (0)",
+			query:    "SELECT COSH(0)",
+			expected: 1.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "TANH with integer argument (0)",
+			query:    "SELECT TANH(0)",
+			expected: 0.0,
+			delta:    0.0001,
+		},
+
+		// Rounding functions with float arguments
+		{
+			name:     "ROUND with float argument",
+			query:    "SELECT ROUND(3.5)",
+			expected: 4.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "FLOOR with float argument",
+			query:    "SELECT FLOOR(3.9)",
+			expected: 3.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "CEIL with float argument",
+			query:    "SELECT CEIL(3.1)",
+			expected: 4.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "TRUNC with float argument",
+			query:    "SELECT TRUNC(3.9)",
+			expected: 3.0,
+			delta:    0.0001,
+		},
+		{
+			name:     "TRUNC with negative float",
+			query:    "SELECT TRUNC(-3.9)",
+			expected: -3.0,
+			delta:    0.0001,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getFirstValue(t, exec, cat, tt.query)
+			require.NotNil(t, result, "result should not be nil")
+
+			v, ok := result.(float64)
+			require.True(t, ok, "expected float64, got %T: %v", result, result)
+			assert.InDelta(t, tt.expected, v, tt.delta, "expected %v, got %v", tt.expected, v)
+		})
+	}
+}

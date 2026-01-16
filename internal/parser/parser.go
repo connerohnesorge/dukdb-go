@@ -3141,7 +3141,7 @@ func (p *parser) parseNotExpr() (Expr, error) {
 }
 
 func (p *parser) parseComparisonExpr() (Expr, error) {
-	left, err := p.parseAddExpr()
+	left, err := p.parseBitwiseOrExpr()
 	if err != nil {
 		return nil, err
 	}
@@ -3173,14 +3173,14 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 	// BETWEEN
 	if p.isKeyword("BETWEEN") {
 		p.advance()
-		low, err := p.parseAddExpr()
+		low, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
 		if err := p.expectKeyword("AND"); err != nil {
 			return nil, err
 		}
-		high, err := p.parseAddExpr()
+		high, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3201,14 +3201,14 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		) {
 		p.advance() // NOT
 		p.advance() // BETWEEN
-		low, err := p.parseAddExpr()
+		low, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
 		if err := p.expectKeyword("AND"); err != nil {
 			return nil, err
 		}
-		high, err := p.parseAddExpr()
+		high, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3297,7 +3297,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 	// LIKE
 	if p.isKeyword("LIKE") {
 		p.advance()
-		right, err := p.parseAddExpr()
+		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3318,7 +3318,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		) {
 		p.advance() // NOT
 		p.advance() // LIKE
-		right, err := p.parseAddExpr()
+		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3333,7 +3333,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 	// ILIKE (PostgreSQL case-insensitive LIKE)
 	if p.isKeyword("ILIKE") {
 		p.advance()
-		right, err := p.parseAddExpr()
+		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3354,7 +3354,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		) {
 		p.advance() // NOT
 		p.advance() // ILIKE
-		right, err := p.parseAddExpr()
+		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3386,7 +3386,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			return left, nil
 		}
 		p.advance()
-		right, err := p.parseAddExpr()
+		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -3396,6 +3396,108 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			Op:    op,
 			Right: right,
 		}, nil
+	}
+
+	return left, nil
+}
+
+// parseBitwiseOrExpr parses bitwise OR expressions (|).
+// This has the lowest precedence among bitwise operators.
+// SQL standard precedence (from lowest to highest in bitwise category):
+// | (OR) < ^ (XOR) < & (AND) < <<, >> (shifts)
+func (p *parser) parseBitwiseOrExpr() (Expr, error) {
+	left, err := p.parseBitwiseXorExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().typ == tokenPipe {
+		p.advance()
+		right, err := p.parseBitwiseXorExpr()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{
+			Left:  left,
+			Op:    OpBitwiseOr,
+			Right: right,
+		}
+	}
+
+	return left, nil
+}
+
+// parseBitwiseXorExpr parses bitwise XOR expressions (^).
+func (p *parser) parseBitwiseXorExpr() (Expr, error) {
+	left, err := p.parseBitwiseAndExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().typ == tokenCaret {
+		p.advance()
+		right, err := p.parseBitwiseAndExpr()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{
+			Left:  left,
+			Op:    OpBitwiseXor,
+			Right: right,
+		}
+	}
+
+	return left, nil
+}
+
+// parseBitwiseAndExpr parses bitwise AND expressions (&).
+func (p *parser) parseBitwiseAndExpr() (Expr, error) {
+	left, err := p.parseShiftExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().typ == tokenAmpersand {
+		p.advance()
+		right, err := p.parseShiftExpr()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{
+			Left:  left,
+			Op:    OpBitwiseAnd,
+			Right: right,
+		}
+	}
+
+	return left, nil
+}
+
+// parseShiftExpr parses bitwise shift expressions (<< and >>).
+// These have the highest precedence among bitwise operators.
+func (p *parser) parseShiftExpr() (Expr, error) {
+	left, err := p.parseAddExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().typ == tokenShiftLeft || p.current().typ == tokenShiftRight {
+		var op BinaryOp
+		if p.current().typ == tokenShiftLeft {
+			op = OpShiftLeft
+		} else {
+			op = OpShiftRight
+		}
+		p.advance()
+		right, err := p.parseAddExpr()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{
+			Left:  left,
+			Op:    op,
+			Right: right,
+		}
 	}
 
 	return left, nil
@@ -3502,6 +3604,20 @@ func (p *parser) parseMulExpr() (Expr, error) {
 }
 
 func (p *parser) parseUnaryExpr() (Expr, error) {
+	// Handle bitwise NOT operator (~)
+	if p.current().typ == tokenTilde {
+		p.advance()
+		expr, err := p.parseUnaryExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		return &UnaryExpr{
+			Op:   OpBitwiseNot,
+			Expr: expr,
+		}, nil
+	}
+
 	if p.current().typ == tokenOperator {
 		switch p.current().value {
 		case "-":
