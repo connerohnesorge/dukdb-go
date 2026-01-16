@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"strings"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	wire "github.com/jeroenrinzema/psql-wire"
@@ -75,13 +77,15 @@ func (h *Handler) Parse(ctx context.Context, query string) (wire.PreparedStateme
 			continue
 		}
 
-		stmtCopy := stmt // Capture for closure
-		stmtFn := func(ctx context.Context, writer wire.DataWriter, parameters []wire.Parameter) error {
-			return h.executeQuery(ctx, stmtCopy, writer, parameters)
-		}
-
-		// Determine the query type and columns
+		// Determine the query type, columns, and parameter types first
 		columns, params := h.analyzeQuery(ctx, stmt)
+
+		// Capture for closure
+		stmtCopy := stmt
+		paramTypesCopy := params // Capture parameter OIDs for proper type conversion
+		stmtFn := func(ctx context.Context, writer wire.DataWriter, parameters []wire.Parameter) error {
+			return h.executeQueryWithTypes(ctx, stmtCopy, writer, parameters, paramTypesCopy)
+		}
 
 		// Create the prepared statement with columns and parameters
 		var opts []wire.PreparedOptionFn
@@ -320,10 +324,36 @@ func splitStatements(query string) []string {
 	return statements
 }
 
+// executeQueryWithTypes executes a query with known parameter types for proper conversion.
+func (h *Handler) executeQueryWithTypes(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter, paramTypes []uint32) error {
+	return h.executeQueryInternal(ctx, query, writer, parameters, paramTypes)
+}
+
 // executeQuery executes a query and writes results to the DataWriter.
+// This is a convenience method that calls executeQueryInternal with no type information.
 func (h *Handler) executeQuery(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter) error {
+	return h.executeQueryInternal(ctx, query, writer, parameters, nil)
+}
+
+// executeQueryInternal executes a query and writes results to the DataWriter.
+// If paramTypes is provided, it's used for proper type conversion of parameters.
+func (h *Handler) executeQueryInternal(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter, paramTypes []uint32) error {
 	// Get session from context for transaction state management
 	session, _ := SessionFromContext(ctx)
+
+	// Start metrics tracking
+	var metricsCollector *MetricsCollector
+	var sessionID uint64
+	if session != nil {
+		sessionID = session.ID()
+	}
+	if h.server != nil && h.server.observability != nil {
+		metricsCollector = h.server.observability.MetricsCollector()
+		if metricsCollector != nil {
+			metricsCollector.StartQuery(sessionID, query)
+		}
+	}
+	startTime := time.Now()
 
 	// Classify the query type
 	upperQuery := strings.ToUpper(strings.TrimSpace(query))
@@ -337,7 +367,18 @@ func (h *Handler) executeQuery(ctx context.Context, query string, writer wire.Da
 	}
 
 	// Convert wire parameters to driver.NamedValue
-	args := h.convertParameters(ctx, parameters)
+	// Use type information if available for proper binary format conversion
+	var args []driver.NamedValue
+	if len(paramTypes) > 0 {
+		var err error
+		args, err = h.convertParametersWithTypes(parameters, paramTypes)
+		if err != nil {
+			// Fall back to type-less conversion on error
+			args = h.convertParameters(ctx, parameters)
+		}
+	} else {
+		args = h.convertParameters(ctx, parameters)
+	}
 
 	// Handle special commands first
 	if handled, err := h.handleSpecialCommand(ctx, upperQuery, query, writer, session); handled {
@@ -347,6 +388,11 @@ func (h *Handler) executeQuery(ctx context.Context, query string, writer wire.Da
 	// Handle transaction commands
 	if handled, err := h.handleTransactionCommand(ctx, upperQuery, writer, session); handled {
 		return err
+	}
+
+	// Handle COPY commands (wire protocol COPY TO STDOUT / FROM STDIN)
+	if IsCopyCommand(query) {
+		return h.handleCopyCommand(ctx, query, writer, session)
 	}
 
 	// Determine if this is a query that returns rows
@@ -400,17 +446,49 @@ func (h *Handler) executeQuery(ctx context.Context, query string, writer wire.Da
 		rewrittenQuery = HandleSelectFromDual(rewrittenQuery)
 	}
 
+	// Set up query cancellation and statement timeout
+	var queryCancel context.CancelFunc
+	queryCtx := ctx
+
+	if session != nil && h.server != nil && h.server.cancellationManager != nil {
+		statementTimeout := session.GetStatementTimeout()
+		queryCtx, queryCancel = h.server.cancellationManager.StartQuery(ctx, session.ID(), query, statementTimeout)
+		session.SetCurrentQueryCancel(queryCancel)
+		defer func() {
+			if queryCancel != nil {
+				queryCancel()
+			}
+			session.ClearCurrentQueryCancel()
+		}()
+	}
+
 	var err error
 	if isSelect {
-		err = h.executeSelectQuery(ctx, rewrittenQuery, writer, args)
+		err = h.executeSelectQuery(queryCtx, rewrittenQuery, writer, args)
 	} else {
-		err = h.executeNonSelectQuery(ctx, query, writer, args)
+		err = h.executeNonSelectQuery(queryCtx, query, writer, args)
+	}
+
+	// Check if query was cancelled
+	if queryCtx.Err() == context.Canceled {
+		// Determine if it was cancelled due to timeout or user request
+		if err == nil || (err != nil && !errors.Is(err, context.Canceled)) {
+			err = ErrQueryCanceled()
+		}
+	} else if queryCtx.Err() == context.DeadlineExceeded {
+		err = NewPgError(CodeQueryCanceled, "canceling statement due to statement timeout")
 	}
 
 	// Handle errors within transactions
 	if err != nil && session != nil && session.InTransaction() {
 		// Mark the transaction as aborted
 		session.SetTransactionAborted(true)
+	}
+
+	// Record metrics
+	if metricsCollector != nil {
+		duration := time.Since(startTime)
+		metricsCollector.EndQuery(sessionID, query, duration, 0, err)
 	}
 
 	// Convert errors to PostgreSQL format
@@ -481,6 +559,21 @@ func (h *Handler) handleSpecialCommand(ctx context.Context, upperQuery, original
 		return true, h.handleDeallocateCommand(ctx, originalQuery, writer, session)
 	}
 
+	// Handle LISTEN command
+	if strings.HasPrefix(upperQuery, "LISTEN ") {
+		return true, h.handleListenCommand(ctx, originalQuery, writer, session)
+	}
+
+	// Handle UNLISTEN command
+	if strings.HasPrefix(upperQuery, "UNLISTEN ") || upperQuery == "UNLISTEN" {
+		return true, h.handleUnlistenCommand(ctx, originalQuery, writer, session)
+	}
+
+	// Handle NOTIFY command
+	if strings.HasPrefix(upperQuery, "NOTIFY ") {
+		return true, h.handleNotifyCommand(ctx, originalQuery, writer, session)
+	}
+
 	return false, nil
 }
 
@@ -517,6 +610,24 @@ func (h *Handler) handleSetCommand(ctx context.Context, query string, writer wir
 
 	// Remove quotes from value if present
 	varValue = strings.Trim(varValue, "'\"")
+
+	// Handle special timeout settings
+	if session != nil {
+		switch varName {
+		case "statement_timeout":
+			timeout, err := parseTimeoutValue(varValue)
+			if err != nil {
+				return NewPgError(CodeInvalidTextRepresentation, "invalid value for parameter \"statement_timeout\": \""+varValue+"\"")
+			}
+			session.SetStatementTimeout(timeout)
+		case "lock_timeout":
+			timeout, err := parseTimeoutValue(varValue)
+			if err != nil {
+				return NewPgError(CodeInvalidTextRepresentation, "invalid value for parameter \"lock_timeout\": \""+varValue+"\"")
+			}
+			session.SetLockTimeout(timeout)
+		}
+	}
 
 	// Store in session if available
 	if session != nil {
@@ -630,6 +741,16 @@ func (h *Handler) getBuiltinVariable(varName string, session *Session) string {
 			}
 		}
 		return ""
+	case "statement_timeout":
+		if session != nil {
+			return formatTimeoutValue(session.GetStatementTimeout())
+		}
+		return "0"
+	case "lock_timeout":
+		if session != nil {
+			return formatTimeoutValue(session.GetLockTimeout())
+		}
+		return "0"
 	default:
 		return ""
 	}
@@ -1294,10 +1415,13 @@ func (h *Handler) getCloseTag(upperQuery string) string {
 }
 
 // analyzeQuery analyzes a query to determine its result columns and parameters.
+// This is critical for DESCRIBE message support in the extended query protocol.
+// The parameters returned will be used in ParameterDescription messages,
+// and columns will be used in RowDescription messages.
 func (h *Handler) analyzeQuery(ctx context.Context, query string) (wire.Columns, []uint32) {
 	upperQuery := strings.ToUpper(strings.TrimSpace(query))
 
-	// For non-SELECT queries, return empty columns
+	// For non-SELECT queries, return empty columns but still try to get parameter types
 	isSelect := strings.HasPrefix(upperQuery, "SELECT") ||
 		strings.HasPrefix(upperQuery, "SHOW") ||
 		strings.HasPrefix(upperQuery, "EXPLAIN") ||
@@ -1305,16 +1429,66 @@ func (h *Handler) analyzeQuery(ctx context.Context, query string) (wire.Columns,
 		strings.HasPrefix(upperQuery, "TABLE") ||
 		strings.HasPrefix(upperQuery, "VALUES")
 
+	// Try to prepare the statement to get proper type information from the binder
+	columns, params := h.getQueryMetadata(ctx, query)
+
 	if !isSelect {
-		// Parse parameters for non-SELECT queries
-		params := wire.ParseParameters(query)
+		// For non-SELECT queries, don't return columns
 		return nil, params
 	}
 
-	// For SELECT queries, try to get column metadata
-	// by preparing the statement
-	columns := h.getQueryColumns(ctx, query)
-	params := wire.ParseParameters(query)
+	return columns, params
+}
+
+// getQueryMetadata uses the engine's Prepare to get column and parameter types.
+// This is more accurate than text-based inference because it uses the binder.
+func (h *Handler) getQueryMetadata(ctx context.Context, query string) (wire.Columns, []uint32) {
+	if h.server == nil || h.server.conn == nil {
+		return nil, InferParameterTypes(query)
+	}
+
+	// Try to prepare the statement to get metadata
+	stmt, err := h.server.conn.Prepare(ctx, query)
+	if err != nil {
+		// Fall back to text-based inference on error
+		return nil, InferParameterTypes(query)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	// Check if the statement supports introspection
+	introspector, ok := stmt.(dukdb.BackendStmtIntrospector)
+	if !ok {
+		return nil, InferParameterTypes(query)
+	}
+
+	// Get parameter types from introspector
+	numInput := stmt.NumInput()
+	var params []uint32
+	if numInput > 0 {
+		params = make([]uint32, numInput)
+		for i := 0; i < numInput; i++ {
+			typ := introspector.ParamType(i + 1) // 1-based index
+			params[i] = dukdbTypeToOid(typ)
+		}
+	}
+
+	// Build columns from introspection
+	colCount := introspector.ColumnCount()
+	if colCount == 0 {
+		return nil, params
+	}
+
+	columns := make(wire.Columns, colCount)
+	for i := 0; i < colCount; i++ {
+		name := introspector.ColumnName(i)
+		typ := introspector.ColumnType(i)
+		oid := dukdbTypeToOid(typ)
+
+		columns[i] = NewColumnBuilder(name).
+			TypeOID(oid).
+			ColumnNumber(int16(i + 1)).
+			Build()
+	}
 
 	return columns, params
 }
@@ -1360,25 +1534,49 @@ func (h *Handler) getQueryColumns(ctx context.Context, query string) wire.Column
 	return columns
 }
 
-// convertParameters converts wire.Parameter to driver.NamedValue.
+// convertParameters converts wire.Parameter to driver.NamedValue with proper type binding.
+// It uses parameter type information from the context if available.
 func (h *Handler) convertParameters(ctx context.Context, parameters []wire.Parameter) []driver.NamedValue {
 	if len(parameters) == 0 {
 		return nil
 	}
 
-	args := make([]driver.NamedValue, len(parameters))
-	for i, param := range parameters {
-		// Scan the parameter value using the appropriate type
-		// For now, we use a generic approach
-		value := param.Value()
-
-		args[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   value,
+	// Create a parameter binder with no explicit types (will infer from values)
+	binder := NewParameterBinder(nil)
+	args, err := binder.BindParameters(parameters)
+	if err != nil {
+		// Fall back to raw byte values on error
+		args = make([]driver.NamedValue, len(parameters))
+		for i, param := range parameters {
+			rawValue := param.Value()
+			var value any
+			if rawValue != nil {
+				// Try to convert to string for text format
+				if param.Format() == wire.TextFormat {
+					value = string(rawValue)
+				} else {
+					value = rawValue
+				}
+			}
+			args[i] = driver.NamedValue{
+				Ordinal: i + 1,
+				Value:   value,
+			}
 		}
 	}
 
 	return args
+}
+
+// convertParametersWithTypes converts wire.Parameter to driver.NamedValue using
+// the specified parameter types for proper type conversion.
+func (h *Handler) convertParametersWithTypes(parameters []wire.Parameter, paramTypes []uint32) ([]driver.NamedValue, error) {
+	if len(parameters) == 0 {
+		return nil, nil
+	}
+
+	binder := NewParameterBinder(paramTypes)
+	return binder.BindParameters(parameters)
 }
 
 // dukdbTypeToOid converts a dukdb.Type to a PostgreSQL OID.
@@ -1533,4 +1731,274 @@ func (h *Handler) handleDeallocateCommand(ctx context.Context, query string, wri
 	}
 
 	return writer.Complete("DEALLOCATE")
+}
+
+// handleListenCommand handles the LISTEN command.
+// Format: LISTEN channel_name
+func (h *Handler) handleListenCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+	if session == nil {
+		return NewPgError(CodeInternalError, "no session available for LISTEN")
+	}
+
+	if h.server == nil || h.server.notificationHub == nil {
+		return NewPgError(CodeInternalError, "notification hub not available")
+	}
+
+	// Parse channel name from query
+	channel := parseChannelName(query, "LISTEN ")
+	if channel == "" {
+		return NewPgError(CodeSyntaxError, "LISTEN requires a channel name")
+	}
+
+	// Register the session for this channel
+	h.server.notificationHub.Listen(session.ID(), channel)
+
+	if h.server.logger != nil {
+		h.server.logger.Debug("session listening on channel",
+			"session_id", session.ID(),
+			"channel", channel,
+		)
+	}
+
+	return writer.Complete("LISTEN")
+}
+
+// handleUnlistenCommand handles the UNLISTEN command.
+// Format: UNLISTEN channel_name | UNLISTEN *
+func (h *Handler) handleUnlistenCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+	if session == nil {
+		return NewPgError(CodeInternalError, "no session available for UNLISTEN")
+	}
+
+	if h.server == nil || h.server.notificationHub == nil {
+		return NewPgError(CodeInternalError, "notification hub not available")
+	}
+
+	// Parse channel name from query
+	channel := parseChannelName(query, "UNLISTEN ")
+	if channel == "" {
+		// UNLISTEN without argument is treated as UNLISTEN *
+		channel = "*"
+	}
+
+	// Unregister the session from this channel (or all channels if *)
+	h.server.notificationHub.Unlisten(session.ID(), channel)
+
+	if h.server.logger != nil {
+		h.server.logger.Debug("session unlistening from channel",
+			"session_id", session.ID(),
+			"channel", channel,
+		)
+	}
+
+	return writer.Complete("UNLISTEN")
+}
+
+// handleNotifyCommand handles the NOTIFY command.
+// Format: NOTIFY channel_name [, 'payload']
+func (h *Handler) handleNotifyCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+	if h.server == nil || h.server.notificationHub == nil {
+		return NewPgError(CodeInternalError, "notification hub not available")
+	}
+
+	// Parse channel and payload from query
+	channel, payload := parseNotifyArgs(query)
+	if channel == "" {
+		return NewPgError(CodeSyntaxError, "NOTIFY requires a channel name")
+	}
+
+	// Get sender PID (use session ID as PID)
+	var senderPID int32
+	if session != nil {
+		senderPID = int32(session.ID())
+	}
+
+	// Send notification to all listeners
+	count := h.server.notificationHub.Notify(channel, payload, senderPID)
+
+	if h.server.logger != nil {
+		h.server.logger.Debug("notification sent",
+			"channel", channel,
+			"payload", payload,
+			"sender_pid", senderPID,
+			"listeners", count,
+		)
+	}
+
+	return writer.Complete("NOTIFY")
+}
+
+// parseChannelName extracts the channel name from a LISTEN or UNLISTEN command.
+func parseChannelName(query, prefix string) string {
+	// Remove the prefix (case-insensitive)
+	upper := strings.ToUpper(query)
+	if strings.HasPrefix(upper, prefix) {
+		query = query[len(prefix):]
+	}
+
+	// Trim whitespace
+	channel := strings.TrimSpace(query)
+
+	// Remove trailing semicolon if present
+	channel = strings.TrimSuffix(channel, ";")
+	channel = strings.TrimSpace(channel)
+
+	// Remove quotes if present
+	if len(channel) >= 2 {
+		if (channel[0] == '"' && channel[len(channel)-1] == '"') ||
+			(channel[0] == '\'' && channel[len(channel)-1] == '\'') {
+			channel = channel[1 : len(channel)-1]
+		}
+	}
+
+	return channel
+}
+
+// parseNotifyArgs extracts the channel name and optional payload from a NOTIFY command.
+// Format: NOTIFY channel [, 'payload']
+func parseNotifyArgs(query string) (channel, payload string) {
+	// Remove "NOTIFY " prefix (case-insensitive)
+	upper := strings.ToUpper(query)
+	if strings.HasPrefix(upper, "NOTIFY ") {
+		query = query[7:]
+	}
+
+	// Trim whitespace
+	query = strings.TrimSpace(query)
+
+	// Remove trailing semicolon if present
+	query = strings.TrimSuffix(query, ";")
+	query = strings.TrimSpace(query)
+
+	// Look for comma to separate channel and payload
+	commaIdx := findCommaOutsideQuotes(query)
+	if commaIdx == -1 {
+		// No payload, just channel name
+		channel = strings.TrimSpace(query)
+	} else {
+		// Channel is before comma, payload is after
+		channel = strings.TrimSpace(query[:commaIdx])
+		payloadStr := strings.TrimSpace(query[commaIdx+1:])
+
+		// Remove quotes from payload
+		if len(payloadStr) >= 2 {
+			if (payloadStr[0] == '\'' && payloadStr[len(payloadStr)-1] == '\'') ||
+				(payloadStr[0] == '"' && payloadStr[len(payloadStr)-1] == '"') {
+				payload = payloadStr[1 : len(payloadStr)-1]
+			} else {
+				payload = payloadStr
+			}
+		} else {
+			payload = payloadStr
+		}
+	}
+
+	// Remove quotes from channel name if present
+	if len(channel) >= 2 {
+		if (channel[0] == '"' && channel[len(channel)-1] == '"') ||
+			(channel[0] == '\'' && channel[len(channel)-1] == '\'') {
+			channel = channel[1 : len(channel)-1]
+		}
+	}
+
+	return channel, payload
+}
+
+// findCommaOutsideQuotes finds the first comma that is not inside quotes.
+func findCommaOutsideQuotes(s string) int {
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '\'':
+			if !inDoubleQuote {
+				// Check for escaped quote
+				if i+1 < len(s) && s[i+1] == '\'' {
+					i++ // Skip escaped quote
+				} else {
+					inSingleQuote = !inSingleQuote
+				}
+			}
+		case '"':
+			if !inSingleQuote {
+				// Check for escaped quote
+				if i+1 < len(s) && s[i+1] == '"' {
+					i++ // Skip escaped quote
+				} else {
+					inDoubleQuote = !inDoubleQuote
+				}
+			}
+		case ',':
+			if !inSingleQuote && !inDoubleQuote {
+				return i
+			}
+		}
+	}
+
+	return -1
+}
+
+// parseTimeoutValue parses a PostgreSQL timeout value string into a time.Duration.
+// Supported formats:
+//   - "0" - disabled
+//   - "1000" - milliseconds (PostgreSQL default unit)
+//   - "1s", "1000ms", "1m" - with unit suffix
+//   - "1min", "1h" - alternative units
+func parseTimeoutValue(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "0" {
+		return 0, nil
+	}
+
+	// Try parsing as duration with unit
+	if d, err := time.ParseDuration(value); err == nil {
+		return d, nil
+	}
+
+	// Handle PostgreSQL-style values
+	value = strings.ToLower(value)
+
+	// Check for units at the end
+	multiplier := time.Millisecond // Default is milliseconds
+
+	if strings.HasSuffix(value, "ms") {
+		multiplier = time.Millisecond
+		value = strings.TrimSuffix(value, "ms")
+	} else if strings.HasSuffix(value, "s") {
+		multiplier = time.Second
+		value = strings.TrimSuffix(value, "s")
+	} else if strings.HasSuffix(value, "min") {
+		multiplier = time.Minute
+		value = strings.TrimSuffix(value, "min")
+	} else if strings.HasSuffix(value, "h") {
+		multiplier = time.Hour
+		value = strings.TrimSuffix(value, "h")
+	}
+
+	// Parse the numeric part
+	var num int64
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if c >= '0' && c <= '9' {
+			num = num*10 + int64(c-'0')
+		} else if c == ' ' || c == '\t' {
+			// Skip whitespace
+			continue
+		} else {
+			// Invalid character
+			return 0, errors.New("invalid timeout value")
+		}
+	}
+
+	return time.Duration(num) * multiplier, nil
+}
+
+// formatTimeoutValue formats a time.Duration as a PostgreSQL timeout string.
+func formatTimeoutValue(d time.Duration) string {
+	if d == 0 {
+		return "0"
+	}
+	return itoa64(d.Milliseconds())
 }

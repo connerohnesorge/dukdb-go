@@ -576,3 +576,203 @@ func TestDeleteWithInvalidWhere(t *testing.T) {
 	_, err = executeAdvancedQuery(t, exec, cat, `DELETE FROM users WHERE nonexistent_column = 1`)
 	require.Error(t, err)
 }
+
+// ---------- Set Operations Tests (UNION, INTERSECT, EXCEPT) ----------
+
+func TestUnionAll(t *testing.T) {
+	exec, cat, _ := setupAdvancedSQLTestExecutor()
+
+	// Create tables
+	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE users (id INTEGER, name VARCHAR)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE admins (id INTEGER, name VARCHAR)`)
+	require.NoError(t, err)
+
+	// Insert data - notice some duplicates
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO users VALUES (1, 'Alice')`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO users VALUES (2, 'Bob')`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO users VALUES (3, 'Charlie')`)
+	require.NoError(t, err)
+
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO admins VALUES (2, 'Bob')`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO admins VALUES (4, 'David')`)
+	require.NoError(t, err)
+
+	// Test UNION ALL - should return all 5 rows including duplicate Bob
+	result, err := executeAdvancedQuery(t, exec, cat, `
+		SELECT id, name FROM users
+		UNION ALL
+		SELECT id, name FROM admins
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.Rows, 5, "UNION ALL should return all rows including duplicates")
+
+	// Verify we have both Bobs
+	bobCount := 0
+	for _, row := range result.Rows {
+		if row["name"] == "Bob" {
+			bobCount++
+		}
+	}
+	assert.Equal(t, 2, bobCount, "UNION ALL should have 2 Bob entries")
+}
+
+func TestUnion(t *testing.T) {
+	exec, cat, _ := setupAdvancedSQLTestExecutor()
+
+	// Create tables
+	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE users (id INTEGER, name VARCHAR)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE admins (id INTEGER, name VARCHAR)`)
+	require.NoError(t, err)
+
+	// Insert data with duplicates
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO users VALUES (1, 'Alice')`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO users VALUES (2, 'Bob')`)
+	require.NoError(t, err)
+
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO admins VALUES (2, 'Bob')`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO admins VALUES (3, 'Charlie')`)
+	require.NoError(t, err)
+
+	// Test UNION - should remove duplicates, returning only 3 unique rows
+	result, err := executeAdvancedQuery(t, exec, cat, `
+		SELECT id, name FROM users
+		UNION
+		SELECT id, name FROM admins
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.Rows, 3, "UNION should remove duplicates")
+}
+
+func TestUnionAllChained(t *testing.T) {
+	exec, cat, _ := setupAdvancedSQLTestExecutor()
+
+	// Create tables
+	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE t1 (v INTEGER)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE t2 (v INTEGER)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE t3 (v INTEGER)`)
+	require.NoError(t, err)
+
+	// Insert data
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (1)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (2)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t3 VALUES (3)`)
+	require.NoError(t, err)
+
+	// Test chained UNION ALL
+	result, err := executeAdvancedQuery(t, exec, cat, `
+		SELECT v FROM t1
+		UNION ALL
+		SELECT v FROM t2
+		UNION ALL
+		SELECT v FROM t3
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.Rows, 3, "Chained UNION ALL should return all rows")
+
+	// Verify values
+	values := make(map[int]bool)
+	for _, row := range result.Rows {
+		v := row["v"]
+		switch val := v.(type) {
+		case int32:
+			values[int(val)] = true
+		case int64:
+			values[int(val)] = true
+		case int:
+			values[val] = true
+		}
+	}
+	assert.True(t, values[1], "Should contain 1")
+	assert.True(t, values[2], "Should contain 2")
+	assert.True(t, values[3], "Should contain 3")
+}
+
+func TestIntersect(t *testing.T) {
+	exec, cat, _ := setupAdvancedSQLTestExecutor()
+
+	// Create tables
+	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE t1 (v INTEGER)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE t2 (v INTEGER)`)
+	require.NoError(t, err)
+
+	// Insert data
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (1)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (2)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (3)`)
+	require.NoError(t, err)
+
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (2)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (3)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (4)`)
+	require.NoError(t, err)
+
+	// Test INTERSECT - should return only common rows (2 and 3)
+	result, err := executeAdvancedQuery(t, exec, cat, `
+		SELECT v FROM t1
+		INTERSECT
+		SELECT v FROM t2
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.Rows, 2, "INTERSECT should return only common rows")
+}
+
+func TestExcept(t *testing.T) {
+	exec, cat, _ := setupAdvancedSQLTestExecutor()
+
+	// Create tables
+	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE t1 (v INTEGER)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE t2 (v INTEGER)`)
+	require.NoError(t, err)
+
+	// Insert data
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (1)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (2)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t1 VALUES (3)`)
+	require.NoError(t, err)
+
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (2)`)
+	require.NoError(t, err)
+	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO t2 VALUES (3)`)
+	require.NoError(t, err)
+
+	// Test EXCEPT - should return only rows in t1 that are not in t2 (just 1)
+	result, err := executeAdvancedQuery(t, exec, cat, `
+		SELECT v FROM t1
+		EXCEPT
+		SELECT v FROM t2
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.Rows, 1, "EXCEPT should return rows only in left side")
+
+	// Check value with type-safe comparison
+	v := result.Rows[0]["v"]
+	var intVal int
+	switch val := v.(type) {
+	case int32:
+		intVal = int(val)
+	case int64:
+		intVal = int(val)
+	case int:
+		intVal = val
+	}
+	assert.Equal(t, 1, intVal, "EXCEPT should return 1")
+}

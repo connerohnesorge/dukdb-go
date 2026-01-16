@@ -16,6 +16,17 @@
 //   - pg_catalog.pg_settings - Server configuration
 //   - pg_catalog.pg_tables - Simplified table listing
 //   - pg_catalog.pg_views - Simplified view listing
+//   - pg_catalog.pg_proc - Functions and procedures
+//   - pg_catalog.pg_constraint - Table constraints
+//   - pg_catalog.pg_operator - Operators
+//   - pg_catalog.pg_aggregate - Aggregate functions
+//   - pg_catalog.pg_trigger - Triggers (empty, for compatibility)
+//   - pg_catalog.pg_extension - Extensions
+//   - pg_catalog.pg_roles - Database roles
+//   - pg_catalog.pg_user - Database users
+//   - pg_catalog.pg_stat_activity - Active sessions (monitoring)
+//   - pg_catalog.pg_stat_statements - Statement statistics (monitoring)
+//   - pg_catalog.pg_locks - Lock information (monitoring)
 //
 // Reference: https://www.postgresql.org/docs/current/catalogs.html
 package catalog
@@ -31,6 +42,11 @@ import (
 type PgCatalog struct {
 	catalog      CatalogProvider
 	databaseName string
+
+	// Monitoring providers (optional - can be nil)
+	activityProvider   SessionActivityProvider
+	statementsProvider StatementStatsProvider
+	lockProvider       LockProvider
 }
 
 // NewPgCatalog creates a new PgCatalog instance.
@@ -40,6 +56,21 @@ func NewPgCatalog(catalog CatalogProvider, databaseName string) *PgCatalog {
 		catalog:      catalog,
 		databaseName: databaseName,
 	}
+}
+
+// SetActivityProvider sets the provider for pg_stat_activity.
+func (pg *PgCatalog) SetActivityProvider(provider SessionActivityProvider) {
+	pg.activityProvider = provider
+}
+
+// SetStatementsProvider sets the provider for pg_stat_statements.
+func (pg *PgCatalog) SetStatementsProvider(provider StatementStatsProvider) {
+	pg.statementsProvider = provider
+}
+
+// SetLockProvider sets the provider for pg_locks.
+func (pg *PgCatalog) SetLockProvider(provider LockProvider) {
+	pg.lockProvider = provider
 }
 
 // IsPgCatalogQuery returns true if the query is selecting from
@@ -130,9 +161,45 @@ func (pg *PgCatalog) Query(query string) *QueryResult {
 		return pg.queryPgProc(filters)
 	case "pg_constraint":
 		return pg.queryPgConstraint(filters)
+	case "pg_operator":
+		return pg.queryPgOperator(filters)
+	case "pg_aggregate":
+		return pg.queryPgAggregate(filters)
+	case "pg_trigger":
+		return pg.queryPgTrigger(filters)
+	case "pg_extension":
+		return pg.queryPgExtension(filters)
+	case "pg_roles":
+		return pg.queryPgRoles(filters)
+	case "pg_user":
+		return pg.queryPgUser(filters)
+	case "pg_stat_activity":
+		return pg.queryPgStatActivity(filters)
+	case "pg_stat_statements":
+		return pg.queryPgStatStatements(filters)
+	case "pg_locks":
+		return pg.queryPgLocks(filters)
 	default:
 		return nil
 	}
+}
+
+// queryPgStatActivity returns data for pg_catalog.pg_stat_activity.
+func (pg *PgCatalog) queryPgStatActivity(filters []Filter) *QueryResult {
+	view := NewPgStatActivityView(pg.activityProvider, pg.databaseName)
+	return view.Query(filters)
+}
+
+// queryPgStatStatements returns data for pg_catalog.pg_stat_statements.
+func (pg *PgCatalog) queryPgStatStatements(filters []Filter) *QueryResult {
+	view := NewPgStatStatementsView(pg.statementsProvider, pg.databaseName)
+	return view.Query(filters)
+}
+
+// queryPgLocks returns data for pg_catalog.pg_locks.
+func (pg *PgCatalog) queryPgLocks(filters []Filter) *QueryResult {
+	view := NewPgLocksView(pg.lockProvider)
+	return view.Query(filters)
 }
 
 // generateOID generates a synthetic OID from a string using FNV hash.

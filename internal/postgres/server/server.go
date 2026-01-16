@@ -72,6 +72,18 @@ type Server struct {
 
 	// catalogHandler handles information_schema and pg_catalog queries.
 	catalogHandler *CatalogHandler
+
+	// notificationHub manages LISTEN/NOTIFY channel subscriptions.
+	notificationHub *NotificationHub
+
+	// connectionManager manages connection pooling, limits, and statistics.
+	connectionManager *ConnectionManager
+
+	// cancellationManager manages query cancellation for the PostgreSQL protocol.
+	cancellationManager *CancellationManager
+
+	// observability manages metrics collection, tracing, and Prometheus export.
+	observability *ObservabilityManager
 }
 
 // NewServer creates a new PostgreSQL wire protocol server with the given configuration.
@@ -86,9 +98,24 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	s := &Server{
-		config:   config,
-		sessions: make(map[uint64]*Session),
-		logger:   slog.Default(),
+		config:          config,
+		sessions:        make(map[uint64]*Session),
+		logger:          slog.Default(),
+		notificationHub: NewNotificationHub(),
+	}
+
+	// Initialize the cancellation manager
+	s.cancellationManager = NewCancellationManager(s)
+
+	// Initialize observability manager for metrics and tracing
+	s.observability = NewObservabilityManager(nil, s)
+
+	// Initialize connection manager if pooling is enabled
+	if config.EnableConnectionPooling {
+		s.connectionManager = NewConnectionManager(config, config.GetConnectionTimeouts())
+		if config.MaxQueueSize > 0 {
+			s.connectionManager.SetMaxQueueSize(config.MaxQueueSize)
+		}
 	}
 
 	// Create the query handler
@@ -144,6 +171,14 @@ func (s *Server) Start() error {
 	}
 	s.catalogHandler = initCatalogHandler(conn, dbName)
 
+	// Set up monitoring providers for pg_stat_activity, pg_stat_statements, pg_locks
+	if s.catalogHandler != nil && s.observability != nil {
+		activityProvider := NewServerActivityProvider(s)
+		statementsProvider := NewServerStatementStatsProvider(s.observability.MetricsCollector())
+		lockProvider := NewServerLockProvider(s)
+		s.catalogHandler.SetMonitoringProviders(activityProvider, statementsProvider, lockProvider)
+	}
+
 	// Build psql-wire server options
 	var options []wire.OptionFn
 
@@ -187,6 +222,12 @@ func (s *Server) Start() error {
 
 	// Set terminate connection handler
 	options = append(options, wire.TerminateConn(s.onConnectionClose))
+
+	// Set up BackendKeyData handler for query cancellation
+	options = append(options, wire.BackendKeyData(s.generateBackendKeyData))
+
+	// Set up CancelRequest handler for query cancellation
+	options = append(options, wire.CancelRequest(s.handleCancelRequest))
 
 	// Create the psql-wire server
 	wireServer, err := wire.NewServer(s.handler.Parse, options...)
@@ -269,12 +310,22 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	wireServer := s.wireServer
 	conn := s.conn
+	connMgr := s.connectionManager
 	s.mu.Unlock()
 
 	if wireServer != nil {
 		if err := wireServer.Shutdown(ctx); err != nil {
 			if s.logger != nil {
 				s.logger.Warn("error during server shutdown", "error", err)
+			}
+		}
+	}
+
+	// Close the connection manager
+	if connMgr != nil {
+		if err := connMgr.Close(); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("error closing connection manager", "error", err)
 			}
 		}
 	}
@@ -295,6 +346,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.wireServer = nil
 	s.conn = nil
 	s.listener = nil
+	s.connectionManager = nil
 	s.mu.Unlock()
 
 	s.closed.Store(true)
@@ -317,6 +369,7 @@ func (s *Server) Close() error {
 	wireServer := s.wireServer
 	conn := s.conn
 	listener := s.listener
+	connMgr := s.connectionManager
 	s.mu.Unlock()
 
 	var errs []error
@@ -329,6 +382,13 @@ func (s *Server) Close() error {
 
 	if listener != nil {
 		if err := listener.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Close the connection manager
+	if connMgr != nil {
+		if err := connMgr.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -347,6 +407,7 @@ func (s *Server) Close() error {
 	s.wireServer = nil
 	s.conn = nil
 	s.listener = nil
+	s.connectionManager = nil
 	s.mu.Unlock()
 
 	s.closed.Store(true)
@@ -417,6 +478,37 @@ func (s *Server) validateCredentials(ctx context.Context, database, username, pa
 
 // sessionMiddleware is called when a new session is established.
 func (s *Server) sessionMiddleware(ctx context.Context) (context.Context, error) {
+	// Check connection limit and acquire slot if using connection manager
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		// Try to acquire a connection slot (may queue if at limit)
+		if err := connMgr.AcquireSlot(ctx); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("connection rejected", "error", err)
+			}
+			return ctx, err
+		}
+	} else {
+		// Legacy connection limit check without connection manager
+		s.mu.RLock()
+		maxConns := s.config.MaxConnections
+		s.mu.RUnlock()
+
+		currentConns := s.connCount.Load()
+		if currentConns >= int64(maxConns) {
+			if s.logger != nil {
+				s.logger.Warn("connection rejected: too many connections",
+					"current", currentConns,
+					"max", maxConns,
+				)
+			}
+			return ctx, ErrTooManyConnections
+		}
+	}
+
 	// Get client parameters from psql-wire context
 	clientParams := wire.ClientParameters(ctx)
 	username := clientParams[wire.ParamUsername]
@@ -446,6 +538,11 @@ func (s *Server) sessionMiddleware(ctx context.Context) (context.Context, error)
 	s.sessionsMu.Lock()
 	s.sessions[session.ID()] = session
 	s.sessionsMu.Unlock()
+
+	// Register with connection manager if enabled
+	if connMgr != nil {
+		connMgr.RegisterConnection(session)
+	}
 
 	// Increment connection count
 	s.connCount.Add(1)
@@ -490,6 +587,28 @@ func (s *Server) onConnectionClose(ctx context.Context) error {
 	s.sessionsMu.Lock()
 	delete(s.sessions, session.ID())
 	s.sessionsMu.Unlock()
+
+	// Unregister from connection manager if enabled
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		connMgr.UnregisterConnection(session.ID())
+	}
+
+	// Remove notification subscriptions for this session
+	if s.notificationHub != nil {
+		s.notificationHub.RemoveSession(session.ID())
+	}
+
+	// Remove cancel key for this session
+	s.mu.RLock()
+	cm := s.cancellationManager
+	s.mu.RUnlock()
+	if cm != nil {
+		cm.RemoveCancelKey(session.ID())
+	}
 
 	// Decrement connection count
 	s.connCount.Add(-1)
@@ -558,4 +677,207 @@ func (s *Server) WaitUntilReady(timeout time.Duration) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return errors.New("server did not become ready within timeout")
+}
+
+// NotificationHub returns the server's notification hub for LISTEN/NOTIFY support.
+func (s *Server) NotificationHub() *NotificationHub {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.notificationHub
+}
+
+// ConnectionManager returns the server's connection manager.
+// Returns nil if connection pooling is disabled.
+func (s *Server) ConnectionManager() *ConnectionManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.connectionManager
+}
+
+// GetConnectionStats returns current connection statistics.
+// If connection pooling is disabled, returns basic stats from the legacy counter.
+func (s *Server) GetConnectionStats() ConnectionStats {
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		return connMgr.GetStats()
+	}
+
+	// Return basic stats from legacy counter
+	return ConnectionStats{
+		ActiveConnections: s.connCount.Load(),
+		LastUpdated:       time.Now(),
+	}
+}
+
+// MarkConnectionActive marks a session's connection as active.
+// This should be called when a session starts processing a query.
+func (s *Server) MarkConnectionActive(sessionID uint64) {
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		connMgr.MarkActive(sessionID)
+	}
+}
+
+// MarkConnectionIdle marks a session's connection as idle.
+// This should be called when a session finishes processing a query.
+func (s *Server) MarkConnectionIdle(sessionID uint64) {
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		connMgr.MarkIdle(sessionID)
+	}
+}
+
+// UpdateConnectionActivity updates the last activity timestamp for a session.
+// This should be called whenever a session has activity to prevent idle timeout.
+func (s *Server) UpdateConnectionActivity(sessionID uint64) {
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		connMgr.UpdateActivity(sessionID)
+	}
+}
+
+// ForceCloseIdleConnections forces immediate cleanup of idle connections.
+// Returns the number of connections closed.
+func (s *Server) ForceCloseIdleConnections(count int) int {
+	s.mu.RLock()
+	connMgr := s.connectionManager
+	s.mu.RUnlock()
+
+	if connMgr != nil {
+		return connMgr.ForceCloseIdleConnections(count)
+	}
+	return 0
+}
+
+// CancellationManager returns the server's cancellation manager.
+func (s *Server) CancellationManager() *CancellationManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cancellationManager
+}
+
+// Observability returns the server's observability manager.
+func (s *Server) Observability() *ObservabilityManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.observability
+}
+
+// StartMetricsServer starts the Prometheus metrics HTTP endpoint.
+// The addr should be in the format "host:port" (e.g., ":9090").
+func (s *Server) StartMetricsServer(addr string) error {
+	s.mu.RLock()
+	om := s.observability
+	s.mu.RUnlock()
+
+	if om == nil {
+		return nil
+	}
+
+	return om.StartMetricsServer(addr)
+}
+
+// StopMetricsServer stops the Prometheus metrics HTTP endpoint.
+func (s *Server) StopMetricsServer(ctx context.Context) error {
+	s.mu.RLock()
+	om := s.observability
+	s.mu.RUnlock()
+
+	if om == nil {
+		return nil
+	}
+
+	return om.StopMetricsServer(ctx)
+}
+
+// generateBackendKeyData generates the backend key data for a new session.
+// This is called by psql-wire during the handshake to get the process ID
+// and secret key that will be sent to the client in the BackendKeyData message.
+func (s *Server) generateBackendKeyData(ctx context.Context) (processID int32, secretKey int32) {
+	// Get session from context
+	session, ok := SessionFromContext(ctx)
+	if !ok {
+		// If no session in context yet, generate a temporary key
+		// This shouldn't happen in normal flow, but handle it gracefully
+		return 0, 0
+	}
+
+	s.mu.RLock()
+	cm := s.cancellationManager
+	s.mu.RUnlock()
+
+	if cm == nil {
+		return int32(session.ID()), 0
+	}
+
+	return cm.GenerateCancelKey(session.ID())
+}
+
+// handleCancelRequest handles a cancel request from a PostgreSQL client.
+// This is called by psql-wire when a CancelRequest message is received.
+func (s *Server) handleCancelRequest(ctx context.Context, processID int32, secretKey int32) error {
+	s.mu.RLock()
+	cm := s.cancellationManager
+	logger := s.logger
+	s.mu.RUnlock()
+
+	if cm == nil {
+		if logger != nil {
+			logger.Warn("cancel request received but cancellation manager not initialized",
+				"process_id", processID,
+			)
+		}
+		return ErrNoRunningQuery
+	}
+
+	if logger != nil {
+		logger.Debug("processing cancel request",
+			"process_id", processID,
+		)
+	}
+
+	err := cm.HandleCancelRequest(ctx, processID, secretKey)
+	if err != nil {
+		if logger != nil {
+			logger.Debug("cancel request failed",
+				"process_id", processID,
+				"error", err,
+			)
+		}
+		return err
+	}
+
+	if logger != nil {
+		logger.Info("query cancelled via cancel request",
+			"process_id", processID,
+		)
+	}
+
+	return nil
+}
+
+// CancelQuery cancels a running query for a session.
+// This is a convenience method that delegates to the cancellation manager.
+func (s *Server) CancelQuery(sessionID uint64) error {
+	s.mu.RLock()
+	cm := s.cancellationManager
+	s.mu.RUnlock()
+
+	if cm == nil {
+		return ErrNoRunningQuery
+	}
+
+	return cm.CancelQuery(sessionID)
 }

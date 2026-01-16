@@ -224,7 +224,42 @@ func (b *Binder) bindSelect(
 		}
 	}
 
+	// Bind set operations (UNION, INTERSECT, EXCEPT)
+	if s.SetOp != parser.SetOpNone && s.Right != nil {
+		bound.SetOp = s.SetOp
+		right, err := b.bindSelect(s.Right)
+		if err != nil {
+			return nil, err
+		}
+		bound.Right = right
+
+		// Validate that both sides have the same number of columns
+		if len(bound.Columns) != len(right.Columns) {
+			return nil, b.errorf("each %s query must have the same number of columns", setOpName(s.SetOp))
+		}
+	}
+
 	return bound, nil
+}
+
+// setOpName returns a human-readable name for a set operation type.
+func setOpName(op parser.SetOpType) string {
+	switch op {
+	case parser.SetOpUnion:
+		return "UNION"
+	case parser.SetOpUnionAll:
+		return "UNION ALL"
+	case parser.SetOpIntersect:
+		return "INTERSECT"
+	case parser.SetOpIntersectAll:
+		return "INTERSECT ALL"
+	case parser.SetOpExcept:
+		return "EXCEPT"
+	case parser.SetOpExceptAll:
+		return "EXCEPT ALL"
+	default:
+		return "set operation"
+	}
 }
 
 func (b *Binder) bindTableRef(

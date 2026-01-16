@@ -33,11 +33,26 @@ func (ps *PreparedStatement) Close() error {
 
 // Portal represents a bound prepared statement with parameters.
 // In PostgreSQL protocol, a portal is created by binding parameters to a prepared statement.
+// Named portals support cursor operations where results can be fetched in batches.
 type Portal struct {
 	Name       string
 	Statement  *PreparedStatement
 	Parameters []driver.NamedValue
 	Executed   bool
+
+	// Cursor state for partial result fetching
+	// CachedRows holds all rows from the query result for partial fetching.
+	CachedRows []map[string]any
+	// CachedColumns holds the column names from the query result.
+	CachedColumns []string
+	// CursorPosition tracks how many rows have been returned.
+	CursorPosition int
+	// Suspended indicates the portal is waiting for more EXECUTE commands.
+	Suspended bool
+	// Completed indicates all rows have been fetched.
+	Completed bool
+	// MaxRows is the row limit for the current/last Execute (0 = unlimited).
+	MaxRows int
 }
 
 // PreparedStmtCache manages prepared statements for a session.
@@ -179,6 +194,197 @@ func (c *PortalCache) Clear() {
 func (c *PortalCache) Close() error {
 	c.Clear()
 	return nil
+}
+
+// Names returns all portal names.
+func (c *PortalCache) Names() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	names := make([]string, 0, len(c.portals))
+	for name := range c.portals {
+		names = append(names, name)
+	}
+	return names
+}
+
+// Count returns the number of portals.
+func (c *PortalCache) Count() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.portals)
+}
+
+// CacheResults stores query results in the portal for partial fetching.
+func (c *PortalCache) CacheResults(name string, rows []map[string]any, columns []string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+
+	portal.CachedRows = rows
+	portal.CachedColumns = columns
+	portal.CursorPosition = 0
+	portal.Completed = false
+	portal.Suspended = false
+	return true
+}
+
+// FetchRows fetches up to maxRows rows from the portal starting at the cursor position.
+// Returns the rows, columns, whether there are more rows, and whether the portal was found.
+func (c *PortalCache) FetchRows(name string, maxRows int) ([]map[string]any, []string, bool, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return nil, nil, false, false
+	}
+
+	if portal.CachedRows == nil || portal.Completed {
+		return nil, portal.CachedColumns, false, true
+	}
+
+	startPos := portal.CursorPosition
+	endPos := startPos + maxRows
+
+	// Handle unlimited fetch (maxRows = 0)
+	if maxRows == 0 {
+		endPos = len(portal.CachedRows)
+	}
+
+	// Clamp to available rows
+	if endPos > len(portal.CachedRows) {
+		endPos = len(portal.CachedRows)
+	}
+
+	// Get the slice of rows
+	rows := portal.CachedRows[startPos:endPos]
+	portal.CursorPosition = endPos
+	portal.MaxRows = maxRows
+
+	// Check if there are more rows
+	hasMore := endPos < len(portal.CachedRows)
+
+	// Update state
+	if hasMore {
+		portal.Suspended = true
+		portal.Completed = false
+	} else {
+		portal.Suspended = false
+		portal.Completed = true
+	}
+	portal.Executed = true
+
+	return rows, portal.CachedColumns, hasMore, true
+}
+
+// MarkCompleted marks a portal as completed.
+func (c *PortalCache) MarkCompleted(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+
+	portal.Completed = true
+	portal.Suspended = false
+	portal.Executed = true
+	return true
+}
+
+// MarkSuspended marks a portal as suspended (waiting for more fetches).
+func (c *PortalCache) MarkSuspended(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+
+	portal.Suspended = true
+	portal.Completed = false
+	portal.Executed = true
+	return true
+}
+
+// ResetCursor resets the cursor position for a portal.
+func (c *PortalCache) ResetCursor(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+
+	portal.CursorPosition = 0
+	portal.Completed = false
+	portal.Suspended = false
+	return true
+}
+
+// IsSuspended returns whether the portal is suspended (has more rows to fetch).
+func (c *PortalCache) IsSuspended(name string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+	return portal.Suspended
+}
+
+// IsCompleted returns whether the portal has finished returning all rows.
+func (c *PortalCache) IsCompleted(name string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return false
+	}
+	return portal.Completed
+}
+
+// GetCursorPosition returns the current cursor position for a portal.
+func (c *PortalCache) GetCursorPosition(name string) (int, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return 0, false
+	}
+	return portal.CursorPosition, true
+}
+
+// GetRemainingRows returns the number of remaining rows for a portal.
+func (c *PortalCache) GetRemainingRows(name string) (int, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	portal, ok := c.portals[name]
+	if !ok {
+		return 0, false
+	}
+
+	if portal.CachedRows == nil {
+		return 0, true
+	}
+
+	remaining := len(portal.CachedRows) - portal.CursorPosition
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, true
 }
 
 // ParsedPrepareStatement contains parsed information from a PREPARE SQL statement.
@@ -594,13 +800,16 @@ func (h *Handler) ExecutePreparedStatement(ctx context.Context, ps *PreparedStat
 		return errors.New("prepared statement has no underlying statement")
 	}
 
-	// Convert string parameters to driver.NamedValue
-	args := make([]driver.NamedValue, len(params))
+	// Convert string parameters to driver.NamedValue with proper type conversion
+	// Strip quotes from string parameters before binding
+	strippedParams := make([]string, len(params))
 	for i, param := range params {
-		args[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   param,
-		}
+		strippedParams[i] = StripQuotes(param)
+	}
+
+	args, err := ConvertStringParams(strippedParams, ps.ParamTypes)
+	if err != nil {
+		return err
 	}
 
 	// Determine if this is a SELECT-like query

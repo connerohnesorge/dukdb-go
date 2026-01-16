@@ -351,3 +351,30 @@ func (p *parser) errorf(
 			args...),
 	}
 }
+
+// errorAtPosition creates a parser error with position information.
+// This helps users locate syntax errors in their SQL statements.
+func (p *parser) errorAtPosition(
+	pos int,
+	format string,
+	args ...any,
+) error {
+	// Calculate line and column from position
+	line := 1
+	col := 1
+	for i := 0; i < pos && i < len(p.input); i++ {
+		if p.input[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+
+	return &dukdb.Error{
+		Type: dukdb.ErrorTypeParser,
+		Msg: fmt.Sprintf(
+			"Parser Error at line %d, column %d: "+format,
+			append([]any{line, col}, args...)...),
+	}
+}

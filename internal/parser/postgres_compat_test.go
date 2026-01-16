@@ -784,6 +784,135 @@ func TestPostgresCompatEdgeCases(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// INT64 Boundary Value Tests
+// -----------------------------------------------------------------------------
+
+func TestPostgresCompatInt64MinMax(t *testing.T) {
+	// INT64 min = -9223372036854775808
+	// INT64 max = 9223372036854775807
+	// The tricky part: 9223372036854775808 > INT64 max, so parsing "-9223372036854775808"
+	// as "-" followed by "9223372036854775808" (positive) then negating fails.
+	// The parser must handle this by parsing the negative number as a whole.
+
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+		wantVal int64
+	}{
+		{
+			name:    "INT64 min value in SELECT",
+			sql:     "SELECT -9223372036854775808",
+			wantErr: false,
+			wantVal: -9223372036854775808,
+		},
+		{
+			name:    "INT64 max value in SELECT",
+			sql:     "SELECT 9223372036854775807",
+			wantErr: false,
+			wantVal: 9223372036854775807,
+		},
+		{
+			name:    "INT64 min value in expression",
+			sql:     "SELECT -9223372036854775808 + 1",
+			wantErr: false,
+			wantVal: 0, // Just check parsing works
+		},
+		{
+			name:    "negative number near min",
+			sql:     "SELECT -9223372036854775807",
+			wantErr: false,
+			wantVal: -9223372036854775807,
+		},
+		{
+			name:    "INT64 overflow - value below min",
+			sql:     "SELECT -9223372036854775809",
+			wantErr: true,
+			wantVal: 0,
+		},
+		{
+			name:    "INT64 overflow - value above max",
+			sql:     "SELECT 9223372036854775808",
+			wantErr: true,
+			wantVal: 0,
+		},
+		{
+			name:    "INT64 min in comparison",
+			sql:     "SELECT * FROM t WHERE x = -9223372036854775808",
+			wantErr: false,
+			wantVal: -9223372036854775808,
+		},
+		{
+			name:    "INT64 min with parentheses",
+			sql:     "SELECT (-9223372036854775808)",
+			wantErr: false,
+			wantVal: -9223372036854775808,
+		},
+		{
+			name:    "negative float near INT64 min",
+			sql:     "SELECT -9223372036854775808.0",
+			wantErr: false,
+			wantVal: 0, // Will be parsed as float, just check it works
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			require.True(t, ok, "expected SelectStmt")
+
+			// For simple SELECT queries, verify the literal value
+			if len(selectStmt.Columns) > 0 && tt.wantVal != 0 {
+				// Check if the first column is directly a literal
+				if lit, ok := selectStmt.Columns[0].Expr.(*Literal); ok {
+					if intVal, ok := lit.Value.(int64); ok {
+						assert.Equal(t, tt.wantVal, intVal)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPostgresCompatInt64MinInInsert(t *testing.T) {
+	// Test INT64 min value in INSERT statement
+	sql := "INSERT INTO t (x) VALUES (-9223372036854775808)"
+	stmt, err := Parse(sql)
+	require.NoError(t, err)
+
+	insertStmt, ok := stmt.(*InsertStmt)
+	require.True(t, ok, "expected InsertStmt")
+	require.Len(t, insertStmt.Values, 1)
+	require.Len(t, insertStmt.Values[0], 1)
+
+	lit, ok := insertStmt.Values[0][0].(*Literal)
+	require.True(t, ok, "expected Literal")
+	assert.Equal(t, int64(-9223372036854775808), lit.Value)
+}
+
+func TestPostgresCompatInt64MinInUpdate(t *testing.T) {
+	// Test INT64 min value in UPDATE statement
+	sql := "UPDATE t SET x = -9223372036854775808 WHERE id = 1"
+	stmt, err := Parse(sql)
+	require.NoError(t, err)
+
+	updateStmt, ok := stmt.(*UpdateStmt)
+	require.True(t, ok, "expected UpdateStmt")
+	require.Len(t, updateStmt.Set, 1)
+
+	lit, ok := updateStmt.Set[0].Value.(*Literal)
+	require.True(t, ok, "expected Literal")
+	assert.Equal(t, int64(-9223372036854775808), lit.Value)
+}
+
+// -----------------------------------------------------------------------------
 // Comprehensive PostgreSQL Syntax Table-Driven Test
 // -----------------------------------------------------------------------------
 
@@ -840,6 +969,289 @@ func TestPostgresCompatComprehensive(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SQL Keyword Typo Detection Tests
+// -----------------------------------------------------------------------------
+
+func TestParserKeywordTypoDetection(t *testing.T) {
+	// These tests verify that the parser rejects common keyword typos
+	// and provides helpful error messages.
+	tests := []struct {
+		name        string
+		sql         string
+		wantErr     bool
+		errContains string // substring that should appear in error message
+	}{
+		// FROM typos
+		{
+			name:        "FORM instead of FROM",
+			sql:         "SELECT * FORM users",
+			wantErr:     true,
+			errContains: "FROM",
+		},
+		{
+			name:        "FOMR instead of FROM",
+			sql:         "SELECT * FOMR users",
+			wantErr:     true,
+			errContains: "FROM",
+		},
+		{
+			name:        "FORM in subquery",
+			sql:         "SELECT * FROM (SELECT * FORM t) AS sub",
+			wantErr:     true,
+			errContains: "FROM",
+		},
+
+		// SELECT typos
+		{
+			name:        "SELCET instead of SELECT",
+			sql:         "SELCET * FROM users",
+			wantErr:     true,
+			errContains: "SELECT",
+		},
+		{
+			name:        "SELEC instead of SELECT",
+			sql:         "SELEC * FROM users",
+			wantErr:     true,
+			errContains: "SELECT",
+		},
+		{
+			name:        "SELET instead of SELECT",
+			sql:         "SELET * FROM users",
+			wantErr:     true,
+			errContains: "SELECT",
+		},
+
+		// INSERT typos
+		{
+			name:        "INSRT instead of INSERT",
+			sql:         "INSRT INTO users VALUES (1)",
+			wantErr:     true,
+			errContains: "INSERT",
+		},
+		{
+			name:        "INSER instead of INSERT",
+			sql:         "INSER INTO users VALUES (1)",
+			wantErr:     true,
+			errContains: "INSERT",
+		},
+
+		// INTO typos
+		{
+			name:        "ITNO instead of INTO",
+			sql:         "INSERT ITNO users VALUES (1)",
+			wantErr:     true,
+			errContains: "INTO",
+		},
+		{
+			name:        "INOT instead of INTO",
+			sql:         "INSERT INOT users VALUES (1)",
+			wantErr:     true,
+			errContains: "INTO",
+		},
+
+		// WHERE typos
+		{
+			name:        "WHER instead of WHERE",
+			sql:         "SELECT * FROM users WHER id = 1",
+			wantErr:     true,
+			errContains: "WHERE",
+		},
+		{
+			name:        "WHRE instead of WHERE",
+			sql:         "SELECT * FROM users WHRE id = 1",
+			wantErr:     true,
+			errContains: "WHERE",
+		},
+		{
+			name:        "WEHRE instead of WHERE",
+			sql:         "UPDATE users SET name = 'test' WEHRE id = 1",
+			wantErr:     true,
+			errContains: "WHERE",
+		},
+
+		// UPDATE typos
+		{
+			name:        "UPATE instead of UPDATE",
+			sql:         "UPATE users SET name = 'test'",
+			wantErr:     true,
+			errContains: "UPDATE",
+		},
+		{
+			name:        "UDPATE instead of UPDATE",
+			sql:         "UDPATE users SET name = 'test'",
+			wantErr:     true,
+			errContains: "UPDATE",
+		},
+
+		// DELETE typos
+		{
+			name:        "DELET instead of DELETE",
+			sql:         "DELET FROM users WHERE id = 1",
+			wantErr:     true,
+			errContains: "DELETE",
+		},
+		{
+			name:        "DELEET instead of DELETE",
+			sql:         "DELEET FROM users WHERE id = 1",
+			wantErr:     true,
+			errContains: "DELETE",
+		},
+
+		// VALUES typos
+		{
+			name:        "VALUEES instead of VALUES",
+			sql:         "INSERT INTO users VALUEES (1)",
+			wantErr:     true,
+			errContains: "VALUES",
+		},
+		{
+			name:        "VALUSE instead of VALUES",
+			sql:         "INSERT INTO users VALUSE (1)",
+			wantErr:     true,
+			errContains: "VALUES",
+		},
+
+		// SET typos
+		{
+			name:        "SE instead of SET",
+			sql:         "UPDATE users SE name = 'test' WHERE id = 1",
+			wantErr:     true,
+			errContains: "SET",
+		},
+		{
+			name:        "SETT instead of SET",
+			sql:         "UPDATE users SETT name = 'test' WHERE id = 1",
+			wantErr:     true,
+			errContains: "SET",
+		},
+
+		// ORDER BY typos
+		{
+			name:        "ORER instead of ORDER",
+			sql:         "SELECT * FROM users ORER BY id",
+			wantErr:     true,
+			errContains: "ORDER",
+		},
+		{
+			name:        "ODER instead of ORDER",
+			sql:         "SELECT * FROM users ODER BY id",
+			wantErr:     true,
+			errContains: "ORDER",
+		},
+
+		// GROUP BY typos
+		{
+			name:        "GROPU instead of GROUP",
+			sql:         "SELECT COUNT(*) FROM users GROPU BY name",
+			wantErr:     true,
+			errContains: "GROUP",
+		},
+		{
+			name:        "GROP instead of GROUP",
+			sql:         "SELECT COUNT(*) FROM users GROP BY name",
+			wantErr:     true,
+			errContains: "GROUP",
+		},
+
+		// LIMIT typos
+		{
+			name:        "LIMT instead of LIMIT",
+			sql:         "SELECT * FROM users LIMT 10",
+			wantErr:     true,
+			errContains: "LIMIT",
+		},
+		{
+			name:        "LMIT instead of LIMIT",
+			sql:         "SELECT * FROM users LMIT 10",
+			wantErr:     true,
+			errContains: "LIMIT",
+		},
+
+		// JOIN typos
+		{
+			name:        "JON instead of JOIN",
+			sql:         "SELECT * FROM users u JON orders o ON u.id = o.user_id",
+			wantErr:     true,
+			errContains: "JOIN",
+		},
+
+		// TABLE typos (in CREATE TABLE)
+		{
+			name:        "TABEL instead of TABLE",
+			sql:         "CREATE TABEL users (id INT)",
+			wantErr:     true,
+			errContains: "TABLE",
+		},
+		{
+			name:        "TABL instead of TABLE",
+			sql:         "CREATE TABL users (id INT)",
+			wantErr:     true,
+			errContains: "TABLE",
+		},
+
+		// CREATE typos
+		{
+			name:        "CRATE instead of CREATE",
+			sql:         "CRATE TABLE users (id INT)",
+			wantErr:     true,
+			errContains: "CREATE",
+		},
+		{
+			name:        "CREAT instead of CREATE",
+			sql:         "CREAT TABLE users (id INT)",
+			wantErr:     true,
+			errContains: "CREATE",
+		},
+
+		// DROP typos
+		{
+			name:        "DORP instead of DROP",
+			sql:         "DORP TABLE users",
+			wantErr:     true,
+			errContains: "DROP",
+		},
+
+		// Valid queries (negative tests - should NOT error)
+		{
+			name:    "valid SELECT FROM",
+			sql:     "SELECT * FROM users",
+			wantErr: false,
+		},
+		{
+			name:    "valid INSERT INTO VALUES",
+			sql:     "INSERT INTO users VALUES (1, 'test')",
+			wantErr: false,
+		},
+		{
+			name:    "valid UPDATE SET WHERE",
+			sql:     "UPDATE users SET name = 'test' WHERE id = 1",
+			wantErr: false,
+		},
+		{
+			name:    "valid DELETE FROM WHERE",
+			sql:     "DELETE FROM users WHERE id = 1",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.sql)
+			if tt.wantErr {
+				require.Error(t, err, "expected error for SQL: %s", tt.sql)
+				// Verify error message contains the suggested correct keyword
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains,
+						"error message should suggest correct keyword for SQL: %s", tt.sql)
+				}
+			} else {
+				assert.NoError(t, err, "unexpected error for SQL: %s", tt.sql)
 			}
 		})
 	}

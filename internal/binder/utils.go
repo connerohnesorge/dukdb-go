@@ -154,8 +154,45 @@ func InferWindowFunctionResultType(name string, args []BoundExpr) dukdb.Type {
 	return dukdb.TYPE_ANY
 }
 
+// inferCoalesceResultType infers the result type of COALESCE, GREATEST, or LEAST functions.
+// Returns the common supertype of all arguments, properly handling NULL types and type promotion.
+func inferCoalesceResultType(args []BoundExpr) dukdb.Type {
+	if len(args) == 0 {
+		return dukdb.TYPE_ANY
+	}
+
+	// Start with the first argument's type
+	resultType := args[0].ResultType()
+
+	// Find common supertype across all arguments
+	for i := 1; i < len(args); i++ {
+		argType := args[i].ResultType()
+		resultType = promoteType(resultType, argType)
+	}
+
+	// If result is still ANY or SQLNULL, try to find a more specific type
+	if resultType == dukdb.TYPE_ANY || resultType == dukdb.TYPE_SQLNULL {
+		for _, arg := range args {
+			argType := arg.ResultType()
+			if argType != dukdb.TYPE_ANY && argType != dukdb.TYPE_SQLNULL {
+				return argType
+			}
+		}
+	}
+
+	return resultType
+}
+
 func promoteType(t1, t2 dukdb.Type) dukdb.Type {
 	if t1 == t2 {
+		return t1
+	}
+
+	// TYPE_ANY yields to any concrete type
+	if t1 == dukdb.TYPE_ANY {
+		return t2
+	}
+	if t2 == dukdb.TYPE_ANY {
 		return t1
 	}
 
@@ -165,6 +202,12 @@ func promoteType(t1, t2 dukdb.Type) dukdb.Type {
 	}
 	if t2 == dukdb.TYPE_SQLNULL {
 		return t1
+	}
+
+	// VARCHAR is universal fallback for mixed types
+	if t1 == dukdb.TYPE_VARCHAR || t2 == dukdb.TYPE_VARCHAR {
+		// If mixing VARCHAR with non-string types, convert to VARCHAR
+		return dukdb.TYPE_VARCHAR
 	}
 
 	// Integer to float promotion
@@ -193,8 +236,45 @@ func promoteType(t1, t2 dukdb.Type) dukdb.Type {
 		return t2
 	}
 
+	// Timestamp types - prefer the more precise one
+	if isTimestampType(t1) && isTimestampType(t2) {
+		return promoteTimestampTypes(t1, t2)
+	}
+
 	// Default to the first type
 	return t1
+}
+
+// isTimestampType returns true if the type is a timestamp variant.
+func isTimestampType(t dukdb.Type) bool {
+	switch t {
+	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_TZ:
+		return true
+	}
+	return false
+}
+
+// promoteTimestampTypes returns the more precise timestamp type.
+func promoteTimestampTypes(t1, t2 dukdb.Type) dukdb.Type {
+	// TYPE_TIMESTAMP_TZ takes precedence (has timezone info)
+	if t1 == dukdb.TYPE_TIMESTAMP_TZ || t2 == dukdb.TYPE_TIMESTAMP_TZ {
+		return dukdb.TYPE_TIMESTAMP_TZ
+	}
+	// TYPE_TIMESTAMP_NS is most precise
+	if t1 == dukdb.TYPE_TIMESTAMP_NS || t2 == dukdb.TYPE_TIMESTAMP_NS {
+		return dukdb.TYPE_TIMESTAMP_NS
+	}
+	// TYPE_TIMESTAMP (microseconds) is next
+	if t1 == dukdb.TYPE_TIMESTAMP || t2 == dukdb.TYPE_TIMESTAMP {
+		return dukdb.TYPE_TIMESTAMP
+	}
+	// TYPE_TIMESTAMP_MS
+	if t1 == dukdb.TYPE_TIMESTAMP_MS || t2 == dukdb.TYPE_TIMESTAMP_MS {
+		return dukdb.TYPE_TIMESTAMP_MS
+	}
+	// TYPE_TIMESTAMP_S
+	return dukdb.TYPE_TIMESTAMP_S
 }
 
 func isIntegerType(t dukdb.Type) bool {
@@ -300,11 +380,17 @@ func inferFunctionResultType(
 
 		return dukdb.TYPE_ANY
 	case "COALESCE":
+		// COALESCE returns the common type of all arguments
+		return inferCoalesceResultType(args)
+	case "NULLIF":
+		// NULLIF returns the type of the first argument
 		if len(args) > 0 {
 			return args[0].ResultType()
 		}
-
 		return dukdb.TYPE_ANY
+	case "GREATEST", "LEAST":
+		// GREATEST/LEAST return the common type of all arguments
+		return inferCoalesceResultType(args)
 	case "ABS":
 		if len(args) > 0 {
 			return args[0].ResultType()
@@ -544,6 +630,16 @@ func getFunctionArgTypes(
 		return types
 	case "COALESCE":
 		// COALESCE accepts homogeneous types - first arg determines type
+		// Return empty to let the first arg drive inference
+		return nil
+	case "NULLIF":
+		// NULLIF(value, value) - returns first arg type
+		// Both args should be same type for comparison
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_ANY, dukdb.TYPE_ANY}
+		}
+	case "GREATEST", "LEAST":
+		// GREATEST/LEAST accept homogeneous types
 		// Return empty to let the first arg drive inference
 		return nil
 	case "COUNT":

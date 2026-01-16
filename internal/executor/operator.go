@@ -370,6 +370,8 @@ func (e *Executor) executeWithContext(
 		return e.executeCheckpoint(execCtx, p)
 	case *planner.PhysicalIcebergScan:
 		return e.executePhysicalIcebergScan(execCtx, p)
+	case *planner.PhysicalSetOp:
+		return e.executeSetOp(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -2479,4 +2481,189 @@ func (e *Executor) evaluateReturning(
 		Columns:      columns,
 		RowsAffected: int64(len(resultRows)),
 	}, nil
+}
+
+// executeSetOp executes a set operation (UNION, INTERSECT, EXCEPT).
+func (e *Executor) executeSetOp(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalSetOp,
+) (*ExecutionResult, error) {
+	// Execute left side
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute right side
+	rightResult, err := e.executeWithContext(ctx, plan.Right)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get output columns from left side (both sides have the same structure)
+	columns := leftResult.Columns
+
+	switch plan.OpType {
+	case planner.SetOpUnionAll:
+		// UNION ALL: simply concatenate all rows from both sides
+		// This preserves all duplicates
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0, len(leftResult.Rows)+len(rightResult.Rows)),
+		}
+		result.Rows = append(result.Rows, leftResult.Rows...)
+		result.Rows = append(result.Rows, rightResult.Rows...)
+		return result, nil
+
+	case planner.SetOpUnion:
+		// UNION: concatenate and remove duplicates
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0),
+		}
+		seen := make(map[string]struct{})
+
+		// Add rows from left side
+		for _, row := range leftResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				result.Rows = append(result.Rows, row)
+			}
+		}
+
+		// Add rows from right side (only if not already seen)
+		for _, row := range rightResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				result.Rows = append(result.Rows, row)
+			}
+		}
+		return result, nil
+
+	case planner.SetOpIntersect:
+		// INTERSECT: rows that appear in both (no duplicates)
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0),
+		}
+
+		// Build a set of rows from the right side
+		rightSet := make(map[string]struct{})
+		for _, row := range rightResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			rightSet[key] = struct{}{}
+		}
+
+		// Keep left rows that exist in right (no duplicates)
+		seen := make(map[string]struct{})
+		for _, row := range leftResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if _, existsInRight := rightSet[key]; existsInRight {
+				if _, alreadySeen := seen[key]; !alreadySeen {
+					seen[key] = struct{}{}
+					result.Rows = append(result.Rows, row)
+				}
+			}
+		}
+		return result, nil
+
+	case planner.SetOpIntersectAll:
+		// INTERSECT ALL: rows that appear in both (with duplicate counting)
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0),
+		}
+
+		// Count occurrences in right side
+		rightCounts := make(map[string]int)
+		for _, row := range rightResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			rightCounts[key]++
+		}
+
+		// For each left row, include it if it has remaining count in right
+		for _, row := range leftResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if rightCounts[key] > 0 {
+				rightCounts[key]--
+				result.Rows = append(result.Rows, row)
+			}
+		}
+		return result, nil
+
+	case planner.SetOpExcept:
+		// EXCEPT: rows in left but not in right (no duplicates)
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0),
+		}
+
+		// Build a set of rows from the right side
+		rightSet := make(map[string]struct{})
+		for _, row := range rightResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			rightSet[key] = struct{}{}
+		}
+
+		// Keep left rows that don't exist in right (no duplicates)
+		seen := make(map[string]struct{})
+		for _, row := range leftResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if _, existsInRight := rightSet[key]; !existsInRight {
+				if _, alreadySeen := seen[key]; !alreadySeen {
+					seen[key] = struct{}{}
+					result.Rows = append(result.Rows, row)
+				}
+			}
+		}
+		return result, nil
+
+	case planner.SetOpExceptAll:
+		// EXCEPT ALL: rows in left but not in right (with duplicate counting)
+		result := &ExecutionResult{
+			Columns: columns,
+			Rows:    make([]map[string]any, 0),
+		}
+
+		// Count occurrences in right side
+		rightCounts := make(map[string]int)
+		for _, row := range rightResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			rightCounts[key]++
+		}
+
+		// For each left row, include it if right doesn't have remaining count
+		for _, row := range leftResult.Rows {
+			key := formatRowForSetOp(row, columns)
+			if rightCounts[key] > 0 {
+				// Right side still has this row, don't include and decrement
+				rightCounts[key]--
+			} else {
+				// Right side doesn't have this row (or ran out), include it
+				result.Rows = append(result.Rows, row)
+			}
+		}
+		return result, nil
+
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "unsupported set operation type",
+		}
+	}
+}
+
+// formatRowForSetOp creates a string key for a row that can be used for set comparison.
+// It uses only the columns specified in the column list to ensure consistent comparison.
+func formatRowForSetOp(row map[string]any, columns []string) string {
+	result := ""
+	for i, col := range columns {
+		if i > 0 {
+			result += "|"
+		}
+		result += formatValue(row[col])
+	}
+	return result
 }

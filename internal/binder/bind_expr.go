@@ -446,16 +446,45 @@ func (b *Binder) bindCaseExpr(
 		bound.Else = elseExpr
 	}
 
-	// Determine result type from THEN/ELSE expressions
-	if len(bound.Whens) > 0 {
-		bound.ResType = bound.Whens[0].Result.ResultType()
-	} else if bound.Else != nil {
-		bound.ResType = bound.Else.ResultType()
-	} else {
-		bound.ResType = dukdb.TYPE_SQLNULL
-	}
+	// Determine result type as common type of all THEN/ELSE expressions
+	bound.ResType = inferCaseResultType(bound.Whens, bound.Else)
 
 	return bound, nil
+}
+
+// inferCaseResultType determines the common result type for a CASE expression.
+// It finds the common supertype of all THEN branches and the ELSE branch (if any).
+func inferCaseResultType(whens []*BoundWhenClause, elseExpr BoundExpr) dukdb.Type {
+	if len(whens) == 0 && elseExpr == nil {
+		return dukdb.TYPE_SQLNULL
+	}
+
+	var resultType dukdb.Type
+
+	// Collect types from all THEN branches
+	for i, when := range whens {
+		if i == 0 {
+			resultType = when.Result.ResultType()
+		} else {
+			resultType = promoteType(resultType, when.Result.ResultType())
+		}
+	}
+
+	// Include ELSE branch in type promotion
+	if elseExpr != nil {
+		if len(whens) == 0 {
+			resultType = elseExpr.ResultType()
+		} else {
+			resultType = promoteType(resultType, elseExpr.ResultType())
+		}
+	}
+
+	// If we still have an unresolved type, default to VARCHAR for safety
+	if resultType == dukdb.TYPE_ANY || resultType == dukdb.TYPE_INVALID {
+		return dukdb.TYPE_VARCHAR
+	}
+
+	return resultType
 }
 
 func (b *Binder) bindBetweenExpr(

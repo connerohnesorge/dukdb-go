@@ -505,6 +505,38 @@ func (e *Executor) evaluateFunctionCall(
 
 		return args[0], nil
 
+	case "GREATEST":
+		if len(args) == 0 {
+			return nil, nil
+		}
+		var result any
+		for _, arg := range args {
+			if arg == nil {
+				// GREATEST returns NULL if any argument is NULL (PostgreSQL behavior)
+				return nil, nil
+			}
+			if result == nil || compareValues(arg, result) > 0 {
+				result = arg
+			}
+		}
+		return result, nil
+
+	case "LEAST":
+		if len(args) == 0 {
+			return nil, nil
+		}
+		var result any
+		for _, arg := range args {
+			if arg == nil {
+				// LEAST returns NULL if any argument is NULL (PostgreSQL behavior)
+				return nil, nil
+			}
+			if result == nil || compareValues(arg, result) < 0 {
+				result = arg
+			}
+		}
+		return result, nil
+
 	case "SUBSTR", "SUBSTRING":
 		if len(args) < 2 || len(args) > 3 {
 			return nil, &dukdb.Error{
@@ -1834,33 +1866,9 @@ func castValue(
 	v any,
 	targetType dukdb.Type,
 ) (any, error) {
-	if v == nil {
-		return nil, nil
-	}
-
-	switch targetType {
-	case dukdb.TYPE_BOOLEAN:
-		return toBool(v), nil
-	case dukdb.TYPE_INTEGER:
-		return int32(toInt64Value(v)), nil
-	case dukdb.TYPE_BIGINT:
-		return toInt64Value(v), nil
-	case dukdb.TYPE_DOUBLE:
-		return toFloat64Value(v), nil
-	case dukdb.TYPE_VARCHAR:
-		return toString(v), nil
-	case dukdb.TYPE_INVALID, dukdb.TYPE_TINYINT, dukdb.TYPE_SMALLINT, dukdb.TYPE_UTINYINT,
-		dukdb.TYPE_USMALLINT, dukdb.TYPE_UINTEGER, dukdb.TYPE_UBIGINT, dukdb.TYPE_FLOAT,
-		dukdb.TYPE_TIMESTAMP, dukdb.TYPE_DATE, dukdb.TYPE_TIME, dukdb.TYPE_INTERVAL,
-		dukdb.TYPE_HUGEINT, dukdb.TYPE_UHUGEINT, dukdb.TYPE_BLOB, dukdb.TYPE_DECIMAL,
-		dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS,
-		dukdb.TYPE_ENUM, dukdb.TYPE_LIST, dukdb.TYPE_STRUCT, dukdb.TYPE_MAP, dukdb.TYPE_ARRAY,
-		dukdb.TYPE_UUID, dukdb.TYPE_UNION, dukdb.TYPE_BIT, dukdb.TYPE_TIME_TZ,
-		dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_ANY, dukdb.TYPE_BIGNUM, dukdb.TYPE_SQLNULL,
-		dukdb.TYPE_JSON, dukdb.TYPE_GEOMETRY, dukdb.TYPE_LAMBDA, dukdb.TYPE_VARIANT:
-		return v, nil
-	}
-	return v, nil
+	// Use the new validation-enabled cast function which returns proper errors
+	// with PostgreSQL SQLSTATE codes for invalid casts.
+	return castValueWithValidation(v, targetType)
 }
 
 // evaluateExtractExpr evaluates an EXTRACT(part FROM source) expression.

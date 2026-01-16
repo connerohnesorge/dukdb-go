@@ -7,6 +7,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
 // PhysicalPlan represents a node in the physical query plan.
@@ -990,6 +991,35 @@ func (s *PhysicalSample) Children() []PhysicalPlan { return []PhysicalPlan{s.Chi
 
 func (s *PhysicalSample) OutputColumns() []ColumnBinding { return s.Child.OutputColumns() }
 
+// ---------- Set Operation Physical Plan Nodes ----------
+
+// PhysicalSetOp represents a physical set operation (UNION, INTERSECT, EXCEPT).
+type PhysicalSetOp struct {
+	// Left is the left side of the set operation.
+	Left PhysicalPlan
+	// Right is the right side of the set operation.
+	Right PhysicalPlan
+	// OpType is the type of set operation (UNION, UNION ALL, etc.).
+	OpType SetOpType
+	// columns caches the output column bindings.
+	columns []ColumnBinding
+}
+
+func (*PhysicalSetOp) physicalPlanNode() {}
+
+func (s *PhysicalSetOp) Children() []PhysicalPlan {
+	return []PhysicalPlan{s.Left, s.Right}
+}
+
+func (s *PhysicalSetOp) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+	// Output columns are the same as the left side's columns
+	s.columns = s.Left.OutputColumns()
+	return s.columns
+}
+
 // ---------- CTE Physical Plan Nodes ----------
 
 // PhysicalRecursiveCTE represents a physical recursive CTE operation.
@@ -1496,6 +1526,37 @@ func (p *Planner) planSelect(
 		plan = &LogicalSample{
 			Child:  plan,
 			Sample: s.Sample,
+		}
+	}
+
+	// Set operations (UNION, INTERSECT, EXCEPT)
+	if s.SetOp != parser.SetOpNone && s.Right != nil {
+		rightPlan, err := p.planSelect(s.Right)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert parser.SetOpType to planner.SetOpType
+		var opType SetOpType
+		switch s.SetOp {
+		case parser.SetOpUnion:
+			opType = SetOpUnion
+		case parser.SetOpUnionAll:
+			opType = SetOpUnionAll
+		case parser.SetOpIntersect:
+			opType = SetOpIntersect
+		case parser.SetOpIntersectAll:
+			opType = SetOpIntersectAll
+		case parser.SetOpExcept:
+			opType = SetOpExcept
+		case parser.SetOpExceptAll:
+			opType = SetOpExceptAll
+		}
+
+		plan = &LogicalSetOp{
+			Left:   plan,
+			Right:  rightPlan,
+			OpType: opType,
 		}
 	}
 
@@ -2615,6 +2676,21 @@ func (p *Planner) createPhysicalPlan(
 
 	case *LogicalIcebergScan:
 		return p.createPhysicalIcebergScan(l)
+
+	case *LogicalSetOp:
+		left, err := p.createPhysicalPlan(l.Left)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.createPhysicalPlan(l.Right)
+		if err != nil {
+			return nil, err
+		}
+		return &PhysicalSetOp{
+			Left:   left,
+			Right:  right,
+			OpType: l.OpType,
+		}, nil
 
 	default:
 		return nil, &dukdb.Error{

@@ -463,3 +463,242 @@ func TestGenerateOID(t *testing.T) {
 	// OIDs should be >= 16384 (to avoid conflicts with PostgreSQL built-in OIDs)
 	assert.GreaterOrEqual(t, oid1, int64(16384))
 }
+
+// TestQueryPgOperator tests pg_catalog.pg_operator queries.
+func TestQueryPgOperator(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all operators", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_operator")
+		require.NotNil(t, result)
+		assert.Equal(t, pgOperatorColumns, result.Columns)
+
+		// Should have all built-in operators
+		assert.Equal(t, len(builtinOperators), len(result.Rows))
+	})
+
+	t.Run("filter equality operators", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_operator WHERE oprname = '='")
+		require.NotNil(t, result)
+		// Should have equality operators for various types
+		assert.GreaterOrEqual(t, len(result.Rows), 5)
+
+		for _, row := range result.Rows {
+			assert.Equal(t, "=", row["oprname"])
+		}
+	})
+
+	t.Run("filter infix operators", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_operator WHERE oprkind = 'b'")
+		require.NotNil(t, result)
+		// Most operators are infix (binary)
+		assert.GreaterOrEqual(t, len(result.Rows), 50)
+	})
+
+	t.Run("filter prefix operators", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_operator WHERE oprkind = 'l'")
+		require.NotNil(t, result)
+		// Should have unary minus and NOT operators
+		assert.GreaterOrEqual(t, len(result.Rows), 3)
+	})
+
+	t.Run("filter mergeable operators", func(t *testing.T) {
+		// Note: boolean values are converted to "YES"/"NO" for filtering
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_operator WHERE oprcanmerge = 'YES'")
+		require.NotNil(t, result)
+		// Equality operators should be mergeable
+		assert.GreaterOrEqual(t, len(result.Rows), 1)
+	})
+}
+
+// TestQueryPgAggregate tests pg_catalog.pg_aggregate queries.
+func TestQueryPgAggregate(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all aggregates", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_aggregate")
+		require.NotNil(t, result)
+		assert.Equal(t, pgAggregateColumns, result.Columns)
+
+		// Should have all built-in aggregates
+		assert.Equal(t, len(builtinAggregates), len(result.Rows))
+	})
+
+	t.Run("filter normal aggregates", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_aggregate WHERE aggkind = 'n'")
+		require.NotNil(t, result)
+		// Most aggregates are normal
+		assert.GreaterOrEqual(t, len(result.Rows), 10)
+	})
+
+	t.Run("filter ordered-set aggregates", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_aggregate WHERE aggkind = 'o'")
+		require.NotNil(t, result)
+		// Should have percentile_cont, percentile_disc, mode
+		assert.GreaterOrEqual(t, len(result.Rows), 3)
+	})
+
+	t.Run("filter hypothetical-set aggregates", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_aggregate WHERE aggkind = 'h'")
+		require.NotNil(t, result)
+		// Should have rank, dense_rank, percent_rank, cume_dist
+		assert.Equal(t, 4, len(result.Rows))
+	})
+
+	t.Run("check count aggregate", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_aggregate WHERE aggfnoid = '300'")
+		require.NotNil(t, result)
+		assert.Len(t, result.Rows, 1)
+
+		row := result.Rows[0]
+		assert.Equal(t, int64(300), row["aggfnoid"])
+		assert.Equal(t, "n", row["aggkind"])
+		assert.Equal(t, "0", row["agginitval"])
+	})
+}
+
+// TestQueryPgTrigger tests pg_catalog.pg_trigger queries.
+func TestQueryPgTrigger(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all triggers returns empty", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_trigger")
+		require.NotNil(t, result)
+		assert.Equal(t, pgTriggerColumns, result.Columns)
+
+		// DukDB does not support triggers, should return empty
+		assert.Empty(t, result.Rows)
+	})
+}
+
+// TestQueryPgExtension tests pg_catalog.pg_extension queries.
+func TestQueryPgExtension(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all extensions", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_extension")
+		require.NotNil(t, result)
+		assert.Equal(t, pgExtensionColumns, result.Columns)
+
+		// Should have plpgsql and dukdb extensions
+		assert.Len(t, result.Rows, 2)
+	})
+
+	t.Run("filter by extname plpgsql", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_extension WHERE extname = 'plpgsql'")
+		require.NotNil(t, result)
+		assert.Len(t, result.Rows, 1)
+		assert.Equal(t, "plpgsql", result.Rows[0]["extname"])
+	})
+
+	t.Run("filter by extname dukdb", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_extension WHERE extname = 'dukdb'")
+		require.NotNil(t, result)
+		assert.Len(t, result.Rows, 1)
+		assert.Equal(t, "dukdb", result.Rows[0]["extname"])
+	})
+}
+
+// TestQueryPgRoles tests pg_catalog.pg_roles queries.
+func TestQueryPgRoles(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all roles", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_roles")
+		require.NotNil(t, result)
+		assert.Equal(t, pgRolesColumns, result.Columns)
+
+		// Should have dukdb superuser + pg_monitor + other standard roles
+		assert.GreaterOrEqual(t, len(result.Rows), 2)
+	})
+
+	t.Run("filter superuser role", func(t *testing.T) {
+		// Note: boolean values are converted to "YES"/"NO" for filtering
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_roles WHERE rolsuper = 'YES'")
+		require.NotNil(t, result)
+		// Should have at least dukdb superuser
+		assert.GreaterOrEqual(t, len(result.Rows), 1)
+
+		// Check it's the dukdb user
+		found := false
+		for _, row := range result.Rows {
+			if row["rolname"] == "dukdb" {
+				found = true
+				assert.Equal(t, true, row["rolsuper"])
+				assert.Equal(t, true, row["rolcanlogin"])
+				break
+			}
+		}
+		assert.True(t, found, "dukdb superuser should exist")
+	})
+
+	t.Run("filter by rolname", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_roles WHERE rolname = 'pg_monitor'")
+		require.NotNil(t, result)
+		assert.Len(t, result.Rows, 1)
+		assert.Equal(t, "pg_monitor", result.Rows[0]["rolname"])
+	})
+
+	t.Run("password is masked", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_roles")
+		require.NotNil(t, result)
+
+		for _, row := range result.Rows {
+			// Password should always be masked
+			assert.Equal(t, "********", row["rolpassword"])
+		}
+	})
+}
+
+// TestQueryPgUser tests pg_catalog.pg_user queries.
+func TestQueryPgUser(t *testing.T) {
+	mock := createTestCatalog()
+	pgCat := NewPgCatalog(mock, "dukdb")
+
+	t.Run("select all users", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_user")
+		require.NotNil(t, result)
+		assert.Equal(t, pgUserColumns, result.Columns)
+
+		// Should only have roles that can log in (dukdb)
+		assert.GreaterOrEqual(t, len(result.Rows), 1)
+	})
+
+	t.Run("all users can login", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_user")
+		require.NotNil(t, result)
+
+		// Verify dukdb is present
+		found := false
+		for _, row := range result.Rows {
+			if row["usename"] == "dukdb" {
+				found = true
+				assert.Equal(t, true, row["usesuper"])
+				break
+			}
+		}
+		assert.True(t, found, "dukdb user should exist in pg_user")
+	})
+
+	t.Run("filter by usename", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_user WHERE usename = 'dukdb'")
+		require.NotNil(t, result)
+		assert.Len(t, result.Rows, 1)
+		assert.Equal(t, "dukdb", result.Rows[0]["usename"])
+	})
+
+	t.Run("password is masked", func(t *testing.T) {
+		result := pgCat.Query("SELECT * FROM pg_catalog.pg_user")
+		require.NotNil(t, result)
+
+		for _, row := range result.Rows {
+			// Password should always be masked
+			assert.Equal(t, "********", row["passwd"])
+		}
+	})
+}

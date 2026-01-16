@@ -227,6 +227,20 @@ func initCatalogHandler(conn dukdb.BackendConn, dbName string) *CatalogHandler {
 	return NewCatalogHandler(adapter, dbName)
 }
 
+// SetMonitoringProviders sets the monitoring providers for pg_catalog views.
+// This allows pg_stat_activity, pg_stat_statements, and pg_locks to work.
+func (ch *CatalogHandler) SetMonitoringProviders(
+	activityProvider pgcatalog.SessionActivityProvider,
+	statementsProvider pgcatalog.StatementStatsProvider,
+	lockProvider pgcatalog.LockProvider,
+) {
+	if ch.pgCatalog != nil {
+		ch.pgCatalog.SetActivityProvider(activityProvider)
+		ch.pgCatalog.SetStatementsProvider(statementsProvider)
+		ch.pgCatalog.SetLockProvider(lockProvider)
+	}
+}
+
 // IsSelectFromDual returns true if the query is "SELECT ... FROM dual" or similar.
 // These are Oracle/MySQL compatibility queries that some tools send.
 func IsSelectFromDual(query string) bool {

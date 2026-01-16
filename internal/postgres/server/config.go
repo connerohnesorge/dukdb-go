@@ -47,6 +47,31 @@ type Config struct {
 	// This should be a valid PostgreSQL version string (e.g., "16.0.0").
 	ServerVersion string
 
+	// Connection timeout options
+
+	// ConnectTimeout is the maximum time to establish a connection (default: 30s).
+	// Zero means no timeout.
+	ConnectTimeout time.Duration
+
+	// IdleTimeout is the maximum time a connection can remain idle before being closed (default: 5m).
+	// Zero means connections are never closed due to being idle.
+	IdleTimeout time.Duration
+
+	// SessionTimeout is the maximum duration for a session (default: 0, no limit).
+	// Zero means sessions have no maximum duration.
+	SessionTimeout time.Duration
+
+	// QueueTimeout is the maximum time to wait in queue for a connection slot (default: 30s).
+	// This applies when MaxConnections is reached and new connections are queued.
+	QueueTimeout time.Duration
+
+	// MaxQueueSize is the maximum number of connections that can wait in queue (default: 1000).
+	// Zero means use the default of 1000.
+	MaxQueueSize int
+
+	// EnableConnectionPooling enables the connection manager for pooling and statistics (default: true).
+	EnableConnectionPooling bool
+
 	// Authentication options
 
 	// RequireAuth indicates whether authentication is required.
@@ -86,15 +111,21 @@ type Config struct {
 // NewConfig creates a new Config with default values.
 func NewConfig() *Config {
 	return &Config{
-		Host:             DefaultHost,
-		Port:             DefaultPort,
-		Database:         "dukdb",
-		MaxConnections:   DefaultMaxConnections,
-		ShutdownTimeout:  DefaultShutdownTimeout,
-		ServerVersion:    DefaultServerVersion,
-		RequireAuth:      false,
-		AuthMethod:       auth.MethodPassword,
-		LogStartupParams: false,
+		Host:                    DefaultHost,
+		Port:                    DefaultPort,
+		Database:                "dukdb",
+		MaxConnections:          DefaultMaxConnections,
+		ShutdownTimeout:         DefaultShutdownTimeout,
+		ServerVersion:           DefaultServerVersion,
+		ConnectTimeout:          30 * time.Second,
+		IdleTimeout:             5 * time.Minute,
+		SessionTimeout:          0, // No session timeout by default
+		QueueTimeout:            30 * time.Second,
+		MaxQueueSize:            1000,
+		EnableConnectionPooling: true,
+		RequireAuth:             false,
+		AuthMethod:              auth.MethodPassword,
+		LogStartupParams:        false,
 	}
 }
 
@@ -105,6 +136,16 @@ func (c *Config) Address() string {
 	}
 	// Format as host:port
 	return c.Host + ":" + itoa(c.Port)
+}
+
+// GetConnectionTimeouts returns the connection timeout configuration.
+func (c *Config) GetConnectionTimeouts() *ConnectionTimeouts {
+	return &ConnectionTimeouts{
+		ConnectTimeout: c.ConnectTimeout,
+		IdleTimeout:    c.IdleTimeout,
+		SessionTimeout: c.SessionTimeout,
+		QueueTimeout:   c.QueueTimeout,
+	}
 }
 
 // Validate validates the configuration and returns an error if invalid.

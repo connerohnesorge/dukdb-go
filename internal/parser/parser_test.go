@@ -3264,6 +3264,151 @@ func TestLimitAllAST(t *testing.T) {
 	})
 }
 
+// TestOffsetWithoutLimit tests standalone OFFSET clause parsing (PostgreSQL compatibility)
+func TestOffsetWithoutLimit(t *testing.T) {
+	tests := []struct {
+		name       string
+		sql        string
+		wantErr    bool
+		wantOffset bool  // whether stmt.Offset should be non-nil
+		wantLimit  bool  // whether stmt.Limit should be non-nil
+		offsetVal  int64 // expected offset value if wantOffset is true
+	}{
+		{
+			name:       "OFFSET without LIMIT",
+			sql:        "SELECT * FROM t OFFSET 5",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  5,
+		},
+		{
+			name:       "OFFSET 0 without LIMIT",
+			sql:        "SELECT * FROM t OFFSET 0",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  0,
+		},
+		{
+			name:       "OFFSET with ORDER BY",
+			sql:        "SELECT * FROM t ORDER BY id OFFSET 10",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  10,
+		},
+		{
+			name:       "OFFSET with WHERE",
+			sql:        "SELECT * FROM t WHERE x > 5 OFFSET 3",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  3,
+		},
+		{
+			name:       "OFFSET with ORDER BY and WHERE",
+			sql:        "SELECT * FROM t WHERE x > 5 ORDER BY id OFFSET 7",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  7,
+		},
+		{
+			name:       "large OFFSET without LIMIT",
+			sql:        "SELECT * FROM t OFFSET 1000000",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  1000000,
+		},
+		{
+			name:       "OFFSET lowercase",
+			sql:        "SELECT * FROM t offset 5",
+			wantErr:    false,
+			wantOffset: true,
+			wantLimit:  false,
+			offsetVal:  5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := Parse(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			selectStmt, ok := stmt.(*SelectStmt)
+			if !ok {
+				t.Fatalf("Expected SelectStmt, got %T", stmt)
+			}
+
+			// Check Limit
+			if tt.wantLimit {
+				if selectStmt.Limit == nil {
+					t.Error("Expected Limit to be non-nil")
+				}
+			} else {
+				if selectStmt.Limit != nil {
+					t.Errorf("Expected Limit to be nil, got %v", selectStmt.Limit)
+				}
+			}
+
+			// Check Offset
+			if tt.wantOffset {
+				if selectStmt.Offset == nil {
+					t.Error("Expected Offset to be non-nil")
+				} else {
+					offsetLit, ok := selectStmt.Offset.(*Literal)
+					if !ok {
+						t.Fatalf("Expected Literal for Offset, got %T", selectStmt.Offset)
+					}
+					if offsetLit.Value != tt.offsetVal {
+						t.Errorf("Expected offset value %d, got %v", tt.offsetVal, offsetLit.Value)
+					}
+				}
+			} else {
+				if selectStmt.Offset != nil {
+					t.Errorf("Expected Offset to be nil, got %v", selectStmt.Offset)
+				}
+			}
+		})
+	}
+
+	// Additional edge case tests
+	t.Run("OFFSET 5 produces Offset node", func(t *testing.T) {
+		sql := "SELECT * FROM t OFFSET 5"
+		stmt, err := Parse(sql)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+
+		if selectStmt.Limit != nil {
+			t.Errorf("Expected Limit to be nil for standalone OFFSET, got %v", selectStmt.Limit)
+		}
+
+		if selectStmt.Offset == nil {
+			t.Fatal("Expected Offset to be non-nil")
+		}
+
+		offsetLit, ok := selectStmt.Offset.(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for Offset, got %T", selectStmt.Offset)
+		}
+
+		if offsetLit.Value != int64(5) {
+			t.Errorf("Expected offset value 5, got %v", offsetLit.Value)
+		}
+	})
+}
+
 // TestILikeParsing tests PostgreSQL ILIKE operator parsing
 func TestILikeParsing(t *testing.T) {
 	t.Run("simple ILIKE", func(t *testing.T) {

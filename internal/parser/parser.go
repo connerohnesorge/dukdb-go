@@ -91,10 +91,14 @@ func (p *parser) parse() (Statement, error) {
 	case p.isKeyword("SHOW"):
 		stmt, err = p.parseShow()
 	default:
-		return nil, p.errorf(
-			"unexpected token: %s",
-			p.current().value,
-		)
+		tok := p.current()
+		suggestion := suggestKeyword(tok.value)
+		if suggestion != "" {
+			return nil, p.errorAtPosition(tok.pos,
+				"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+		}
+		return nil, p.errorAtPosition(tok.pos,
+			"unexpected token %q", tok.value)
 	}
 
 	if err != nil {
@@ -104,6 +108,19 @@ func (p *parser) parse() (Statement, error) {
 	// Skip optional semicolon
 	if p.current().typ == tokenSemicolon {
 		p.advance()
+	}
+
+	// Check for unconsumed tokens - this catches typos like "SELECT * FORM users"
+	// where FORM is not recognized as FROM and gets left unconsumed
+	if p.current().typ != tokenEOF {
+		tok := p.current()
+		suggestion := suggestKeyword(tok.value)
+		if suggestion != "" {
+			return nil, p.errorAtPosition(tok.pos,
+				"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+		}
+		return nil, p.errorAtPosition(tok.pos,
+			"unexpected token %q at end of statement", tok.value)
 	}
 
 	return stmt, nil
@@ -345,6 +362,17 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 		}
 	}
 
+	// OFFSET without LIMIT (PostgreSQL allows standalone OFFSET)
+	// Only parse if OFFSET wasn't already parsed as part of LIMIT clause
+	if stmt.Offset == nil && p.isKeyword("OFFSET") {
+		p.advance()
+		offset, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Offset = offset
+	}
+
 	// Check for set operations (UNION, INTERSECT, EXCEPT)
 	if p.isKeyword("UNION") || p.isKeyword("INTERSECT") || p.isKeyword("EXCEPT") {
 		var setOp SetOpType
@@ -400,6 +428,23 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 					Expr: &StarExpr{},
 				},
 			)
+
+			// After star, check if the next token looks like a keyword typo (e.g., FORM instead of FROM)
+			// This catches cases like "SELECT * FORM users" where FORM would otherwise be ignored
+			if p.current().typ == tokenIdent && !p.isKeyword("FROM") &&
+				!p.isKeyword("WHERE") && !p.isKeyword("GROUP") &&
+				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+				!p.isKeyword("OFFSET") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
+				tok := p.current()
+				if isProbableKeywordTypo(tok.value) {
+					suggestion := suggestKeyword(tok.value)
+					if suggestion != "" {
+						return nil, p.errorAtPosition(tok.pos,
+							"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+					}
+				}
+			}
 		} else {
 			expr, err := p.parseExpr()
 			if err != nil {
@@ -418,13 +463,24 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 			} else if p.current().typ == tokenIdent && !p.isKeyword("FROM") &&
 				!p.isKeyword("WHERE") && !p.isKeyword("GROUP") &&
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+				!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("INNER") &&
 				!p.isKeyword("LEFT") && !p.isKeyword("RIGHT") &&
 				!p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 				!p.isKeyword("JOIN") && !p.isKeyword("ON") &&
 				!p.isKeyword("RETURNING") &&
 				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
-				col.Alias = p.advance().value
+				// Check if this looks like a keyword typo
+				tok := p.current()
+				if isProbableKeywordTypo(tok.value) {
+					suggestion := suggestKeyword(tok.value)
+					if suggestion != "" {
+						return nil, p.errorAtPosition(tok.pos,
+							"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+					}
+				} else {
+					col.Alias = p.advance().value
+				}
 			}
 
 			cols = append(cols, col)
@@ -550,11 +606,22 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			newRef.Alias = p.advance().value
 		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+			!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
-			newRef.Alias = p.advance().value
+			// Check if this looks like a keyword typo
+			tok := p.current()
+			if isProbableKeywordTypo(tok.value) {
+				suggestion := suggestKeyword(tok.value)
+				if suggestion != "" {
+					return newRef, p.errorAtPosition(tok.pos,
+						"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+				}
+			} else {
+				newRef.Alias = p.advance().value
+			}
 		}
 		return newRef, nil
 	}
@@ -577,11 +644,22 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			newRef.Alias = p.advance().value
 		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+			!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
-			newRef.Alias = p.advance().value
+			// Check if this looks like a keyword typo
+			tok := p.current()
+			if isProbableKeywordTypo(tok.value) {
+				suggestion := suggestKeyword(tok.value)
+				if suggestion != "" {
+					return newRef, p.errorAtPosition(tok.pos,
+						"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+				}
+			} else {
+				newRef.Alias = p.advance().value
+			}
 		}
 		return newRef, nil
 	}
@@ -613,12 +691,23 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		ref.Alias = p.advance().value
 	} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 		!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
+		!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 		!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
 		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
-		ref.Alias = p.advance().value
+		// Check if this looks like a keyword typo - if so, don't consume it as an alias
+		tok := p.current()
+		if isProbableKeywordTypo(tok.value) {
+			suggestion := suggestKeyword(tok.value)
+			if suggestion != "" {
+				return ref, p.errorAtPosition(tok.pos,
+					"unexpected token %q (did you mean %s?)", tok.value, suggestion)
+			}
+		} else {
+			ref.Alias = p.advance().value
+		}
 	}
 
 	return ref, nil
@@ -951,6 +1040,22 @@ func (p *parser) parseOrderBy() ([]OrderByExpr, error) {
 			order.Desc = true
 		} else if p.isKeyword("ASC") {
 			p.advance()
+		}
+
+		// Check for NULLS FIRST/LAST
+		if p.isKeyword("NULLS") {
+			p.advance()
+			if p.isKeyword("FIRST") {
+				p.advance()
+				nullsFirst := true
+				order.NullsFirst = &nullsFirst
+			} else if p.isKeyword("LAST") {
+				p.advance()
+				nullsFirst := false
+				order.NullsFirst = &nullsFirst
+			} else {
+				return nil, p.errorf("expected FIRST or LAST after NULLS")
+			}
 		}
 
 		orderBy = append(orderBy, order)
@@ -3403,46 +3508,49 @@ func (p *parser) parseUnaryExpr() (Expr, error) {
 			p.advance()
 			// Special handling: if the next token is a numeric literal,
 			// parse it as a negative literal to avoid overflow issues
-			// (e.g., -2147483648 which doesn't fit as positive int32)
+			// (e.g., -9223372036854775808 which is INT64 min and doesn't fit as positive int64)
 			if p.current().typ == tokenNumber {
 				tok := p.advance()
 				numStr := tok.value
-				// Parse as negative number
+				// Parse as negative number by prepending the minus sign
+				// This allows us to correctly parse INT64 min (-9223372036854775808)
+				// which cannot be represented as a positive int64 then negated
+				negNumStr := "-" + numStr
 				if strings.Contains(
 					numStr,
 					".",
 				) ||
 					strings.ContainsAny(numStr, "eE") {
 					f, err := strconv.ParseFloat(
-						numStr,
+						negNumStr,
 						64,
 					)
 					if err != nil {
 						return nil, p.errorf(
 							"invalid number: %s",
-							numStr,
+							negNumStr,
 						)
 					}
 
 					return &Literal{
-						Value: -f,
+						Value: f,
 						Type:  dukdb.TYPE_DOUBLE,
 					}, nil
 				}
 				i, err := strconv.ParseInt(
-					numStr,
+					negNumStr,
 					10,
 					64,
 				)
 				if err != nil {
 					return nil, p.errorf(
 						"invalid number: %s",
-						numStr,
+						negNumStr,
 					)
 				}
 
 				return &Literal{
-					Value: -i,
+					Value: i,
 					Type:  dukdb.TYPE_BIGINT,
 				}, nil
 			}

@@ -1201,3 +1201,50 @@ func (s *LogicalIcebergScan) OutputColumns() []ColumnBinding {
 
 	return s.columns
 }
+
+// ---------- Set Operation Logical Plan Nodes ----------
+
+// SetOpType represents the type of set operation.
+type SetOpType int
+
+const (
+	// SetOpUnion represents UNION (removes duplicates).
+	SetOpUnion SetOpType = iota
+	// SetOpUnionAll represents UNION ALL (preserves all rows).
+	SetOpUnionAll
+	// SetOpIntersect represents INTERSECT (removes duplicates).
+	SetOpIntersect
+	// SetOpIntersectAll represents INTERSECT ALL (preserves duplicates).
+	SetOpIntersectAll
+	// SetOpExcept represents EXCEPT (removes duplicates).
+	SetOpExcept
+	// SetOpExceptAll represents EXCEPT ALL (preserves duplicates).
+	SetOpExceptAll
+)
+
+// LogicalSetOp represents a set operation (UNION, INTERSECT, EXCEPT) in the logical plan.
+type LogicalSetOp struct {
+	// Left is the left side of the set operation.
+	Left LogicalPlan
+	// Right is the right side of the set operation.
+	Right LogicalPlan
+	// OpType is the type of set operation (UNION, UNION ALL, etc.).
+	OpType SetOpType
+	// columns caches the output column bindings.
+	columns []ColumnBinding
+}
+
+func (*LogicalSetOp) logicalPlanNode() {}
+
+func (s *LogicalSetOp) Children() []LogicalPlan {
+	return []LogicalPlan{s.Left, s.Right}
+}
+
+func (s *LogicalSetOp) OutputColumns() []ColumnBinding {
+	if s.columns != nil {
+		return s.columns
+	}
+	// Output columns are the same as the left side's columns
+	s.columns = s.Left.OutputColumns()
+	return s.columns
+}

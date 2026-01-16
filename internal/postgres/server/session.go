@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // sessionIDCounter is used to generate unique session IDs.
@@ -77,6 +78,15 @@ type Session struct {
 
 	// portals holds bound prepared statements with parameters.
 	portals *PortalCache
+
+	// statementTimeout is the timeout for query execution (0 means no timeout).
+	statementTimeout time.Duration
+
+	// lockTimeout is the timeout for waiting on locks (0 means no timeout).
+	lockTimeout time.Duration
+
+	// currentQueryCancel cancels the current running query.
+	currentQueryCancel context.CancelFunc
 }
 
 // NewSession creates a new session for the given server.
@@ -384,6 +394,59 @@ func (s *Session) GetTransactionState() TransactionState {
 	return TxStateInTx
 }
 
+// GetPendingNotifications retrieves and clears all pending notifications for this session.
+// This accesses the server's notification hub.
+func (s *Session) GetPendingNotifications() []*Notification {
+	s.mu.RLock()
+	server := s.server
+	id := s.id
+	s.mu.RUnlock()
+
+	if server == nil || server.notificationHub == nil {
+		return nil
+	}
+
+	return server.notificationHub.GetPendingNotifications(id)
+}
+
+// HasPendingNotifications checks if this session has pending notifications.
+func (s *Session) HasPendingNotifications() bool {
+	s.mu.RLock()
+	server := s.server
+	id := s.id
+	s.mu.RUnlock()
+
+	if server == nil || server.notificationHub == nil {
+		return false
+	}
+
+	// Check queue length without consuming
+	hub := server.notificationHub
+	hub.mu.RLock()
+	queue, ok := hub.sessionQueues[id]
+	hub.mu.RUnlock()
+
+	if !ok {
+		return false
+	}
+
+	return queue.Len() > 0
+}
+
+// GetListeningChannels returns the channels this session is listening on.
+func (s *Session) GetListeningChannels() []string {
+	s.mu.RLock()
+	server := s.server
+	id := s.id
+	s.mu.RUnlock()
+
+	if server == nil || server.notificationHub == nil {
+		return nil
+	}
+
+	return server.notificationHub.GetListeningChannels(id)
+}
+
 // sessionContextKey is the context key for storing session data.
 type sessionContextKey struct{}
 
@@ -396,4 +459,58 @@ func SessionFromContext(ctx context.Context) (*Session, bool) {
 // ContextWithSession adds the session to the context.
 func ContextWithSession(ctx context.Context, session *Session) context.Context {
 	return context.WithValue(ctx, sessionContextKey{}, session)
+}
+
+// GetStatementTimeout returns the session's statement timeout.
+func (s *Session) GetStatementTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.statementTimeout
+}
+
+// SetStatementTimeout sets the session's statement timeout.
+func (s *Session) SetStatementTimeout(timeout time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statementTimeout = timeout
+}
+
+// GetLockTimeout returns the session's lock timeout.
+func (s *Session) GetLockTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lockTimeout
+}
+
+// SetLockTimeout sets the session's lock timeout.
+func (s *Session) SetLockTimeout(timeout time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lockTimeout = timeout
+}
+
+// SetCurrentQueryCancel sets the cancel function for the current query.
+func (s *Session) SetCurrentQueryCancel(cancel context.CancelFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.currentQueryCancel = cancel
+}
+
+// CancelCurrentQuery cancels the currently running query if any.
+func (s *Session) CancelCurrentQuery() {
+	s.mu.Lock()
+	cancel := s.currentQueryCancel
+	s.currentQueryCancel = nil
+	s.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// ClearCurrentQueryCancel clears the current query cancel function.
+func (s *Session) ClearCurrentQueryCancel() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.currentQueryCancel = nil
 }

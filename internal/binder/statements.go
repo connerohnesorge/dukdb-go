@@ -24,6 +24,8 @@ type BoundSelectStmt struct {
 	Limit      BoundExpr
 	Offset     BoundExpr
 	Sample     *BoundSampleOptions // SAMPLE clause options
+	SetOp      parser.SetOpType    // Type of set operation (UNION, INTERSECT, EXCEPT)
+	Right      *BoundSelectStmt    // Right side of set operation
 }
 
 func (*BoundSelectStmt) boundStmtNode() {}

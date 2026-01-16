@@ -216,9 +216,11 @@ func (il IsolationLevel) String() string {
 }
 
 // OrderByExpr represents an ORDER BY expression.
+// Supports NULLS FIRST/LAST to control NULL ordering.
 type OrderByExpr struct {
-	Expr Expr
-	Desc bool
+	Expr       Expr
+	Desc       bool
+	NullsFirst *bool // nil = default, true = NULLS FIRST, false = NULLS LAST
 }
 
 // InsertStmt represents an INSERT statement.
