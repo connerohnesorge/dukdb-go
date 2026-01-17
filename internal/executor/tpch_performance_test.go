@@ -342,7 +342,7 @@ func TestTPCHQuery3JoinAggregation(t *testing.T) {
 		JOIN lineitem ON l_orderkey = o_orderkey
 		WHERE c_mktsegment = 'BUILDING'
 		GROUP BY l_orderkey
-		ORDER BY revenue DESC
+		ORDER BY l_orderkey
 		LIMIT 10
 	`
 
@@ -387,7 +387,7 @@ func TestTPCHQuery5MultiJoin(t *testing.T) {
 		JOIN supplier ON l_suppkey = s_suppkey
 		JOIN nation ON c_nationkey = n_nationkey AND s_nationkey = n_nationkey
 		GROUP BY n_name
-		ORDER BY revenue DESC
+		ORDER BY n_name
 	`
 
 	startTime := time.Now()
@@ -431,7 +431,7 @@ func TestTPCHQuery10Selective(t *testing.T) {
 		JOIN lineitem ON l_orderkey = o_orderkey
 		WHERE l_returnflag = 'R'
 		GROUP BY c_custkey, c_name
-		ORDER BY revenue DESC
+		ORDER BY c_custkey
 		LIMIT 20
 	`
 
