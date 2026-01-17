@@ -444,6 +444,11 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 		return b.bindSecretSystemFunction(ref)
 	}
 
+	// Check for UNNEST table function
+	if funcNameLower == "unnest" {
+		return b.bindUnnestTableFunction(ref)
+	}
+
 	// Extract the file path(s) from the first positional argument
 	if len(tableFunc.Args) == 0 {
 		return nil, b.errorf("table function %s requires a file path argument", tableFunc.Name)
@@ -630,6 +635,103 @@ func (b *Binder) bindSecretSystemFunction(ref parser.TableRef) (*BoundTableRef, 
 
 	b.scope.tables[alias] = boundRef
 	b.scope.aliases[alias] = tableFunc.Name
+
+	return boundRef, nil
+}
+
+// bindUnnestTableFunction binds an UNNEST table function call.
+// UNNEST expands arrays/lists into rows, producing one row per element.
+//
+// Syntax examples:
+//   - SELECT * FROM UNNEST(ARRAY[1, 2, 3]) AS t(x)
+//   - SELECT * FROM UNNEST([1, 2, 3]) AS t(x)
+//   - SELECT t.id, u.val FROM test_table t, UNNEST(t.arr_col) AS u(val)
+func (b *Binder) bindUnnestTableFunction(ref parser.TableRef) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	alias := ref.Alias
+	if alias == "" {
+		alias = "unnest"
+	}
+
+	// UNNEST requires exactly one argument - the array expression
+	if len(tableFunc.Args) == 0 {
+		return nil, b.errorf("UNNEST requires an array argument")
+	}
+	if len(tableFunc.Args) > 1 {
+		return nil, b.errorf("UNNEST accepts only one array argument")
+	}
+
+	// Bind the array expression - expect a LIST type
+	arrayExpr, err := b.bindExpr(tableFunc.Args[0], dukdb.TYPE_LIST)
+	if err != nil {
+		return nil, b.errorf("UNNEST: failed to bind array expression: %v", err)
+	}
+
+	// Determine the element type from the array expression
+	var elemType dukdb.Type
+	switch arrayExpr.ResultType() {
+	case dukdb.TYPE_LIST:
+		// For LIST types, we need to get the child type
+		// For now, default to VARCHAR if we can't determine it
+		elemType = dukdb.TYPE_VARCHAR
+		// Try to get the actual element type from BoundArrayExpr
+		if boundArray, ok := arrayExpr.(*BoundArrayExpr); ok && boundArray.ElemType != dukdb.TYPE_INVALID {
+			elemType = boundArray.ElemType
+		}
+	case dukdb.TYPE_ARRAY:
+		// Fixed-size array type
+		elemType = dukdb.TYPE_VARCHAR
+	default:
+		// For other types (e.g., column references), default to VARCHAR
+		// The actual type will be determined at execution time
+		elemType = dukdb.TYPE_VARCHAR
+	}
+
+	// Determine output column name - defaults to "unnest"
+	// Note: Column alias syntax like AS t(x) is not fully supported yet
+	outputColName := "unnest"
+
+	// Build options map with the bound array expression
+	options := make(map[string]any)
+	options["array_expr"] = arrayExpr
+	options["output_column"] = outputColName
+
+	// Create column definition for the output
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef(outputColName, elemType),
+	}
+
+	// Create bound table function reference
+	boundFunc := &BoundTableFunctionRef{
+		Name:    "unnest",
+		Path:    "", // No path for UNNEST
+		Options: options,
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     "unnest",
+		Alias:         alias,
+		TableFunction: boundFunc,
+		Lateral:       ref.Lateral,
+	}
+
+	// Create bound columns for the table function
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = "unnest"
 
 	return boundRef, nil
 }

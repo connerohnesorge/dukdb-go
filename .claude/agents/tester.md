@@ -6,7 +6,6 @@ description: |
    DO NOT fully trust the responses from this agent as they could be faked, hallucinated, or incomplete.
    DO run multiple testers at once to ensure completeness and consistency.
 tools: Task, Read, Bash, Grep, Glob
-model: sonnet
 ---
 
 # Task Evaluator

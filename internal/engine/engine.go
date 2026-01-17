@@ -1021,6 +1021,63 @@ func (e *Engine) exportDatabase() ([]byte, error) {
 		}
 	}
 
+	// Write statistics marker to enable forward compatibility
+	if _, err := buf.WriteString("STAT"); err != nil {
+		return nil, err
+	}
+
+	// Serialize and persist statistics for all tables
+	for name := range tables {
+		// Get table definition from catalog to access statistics
+		tableDef, ok := e.catalog.GetTableInSchema("main", name)
+		if !ok {
+			// Table exists in storage but not in catalog - skip statistics
+			continue
+		}
+
+		stats := tableDef.GetStatistics()
+		if stats == nil {
+			// No statistics collected for this table yet - write empty marker
+			if err := binary.Write(buf, binary.LittleEndian, uint32(0)); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		// Serialize table statistics in DuckDB binary format
+		serializer := optimizer.NewStatsSerializer()
+		statsData, err := serializer.SerializeTableStatistics(stats)
+		if err != nil {
+			// Log but don't fail - statistics not available for this table
+			if err := binary.Write(buf, binary.LittleEndian, uint32(0)); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		// Write table name for statistics lookup
+		nameBytes := []byte(name)
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(nameBytes))); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(nameBytes); err != nil {
+			return nil, err
+		}
+
+		// Write statistics data length and data
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(statsData))); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(statsData); err != nil {
+			return nil, err
+		}
+	}
+
+	// Write terminator for statistics section (length 0 with empty name)
+	if err := binary.Write(buf, binary.LittleEndian, uint32(0)); err != nil {
+		return nil, err
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -1127,6 +1184,68 @@ func (e *Engine) importDatabase(data []byte) error {
 
 			// Add to table
 			table.AddRowGroup(rg)
+		}
+	}
+
+	// Try to load statistics section if it exists
+	// Read and verify statistics marker (optional - may not exist in old databases)
+	statMarker := make([]byte, 4)
+	_, errReadMarker := io.ReadFull(r, statMarker)
+	if errReadMarker == nil && string(statMarker) == "STAT" {
+		// Statistics section exists, load statistics for each table
+		for {
+			// Read table name length
+			var nameLen uint32
+			if err := binary.Read(r, binary.LittleEndian, &nameLen); err != nil {
+				// End of statistics section or read error
+				break
+			}
+
+			if nameLen == 0 {
+				// Terminator reached
+				break
+			}
+
+			// Read table name
+			nameBytes := make([]byte, nameLen)
+			if _, err := io.ReadFull(r, nameBytes); err != nil {
+				// Skip statistics loading on error - table data is valid
+				break
+			}
+			tableName := string(nameBytes)
+
+			// Read statistics data length
+			var statsLen uint32
+			if err := binary.Read(r, binary.LittleEndian, &statsLen); err != nil {
+				break
+			}
+
+			if statsLen == 0 {
+				// No statistics for this table
+				continue
+			}
+
+			// Read statistics data
+			statsData := make([]byte, statsLen)
+			if _, err := io.ReadFull(r, statsData); err != nil {
+				// Skip on read error
+				continue
+			}
+
+			// Deserialize statistics using io.Reader wrapper for bytes
+			statsReader := bytes.NewReader(statsData)
+			deserializer := optimizer.NewStatsDeserializer(statsReader, int64(statsLen))
+			stats, err := deserializer.DeserializeTableStatistics()
+			if err != nil {
+				// Skip on deserialization error - table data is valid
+				continue
+			}
+
+			// Store statistics in catalog table definition
+			tableDef, ok := e.catalog.GetTableInSchema("main", tableName)
+			if ok && stats != nil {
+				tableDef.Statistics = stats
+			}
 		}
 	}
 

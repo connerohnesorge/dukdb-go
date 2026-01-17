@@ -161,6 +161,8 @@ const (
 	JoinTypeRight
 	JoinTypeFull
 	JoinTypeCross
+	JoinTypeSemi  // SEMI JOIN: outputs left rows where right match exists (for EXISTS, IN subqueries)
+	JoinTypeAnti  // ANTI JOIN: outputs left rows where right match does NOT exist (for NOT EXISTS, NOT IN)
 )
 
 func (*LogicalJoin) logicalPlanNode() {}

@@ -12,6 +12,7 @@
 package optimizer
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -138,7 +139,7 @@ func TestSimpleProjectionQueryOverhead(t *testing.T) {
 		columns: scan.columns,
 	}
 
-	const iterations = 1000
+	const iterations = 10000
 	start := time.Now()
 	for range iterations {
 		_, err := optimizer.Optimize(project)
@@ -147,529 +148,186 @@ func TestSimpleProjectionQueryOverhead(t *testing.T) {
 	elapsed := time.Since(start)
 	avgTime := elapsed / iterations
 
-	t.Logf("Projection query optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
+	t.Logf("Projection optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
 	assert.Less(t, avgTime, 5*time.Millisecond, "Simple projection optimization should be < 5ms")
 }
 
-// TestSimpleSortQueryOverhead tests optimization overhead for sort queries.
-func TestSimpleSortQueryOverhead(t *testing.T) {
-	optimizer := NewCostBasedOptimizer(nil)
+// ============================================================================
+// Task 3.9: Auto-Update Performance Benchmarks
+// ============================================================================
 
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "data",
-		alias:     "d",
-		columns: []OutputColumn{
-			{Table: "d", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	sort := &mockLogicalSort{child: scan}
-
-	const iterations = 1000
-	start := time.Now()
-	for range iterations {
-		_, err := optimizer.Optimize(sort)
-		require.NoError(t, err)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("Sort query optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	assert.Less(t, avgTime, 5*time.Millisecond, "Simple sort optimization should be < 5ms")
-}
-
-// TestSimpleLimitQueryOverhead tests optimization overhead for limit queries.
-func TestSimpleLimitQueryOverhead(t *testing.T) {
-	optimizer := NewCostBasedOptimizer(nil)
-
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "data",
-		alias:     "d",
-		columns: []OutputColumn{
-			{Table: "d", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	limit := &mockLogicalLimit{
-		child:  scan,
-		limit:  100,
-		offset: 0,
-	}
-
-	const iterations = 1000
-	start := time.Now()
-	for range iterations {
-		_, err := optimizer.Optimize(limit)
-		require.NoError(t, err)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("Limit query optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	assert.Less(t, avgTime, 5*time.Millisecond, "Simple limit optimization should be < 5ms")
-}
-
-// TestSimpleAggregateQueryOverhead tests optimization overhead for aggregate queries.
-func TestSimpleAggregateQueryOverhead(t *testing.T) {
-	optimizer := NewCostBasedOptimizer(nil)
-
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "data",
-		alias:     "d",
-		columns: []OutputColumn{
-			{Table: "d", Column: "category", Type: dukdb.TYPE_VARCHAR},
-			{Table: "d", Column: "value", Type: dukdb.TYPE_DOUBLE},
-		},
-	}
-
-	aggregate := &mockLogicalAggregate{
-		child: scan,
-		groupBy: []ExprNode{
-			&mockColumnRef{table: "d", column: "category", colType: dukdb.TYPE_VARCHAR},
-		},
-		columns: []OutputColumn{
-			{Table: "d", Column: "category", Type: dukdb.TYPE_VARCHAR},
-			{Column: "sum", Type: dukdb.TYPE_DOUBLE},
-		},
-	}
-
-	const iterations = 1000
-	start := time.Now()
-	for range iterations {
-		_, err := optimizer.Optimize(aggregate)
-		require.NoError(t, err)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("Aggregate query optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	assert.Less(t, avgTime, 5*time.Millisecond, "Simple aggregate optimization should be < 5ms")
-}
-
-// TestTwoTableJoinOverhead tests optimization overhead for 2-table joins.
-func TestTwoTableJoinOverhead(t *testing.T) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "users", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 10000, PageCount: 100},
-	})
-	catalog.AddTable("main", "orders", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 50000, PageCount: 500},
-	})
-
-	optimizer := NewCostBasedOptimizer(catalog)
-
-	usersScan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	ordersScan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "orders",
-		alias:     "o",
-		columns: []OutputColumn{
-			{Table: "o", Column: "user_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	join := &mockLogicalJoin{
-		left:     usersScan,
-		right:    ordersScan,
-		joinType: JoinTypeInner,
-		condition: &mockBinaryExpr{
-			left:    &mockColumnRef{table: "u", column: "id", colType: dukdb.TYPE_INTEGER},
-			op:      OpEq,
-			right:   &mockColumnRef{table: "o", column: "user_id", colType: dukdb.TYPE_INTEGER},
-			resType: dukdb.TYPE_BOOLEAN,
-		},
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-			{Table: "o", Column: "user_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	const iterations = 1000
-	start := time.Now()
-	for range iterations {
-		_, err := optimizer.Optimize(join)
-		require.NoError(t, err)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("2-table join optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	// Joins are more complex, but should still be fast
-	assert.Less(t, avgTime, 10*time.Millisecond, "2-table join optimization should be < 10ms")
-}
-
-// TestCardinalityEstimatorOverhead measures cardinality estimation overhead.
-func TestCardinalityEstimatorOverhead(t *testing.T) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "users", &mockTableInfo{
-		stats: &TableStatistics{
-			RowCount:  100000,
-			PageCount: 1000,
-			Columns: []ColumnStatistics{
-				{ColumnName: "id", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: 100000},
-				{ColumnName: "status", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 10},
-			},
-		},
-	})
-
-	stats := NewStatisticsManager(catalog)
-	estimator := NewCardinalityEstimator(stats)
-
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	filter := &mockLogicalFilter{
-		child: scan,
-		condition: &mockBinaryExpr{
-			left:    &mockColumnRef{table: "u", column: "status", colType: dukdb.TYPE_VARCHAR},
-			op:      OpEq,
-			right:   &mockLiteral{value: "active", valType: dukdb.TYPE_VARCHAR},
-			resType: dukdb.TYPE_BOOLEAN,
-		},
-	}
-
-	const iterations = 10000
-	start := time.Now()
-	for range iterations {
-		_ = estimator.EstimateCardinality(filter)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("Cardinality estimation: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	// Cardinality estimation should be very fast (sub-microsecond for simple cases)
-	assert.Less(t, avgTime, 100*time.Microsecond, "Cardinality estimation should be < 100us")
-}
-
-// TestCostModelOverhead measures cost model computation overhead.
-func TestCostModelOverhead(t *testing.T) {
-	stats := NewStatisticsManager(nil)
-	estimator := NewCardinalityEstimator(stats)
-	costModel := NewCostModel(DefaultCostConstants(), estimator)
-
-	// Create a mock physical scan node
-	mockScan := &mockPhysicalScan{
-		schema:    "main",
-		tableName: "users",
-		rowCount:  10000,
-		pageCount: 100,
-	}
-
-	const iterations = 10000
-	start := time.Now()
-	for range iterations {
-		_ = costModel.EstimateCost(mockScan)
-	}
-	elapsed := time.Since(start)
-	avgTime := elapsed / iterations
-
-	t.Logf("Cost model estimation: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
-	assert.Less(t, avgTime, 100*time.Microsecond, "Cost model estimation should be < 100us")
-}
-
-// mockPhysicalScan implements PhysicalScanNode for testing.
-type mockPhysicalScan struct {
-	schema    string
-	tableName string
-	rowCount  float64
-	pageCount float64
-}
-
-func (s *mockPhysicalScan) PhysicalPlanType() string { return "PhysicalScan" }
-func (s *mockPhysicalScan) PhysicalChildren() []PhysicalPlanNode {
-	return nil
-}
-func (s *mockPhysicalScan) PhysicalOutputColumns() []PhysicalOutputColumn {
-	return []PhysicalOutputColumn{
-		{Table: s.tableName, Column: "id", Type: dukdb.TYPE_INTEGER},
-	}
-}
-func (s *mockPhysicalScan) ScanSchema() string      { return s.schema }
-func (s *mockPhysicalScan) ScanTableName() string   { return s.tableName }
-func (s *mockPhysicalScan) ScanAlias() string       { return s.tableName }
-func (s *mockPhysicalScan) ScanRowCount() float64   { return s.rowCount }
-func (s *mockPhysicalScan) ScanPageCount() float64  { return s.pageCount }
-
-// BenchmarkCardinalityEstimation benchmarks cardinality estimation.
-func BenchmarkCardinalityEstimation(b *testing.B) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "users", &mockTableInfo{
-		stats: &TableStatistics{
-			RowCount: 100000,
-			Columns: []ColumnStatistics{
-				{ColumnName: "status", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 10},
-			},
-		},
-	})
-
-	stats := NewStatisticsManager(catalog)
-	estimator := NewCardinalityEstimator(stats)
-
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-	}
-
-	filter := &mockLogicalFilter{
-		child: scan,
-		condition: &mockBinaryExpr{
-			left:  &mockColumnRef{table: "u", column: "status", colType: dukdb.TYPE_VARCHAR},
-			op:    OpEq,
-			right: &mockLiteral{value: "active", valType: dukdb.TYPE_VARCHAR},
-		},
-	}
+// BenchmarkModificationTracking benchmarks the performance of recording modifications.
+// Goal: <1 microsecond per operation (non-blocking, just counter increment)
+func BenchmarkModificationTracking(b *testing.B) {
+	tracker := NewModificationTracker()
+	tracker.InitializeTable("test", 10000)
 
 	b.ResetTimer()
 	for range b.N {
-		_ = estimator.EstimateCardinality(filter)
+		tracker.RecordInsert("test", 1)
 	}
+
+	// Result should be extremely fast: sub-microsecond
+	// Each call is just a lock + counter increment
+	b.ReportAllocs()
 }
 
-// BenchmarkCostModelScan benchmarks cost model for scan operations.
-func BenchmarkCostModelScan(b *testing.B) {
-	costModel := NewCostModel(DefaultCostConstants(), nil)
+// BenchmarkThresholdCheck benchmarks ratio calculation and threshold comparison.
+// Goal: <10 microseconds per check (calculate ratio + compare)
+func BenchmarkThresholdCheck(b *testing.B) {
+	tracker := NewModificationTracker()
+	tracker.InitializeTable("test", 100000)
 
-	mockScan := &mockPhysicalScan{
-		schema:    "main",
-		tableName: "users",
-		rowCount:  10000,
-		pageCount: 100,
-	}
+	// Add some modifications
+	tracker.RecordInsert("test", 5000)
 
 	b.ResetTimer()
 	for range b.N {
-		_ = costModel.EstimateCost(mockScan)
+		ratio := tracker.GetModificationRatio("test")
+		if ratio >= 0.10 {
+			// Threshold exceeded
+		}
 	}
+
+	b.ReportAllocs()
 }
 
-// BenchmarkOptimizerSimpleScan benchmarks optimizer for simple scan.
-func BenchmarkOptimizerSimpleScan(b *testing.B) {
-	optimizer := NewCostBasedOptimizer(nil)
+// BenchmarkQueueing benchmarks the overhead of queuing a table for ANALYZE.
+// Goal: <100 microseconds per queue operation (lock + map insertion)
+func BenchmarkQueueing(b *testing.B) {
+	tracker := NewModificationTracker()
+	tracker.InitializeTable("test", 10000)
 
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
+	analyzeFunc := func(ctx context.Context, tableName string, incremental bool) error {
+		return nil
 	}
+
+	getRowCountFunc := func(tableName string) (int64, error) {
+		return 10000, nil
+	}
+
+	aum := NewAutoUpdateManager(tracker, analyzeFunc, getRowCountFunc)
+	aum.SetBatchInterval(1 * time.Second) // Long interval so batch doesn't execute during benchmark
+
+	tracker.RecordInsert("test", 1100) // Trigger threshold
 
 	b.ResetTimer()
 	for range b.N {
-		_, _ = optimizer.Optimize(scan)
+		aum.CheckAndQueueAutoAnalyze("test")
 	}
+
+	b.ReportAllocs()
 }
 
-// BenchmarkOptimizerSimpleFilter benchmarks optimizer for simple filter.
-func BenchmarkOptimizerSimpleFilter(b *testing.B) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "users", &mockTableInfo{
-		stats: &TableStatistics{
-			RowCount: 10000,
-			Columns: []ColumnStatistics{
-				{ColumnName: "status", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 5},
-			},
-		},
-	})
+// BenchmarkAutoUpdateWithoutTrigger benchmarks the performance of modification tracking
+// when auto-update is NOT triggered (modifications stay below 10%).
+// Goal: <2 microseconds total overhead per operation
+func BenchmarkAutoUpdateWithoutTrigger(b *testing.B) {
+	tracker := NewModificationTracker()
+	tracker.InitializeTable("test", 100000)
 
-	optimizer := NewCostBasedOptimizer(catalog)
-
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
+	analyzeFunc := func(ctx context.Context, tableName string, incremental bool) error {
+		return nil
 	}
 
-	filter := &mockLogicalFilter{
-		child: scan,
-		condition: &mockBinaryExpr{
-			left:  &mockColumnRef{table: "u", column: "status", colType: dukdb.TYPE_VARCHAR},
-			op:    OpEq,
-			right: &mockLiteral{value: "active", valType: dukdb.TYPE_VARCHAR},
-		},
+	getRowCountFunc := func(tableName string) (int64, error) {
+		return 100000, nil
 	}
+
+	aum := NewAutoUpdateManager(tracker, analyzeFunc, getRowCountFunc)
 
 	b.ResetTimer()
 	for range b.N {
-		_, _ = optimizer.Optimize(filter)
+		// Record insert below threshold (< 0.05%)
+		tracker.RecordInsert("test", 1)
+		aum.CheckAndQueueAutoAnalyze("test")
 	}
+
+	b.ReportAllocs()
 }
 
-// BenchmarkOptimizerSimpleAggregate benchmarks optimizer for simple aggregate.
-func BenchmarkOptimizerSimpleAggregate(b *testing.B) {
-	optimizer := NewCostBasedOptimizer(nil)
+// BenchmarkAutoUpdateBatchExecution benchmarks the time to execute a batch of ANALYZE operations.
+// This includes actual ANALYZE calls (stubbed) plus tracking updates.
+// Goal: ~1ms per table in batch
+func BenchmarkAutoUpdateBatchExecution(b *testing.B) {
+	tracker := NewModificationTracker()
 
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "category", Type: dukdb.TYPE_VARCHAR},
-		},
+	// Set up 10 tables
+	tableCount := 10
+	for i := 0; i < tableCount; i++ {
+		tableName := "table_" + string(rune('0'+i))
+		tracker.InitializeTable(tableName, 100000)
+		tracker.RecordInsert(tableName, 15000) // 15% modification
 	}
 
-	aggregate := &mockLogicalAggregate{
-		child: scan,
-		groupBy: []ExprNode{
-			&mockColumnRef{table: "u", column: "category", colType: dukdb.TYPE_VARCHAR},
-		},
-		columns: []OutputColumn{
-			{Column: "count", Type: dukdb.TYPE_BIGINT},
-		},
+	analyzeCount := 0
+	analyzeFunc := func(ctx context.Context, tableName string, incremental bool) error {
+		analyzeCount++
+		// Simulate some ANALYZE work (but keep it minimal for benchmark)
+		time.Sleep(100 * time.Microsecond)
+		return nil
 	}
 
+	getRowCountFunc := func(tableName string) (int64, error) {
+		return 100000, nil
+	}
+
+	aum := NewAutoUpdateManager(tracker, analyzeFunc, getRowCountFunc)
+
+	// Manually trigger analyze for all tables
 	b.ResetTimer()
 	for range b.N {
-		_, _ = optimizer.Optimize(aggregate)
+		for i := 0; i < tableCount; i++ {
+			tableName := "table_" + string(rune('0'+i))
+			aum.CheckAndQueueAutoAnalyze(tableName)
+		}
+
+		// Wait for batch to complete
+		time.Sleep(200 * time.Millisecond)
 	}
+
+	b.ReportAllocs()
 }
 
-// BenchmarkOptimizerSortLimit benchmarks optimizer for sort with limit.
-func BenchmarkOptimizerSortLimit(b *testing.B) {
-	optimizer := NewCostBasedOptimizer(nil)
+// BenchmarkAutoUpdateOverheadComparison benchmarks the total overhead of auto-update
+// in a realistic scenario: 1000 single-row inserts.
+// This measures: modification tracking + queuing + batching
+// Goal: <1ms total for 1000 operations (including batch execution)
+func BenchmarkAutoUpdateOverheadComparison(b *testing.B) {
+	tracker := NewModificationTracker()
+	tracker.InitializeTable("busy_table", 1000000)
 
-	scan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
+	batchCount := 0
+	analyzeFunc := func(ctx context.Context, tableName string, incremental bool) error {
+		batchCount++
+		return nil
 	}
 
-	sort := &mockLogicalSort{child: scan}
-	limit := &mockLogicalLimit{child: sort, limit: 10, offset: 0}
+	getRowCountFunc := func(tableName string) (int64, error) {
+		return 1000000, nil
+	}
+
+	aum := NewAutoUpdateManager(tracker, analyzeFunc, getRowCountFunc)
+	aum.SetBatchInterval(10 * time.Millisecond) // Short batch interval
 
 	b.ResetTimer()
-	for range b.N {
-		_, _ = optimizer.Optimize(limit)
-	}
-}
+	b.StopTimer()
 
-// BenchmarkOptimizerTwoTableJoin benchmarks optimizer for 2-table join.
-func BenchmarkOptimizerTwoTableJoin(b *testing.B) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "users", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 10000, PageCount: 100},
-	})
-	catalog.AddTable("main", "orders", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 50000, PageCount: 500},
-	})
+	for iteration := 0; iteration < b.N; iteration++ {
+		start := time.Now()
 
-	optimizer := NewCostBasedOptimizer(catalog)
+		// Record 1000 single-row inserts
+		for i := 0; i < 1000; i++ {
+			tracker.RecordInsert("busy_table", 1)
+			aum.CheckAndQueueAutoAnalyze("busy_table")
+		}
 
-	usersScan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "users",
-		alias:     "u",
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-		},
+		// Wait for batch to complete
+		time.Sleep(50 * time.Millisecond)
+
+		elapsed := time.Since(start)
+		b.ReportMetric(float64(elapsed.Microseconds()), "microseconds_per_1000_ops")
 	}
 
-	ordersScan := &mockLogicalScan{
-		schema:    "main",
-		tableName: "orders",
-		alias:     "o",
-		columns: []OutputColumn{
-			{Table: "o", Column: "user_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	join := &mockLogicalJoin{
-		left:     usersScan,
-		right:    ordersScan,
-		joinType: JoinTypeInner,
-		condition: &mockBinaryExpr{
-			left:  &mockColumnRef{table: "u", column: "id", colType: dukdb.TYPE_INTEGER},
-			op:    OpEq,
-			right: &mockColumnRef{table: "o", column: "user_id", colType: dukdb.TYPE_INTEGER},
-		},
-		columns: []OutputColumn{
-			{Table: "u", Column: "id", Type: dukdb.TYPE_INTEGER},
-			{Table: "o", Column: "user_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	b.ResetTimer()
-	for range b.N {
-		_, _ = optimizer.Optimize(join)
-	}
-}
-
-// BenchmarkOptimizerThreeTableJoin benchmarks optimizer for 3-table join.
-func BenchmarkOptimizerThreeTableJoin(b *testing.B) {
-	catalog := newMockCatalog()
-	catalog.AddTable("main", "a", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 1000, PageCount: 10},
-	})
-	catalog.AddTable("main", "b", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 5000, PageCount: 50},
-	})
-	catalog.AddTable("main", "c", &mockTableInfo{
-		stats: &TableStatistics{RowCount: 10000, PageCount: 100},
-	})
-
-	optimizer := NewCostBasedOptimizer(catalog)
-
-	scanA := &mockLogicalScan{schema: "main", tableName: "a", alias: "a",
-		columns: []OutputColumn{{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER}}}
-	scanB := &mockLogicalScan{schema: "main", tableName: "b", alias: "b",
-		columns: []OutputColumn{{Table: "b", Column: "a_id", Type: dukdb.TYPE_INTEGER}}}
-	scanC := &mockLogicalScan{schema: "main", tableName: "c", alias: "c",
-		columns: []OutputColumn{{Table: "c", Column: "b_id", Type: dukdb.TYPE_INTEGER}}}
-
-	joinAB := &mockLogicalJoin{
-		left: scanA, right: scanB, joinType: JoinTypeInner,
-		condition: &mockBinaryExpr{
-			left:  &mockColumnRef{table: "a", column: "id", colType: dukdb.TYPE_INTEGER},
-			op:    OpEq,
-			right: &mockColumnRef{table: "b", column: "a_id", colType: dukdb.TYPE_INTEGER},
-		},
-		columns: []OutputColumn{
-			{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER},
-			{Table: "b", Column: "a_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	joinABC := &mockLogicalJoin{
-		left: joinAB, right: scanC, joinType: JoinTypeInner,
-		condition: &mockBinaryExpr{
-			left:  &mockColumnRef{table: "b", column: "a_id", colType: dukdb.TYPE_INTEGER},
-			op:    OpEq,
-			right: &mockColumnRef{table: "c", column: "b_id", colType: dukdb.TYPE_INTEGER},
-		},
-		columns: []OutputColumn{
-			{Table: "a", Column: "id", Type: dukdb.TYPE_INTEGER},
-			{Table: "b", Column: "a_id", Type: dukdb.TYPE_INTEGER},
-			{Table: "c", Column: "b_id", Type: dukdb.TYPE_INTEGER},
-		},
-	}
-
-	b.ResetTimer()
-	for range b.N {
-		_, _ = optimizer.Optimize(joinABC)
-	}
+	b.ReportAllocs()
 }

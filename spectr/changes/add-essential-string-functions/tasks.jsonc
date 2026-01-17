@@ -203,10 +203,8 @@
     {
       "id": "3.8",
       "section": "String Concatenation and Splitting",
-      "description": "Integration test: STRING_SPLIT with UNNEST (BLOCKED: UNNEST not implemented in dukdb-go)",
-      "status": "pending",
-      "blocked": true,
-      "blocker": "UNNEST table function not implemented"
+      "description": "Integration test: STRING_SPLIT with UNNEST",
+      "status": "completed"
     },
     {
       "id": "4.1",
@@ -967,10 +965,8 @@
     {
       "id": "14.6",
       "section": "Integration Tests",
-      "description": "Test STRING_SPLIT with UNNEST for array expansion (BLOCKED: UNNEST not implemented in dukdb-go)",
-      "status": "pending",
-      "blocked": true,
-      "blocker": "UNNEST table function not implemented"
+      "description": "Test STRING_SPLIT with UNNEST for array expansion",
+      "status": "completed"
     },
     {
       "id": "14.7",

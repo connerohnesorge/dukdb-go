@@ -13,6 +13,8 @@ require (
 	github.com/coder/quartz v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/hamba/avro/v2 v2.31.0
+	github.com/jackc/pgx/v5 v5.4.3
+	github.com/jeroenrinzema/psql-wire v0.17.0
 	github.com/klauspost/compress v1.18.2
 	github.com/marcboeker/go-duckdb v1.8.5
 	github.com/minio/minio-go/v7 v7.0.97
@@ -22,6 +24,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/twmb/murmur3 v1.1.8
 	github.com/xuri/excelize/v2 v2.10.0
+	golang.org/x/crypto v0.46.0
 	google.golang.org/api v0.256.0
 )
 
@@ -82,8 +85,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/pgx/v5 v5.4.3 // indirect
-	github.com/jeroenrinzema/psql-wire v0.17.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
@@ -119,7 +120,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	gocloud.dev v0.43.0 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect

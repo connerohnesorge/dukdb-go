@@ -109,6 +109,9 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeWhichSecret(ctx, plan)
 	case "duckdb_secrets":
 		return e.executeDuckDBSecrets(ctx, plan)
+	// Array/list expansion functions
+	case "unnest":
+		return e.executeUnnest(ctx, plan)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

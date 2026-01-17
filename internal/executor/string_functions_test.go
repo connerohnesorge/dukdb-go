@@ -2018,6 +2018,252 @@ func TestIntegration_UNION_NullHandling(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Integration Tests for STRING_SPLIT with UNNEST (Tasks 3.8 and 14.6)
+// Tests that STRING_SPLIT arrays can be expanded using UNNEST
+// =============================================================================
+
+// TestIntegration_STRING_SPLIT_UNNEST_Basic tests basic STRING_SPLIT with UNNEST
+func TestIntegration_STRING_SPLIT_UNNEST_Basic(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	tests := []struct {
+		name     string
+		query    string
+		expected []any
+	}{
+		{
+			name:     "Basic comma split with UNNEST",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('a,b,c', ','))",
+			expected: []any{"a", "b", "c"},
+		},
+		{
+			name:     "Space split with UNNEST",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('hello world', ' '))",
+			expected: []any{"hello", "world"},
+		},
+		{
+			name:     "Pipe delimiter with UNNEST",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('one|two|three', '|'))",
+			expected: []any{"one", "two", "three"},
+		},
+		{
+			name:     "Single element result",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('noseparator', ','))",
+			expected: []any{"noseparator"},
+		},
+		{
+			name:     "Empty parts from consecutive separators",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('a,,b', ','))",
+			expected: []any{"a", "", "b"},
+		},
+		{
+			name:     "Character-by-character split (empty separator)",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('abc', ''))",
+			expected: []any{"a", "b", "c"},
+		},
+		{
+			name:     "Longer separator string",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('one--two--three', '--'))",
+			expected: []any{"one", "two", "three"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executeStringQuery(t, exec, cat, tt.query)
+			require.NoError(t, err, "Query should execute without error")
+			require.Len(t, result.Rows, len(tt.expected), "Expected %d rows", len(tt.expected))
+
+			// Verify each row matches expected value
+			for i, row := range result.Rows {
+				// Get the value from the row (column name is "unnest")
+				val, ok := row["unnest"]
+				require.True(t, ok, "Row should have 'unnest' column")
+				assert.Equal(t, tt.expected[i], val, "Row %d mismatch", i)
+			}
+		})
+	}
+}
+
+// TestIntegration_STRING_SPLIT_UNNEST_WithAlias tests STRING_SPLIT with UNNEST using aliases
+func TestIntegration_STRING_SPLIT_UNNEST_WithAlias(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	tests := []struct {
+		name        string
+		query       string
+		expected    []any
+		colName     string
+		expectError bool
+	}{
+		{
+			name:     "With table alias",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('x,y,z', ',')) AS t",
+			expected: []any{"x", "y", "z"},
+			colName:  "unnest",
+		},
+		{
+			name:     "CSV line parsing",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('name,age,city', ',')) AS fields",
+			expected: []any{"name", "age", "city"},
+			colName:  "unnest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executeStringQuery(t, exec, cat, tt.query)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err, "Query should execute without error")
+			require.Len(t, result.Rows, len(tt.expected), "Expected %d rows", len(tt.expected))
+
+			for i, row := range result.Rows {
+				val := row[tt.colName]
+				assert.Equal(t, tt.expected[i], val, "Row %d mismatch", i)
+			}
+		})
+	}
+}
+
+// TestIntegration_STRING_SPLIT_UNNEST_EmptyAndNull tests edge cases with empty/NULL
+func TestIntegration_STRING_SPLIT_UNNEST_EmptyAndNull(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	t.Run("Empty string produces single empty element", func(t *testing.T) {
+		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT('', ','))")
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 1)
+		assert.Equal(t, "", result.Rows[0]["unnest"])
+	})
+
+	t.Run("Only separator produces two empty elements", func(t *testing.T) {
+		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT(',', ','))")
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 2)
+		assert.Equal(t, "", result.Rows[0]["unnest"])
+		assert.Equal(t, "", result.Rows[1]["unnest"])
+	})
+
+	t.Run("Multiple consecutive separators", func(t *testing.T) {
+		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT('a,,,b', ','))")
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 4) // "a", "", "", "b"
+		assert.Equal(t, "a", result.Rows[0]["unnest"])
+		assert.Equal(t, "", result.Rows[1]["unnest"])
+		assert.Equal(t, "", result.Rows[2]["unnest"])
+		assert.Equal(t, "b", result.Rows[3]["unnest"])
+	})
+}
+
+// TestIntegration_STRING_SPLIT_UNNEST_RealWorldExamples tests real-world use cases
+func TestIntegration_STRING_SPLIT_UNNEST_RealWorldExamples(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	tests := []struct {
+		name     string
+		query    string
+		expected []any
+	}{
+		{
+			name:     "Parse path components",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('/home/user/documents', '/'))",
+			expected: []any{"", "home", "user", "documents"},
+		},
+		{
+			name:     "Parse URL query params keys",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('key1=val1&key2=val2&key3=val3', '&'))",
+			expected: []any{"key1=val1", "key2=val2", "key3=val3"},
+		},
+		{
+			name:     "Parse comma-separated list with spaces",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('apple, banana, cherry', ', '))",
+			expected: []any{"apple", "banana", "cherry"},
+		},
+		{
+			name:     "Parse tab-separated values",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('col1\tcol2\tcol3', '\t'))",
+			expected: []any{"col1", "col2", "col3"},
+		},
+		{
+			name:     "Parse semicolon-separated emails",
+			query:    "SELECT * FROM UNNEST(STRING_SPLIT('user1@example.com;user2@example.com;user3@example.com', ';'))",
+			expected: []any{"user1@example.com", "user2@example.com", "user3@example.com"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executeStringQuery(t, exec, cat, tt.query)
+			require.NoError(t, err, "Query should execute without error")
+			require.Len(t, result.Rows, len(tt.expected), "Expected %d rows", len(tt.expected))
+
+			for i, row := range result.Rows {
+				val := row["unnest"]
+				assert.Equal(t, tt.expected[i], val, "Row %d mismatch", i)
+			}
+		})
+	}
+}
+
+// TestIntegration_STRING_SPLIT_UNNEST_WithOtherFunctions tests STRING_SPLIT+UNNEST combined with other functions
+func TestIntegration_STRING_SPLIT_UNNEST_WithOtherFunctions(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	t.Run("COUNT elements from STRING_SPLIT", func(t *testing.T) {
+		result, err := executeStringQuery(t, exec, cat, "SELECT COUNT(*) FROM UNNEST(STRING_SPLIT('a,b,c,d,e', ','))")
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 1)
+		// Count should be 5
+		for _, val := range result.Rows[0] {
+			assert.Equal(t, int64(5), val)
+		}
+	})
+}
+
+// TestIntegration_REGEXP_SPLIT_UNNEST tests REGEXP_SPLIT_TO_ARRAY with UNNEST
+func TestIntegration_REGEXP_SPLIT_UNNEST(t *testing.T) {
+	exec, cat := setupStringTestExecutor()
+
+	tests := []struct {
+		name     string
+		query    string
+		expected []any
+	}{
+		{
+			name:     "Regex split by whitespace",
+			query:    "SELECT * FROM UNNEST(REGEXP_SPLIT_TO_ARRAY('hello   world  foo', '\\s+'))",
+			expected: []any{"hello", "world", "foo"},
+		},
+		{
+			name:     "Regex split by digits",
+			query:    "SELECT * FROM UNNEST(REGEXP_SPLIT_TO_ARRAY('a1b2c3d', '[0-9]'))",
+			expected: []any{"a", "b", "c", "d"},
+		},
+		{
+			name:     "Regex split by multiple separators",
+			query:    "SELECT * FROM UNNEST(REGEXP_SPLIT_TO_ARRAY('one,two;three|four', '[,;|]'))",
+			expected: []any{"one", "two", "three", "four"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executeStringQuery(t, exec, cat, tt.query)
+			require.NoError(t, err, "Query should execute without error")
+			require.Len(t, result.Rows, len(tt.expected), "Expected %d rows", len(tt.expected))
+
+			for i, row := range result.Rows {
+				val := row["unnest"]
+				assert.Equal(t, tt.expected[i], val, "Row %d mismatch", i)
+			}
+		})
+	}
+}
+
 // TestIntegration_UNION_TypeConsistency tests that UNION queries produce consistent types
 func TestIntegration_UNION_TypeConsistency(t *testing.T) {
 	exec, cat := setupStringTestExecutor()

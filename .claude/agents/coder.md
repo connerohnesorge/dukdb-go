@@ -6,7 +6,6 @@ description: |
    DO NOT use when you need to implement a general task containing multiple todo or task items.
    USE WHEN you need for the coder agent to use a SlashCommand (ie like /spectr:apply <change id>, /spectr:proposal .... " use thie f"<change id> to implement the change)
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, SlashCommand
-model: opus
 ---
 
 # Implementation Coder Agent

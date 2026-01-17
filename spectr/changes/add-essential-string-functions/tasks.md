@@ -35,7 +35,7 @@
 - [x] 3.5 Add STRING_SPLIT case to expression evaluator
 - [x] 3.6 Write unit tests for concatenation and splitting
 - [x] 3.7 Test NULL handling: CONCAT_WS skips NULLs, STRING_SPLIT returns NULL
-- [ ] 3.8 Integration test: STRING_SPLIT with UNNEST
+- [x] 3.8 Integration test: STRING_SPLIT with UNNEST
 
 ## 4. Padding Functions
 
@@ -195,7 +195,7 @@
 - [x] 14.3 Test string functions in computed columns
 - [x] 14.4 Test string functions with aggregate functions
 - [x] 14.5 Test nested string function calls: `SELECT UPPER(REGEXP_REPLACE(name, '[0-9]', ''))`
-- [ ] 14.6 Test STRING_SPLIT with UNNEST for array expansion
+- [x] 14.6 Test STRING_SPLIT with UNNEST for array expansion
 - [x] 14.7 Test regex functions with table joins
 - [x] 14.8 Integration test: Log parsing (REGEXP_EXTRACT for parsing log lines)
 - [x] 14.9 Integration test: Data cleaning (TRIM, REGEXP_REPLACE for normalization)
