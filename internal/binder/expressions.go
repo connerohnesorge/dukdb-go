@@ -149,6 +149,18 @@ func (*BoundInListExpr) boundExprNode() {}
 
 func (*BoundInListExpr) ResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
 
+// BoundArrayExpr represents a bound array literal expression.
+// Used for array syntax in table functions like ['file1.csv', 'file2.csv'].
+// The result type is TYPE_LIST with elements of the inferred element type.
+type BoundArrayExpr struct {
+	Elements []BoundExpr
+	ElemType dukdb.Type // Inferred element type (usually TYPE_VARCHAR for file lists)
+}
+
+func (*BoundArrayExpr) boundExprNode() {}
+
+func (a *BoundArrayExpr) ResultType() dukdb.Type { return dukdb.TYPE_LIST }
+
 // BoundInSubqueryExpr represents a bound IN expression with a subquery.
 type BoundInSubqueryExpr struct {
 	Expr     BoundExpr

@@ -100,6 +100,23 @@ type FileSystem interface {
 	URI() string
 	// Capabilities returns the capabilities of this filesystem.
 	Capabilities() FileSystemCapabilities
+	// Glob expands a glob pattern to a list of matching file paths.
+	// Supports wildcards: * (any characters), ? (single character), ** (recursive),
+	// and character classes [abc], [a-z], [!abc].
+	// Returns files sorted alphabetically.
+	Glob(pattern string) ([]string, error)
+	// SupportsGlob returns true if the filesystem has native glob support.
+	// If false, callers should use FallbackGlob for glob expansion.
+	SupportsGlob() bool
+}
+
+// FallbackGlob provides glob pattern expansion for filesystems that don't have native glob support.
+// It uses the filesystem's ReadDir and Stat methods to walk the directory tree.
+// This function should be used when SupportsGlob() returns false.
+func FallbackGlob(fs FileSystem, pattern string) ([]string, error) {
+	matcher := NewGlobMatcher(fs)
+
+	return matcher.Match(pattern)
 }
 
 // ContextFile extends File with context-aware operations for cancellation support.

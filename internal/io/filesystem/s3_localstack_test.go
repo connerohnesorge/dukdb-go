@@ -822,3 +822,290 @@ func TestLocalStackS3URI(t *testing.T) {
 
 	assert.Equal(t, "s3://", fs.URI())
 }
+
+// TestLocalStackS3Glob tests glob pattern matching against LocalStack S3.
+func TestLocalStackS3Glob(t *testing.T) {
+	config := getLocalStackConfig(t)
+	ctx := context.Background()
+
+	fs, err := NewS3FileSystem(ctx, *config)
+	require.NoError(t, err)
+
+	bucket := getLocalStackBucket()
+	ensureLocalStackBucket(ctx, t, fs, bucket)
+
+	// Create a unique prefix for this test
+	prefix := fmt.Sprintf("test/glob-%d", time.Now().UnixNano())
+	basePath := fmt.Sprintf("s3://%s/%s", bucket, prefix)
+
+	// Create test files in a structure:
+	// data/
+	//   file1.csv
+	//   file2.csv
+	//   file3.txt
+	//   subdir/
+	//     file4.csv
+	//     file5.parquet
+	//   year=2024/
+	//     month=01/
+	//       data.csv
+	//     month=02/
+	//       data.csv
+	//   year=2023/
+	//     month=12/
+	//       data.csv
+
+	files := []string{
+		"data/file1.csv",
+		"data/file2.csv",
+		"data/file3.txt",
+		"data/subdir/file4.csv",
+		"data/subdir/file5.parquet",
+		"data/year=2024/month=01/data.csv",
+		"data/year=2024/month=02/data.csv",
+		"data/year=2023/month=12/data.csv",
+	}
+
+	// Create all test files
+	for _, fname := range files {
+		path := fmt.Sprintf("%s/%s", basePath, fname)
+
+		file, err := fs.Create(path)
+		require.NoError(t, err)
+
+		_, err = file.Write([]byte("test content"))
+		require.NoError(t, err)
+
+		err = file.Close()
+		require.NoError(t, err)
+	}
+
+	// Cleanup at end
+	defer func() {
+		for _, fname := range files {
+			path := fmt.Sprintf("%s/%s", basePath, fname)
+			_ = fs.Remove(path)
+		}
+	}()
+
+	tests := []struct {
+		name     string
+		pattern  string
+		expected []string
+	}{
+		{
+			name:    "simple asterisk",
+			pattern: fmt.Sprintf("%s/data/*.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/file1.csv", basePath),
+				fmt.Sprintf("%s/data/file2.csv", basePath),
+			},
+		},
+		{
+			name:    "all csv files recursive",
+			pattern: fmt.Sprintf("%s/data/**/*.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/file1.csv", basePath),
+				fmt.Sprintf("%s/data/file2.csv", basePath),
+				fmt.Sprintf("%s/data/subdir/file4.csv", basePath),
+				fmt.Sprintf("%s/data/year=2023/month=12/data.csv", basePath),
+				fmt.Sprintf("%s/data/year=2024/month=01/data.csv", basePath),
+				fmt.Sprintf("%s/data/year=2024/month=02/data.csv", basePath),
+			},
+		},
+		{
+			name:    "question mark",
+			pattern: fmt.Sprintf("%s/data/file?.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/file1.csv", basePath),
+				fmt.Sprintf("%s/data/file2.csv", basePath),
+			},
+		},
+		{
+			name:    "hive partitioning",
+			pattern: fmt.Sprintf("%s/data/year=*/month=*/data.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/year=2023/month=12/data.csv", basePath),
+				fmt.Sprintf("%s/data/year=2024/month=01/data.csv", basePath),
+				fmt.Sprintf("%s/data/year=2024/month=02/data.csv", basePath),
+			},
+		},
+		{
+			name:    "specific year hive",
+			pattern: fmt.Sprintf("%s/data/year=2024/month=*/*.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/year=2024/month=01/data.csv", basePath),
+				fmt.Sprintf("%s/data/year=2024/month=02/data.csv", basePath),
+			},
+		},
+		{
+			name:     "no match",
+			pattern:  fmt.Sprintf("%s/data/*.json", basePath),
+			expected: nil,
+		},
+		{
+			name:    "literal path",
+			pattern: fmt.Sprintf("%s/data/file1.csv", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/file1.csv", basePath),
+			},
+		},
+		{
+			name:    "parquet files",
+			pattern: fmt.Sprintf("%s/data/**/*.parquet", basePath),
+			expected: []string{
+				fmt.Sprintf("%s/data/subdir/file5.parquet", basePath),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := fs.Glob(tt.pattern)
+			require.NoError(t, err)
+
+			// Handle nil vs empty slice comparison
+			if len(tt.expected) == 0 && len(result) == 0 {
+				return // Both empty, test passes
+			}
+
+			assert.ElementsMatch(t, tt.expected, result)
+		})
+	}
+}
+
+// TestLocalStackS3GlobWithContext tests glob with context cancellation.
+func TestLocalStackS3GlobWithContext(t *testing.T) {
+	config := getLocalStackConfig(t)
+	ctx := context.Background()
+
+	fs, err := NewS3FileSystem(ctx, *config)
+	require.NoError(t, err)
+
+	bucket := getLocalStackBucket()
+	ensureLocalStackBucket(ctx, t, fs, bucket)
+
+	// Create a few test files
+	prefix := fmt.Sprintf("test/glob-context-%d", time.Now().UnixNano())
+	basePath := fmt.Sprintf("s3://%s/%s", bucket, prefix)
+
+	files := []string{"file1.csv", "file2.csv", "file3.csv"}
+	for _, fname := range files {
+		path := fmt.Sprintf("%s/%s", basePath, fname)
+
+		file, err := fs.Create(path)
+		require.NoError(t, err)
+
+		_, err = file.Write([]byte("test"))
+		require.NoError(t, err)
+
+		err = file.Close()
+		require.NoError(t, err)
+	}
+
+	defer func() {
+		for _, fname := range files {
+			path := fmt.Sprintf("%s/%s", basePath, fname)
+			_ = fs.Remove(path)
+		}
+	}()
+
+	// Test with valid context
+	result, err := fs.GlobContext(ctx, fmt.Sprintf("%s/*.csv", basePath))
+	require.NoError(t, err)
+	assert.Len(t, result, 3)
+
+	// Test with canceled context
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel() // Cancel immediately
+
+	_, err = fs.GlobContext(canceledCtx, fmt.Sprintf("%s/*.csv", basePath))
+	assert.Error(t, err)
+}
+
+// TestLocalStackS3GlobSupportsGlob verifies S3 filesystem reports native glob support.
+func TestLocalStackS3GlobSupportsGlob(t *testing.T) {
+	config := getLocalStackConfig(t)
+	ctx := context.Background()
+
+	fs, err := NewS3FileSystem(ctx, *config)
+	require.NoError(t, err)
+
+	assert.True(t, fs.SupportsGlob(), "S3FileSystem should support native glob")
+}
+
+// TestLocalStackS3GlobInvalidPattern tests error handling for invalid glob patterns.
+func TestLocalStackS3GlobInvalidPattern(t *testing.T) {
+	config := getLocalStackConfig(t)
+	ctx := context.Background()
+
+	fs, err := NewS3FileSystem(ctx, *config)
+	require.NoError(t, err)
+
+	bucket := getLocalStackBucket()
+
+	tests := []struct {
+		name    string
+		pattern string
+	}{
+		{"empty pattern", ""},
+		{"multiple double asterisk", fmt.Sprintf("s3://%s/data/**/**/file.csv", bucket)},
+		{"unclosed bracket", fmt.Sprintf("s3://%s/data/file[abc.csv", bucket)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := fs.Glob(tt.pattern)
+			assert.Error(t, err)
+		})
+	}
+}
+
+// TestLocalStackS3GlobPagination tests glob with many objects (pagination).
+func TestLocalStackS3GlobPagination(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping pagination test in short mode")
+	}
+
+	config := getLocalStackConfig(t)
+	ctx := context.Background()
+
+	fs, err := NewS3FileSystem(ctx, *config)
+	require.NoError(t, err)
+
+	bucket := getLocalStackBucket()
+	ensureLocalStackBucket(ctx, t, fs, bucket)
+
+	// Create 50 test files (not 1000+ to keep test fast)
+	prefix := fmt.Sprintf("test/glob-pagination-%d", time.Now().UnixNano())
+	basePath := fmt.Sprintf("s3://%s/%s", bucket, prefix)
+
+	numFiles := 50
+	files := make([]string, numFiles)
+	for i := 0; i < numFiles; i++ {
+		fname := fmt.Sprintf("file%04d.csv", i)
+		files[i] = fname
+		path := fmt.Sprintf("%s/%s", basePath, fname)
+
+		file, err := fs.Create(path)
+		require.NoError(t, err)
+
+		_, err = file.Write([]byte(fmt.Sprintf("content %d", i)))
+		require.NoError(t, err)
+
+		err = file.Close()
+		require.NoError(t, err)
+	}
+
+	defer func() {
+		for _, fname := range files {
+			path := fmt.Sprintf("%s/%s", basePath, fname)
+			_ = fs.Remove(path)
+		}
+	}()
+
+	// Glob all CSV files
+	result, err := fs.Glob(fmt.Sprintf("%s/*.csv", basePath))
+	require.NoError(t, err)
+	assert.Len(t, result, numFiles, "Should find all %d files", numFiles)
+}

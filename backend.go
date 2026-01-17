@@ -229,6 +229,16 @@ type Config struct {
 	// Valid values are "duckdb" (native format) and "parquet" (column-oriented).
 	// Default is "duckdb".
 	Format string
+
+	// MaxFilesPerGlob specifies the maximum number of files that a glob pattern can match.
+	// This limit prevents memory exhaustion when glob patterns match too many files.
+	// Default is 10000. Set to 0 to use the default.
+	MaxFilesPerGlob int
+
+	// FileGlobTimeout specifies the timeout for cloud storage glob operations.
+	// This is useful for preventing long-running list operations on large buckets.
+	// Default is 60 seconds. Set to 0 to use the default.
+	FileGlobTimeout int
 }
 
 // Type enum is defined in type_enum.go

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -87,6 +89,10 @@ type EngineConn struct {
 	inTxn                     bool                 // Whether BEGIN was explicitly called (explicit transaction mode)
 	defaultIsolationLevel     parser.IsolationLevel // Default isolation level for new transactions
 	currentIsolationLevel     parser.IsolationLevel // Isolation level of current transaction (if any)
+
+	// Glob settings - initialized from config, can be overridden via SET
+	maxFilesPerGlob           int // Max files a glob pattern can match (default: 10000)
+	fileGlobTimeout           int // Timeout for cloud storage glob operations in seconds (default: 60)
 }
 
 // undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
@@ -471,6 +477,22 @@ func (c *EngineConn) handleSet(stmt *parser.SetStmt) (int64, error) {
 		}
 		c.defaultIsolationLevel = level
 		return 0, nil
+	case "max_files_per_glob":
+		// Parse the max files per glob setting
+		maxFiles, err := parsePositiveInt(stmt.Value, "max_files_per_glob", 1, 1000000)
+		if err != nil {
+			return 0, err
+		}
+		c.maxFilesPerGlob = maxFiles
+		return 0, nil
+	case "file_glob_timeout":
+		// Parse the file glob timeout setting
+		timeout, err := parsePositiveInt(stmt.Value, "file_glob_timeout", 1, 600)
+		if err != nil {
+			return 0, err
+		}
+		c.fileGlobTimeout = timeout
+		return 0, nil
 	default:
 		// Unknown variable - for now we silently accept it
 		// In a full implementation, we might store these in a config map
@@ -509,6 +531,19 @@ func parseIsolationLevelString(s string) (parser.IsolationLevel, error) {
 	}
 }
 
+// parsePositiveInt parses a positive integer from a string.
+// Returns an error if the value is not a valid positive integer or outside the specified range.
+func parsePositiveInt(s string, name string, minVal, maxVal int) (int, error) {
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value: %s (must be a positive integer)", name, s)
+	}
+	if val < minVal || val > maxVal {
+		return 0, fmt.Errorf("%s must be between %d and %d, got %d", name, minVal, maxVal, val)
+	}
+	return val, nil
+}
+
 // handleShow handles the SHOW statement for session configuration.
 // Returns a single row with the value of the requested variable.
 func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []string, error) {
@@ -526,6 +561,12 @@ func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []stri
 	case "default_transaction_isolation":
 		// Return the default isolation level
 		value = c.defaultIsolationLevel.String()
+	case "max_files_per_glob":
+		// Return the max files per glob setting
+		value = strconv.Itoa(c.maxFilesPerGlob)
+	case "file_glob_timeout":
+		// Return the file glob timeout setting
+		value = strconv.Itoa(c.fileGlobTimeout)
 	default:
 		// Unknown variable - return empty
 		value = ""
@@ -575,6 +616,16 @@ func (c *EngineConn) configureExecutorMVCC(exec *executor.Executor) {
 		exec.SetConflictDetector(c.engine.ConflictDetector())
 		exec.SetLockManager(c.engine.LockManager())
 	}
+}
+
+// MaxFilesPerGlob returns the maximum number of files that a glob pattern can match.
+func (c *EngineConn) MaxFilesPerGlob() int {
+	return c.maxFilesPerGlob
+}
+
+// FileGlobTimeout returns the timeout for cloud storage glob operations in seconds.
+func (c *EngineConn) FileGlobTimeout() int {
+	return c.fileGlobTimeout
 }
 
 // Query executes a query that returns rows.

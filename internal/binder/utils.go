@@ -405,8 +405,54 @@ func inferFunctionResultType(
 		"SUBSTR",
 		"SUBSTRING",
 		"CONCAT",
-		"REPLACE":
+		"REPLACE",
+		// New string functions (add-essential-string-functions)
+		"REGEXP_REPLACE",
+		"REGEXP_EXTRACT",
+		"CONCAT_WS",
+		"LPAD",
+		"RPAD",
+		"REVERSE",
+		"REPEAT",
+		"LEFT",
+		"RIGHT",
+		"STRIP",
+		"LSTRIP",
+		"RSTRIP",
+		"CHR",
+		"MD5",
+		"SHA256":
 		return dukdb.TYPE_VARCHAR
+	// String functions returning BOOLEAN
+	case "REGEXP_MATCHES",
+		"CONTAINS",
+		"PREFIX",
+		"SUFFIX",
+		"STARTS_WITH",
+		"ENDS_WITH":
+		return dukdb.TYPE_BOOLEAN
+	// String functions returning INTEGER/BIGINT
+	case "POSITION",
+		"STRPOS",
+		"INSTR",
+		"ASCII",
+		"UNICODE",
+		"LEVENSHTEIN",
+		"DAMERAU_LEVENSHTEIN",
+		"HAMMING",
+		"HASH":
+		return dukdb.TYPE_BIGINT
+	// String functions returning DOUBLE (similarity)
+	case "JACCARD",
+		"JARO_SIMILARITY",
+		"JARO_WINKLER_SIMILARITY":
+		return dukdb.TYPE_DOUBLE
+	// String functions returning arrays
+	case "REGEXP_EXTRACT_ALL",
+		"REGEXP_SPLIT_TO_ARRAY",
+		"STRING_SPLIT",
+		"STRING_SPLIT_REGEX":
+		return dukdb.TYPE_ANY // Arrays represented as TYPE_ANY
 	case "LENGTH",
 		"CHAR_LENGTH",
 		"CHARACTER_LENGTH":
@@ -701,6 +747,108 @@ func getFunctionArgTypes(
 		}
 
 		return types
+	// New string functions (add-essential-string-functions)
+	case "REGEXP_MATCHES":
+		// REGEXP_MATCHES(string, pattern)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "REGEXP_REPLACE":
+		// REGEXP_REPLACE(string, pattern, replacement [, flags])
+		types := make([]dukdb.Type, argCount)
+		for i := range types {
+			types[i] = dukdb.TYPE_VARCHAR
+		}
+		return types
+	case "REGEXP_EXTRACT":
+		// REGEXP_EXTRACT(string, pattern [, group])
+		if argCount >= 2 {
+			types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+			if argCount >= 3 {
+				types = append(types, dukdb.TYPE_INTEGER)
+			}
+			return types
+		}
+	case "REGEXP_EXTRACT_ALL":
+		// REGEXP_EXTRACT_ALL(string, pattern [, group])
+		if argCount >= 2 {
+			types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+			if argCount >= 3 {
+				types = append(types, dukdb.TYPE_INTEGER)
+			}
+			return types
+		}
+	case "REGEXP_SPLIT_TO_ARRAY":
+		// REGEXP_SPLIT_TO_ARRAY(string, pattern)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "CONCAT_WS":
+		// CONCAT_WS(separator, str1, str2, ...)
+		types := make([]dukdb.Type, argCount)
+		for i := range types {
+			types[i] = dukdb.TYPE_VARCHAR
+		}
+		return types
+	case "STRING_SPLIT", "STRING_SPLIT_REGEX":
+		// STRING_SPLIT(string, separator)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "LPAD", "RPAD":
+		// LPAD(string, length [, fill])
+		if argCount >= 2 {
+			types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER}
+			if argCount >= 3 {
+				types = append(types, dukdb.TYPE_VARCHAR)
+			}
+			return types
+		}
+	case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "ASCII", "UNICODE", "MD5", "SHA256":
+		// Single string argument functions
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "REPEAT":
+		// REPEAT(string, count)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER}
+		}
+	case "LEFT", "RIGHT":
+		// LEFT(string, count), RIGHT(string, count)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER}
+		}
+	case "POSITION":
+		// POSITION(substring IN string) - reordered as (substring, string)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "STRPOS", "INSTR", "CONTAINS":
+		// STRPOS(string, substring)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "PREFIX", "SUFFIX", "STARTS_WITH", "ENDS_WITH":
+		// PREFIX(string, prefix)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "CHR":
+		// CHR(code)
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_INTEGER}
+		}
+	case "HASH":
+		// HASH(string)
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "LEVENSHTEIN", "DAMERAU_LEVENSHTEIN", "HAMMING", "JACCARD", "JARO_SIMILARITY", "JARO_WINKLER_SIMILARITY":
+		// Two string argument functions
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
 	case "COALESCE":
 		// COALESCE accepts homogeneous types - first arg determines type
 		// Return empty to let the first arg drive inference

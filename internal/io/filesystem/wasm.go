@@ -134,6 +134,14 @@ func (*wasmLocalFileSystem) Capabilities() FileSystemCapabilities {
 	}
 }
 
+func (*wasmLocalFileSystem) Glob(_ string) ([]string, error) {
+	return nil, ErrWASMNotSupported
+}
+
+func (*wasmLocalFileSystem) SupportsGlob() bool {
+	return false
+}
+
 // Verify wasmLocalFileSystem implements FileSystem interface.
 var _ FileSystem = (*wasmLocalFileSystem)(nil)
 
@@ -193,6 +201,14 @@ func (fs *wasmCloudFileSystem) Capabilities() FileSystemCapabilities {
 		SupportsDelete:  false,
 		ContextTimeout:  false,
 	}
+}
+
+func (*wasmCloudFileSystem) Glob(_ string) ([]string, error) {
+	return nil, ErrWASMNotSupported
+}
+
+func (*wasmCloudFileSystem) SupportsGlob() bool {
+	return false
 }
 
 // Verify wasmCloudFileSystem implements FileSystem interface.

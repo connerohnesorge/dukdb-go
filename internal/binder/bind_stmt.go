@@ -4,15 +4,20 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/io/arrow"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
+	"github.com/dukdb/dukdb-go/internal/io/filesystem"
 	"github.com/dukdb/dukdb-go/internal/io/iceberg"
 	"github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/io/parquet"
+	"github.com/dukdb/dukdb-go/internal/io/xlsx"
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
@@ -439,19 +444,48 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 		return b.bindSecretSystemFunction(ref)
 	}
 
-	// Extract the file path from the first positional argument
+	// Extract the file path(s) from the first positional argument
 	if len(tableFunc.Args) == 0 {
 		return nil, b.errorf("table function %s requires a file path argument", tableFunc.Name)
 	}
 
 	pathExpr := tableFunc.Args[0]
-	pathLit, ok := pathExpr.(*parser.Literal)
-	if !ok || pathLit.Type != dukdb.TYPE_VARCHAR {
-		return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
-	}
-	path, ok := pathLit.Value.(string)
-	if !ok {
-		return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
+	var path string
+	var paths []string
+
+	switch pe := pathExpr.(type) {
+	case *parser.Literal:
+		// Single path: read_csv('file.csv')
+		if pe.Type != dukdb.TYPE_VARCHAR {
+			return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
+		}
+		pathStr, ok := pe.Value.(string)
+		if !ok {
+			return nil, b.errorf("table function %s requires a string path as first argument", tableFunc.Name)
+		}
+		path = pathStr
+
+	case *parser.ArrayExpr:
+		// Array of paths: read_csv(['file1.csv', 'file2.csv'])
+		paths = make([]string, 0, len(pe.Elements))
+		for i, elem := range pe.Elements {
+			lit, ok := elem.(*parser.Literal)
+			if !ok || lit.Type != dukdb.TYPE_VARCHAR {
+				return nil, b.errorf("table function %s array element %d must be a string path", tableFunc.Name, i)
+			}
+			pathStr, ok := lit.Value.(string)
+			if !ok {
+				return nil, b.errorf("table function %s array element %d must be a string path", tableFunc.Name, i)
+			}
+			paths = append(paths, pathStr)
+		}
+		// Use first path for schema inference
+		if len(paths) > 0 {
+			path = paths[0]
+		}
+
+	default:
+		return nil, b.errorf("table function %s requires a string path or array of paths as first argument", tableFunc.Name)
 	}
 
 	// Build options map from named arguments
@@ -474,6 +508,7 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 	boundFunc := &BoundTableFunctionRef{
 		Name:    tableFunc.Name,
 		Path:    path,
+		Paths:   paths,
 		Options: options,
 		Columns: columns,
 	}
@@ -610,13 +645,14 @@ func (b *Binder) inferTableFunctionSchema(
 		return b.inferCSVSchema(path, options)
 	case "read_csv_auto":
 		// read_csv_auto uses auto-detection for everything
-		// No explicit options are passed - let the CSV reader auto-detect
-		return b.inferCSVSchema(path, nil)
+		// Pass options for metadata columns (filename, file_row_number, etc.)
+		return b.inferCSVSchema(path, options)
 	case "read_json":
 		return b.inferJSONSchema(path, options)
 	case "read_json_auto":
 		// read_json_auto uses auto-detection for format and schema
-		return b.inferJSONSchema(path, nil)
+		// Pass options for metadata columns (filename, file_row_number, etc.)
+		return b.inferJSONSchema(path, options)
 	case "read_ndjson":
 		// read_ndjson is an alias for read_json with NDJSON format
 		if options == nil {
@@ -631,6 +667,11 @@ func (b *Binder) inferTableFunctionSchema(
 	case "read_arrow_auto":
 		// read_arrow_auto uses auto-detection for file vs stream format
 		return b.inferArrowSchemaAuto(path, options)
+	case "read_xlsx":
+		return b.inferXLSXSchema(path, options)
+	case "read_xlsx_auto":
+		// read_xlsx_auto uses auto-detection for header and types
+		return b.inferXLSXSchema(path, options)
 	case "iceberg_scan":
 		return b.inferIcebergScanSchema(path, options)
 	case "iceberg_metadata":
@@ -647,9 +688,22 @@ func (b *Binder) inferTableFunctionSchema(
 }
 
 // inferCSVSchema reads a CSV file and infers its schema.
+// It supports glob patterns - if a glob is detected, it expands the pattern
+// and uses the first matching file for schema inference.
 func (b *Binder) inferCSVSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveCSVPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
 	// Open the file
-	file, err := os.Open(path)
+	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return nil, b.errorf("failed to open CSV file: %v", err)
 	}
@@ -708,8 +762,58 @@ func (b *Binder) inferCSVSchema(path string, options map[string]any) ([]*catalog
 		return nil, b.errorf("failed to get CSV types: %v", err)
 	}
 
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+	hasHivePartitioning := false
+	var hivePartitionCols []string
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		case "hive_partitioning":
+			switch v := val.(type) {
+			case bool:
+				hasHivePartitioning = v
+			case string:
+				hasHivePartitioning = strings.ToLower(v) == "auto" || v == "true" || v == "1"
+			}
+		}
+	}
+
+	// If hive partitioning is enabled, extract partition column names from the path
+	if hasHivePartitioning {
+		hivePartitionCols = extractHivePartitionColumns(path)
+	}
+
 	// Create column definitions
-	columns := make([]*catalog.ColumnDef, len(columnNames))
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+	totalCols += len(hivePartitionCols)
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
 	for i, colName := range columnNames {
 		var colType dukdb.Type
 		if i < len(columnTypes) {
@@ -717,16 +821,116 @@ func (b *Binder) inferCSVSchema(path string, options map[string]any) ([]*catalog
 		} else {
 			colType = dukdb.TYPE_VARCHAR
 		}
-		columns[i] = catalog.NewColumnDef(colName, colType)
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
+	}
+
+	// Add hive partition columns
+	for _, colName := range hivePartitionCols {
+		columns = append(columns, catalog.NewColumnDef(colName, dukdb.TYPE_VARCHAR))
 	}
 
 	return columns, nil
 }
 
+// resolveCSVPath resolves a path or glob pattern to a single file path for schema inference.
+func (b *Binder) resolveCSVPath(path string, options map[string]any) (string, error) {
+	// Check if it's a glob pattern
+	if !isGlobPattern(path) {
+		// Not a glob - return as is
+		return path, nil
+	}
+
+	// Check file_glob_behavior option
+	allowEmpty := false
+	if options != nil {
+		if behavior, ok := options["file_glob_behavior"]; ok {
+			if s, ok := behavior.(string); ok && strings.ToUpper(s) == "ALLOW_EMPTY" {
+				allowEmpty = true
+			}
+		}
+	}
+
+	// Expand the glob pattern
+	fs := filesystem.NewLocalFileSystem("")
+	paths, err := fs.Glob(path)
+	if err != nil {
+		return "", b.errorf("failed to expand glob pattern: %v", err)
+	}
+
+	// Sort paths alphabetically for consistent behavior
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", b.errorf("no files match pattern: %s", path)
+	}
+
+	// Return the first matching file for schema inference
+	return paths[0], nil
+}
+
+// isGlobPattern checks if a path contains glob pattern characters.
+func isGlobPattern(path string) bool {
+	return strings.ContainsAny(path, "*?[")
+}
+
+// extractHivePartitionColumns extracts partition column names from a path.
+// Example: /data/year=2024/month=01/file.csv returns ["month", "year"] (sorted)
+func extractHivePartitionColumns(path string) []string {
+	var cols []string
+	seen := make(map[string]bool)
+
+	// Split path into components
+	parts := strings.Split(filepath.ToSlash(path), "/")
+
+	// Look for key=value patterns
+	hivePattern := regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)=`)
+	for _, part := range parts {
+		if matches := hivePattern.FindStringSubmatch(part); matches != nil {
+			key := matches[1]
+			if !seen[key] {
+				seen[key] = true
+				cols = append(cols, key)
+			}
+		}
+	}
+
+	// Sort for consistent ordering
+	sort.Strings(cols)
+
+	return cols
+}
+
 // inferJSONSchema reads a JSON file and infers its schema.
+// It supports glob patterns - if a glob is detected, it expands the pattern
+// and uses the first matching file for schema inference.
 func (b *Binder) inferJSONSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveJSONPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
 	// Open the file
-	file, err := os.Open(path)
+	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return nil, b.errorf("failed to open JSON file: %v", err)
 	}
@@ -787,8 +991,58 @@ func (b *Binder) inferJSONSchema(path string, options map[string]any) ([]*catalo
 		return nil, b.errorf("failed to get JSON types: %v", err)
 	}
 
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+	hasHivePartitioning := false
+	var hivePartitionCols []string
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		case "hive_partitioning":
+			switch v := val.(type) {
+			case bool:
+				hasHivePartitioning = v
+			case string:
+				hasHivePartitioning = strings.ToLower(v) == "auto" || v == "true" || v == "1"
+			}
+		}
+	}
+
+	// If hive partitioning is enabled, extract partition column names from the path
+	if hasHivePartitioning {
+		hivePartitionCols = extractHivePartitionColumns(path)
+	}
+
 	// Create column definitions
-	columns := make([]*catalog.ColumnDef, len(columnNames))
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+	totalCols += len(hivePartitionCols)
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
 	for i, colName := range columnNames {
 		var colType dukdb.Type
 		if i < len(columnTypes) {
@@ -796,14 +1050,80 @@ func (b *Binder) inferJSONSchema(path string, options map[string]any) ([]*catalo
 		} else {
 			colType = dukdb.TYPE_VARCHAR
 		}
-		columns[i] = catalog.NewColumnDef(colName, colType)
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
+	}
+
+	// Add hive partition columns
+	for _, colName := range hivePartitionCols {
+		columns = append(columns, catalog.NewColumnDef(colName, dukdb.TYPE_VARCHAR))
 	}
 
 	return columns, nil
 }
 
+// resolveJSONPath resolves a path or glob pattern to a single file path for schema inference.
+func (b *Binder) resolveJSONPath(path string, options map[string]any) (string, error) {
+	// Check if it's a glob pattern
+	if !isGlobPattern(path) {
+		// Not a glob - return as is
+		return path, nil
+	}
+
+	// Check file_glob_behavior option
+	allowEmpty := false
+	if options != nil {
+		if behavior, ok := options["file_glob_behavior"]; ok {
+			if s, ok := behavior.(string); ok && strings.ToUpper(s) == "ALLOW_EMPTY" {
+				allowEmpty = true
+			}
+		}
+	}
+
+	// Expand the glob pattern
+	fs := filesystem.NewLocalFileSystem("")
+	paths, err := fs.Glob(path)
+	if err != nil {
+		return "", b.errorf("failed to expand glob pattern: %v", err)
+	}
+
+	// Sort paths alphabetically for consistent behavior
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", b.errorf("no files match pattern: %s", path)
+	}
+
+	// Return the first matching file for schema inference
+	return paths[0], nil
+}
+
 // inferParquetSchema reads a Parquet file and infers its schema.
 func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveParquetPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
 	// Build reader options from options map
 	opts := parquet.DefaultReaderOptions()
 
@@ -827,7 +1147,7 @@ func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*cat
 	}
 
 	// Create the Parquet reader from path
-	reader, err := parquet.NewReaderFromPath(path, opts)
+	reader, err := parquet.NewReaderFromPath(resolvedPath, opts)
 	if err != nil {
 		return nil, b.errorf("failed to create Parquet reader: %v", err)
 	}
@@ -845,8 +1165,58 @@ func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*cat
 		return nil, b.errorf("failed to get Parquet types: %v", err)
 	}
 
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+	hasHivePartitioning := false
+	var hivePartitionCols []string
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		case "hive_partitioning":
+			switch v := val.(type) {
+			case bool:
+				hasHivePartitioning = v
+			case string:
+				hasHivePartitioning = strings.ToLower(v) == "auto" || v == "true" || v == "1"
+			}
+		}
+	}
+
+	// If hive partitioning is enabled, extract partition column names from the resolved path
+	if hasHivePartitioning {
+		hivePartitionCols = extractHivePartitionColumns(resolvedPath)
+	}
+
 	// Create column definitions
-	columns := make([]*catalog.ColumnDef, len(columnNames))
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+	totalCols += len(hivePartitionCols)
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
 	for i, colName := range columnNames {
 		var colType dukdb.Type
 		if i < len(columnTypes) {
@@ -854,15 +1224,265 @@ func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*cat
 		} else {
 			colType = dukdb.TYPE_VARCHAR
 		}
-		columns[i] = catalog.NewColumnDef(colName, colType)
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
+	}
+
+	// Add hive partition columns
+	for _, colName := range hivePartitionCols {
+		columns = append(columns, catalog.NewColumnDef(colName, dukdb.TYPE_VARCHAR))
 	}
 
 	return columns, nil
 }
 
+// resolveParquetPath resolves a path or glob pattern to a single file path for schema inference.
+func (b *Binder) resolveParquetPath(path string, options map[string]any) (string, error) {
+	// Check if it's a glob pattern
+	if !isGlobPattern(path) {
+		// Not a glob - return as is
+		return path, nil
+	}
+
+	// Check file_glob_behavior option
+	allowEmpty := false
+	if options != nil {
+		if behavior, ok := options["file_glob_behavior"]; ok {
+			if s, ok := behavior.(string); ok && strings.ToUpper(s) == "ALLOW_EMPTY" {
+				allowEmpty = true
+			}
+		}
+	}
+
+	// Expand the glob pattern
+	fs := filesystem.NewLocalFileSystem("")
+	paths, err := fs.Glob(path)
+	if err != nil {
+		return "", b.errorf("failed to expand glob pattern: %v", err)
+	}
+
+	// Sort paths alphabetically for consistent behavior
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", b.errorf("no files match pattern: %s", path)
+	}
+
+	// Return the first matching file for schema inference
+	return paths[0], nil
+}
+
+// inferXLSXSchema reads an XLSX file and infers its schema.
+// It supports glob patterns - if a glob is detected, it expands the pattern
+// and uses the first matching file for schema inference.
+func (b *Binder) inferXLSXSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveXLSXPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
+	// Build reader options from options map
+	opts := xlsx.DefaultReaderOptions()
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "sheet":
+			if s, ok := val.(string); ok {
+				opts.Sheet = s
+			}
+		case "sheet_index":
+			switch v := val.(type) {
+			case int64:
+				opts.SheetIndex = int(v)
+			case int:
+				opts.SheetIndex = v
+			}
+		case "range":
+			if s, ok := val.(string); ok {
+				opts.Range = s
+			}
+		case "header":
+			if boolVal, ok := val.(bool); ok {
+				opts.Header = boolVal
+			}
+		case "skip":
+			switch v := val.(type) {
+			case int64:
+				opts.Skip = int(v)
+			case int:
+				opts.Skip = v
+			}
+		case "empty_as_null":
+			if boolVal, ok := val.(bool); ok {
+				opts.EmptyAsNull = boolVal
+			}
+		case "infer_types":
+			if boolVal, ok := val.(bool); ok {
+				opts.InferTypes = boolVal
+			}
+		}
+	}
+
+	// Open the file
+	file, err := os.Open(resolvedPath)
+	if err != nil {
+		return nil, b.errorf("failed to open XLSX file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Create the XLSX reader
+	reader, err := xlsx.NewReader(file, opts)
+	if err != nil {
+		return nil, b.errorf("failed to create XLSX reader: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	// Get the schema (column names)
+	columnNames, err := reader.Schema()
+	if err != nil {
+		return nil, b.errorf("failed to get XLSX schema: %v", err)
+	}
+
+	// Get the column types
+	columnTypes, err := reader.Types()
+	if err != nil {
+		return nil, b.errorf("failed to get XLSX types: %v", err)
+	}
+
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		}
+	}
+
+	// Create column definitions
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
+	for i, colName := range columnNames {
+		var colType dukdb.Type
+		if i < len(columnTypes) {
+			colType = columnTypes[i]
+		} else {
+			colType = dukdb.TYPE_VARCHAR
+		}
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
+	}
+
+	return columns, nil
+}
+
+// resolveXLSXPath resolves a path or glob pattern to a single file path for schema inference.
+func (b *Binder) resolveXLSXPath(path string, options map[string]any) (string, error) {
+	// Check if it's a glob pattern
+	if !isGlobPattern(path) {
+		// Not a glob - return as is
+		return path, nil
+	}
+
+	// Check file_glob_behavior option
+	allowEmpty := false
+	if options != nil {
+		if behavior, ok := options["file_glob_behavior"]; ok {
+			if s, ok := behavior.(string); ok && strings.ToUpper(s) == "ALLOW_EMPTY" {
+				allowEmpty = true
+			}
+		}
+	}
+
+	// Expand the glob pattern
+	fs := filesystem.NewLocalFileSystem("")
+	paths, err := fs.Glob(path)
+	if err != nil {
+		return "", b.errorf("failed to expand glob pattern: %v", err)
+	}
+
+	// Sort paths alphabetically for consistent behavior
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", b.errorf("no files match pattern: %s", path)
+	}
+
+	// Return the first matching file for schema inference
+	return paths[0], nil
+}
+
 // inferArrowSchema reads an Arrow IPC file and infers its schema.
 // This function defaults to the file format (random access).
+// It supports glob patterns - if a glob is detected, it expands the pattern
+// and uses the first matching file for schema inference.
 func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveArrowPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
 	// Build reader options from options map
 	opts := arrow.DefaultReaderOptions()
 
@@ -886,7 +1506,7 @@ func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catal
 	}
 
 	// Create the Arrow reader from path (file format)
-	reader, err := arrow.NewReaderFromPath(path, opts)
+	reader, err := arrow.NewReaderFromPath(resolvedPath, opts)
 	if err != nil {
 		return nil, b.errorf("failed to create Arrow reader: %v", err)
 	}
@@ -904,8 +1524,43 @@ func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catal
 		return nil, b.errorf("failed to get Arrow types: %v", err)
 	}
 
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		}
+	}
+
 	// Create column definitions
-	columns := make([]*catalog.ColumnDef, len(columnNames))
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
 	for i, colName := range columnNames {
 		var colType dukdb.Type
 		if i < len(columnTypes) {
@@ -913,15 +1568,78 @@ func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catal
 		} else {
 			colType = dukdb.TYPE_VARCHAR
 		}
-		columns[i] = catalog.NewColumnDef(colName, colType)
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
 	}
 
 	return columns, nil
 }
 
+// resolveArrowPath resolves a path or glob pattern to a single file path for schema inference.
+func (b *Binder) resolveArrowPath(path string, options map[string]any) (string, error) {
+	// Check if it's a glob pattern
+	if !isGlobPattern(path) {
+		// Not a glob - return as is
+		return path, nil
+	}
+
+	// Check file_glob_behavior option
+	allowEmpty := false
+	if options != nil {
+		if behavior, ok := options["file_glob_behavior"]; ok {
+			if s, ok := behavior.(string); ok && strings.ToUpper(s) == "ALLOW_EMPTY" {
+				allowEmpty = true
+			}
+		}
+	}
+
+	// Expand the glob pattern
+	fs := filesystem.NewLocalFileSystem("")
+	paths, err := fs.Glob(path)
+	if err != nil {
+		return "", b.errorf("failed to expand glob pattern: %v", err)
+	}
+
+	// Sort paths alphabetically for consistent behavior
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", b.errorf("no files match pattern: %s", path)
+	}
+
+	// Return the first matching file for schema inference
+	return paths[0], nil
+}
+
 // inferArrowSchemaAuto reads an Arrow IPC file with auto-detection for format.
 // It detects whether the file is in file format or stream format based on magic bytes.
+// It supports glob patterns - if a glob is detected, it expands the pattern
+// and uses the first matching file for schema inference.
 func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+	// Check for glob patterns and resolve to actual file path
+	resolvedPath, err := b.resolveArrowPath(path, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// If resolved path is empty, it means allow_empty was set and no files matched
+	if resolvedPath == "" {
+		return []*catalog.ColumnDef{}, nil
+	}
+
 	// Build reader options from options map
 	opts := arrow.DefaultReaderOptions()
 
@@ -945,14 +1663,14 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 	}
 
 	// Detect format from file extension first
-	format := arrow.DetectFormatFromPath(path)
+	format := arrow.DetectFormatFromPath(resolvedPath)
 
 	var columnNames []string
 	var columnTypes []dukdb.Type
 
 	if format == arrow.FormatStream {
 		// Use stream reader for stream format
-		reader, err := arrow.NewStreamReaderFromPath(path, opts)
+		reader, err := arrow.NewStreamReaderFromPath(resolvedPath, opts)
 		if err != nil {
 			return nil, b.errorf("failed to create Arrow stream reader: %v", err)
 		}
@@ -969,10 +1687,10 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 		}
 	} else {
 		// Default to file reader (handles .arrow, .feather, .ipc, and unknown extensions)
-		reader, err := arrow.NewReaderFromPath(path, opts)
+		reader, err := arrow.NewReaderFromPath(resolvedPath, opts)
 		if err != nil {
 			// If file format fails, try stream format as fallback
-			streamReader, streamErr := arrow.NewStreamReaderFromPath(path, opts)
+			streamReader, streamErr := arrow.NewStreamReaderFromPath(resolvedPath, opts)
 			if streamErr != nil {
 				return nil, b.errorf("failed to create Arrow reader: %v", err)
 			}
@@ -1002,8 +1720,43 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 		}
 	}
 
+	// Check for metadata columns
+	hasFilename := false
+	hasFileRowNumber := false
+	hasFileIndex := false
+
+	for name, val := range options {
+		switch strings.ToLower(name) {
+		case "filename":
+			if boolVal, ok := val.(bool); ok {
+				hasFilename = boolVal
+			}
+		case "file_row_number":
+			if boolVal, ok := val.(bool); ok {
+				hasFileRowNumber = boolVal
+			}
+		case "file_index":
+			if boolVal, ok := val.(bool); ok {
+				hasFileIndex = boolVal
+			}
+		}
+	}
+
 	// Create column definitions
-	columns := make([]*catalog.ColumnDef, len(columnNames))
+	totalCols := len(columnNames)
+	if hasFilename {
+		totalCols++
+	}
+	if hasFileRowNumber {
+		totalCols++
+	}
+	if hasFileIndex {
+		totalCols++
+	}
+
+	columns := make([]*catalog.ColumnDef, 0, totalCols)
+
+	// Add data columns
 	for i, colName := range columnNames {
 		var colType dukdb.Type
 		if i < len(columnTypes) {
@@ -1011,7 +1764,18 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 		} else {
 			colType = dukdb.TYPE_VARCHAR
 		}
-		columns[i] = catalog.NewColumnDef(colName, colType)
+		columns = append(columns, catalog.NewColumnDef(colName, colType))
+	}
+
+	// Add metadata columns
+	if hasFilename {
+		columns = append(columns, catalog.NewColumnDef("filename", dukdb.TYPE_VARCHAR))
+	}
+	if hasFileRowNumber {
+		columns = append(columns, catalog.NewColumnDef("file_row_number", dukdb.TYPE_BIGINT))
+	}
+	if hasFileIndex {
+		columns = append(columns, catalog.NewColumnDef("file_index", dukdb.TYPE_INTEGER))
 	}
 
 	return columns, nil

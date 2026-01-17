@@ -692,6 +692,15 @@ type InListExpr struct {
 
 func (*InListExpr) exprNode() {}
 
+// ArrayExpr represents an array literal expression.
+// Used for array syntax in table functions like ['file1.csv', 'file2.csv'].
+// Example: SELECT * FROM read_csv(['file1.csv', 'file2.csv'])
+type ArrayExpr struct {
+	Elements []Expr // The array elements
+}
+
+func (*ArrayExpr) exprNode() {}
+
 // InSubqueryExpr represents an IN expression with a subquery.
 type InSubqueryExpr struct {
 	Expr     Expr

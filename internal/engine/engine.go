@@ -73,10 +73,22 @@ func (e *Engine) Open(
 		}
 		isolatedEngine.persistent = false
 
+		// Initialize glob settings from config
+		maxFilesPerGlob := dukdb.DefaultMaxFilesPerGlob
+		fileGlobTimeout := dukdb.DefaultFileGlobTimeout
+		if isolatedEngine.config.MaxFilesPerGlob > 0 {
+			maxFilesPerGlob = isolatedEngine.config.MaxFilesPerGlob
+		}
+		if isolatedEngine.config.FileGlobTimeout > 0 {
+			fileGlobTimeout = isolatedEngine.config.FileGlobTimeout
+		}
+
 		conn := &EngineConn{
-			id:     generateConnID(),
-			engine: isolatedEngine,
-			txn:    isolatedEngine.txnMgr.Begin(),
+			id:              generateConnID(),
+			engine:          isolatedEngine,
+			txn:             isolatedEngine.txnMgr.Begin(),
+			maxFilesPerGlob: maxFilesPerGlob,
+			fileGlobTimeout: fileGlobTimeout,
 		}
 
 		return conn, nil
@@ -156,11 +168,25 @@ func (e *Engine) Open(
 		e.walWriter = walWriter
 	}
 
+	// Initialize glob settings from config
+	maxFilesPerGlob := dukdb.DefaultMaxFilesPerGlob
+	fileGlobTimeout := dukdb.DefaultFileGlobTimeout
+	if e.config != nil {
+		if e.config.MaxFilesPerGlob > 0 {
+			maxFilesPerGlob = e.config.MaxFilesPerGlob
+		}
+		if e.config.FileGlobTimeout > 0 {
+			fileGlobTimeout = e.config.FileGlobTimeout
+		}
+	}
+
 	// Create a new connection
 	conn := &EngineConn{
-		id:     generateConnID(),
-		engine: e,
-		txn:    e.txnMgr.Begin(),
+		id:              generateConnID(),
+		engine:          e,
+		txn:             e.txnMgr.Begin(),
+		maxFilesPerGlob: maxFilesPerGlob,
+		fileGlobTimeout: fileGlobTimeout,
 	}
 
 	return conn, nil

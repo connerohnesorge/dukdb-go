@@ -168,6 +168,22 @@ func (*LocalFileSystem) Capabilities() FileSystemCapabilities {
 	}
 }
 
+// Glob expands a glob pattern to a list of matching file paths.
+// Uses the GlobMatcher for pattern expansion with full recursive support.
+// The pattern should be relative to the filesystem's basePath (if any).
+func (l *LocalFileSystem) Glob(pattern string) ([]string, error) {
+	// Use the GlobMatcher for pattern expansion
+	// The GlobMatcher uses the filesystem's ReadDir/Stat which already handle basePath resolution
+	matcher := NewGlobMatcher(l)
+
+	return matcher.Match(pattern)
+}
+
+// SupportsGlob returns true because LocalFileSystem has native glob support.
+func (*LocalFileSystem) SupportsGlob() bool {
+	return true
+}
+
 // LocalFile wraps os.File to implement the File interface.
 type LocalFile struct {
 	file *os.File

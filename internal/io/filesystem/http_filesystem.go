@@ -219,6 +219,18 @@ func (*HTTPFileSystem) Capabilities() FileSystemCapabilities {
 	}
 }
 
+// Glob is not supported for HTTP resources.
+// HTTP filesystems do not support directory listing, which is required for glob expansion.
+func (*HTTPFileSystem) Glob(_ string) ([]string, error) {
+	return nil, ErrNotSupported
+}
+
+// SupportsGlob returns false because HTTP filesystems do not support glob operations.
+// HTTP does not support directory listing, which is required for glob expansion.
+func (*HTTPFileSystem) SupportsGlob() bool {
+	return false
+}
+
 // Verify HTTPFileSystem implements FileSystem interface at compile time.
 var _ FileSystem = (*HTTPFileSystem)(nil)
 

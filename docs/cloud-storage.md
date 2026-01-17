@@ -215,6 +215,402 @@ COPY my_table FROM 's3://my-bucket/data/*.csv' (FORMAT CSV);
 | `[a-z]` | Match any character in the range |
 | `[!abc]` | Match any character not in the set |
 
+### Array of Files Syntax
+
+Read multiple specific files using array syntax instead of glob patterns:
+
+```sql
+-- Read a list of specific CSV files
+SELECT * FROM read_csv(['data/jan.csv', 'data/feb.csv', 'data/mar.csv']);
+
+-- Mix local and cloud files in the same query
+SELECT * FROM read_parquet(['local_data.parquet', 's3://bucket/remote_data.parquet']);
+
+-- Array syntax with glob patterns inside
+SELECT * FROM read_json(['logs/2024/*.json', 'logs/2023/december.json']);
+
+-- Parquet files from different S3 buckets
+SELECT * FROM read_parquet([
+    's3://bucket-a/data/part1.parquet',
+    's3://bucket-b/data/part2.parquet'
+]);
+```
+
+Array syntax is useful when you need to read specific files that do not follow a glob-friendly naming convention, or when combining files from different locations.
+
+### Metadata Columns
+
+Virtual metadata columns provide information about which file each row originated from. These columns are added to the output when enabled via options.
+
+```sql
+-- Add filename column showing the source file path
+SELECT *, filename FROM read_csv('data/*.csv', filename=true);
+
+-- Add file_row_number (1-indexed row number within each file)
+SELECT *, file_row_number FROM read_parquet('s3://bucket/*.parquet', file_row_number=true);
+
+-- Add file_index (0-indexed position in the file list)
+SELECT *, file_index FROM read_json('logs/**/*.json', file_index=true);
+
+-- Combine all metadata columns
+SELECT
+    *,
+    filename,
+    file_row_number,
+    file_index
+FROM read_csv(
+    'data/*.csv',
+    filename=true,
+    file_row_number=true,
+    file_index=true
+);
+```
+
+| Option | Type | Column Name | Description |
+|--------|------|-------------|-------------|
+| `filename=true` | VARCHAR | `filename` | Full path of the source file |
+| `file_row_number=true` | BIGINT | `file_row_number` | 1-indexed row number within the file |
+| `file_index=true` | INTEGER | `file_index` | 0-indexed position in the sorted file list |
+
+**Example output with metadata columns:**
+
+```sql
+SELECT * FROM read_csv('data/*.csv', filename=true, file_row_number=true);
+```
+
+| id | name | filename | file_row_number |
+|----|------|----------|-----------------|
+| 1 | Alice | data/users_a.csv | 1 |
+| 2 | Bob | data/users_a.csv | 2 |
+| 3 | Carol | data/users_b.csv | 1 |
+
+### Schema Alignment (Union by Name)
+
+When reading multiple files with different schemas, dukdb-go uses union-by-name semantics to merge the schemas:
+
+```sql
+-- File1: id (INTEGER), name (VARCHAR)
+-- File2: id (INTEGER), email (VARCHAR)
+-- Result: id (INTEGER), name (VARCHAR), email (VARCHAR)
+
+SELECT * FROM read_csv('data/*.csv', union_by_name=true);
+```
+
+**Union-by-name behavior:**
+
+- **Column matching**: Columns are matched by name (case-sensitive)
+- **Missing columns**: Filled with NULL values
+- **Type widening**: Compatible types are widened automatically
+- **Incompatible types**: Results in an error
+
+**Type widening rules:**
+
+| Source Types | Result Type |
+|--------------|-------------|
+| TINYINT + SMALLINT | SMALLINT |
+| SMALLINT + INTEGER | INTEGER |
+| INTEGER + BIGINT | BIGINT |
+| FLOAT + DOUBLE | DOUBLE |
+| INTEGER + DOUBLE | DOUBLE |
+| TIMESTAMP_S + TIMESTAMP | TIMESTAMP |
+| TIMESTAMP + TIMESTAMP_NS | TIMESTAMP_NS |
+
+**Incompatible type errors:**
+
+```sql
+-- This will fail: cannot merge INTEGER with VARCHAR
+-- File1: value (INTEGER)
+-- File2: value (VARCHAR)
+SELECT * FROM read_csv('incompatible/*.csv');
+-- Error: incompatible column types: cannot merge INTEGER with VARCHAR
+```
+
+**Disable union-by-name for positional matching:**
+
+```sql
+-- Match columns by position instead of name
+SELECT * FROM read_csv('data/*.csv', union_by_name=false);
+```
+
+When `union_by_name=false`, all files must have the same number of columns. Column names from the first file are used.
+
+### Hive Partitioning
+
+Hive partitioning extracts column values from directory names in the path structure:
+
+```
+data/
+  year=2023/
+    month=01/
+      sales.parquet
+    month=02/
+      sales.parquet
+  year=2024/
+    month=01/
+      sales.parquet
+```
+
+```sql
+-- Enable Hive partitioning to extract year and month columns
+SELECT * FROM read_parquet('data/**/*.parquet', hive_partitioning=true);
+```
+
+| product | amount | year | month |
+|---------|--------|------|-------|
+| Widget | 100.00 | 2023 | 01 |
+| Gadget | 200.00 | 2023 | 02 |
+| Widget | 150.00 | 2024 | 01 |
+
+**Hive partitioning options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `hive_partitioning` | BOOLEAN or 'auto' | false | Enable Hive partition column extraction |
+| `hive_types_autocast` | BOOLEAN | true | Automatically infer types for partition values |
+| `hive_types` | MAP | NULL | Explicit type mapping for partition columns |
+
+**Auto-detection mode:**
+
+```sql
+-- Automatically detect if paths contain Hive partitions
+SELECT * FROM read_parquet('data/**/*.parquet', hive_partitioning='auto');
+```
+
+**Explicit type mapping:**
+
+```sql
+-- Specify exact types for partition columns
+SELECT * FROM read_csv(
+    'data/**/*.csv',
+    hive_partitioning=true,
+    hive_types={'year': 'INTEGER', 'month': 'INTEGER'}
+);
+```
+
+**Type autocast behavior:**
+
+When `hive_types_autocast=true` (default), partition values are automatically converted:
+- Numeric strings (e.g., "2024") become INTEGER or BIGINT
+- Decimal strings (e.g., "3.14") become DOUBLE
+- "true"/"false" become BOOLEAN
+- All other values remain VARCHAR
+
+```sql
+-- Disable autocast to keep all partition values as VARCHAR
+SELECT * FROM read_parquet('data/**/*.parquet',
+    hive_partitioning=true,
+    hive_types_autocast=false
+);
+```
+
+### File Glob Options
+
+The `file_glob_behavior` option controls how empty glob results are handled:
+
+| Value | Behavior |
+|-------|----------|
+| `'DISALLOW_EMPTY'` | Return an error when no files match (default) |
+| `'ALLOW_EMPTY'` | Return an empty result set when no files match |
+| `'FALLBACK_GLOB'` | Treat the pattern as a literal path if no matches found |
+
+```sql
+-- Default: error when no files match
+SELECT * FROM read_csv('data/*.csv');
+-- Error: no files match pattern: data/*.csv
+
+-- Allow empty results
+SELECT * FROM read_csv('data/*.csv', file_glob_behavior='ALLOW_EMPTY');
+-- Returns empty result set (no error)
+
+-- Fallback to literal path
+SELECT * FROM read_csv('file[1].csv', file_glob_behavior='FALLBACK_GLOB');
+-- If no glob matches, tries to read 'file[1].csv' as a literal filename
+```
+
+**Use cases:**
+
+- `DISALLOW_EMPTY`: Strict mode, ensures data is present
+- `ALLOW_EMPTY`: Graceful handling when data may not exist yet
+- `FALLBACK_GLOB`: Useful for filenames containing glob characters (e.g., `report[2024].csv`)
+
+### Files to Sniff
+
+The `files_to_sniff` option controls how many files are sampled for schema detection when reading multiple files:
+
+```sql
+-- Sniff schema from first 3 files (useful when schemas may vary)
+SELECT * FROM read_csv('data/**/*.csv', files_to_sniff=3);
+
+-- Sniff schema from all files (most accurate but slower)
+SELECT * FROM read_csv('data/**/*.csv', files_to_sniff=-1);
+
+-- Default: sniff only the first file
+SELECT * FROM read_csv('data/**/*.csv');  -- files_to_sniff=1
+```
+
+| Value | Behavior |
+|-------|----------|
+| 1 (default) | Sniff schema from the first file only |
+| N > 1 | Sniff schema from the first N files and merge |
+| -1 | Sniff schema from all matched files |
+
+**When to increase `files_to_sniff`:**
+
+- Files have different columns (some columns may be missing in early files)
+- Column types vary between files (e.g., first file has NULL values, later files have integers)
+- Schema evolution over time (newer files have additional columns)
+
+### Limits and Configuration
+
+**Maximum files per glob:**
+
+By default, a glob pattern can match up to **10,000 files**. This limit prevents memory exhaustion and excessive cloud API calls.
+
+```sql
+-- This will error if more than 10,000 files match
+SELECT * FROM read_parquet('s3://bucket/data/**/*.parquet');
+-- Error: glob pattern matches too many files: 15000 files (limit: 10000)
+```
+
+**File ordering:**
+
+Files matched by glob patterns are sorted **alphabetically** by path. This ensures deterministic ordering across queries.
+
+```sql
+-- Files are processed in alphabetical order:
+-- data/file_01.csv, data/file_02.csv, data/file_10.csv
+SELECT * FROM read_csv('data/*.csv', file_index=true);
+```
+
+| file_index | filename |
+|------------|----------|
+| 0 | data/file_01.csv |
+| 1 | data/file_02.csv |
+| 2 | data/file_10.csv |
+
+### Error Handling
+
+**Common glob-related errors:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `no files match pattern` | Glob pattern matches zero files | Check pattern, verify files exist, or use `file_glob_behavior='ALLOW_EMPTY'` |
+| `glob pattern matches too many files` | More than 10,000 files matched | Use a more specific pattern or filter by partition |
+| `incompatible column types` | Files have columns with conflicting types | Ensure column types are compatible or explicitly cast |
+| `invalid glob pattern` | Malformed pattern syntax | Check bracket expressions are closed, no multiple `**` |
+| `unclosed bracket expression` | Missing `]` in character class | Add closing bracket: `[a-z]` |
+| `multiple '**' wildcards` | Pattern contains more than one `**` | Use only one recursive wildcard per pattern |
+
+**Example error handling in Go:**
+
+```go
+rows, err := db.Query(`
+    SELECT * FROM read_csv('s3://bucket/data/*.csv', file_glob_behavior='ALLOW_EMPTY')
+`)
+if err != nil {
+    // Handle error (connection issues, permission denied, etc.)
+    log.Printf("Query failed: %v", err)
+    return
+}
+
+// Check if any rows were returned
+if !rows.Next() {
+    log.Println("No data files found matching pattern")
+    return
+}
+```
+
+### Multi-Format Examples
+
+**CSV with all glob features:**
+
+```sql
+SELECT
+    product,
+    amount,
+    filename,
+    file_row_number,
+    year,
+    month
+FROM read_csv(
+    's3://bucket/sales/year=*/month=*/*.csv',
+    header=true,
+    delimiter=',',
+    filename=true,
+    file_row_number=true,
+    hive_partitioning=true,
+    hive_types={'year': 'INTEGER', 'month': 'INTEGER'},
+    union_by_name=true,
+    files_to_sniff=3
+);
+```
+
+**JSON with glob patterns:**
+
+```sql
+-- Read all JSON log files recursively
+SELECT
+    timestamp,
+    level,
+    message,
+    filename
+FROM read_json(
+    'logs/**/*.json',
+    format='array',
+    filename=true,
+    file_glob_behavior='ALLOW_EMPTY'
+);
+
+-- Read NDJSON files with Hive partitioning
+SELECT * FROM read_ndjson(
+    'events/date=*/*.ndjson',
+    hive_partitioning=true
+);
+```
+
+**Parquet with glob patterns:**
+
+```sql
+-- Read partitioned Parquet dataset
+SELECT
+    *,
+    file_index
+FROM read_parquet(
+    's3://datalake/warehouse/table/year=202[34]/month=*/data.parquet',
+    file_index=true,
+    hive_partitioning=true,
+    hive_types_autocast=true
+);
+
+-- Read specific files from array
+SELECT * FROM read_parquet([
+    'gs://bucket/q1_2024.parquet',
+    'gs://bucket/q2_2024.parquet',
+    'gs://bucket/q3_2024.parquet'
+]);
+```
+
+**XLSX with glob patterns:**
+
+```sql
+-- Read multiple Excel files
+SELECT
+    *,
+    filename
+FROM read_xlsx(
+    'reports/**/*.xlsx',
+    sheet='Summary',
+    filename=true
+);
+
+-- Combine Excel files with different schemas
+SELECT * FROM read_xlsx(
+    ['report_2023.xlsx', 'report_2024.xlsx'],
+    union_by_name=true,
+    files_to_sniff=2
+);
+```
+
 ## Authentication
 
 See [Secrets Management](secrets.md) for detailed information on configuring authentication for each cloud provider.

@@ -149,6 +149,9 @@ func (e *Executor) evaluateExpr(
 		// They are handled by the planner/executor for grouping sets.
 		return nil, nil
 
+	case *binder.BoundArrayExpr:
+		return e.evaluateArrayExpr(ctx, ex, row)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -975,6 +978,341 @@ func (e *Executor) evaluateFunctionCall(
 			toString(args[2]),
 		), nil
 
+	// Regular Expression Functions
+	case "REGEXP_MATCHES":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REGEXP_MATCHES requires 2 arguments",
+			}
+		}
+		return regexpMatchesValue(args[0], args[1])
+
+	case "REGEXP_REPLACE":
+		if len(args) < 3 || len(args) > 4 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REGEXP_REPLACE requires 3 or 4 arguments",
+			}
+		}
+		flags := interface{}(nil)
+		if len(args) == 4 {
+			flags = args[3]
+		}
+		return regexpReplaceValue(args[0], args[1], args[2], flags)
+
+	case "REGEXP_EXTRACT":
+		if len(args) < 2 || len(args) > 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REGEXP_EXTRACT requires 2 or 3 arguments",
+			}
+		}
+		group := interface{}(nil)
+		if len(args) == 3 {
+			group = args[2]
+		}
+		return regexpExtractValue(args[0], args[1], group)
+
+	case "REGEXP_EXTRACT_ALL":
+		if len(args) < 2 || len(args) > 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REGEXP_EXTRACT_ALL requires 2 or 3 arguments",
+			}
+		}
+		group := interface{}(nil)
+		if len(args) == 3 {
+			group = args[2]
+		}
+		return regexpExtractAllValue(args[0], args[1], group)
+
+	case "REGEXP_SPLIT_TO_ARRAY":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REGEXP_SPLIT_TO_ARRAY requires 2 arguments",
+			}
+		}
+		return regexpSplitToArrayValue(args[0], args[1])
+
+	// Concatenation and Splitting
+	case "CONCAT_WS":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "CONCAT_WS requires at least 2 arguments",
+			}
+		}
+		return concatWSValue(args[0], args[1:]...)
+
+	case "STRING_SPLIT":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "STRING_SPLIT requires 2 arguments",
+			}
+		}
+		return stringSplitValue(args[0], args[1])
+
+	case "STRING_SPLIT_REGEX":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "STRING_SPLIT_REGEX requires 2 arguments",
+			}
+		}
+		return regexpSplitToArrayValue(args[0], args[1])
+
+	// Padding Functions
+	case "LPAD":
+		if len(args) < 2 || len(args) > 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LPAD requires 2 or 3 arguments",
+			}
+		}
+		fill := interface{}(nil)
+		if len(args) == 3 {
+			fill = args[2]
+		}
+		return lpadValue(args[0], args[1], fill)
+
+	case "RPAD":
+		if len(args) < 2 || len(args) > 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "RPAD requires 2 or 3 arguments",
+			}
+		}
+		fill := interface{}(nil)
+		if len(args) == 3 {
+			fill = args[2]
+		}
+		return rpadValue(args[0], args[1], fill)
+
+	// String Manipulation
+	case "REVERSE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REVERSE requires 1 argument",
+			}
+		}
+		return reverseValue(args[0])
+
+	case "REPEAT":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "REPEAT requires 2 arguments",
+			}
+		}
+		return repeatValue(args[0], args[1])
+
+	case "LEFT":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LEFT requires 2 arguments",
+			}
+		}
+		return leftValue(args[0], args[1])
+
+	case "RIGHT":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "RIGHT requires 2 arguments",
+			}
+		}
+		return rightValue(args[0], args[1])
+
+	case "POSITION":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "POSITION requires 2 arguments",
+			}
+		}
+		return positionValue(args[0], args[1])
+
+	case "STRPOS", "INSTR":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "STRPOS requires 2 arguments",
+			}
+		}
+		// Note: reversed argument order
+		return positionValue(args[1], args[0])
+
+	case "CONTAINS":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "CONTAINS requires 2 arguments",
+			}
+		}
+		return containsValue(args[0], args[1])
+
+	case "PREFIX", "STARTS_WITH":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "PREFIX requires 2 arguments",
+			}
+		}
+		return prefixValue(args[0], args[1])
+
+	case "SUFFIX", "ENDS_WITH":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SUFFIX requires 2 arguments",
+			}
+		}
+		return suffixValue(args[0], args[1])
+
+	// Encoding Functions
+	case "ASCII":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "ASCII requires 1 argument",
+			}
+		}
+		return asciiValue(args[0])
+
+	case "CHR":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "CHR requires 1 argument",
+			}
+		}
+		return chrValue(args[0])
+
+	case "UNICODE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "UNICODE requires 1 argument",
+			}
+		}
+		return unicodeValue(args[0])
+
+	// Hash Functions
+	case "MD5":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "MD5 requires 1 argument",
+			}
+		}
+		return md5Value(args[0])
+
+	case "SHA256":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SHA256 requires 1 argument",
+			}
+		}
+		return sha256Value(args[0])
+
+	case "HASH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "HASH requires 1 argument",
+			}
+		}
+		return hashStringValue(args[0])
+
+	// String Distance Functions
+	case "LEVENSHTEIN":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LEVENSHTEIN requires 2 arguments",
+			}
+		}
+		return levenshteinValue(args[0], args[1])
+
+	case "DAMERAU_LEVENSHTEIN":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "DAMERAU_LEVENSHTEIN requires 2 arguments",
+			}
+		}
+		return damerauLevenshteinValue(args[0], args[1])
+
+	case "HAMMING":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "HAMMING requires 2 arguments",
+			}
+		}
+		return hammingValue(args[0], args[1])
+
+	case "JACCARD":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JACCARD requires 2 arguments",
+			}
+		}
+		return jaccardValue(args[0], args[1])
+
+	case "JARO_SIMILARITY":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JARO_SIMILARITY requires 2 arguments",
+			}
+		}
+		return jaroSimilarityValue(args[0], args[1])
+
+	case "JARO_WINKLER_SIMILARITY":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JARO_WINKLER_SIMILARITY requires 2 arguments",
+			}
+		}
+		return jaroWinklerSimilarityValue(args[0], args[1])
+
+	// Aliases for existing functions
+	case "STRIP":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "STRIP requires 1 argument",
+			}
+		}
+		return strings.TrimSpace(toString(args[0])), nil
+
+	case "LSTRIP":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LSTRIP requires 1 argument",
+			}
+		}
+		return strings.TrimLeft(toString(args[0]), " "), nil
+
+	case "RSTRIP":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "RSTRIP requires 1 argument",
+			}
+		}
+		return strings.TrimRight(toString(args[0]), " "), nil
+
 	// Date/Time extraction functions
 	case "YEAR":
 		return evalYear(args)
@@ -1379,6 +1717,27 @@ func (e *Executor) evaluateInListExpr(
 	}
 
 	return false, nil
+}
+
+// evaluateArrayExpr evaluates an array literal expression.
+// Returns a []any slice containing the evaluated elements.
+// This is primarily used for passing arrays of file paths to table functions.
+func (e *Executor) evaluateArrayExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundArrayExpr,
+	row map[string]any,
+) (any, error) {
+	result := make([]any, 0, len(expr.Elements))
+
+	for _, elem := range expr.Elements {
+		val, err := e.evaluateExpr(ctx, elem, row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, val)
+	}
+
+	return result, nil
 }
 
 func (e *Executor) evaluateInSubqueryExpr(

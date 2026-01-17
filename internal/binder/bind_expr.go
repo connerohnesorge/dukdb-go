@@ -76,6 +76,8 @@ func (b *Binder) bindExpr(
 		return b.bindRollupExpr(e)
 	case *parser.CubeExpr:
 		return b.bindCubeExpr(e)
+	case *parser.ArrayExpr:
+		return b.bindArrayExpr(e)
 	default:
 		return nil, b.errorf("unsupported expression type: %T", expr)
 	}
@@ -1100,5 +1102,39 @@ func (b *Binder) bindGroupingCall(f *parser.FunctionCall) (*BoundGroupingCall, e
 
 	return &BoundGroupingCall{
 		Args: args,
+	}, nil
+}
+
+// bindArrayExpr binds an array literal expression.
+// Arrays in table functions are typically lists of file paths.
+// Example: ['file1.csv', 'file2.csv']
+func (b *Binder) bindArrayExpr(e *parser.ArrayExpr) (*BoundArrayExpr, error) {
+	elements := make([]BoundExpr, 0, len(e.Elements))
+	var elemType dukdb.Type = dukdb.TYPE_SQLNULL // Start with null for empty arrays
+
+	for _, elem := range e.Elements {
+		boundElem, err := b.bindExpr(elem, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, boundElem)
+
+		// Infer element type from first non-null element
+		if elemType == dukdb.TYPE_SQLNULL {
+			elemType = boundElem.ResultType()
+		} else if boundElem.ResultType() != dukdb.TYPE_SQLNULL {
+			// Promote type if needed
+			elemType = promoteType(elemType, boundElem.ResultType())
+		}
+	}
+
+	// Default to VARCHAR for empty arrays (common for file paths)
+	if elemType == dukdb.TYPE_SQLNULL && len(elements) == 0 {
+		elemType = dukdb.TYPE_VARCHAR
+	}
+
+	return &BoundArrayExpr{
+		Elements: elements,
+		ElemType: elemType,
 	}, nil
 }

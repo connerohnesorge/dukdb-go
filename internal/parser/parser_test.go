@@ -3568,3 +3568,281 @@ func TestILikeParsing(t *testing.T) {
 		}
 	})
 }
+
+// TestParseArrayLiteral tests parsing of array literal expressions.
+// Array literals are used in table functions like: read_csv(['file1.csv', 'file2.csv'])
+func TestParseArrayLiteral(t *testing.T) {
+	t.Run("simple string array", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM read_csv(['file1.csv', 'file2.csv'])")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		if selectStmt.From == nil || len(selectStmt.From.Tables) == 0 {
+			t.Fatal("Expected FROM clause with table function")
+		}
+
+		tableRef := selectStmt.From.Tables[0]
+		if tableRef.TableFunction == nil {
+			t.Fatal("Expected table function reference")
+		}
+
+		if tableRef.TableFunction.Name != "read_csv" {
+			t.Errorf("Expected function name 'read_csv', got '%s'", tableRef.TableFunction.Name)
+		}
+
+		if len(tableRef.TableFunction.Args) != 1 {
+			t.Fatalf("Expected 1 argument, got %d", len(tableRef.TableFunction.Args))
+		}
+
+		arrayExpr, ok := tableRef.TableFunction.Args[0].(*ArrayExpr)
+		if !ok {
+			t.Fatalf("Expected ArrayExpr argument, got %T", tableRef.TableFunction.Args[0])
+		}
+
+		if len(arrayExpr.Elements) != 2 {
+			t.Fatalf("Expected 2 array elements, got %d", len(arrayExpr.Elements))
+		}
+
+		// Check first element
+		elem1, ok := arrayExpr.Elements[0].(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for first element, got %T", arrayExpr.Elements[0])
+		}
+		if elem1.Value != "file1.csv" {
+			t.Errorf("Expected 'file1.csv', got '%v'", elem1.Value)
+		}
+
+		// Check second element
+		elem2, ok := arrayExpr.Elements[1].(*Literal)
+		if !ok {
+			t.Fatalf("Expected Literal for second element, got %T", arrayExpr.Elements[1])
+		}
+		if elem2.Value != "file2.csv" {
+			t.Errorf("Expected 'file2.csv', got '%v'", elem2.Value)
+		}
+	})
+
+	t.Run("empty array", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM read_csv([])")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt, ok := stmt.(*SelectStmt)
+		if !ok {
+			t.Fatalf("Expected SelectStmt, got %T", stmt)
+		}
+
+		tableRef := selectStmt.From.Tables[0]
+		arrayExpr, ok := tableRef.TableFunction.Args[0].(*ArrayExpr)
+		if !ok {
+			t.Fatalf("Expected ArrayExpr argument, got %T", tableRef.TableFunction.Args[0])
+		}
+
+		if len(arrayExpr.Elements) != 0 {
+			t.Errorf("Expected empty array, got %d elements", len(arrayExpr.Elements))
+		}
+	})
+
+	t.Run("single element array", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM read_csv(['single.csv'])")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+		arrayExpr := tableRef.TableFunction.Args[0].(*ArrayExpr)
+
+		if len(arrayExpr.Elements) != 1 {
+			t.Errorf("Expected 1 element, got %d", len(arrayExpr.Elements))
+		}
+
+		elem := arrayExpr.Elements[0].(*Literal)
+		if elem.Value != "single.csv" {
+			t.Errorf("Expected 'single.csv', got '%v'", elem.Value)
+		}
+	})
+
+	t.Run("array with trailing comma", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM read_csv(['file1.csv', 'file2.csv',])")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+		arrayExpr := tableRef.TableFunction.Args[0].(*ArrayExpr)
+
+		if len(arrayExpr.Elements) != 2 {
+			t.Errorf("Expected 2 elements (trailing comma should be ignored), got %d", len(arrayExpr.Elements))
+		}
+	})
+
+	t.Run("array with numeric elements", func(t *testing.T) {
+		stmt, err := Parse("SELECT [1, 2, 3]")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		arrayExpr, ok := selectStmt.Columns[0].Expr.(*ArrayExpr)
+		if !ok {
+			t.Fatalf("Expected ArrayExpr in SELECT column, got %T", selectStmt.Columns[0].Expr)
+		}
+
+		if len(arrayExpr.Elements) != 3 {
+			t.Errorf("Expected 3 elements, got %d", len(arrayExpr.Elements))
+		}
+
+		for i, expected := range []int64{1, 2, 3} {
+			lit := arrayExpr.Elements[i].(*Literal)
+			if lit.Value != expected {
+				t.Errorf("Element %d: expected %d, got %v", i, expected, lit.Value)
+			}
+		}
+	})
+
+	t.Run("array with mixed types", func(t *testing.T) {
+		stmt, err := Parse("SELECT ['hello', 123, 45.6]")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		arrayExpr := selectStmt.Columns[0].Expr.(*ArrayExpr)
+
+		if len(arrayExpr.Elements) != 3 {
+			t.Errorf("Expected 3 elements, got %d", len(arrayExpr.Elements))
+		}
+
+		// First element is string
+		lit1 := arrayExpr.Elements[0].(*Literal)
+		if lit1.Value != "hello" {
+			t.Errorf("Expected 'hello', got '%v'", lit1.Value)
+		}
+
+		// Second element is integer
+		lit2 := arrayExpr.Elements[1].(*Literal)
+		if lit2.Value != int64(123) {
+			t.Errorf("Expected 123, got '%v'", lit2.Value)
+		}
+
+		// Third element is float
+		lit3 := arrayExpr.Elements[2].(*Literal)
+		if lit3.Value != 45.6 {
+			t.Errorf("Expected 45.6, got '%v'", lit3.Value)
+		}
+	})
+
+	t.Run("array with expressions", func(t *testing.T) {
+		stmt, err := Parse("SELECT [1 + 2, 3 * 4]")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		arrayExpr := selectStmt.Columns[0].Expr.(*ArrayExpr)
+
+		if len(arrayExpr.Elements) != 2 {
+			t.Errorf("Expected 2 elements, got %d", len(arrayExpr.Elements))
+		}
+
+		// Elements should be BinaryExpr (arithmetic expressions)
+		_, ok := arrayExpr.Elements[0].(*BinaryExpr)
+		if !ok {
+			t.Errorf("Expected BinaryExpr for first element, got %T", arrayExpr.Elements[0])
+		}
+
+		_, ok = arrayExpr.Elements[1].(*BinaryExpr)
+		if !ok {
+			t.Errorf("Expected BinaryExpr for second element, got %T", arrayExpr.Elements[1])
+		}
+	})
+
+	t.Run("nested arrays", func(t *testing.T) {
+		stmt, err := Parse("SELECT [[1, 2], [3, 4]]")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		arrayExpr := selectStmt.Columns[0].Expr.(*ArrayExpr)
+
+		if len(arrayExpr.Elements) != 2 {
+			t.Errorf("Expected 2 nested arrays, got %d", len(arrayExpr.Elements))
+		}
+
+		// First nested array
+		nested1, ok := arrayExpr.Elements[0].(*ArrayExpr)
+		if !ok {
+			t.Fatalf("Expected nested ArrayExpr, got %T", arrayExpr.Elements[0])
+		}
+		if len(nested1.Elements) != 2 {
+			t.Errorf("Expected 2 elements in first nested array, got %d", len(nested1.Elements))
+		}
+
+		// Second nested array
+		nested2, ok := arrayExpr.Elements[1].(*ArrayExpr)
+		if !ok {
+			t.Fatalf("Expected nested ArrayExpr, got %T", arrayExpr.Elements[1])
+		}
+		if len(nested2.Elements) != 2 {
+			t.Errorf("Expected 2 elements in second nested array, got %d", len(nested2.Elements))
+		}
+	})
+
+	t.Run("array in table function with named args", func(t *testing.T) {
+		stmt, err := Parse("SELECT * FROM read_csv(['a.csv', 'b.csv'], delimiter=',')")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+		tableRef := selectStmt.From.Tables[0]
+		tf := tableRef.TableFunction
+
+		if len(tf.Args) != 1 {
+			t.Errorf("Expected 1 positional arg, got %d", len(tf.Args))
+		}
+
+		arrayExpr := tf.Args[0].(*ArrayExpr)
+		if len(arrayExpr.Elements) != 2 {
+			t.Errorf("Expected 2 array elements, got %d", len(arrayExpr.Elements))
+		}
+
+		// Check named arg
+		if tf.NamedArgs == nil || tf.NamedArgs["delimiter"] == nil {
+			t.Error("Expected delimiter named argument")
+		}
+	})
+
+	t.Run("multiple array arguments", func(t *testing.T) {
+		stmt, err := Parse("SELECT ['x', 'y'], ['a', 'b', 'c']")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		selectStmt := stmt.(*SelectStmt)
+
+		if len(selectStmt.Columns) != 2 {
+			t.Fatalf("Expected 2 columns, got %d", len(selectStmt.Columns))
+		}
+
+		arr1 := selectStmt.Columns[0].Expr.(*ArrayExpr)
+		if len(arr1.Elements) != 2 {
+			t.Errorf("First array: expected 2 elements, got %d", len(arr1.Elements))
+		}
+
+		arr2 := selectStmt.Columns[1].Expr.(*ArrayExpr)
+		if len(arr2.Elements) != 3 {
+			t.Errorf("Second array: expected 3 elements, got %d", len(arr2.Elements))
+		}
+	})
+}

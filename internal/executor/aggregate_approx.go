@@ -68,7 +68,7 @@ func (hll *HyperLogLog) Add(value any) {
 	}
 
 	// Hash the value using fnv64
-	hash := hashValue(value)
+	hash := hashValueForHLL(value)
 
 	// Use the first p bits as the register index
 	index := hash >> (64 - hll.precision)
@@ -128,9 +128,9 @@ func (hll *HyperLogLog) applyBiasCorrection(estimate float64) float64 {
 	return estimate
 }
 
-// hashValue hashes an arbitrary value to a uint64.
+// hashValueForHLL hashes an arbitrary value to a uint64 for HyperLogLog.
 // Uses FNV-1a followed by a finalization mixing step (similar to MurmurHash3).
-func hashValue(value any) uint64 {
+func hashValueForHLL(value any) uint64 {
 	h := fnv.New64a()
 	// Convert value to string representation for hashing
 	_, _ = h.Write([]byte(formatValue(value)))
@@ -265,7 +265,7 @@ func (hll *HyperLogLogPacked) Add(value any) {
 		return
 	}
 
-	hash := hashValue(value)
+	hash := hashValueForHLL(value)
 	index := uint32(hash >> (64 - hll.precision))
 	w := hash << hll.precision
 	leadingZeros := uint8(countLeadingZeros(w) + 1)

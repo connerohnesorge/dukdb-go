@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -318,6 +319,116 @@ func (*GCSFileSystem) Capabilities() FileSystemCapabilities {
 		SupportsDelete:  true,
 		ContextTimeout:  true,
 	}
+}
+
+// Glob expands a glob pattern to a list of matching GCS object keys.
+// Uses storage.Query with prefix optimization to efficiently list objects.
+// Handles pagination automatically using the GCS iterator.
+// Applies retry logic with exponential backoff for rate limiting.
+func (fs *GCSFileSystem) Glob(pattern string) ([]string, error) {
+	return fs.GlobContext(context.Background(), pattern)
+}
+
+// GlobContext expands a glob pattern with context support for cancellation.
+func (fs *GCSFileSystem) GlobContext(ctx context.Context, pattern string) ([]string, error) {
+	// Validate the pattern
+	if err := ValidateGlobPattern(pattern); err != nil {
+		return nil, err
+	}
+
+	// Normalize path separators
+	pattern = normalizePath(pattern)
+
+	// Parse GCS path from pattern to extract bucket and object pattern
+	bucket, objectPattern, err := parseGCSPath(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("gcs: glob parse error: %w", err)
+	}
+
+	// If no glob characters, check if the object exists
+	if !ContainsGlobPattern(objectPattern) {
+		exists, err := fs.Exists(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("gcs: checking path existence: %w", err)
+		}
+		if exists {
+			return []string{pattern}, nil
+		}
+		return nil, nil
+	}
+
+	// Extract the prefix (literal part before any wildcards) for optimization
+	prefix := ExtractPrefix(objectPattern)
+
+	// List objects with prefix optimization
+	matches, err := fs.listObjectsWithPrefix(ctx, bucket, prefix, objectPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort results alphabetically
+	sort.Strings(matches)
+
+	return matches, nil
+}
+
+// listObjectsWithPrefix lists GCS objects using the given prefix and filters by pattern.
+// Handles pagination automatically using the GCS iterator.
+// Uses retry logic with exponential backoff for transient errors.
+func (fs *GCSFileSystem) listObjectsWithPrefix(
+	ctx context.Context,
+	bucket, prefix, pattern string,
+) ([]string, error) {
+	// Create the list operation function for retry
+	listFn := func() ([]string, error) {
+		var matches []string
+
+		// Use storage.Query with prefix for efficient listing
+		query := &storage.Query{
+			Prefix: prefix,
+		}
+
+		it := fs.client.Bucket(bucket).Objects(ctx, query)
+
+		for {
+			attrs, err := it.Next()
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("gcs: failed to list objects: %w", err)
+			}
+
+			// Skip "directory" markers (keys ending with /)
+			if strings.HasSuffix(attrs.Name, gcsPathSeparator) {
+				continue
+			}
+
+			// Check if the object key matches the pattern
+			matched, err := MatchPattern(pattern, attrs.Name)
+			if err != nil {
+				return nil, fmt.Errorf("gcs: pattern match error: %w", err)
+			}
+			if matched {
+				fullPath := "gs://" + bucket + gcsPathSeparator + attrs.Name
+				matches = append(matches, fullPath)
+			}
+		}
+
+		return matches, nil
+	}
+
+	// Use retry logic if configured
+	if fs.config.RetryConfig.MaxRetries > 0 {
+		return WithRetryFunc(ctx, fs.config.RetryConfig, listFn)
+	}
+
+	return listFn()
+}
+
+// SupportsGlob returns true because GCSFileSystem has native glob support with prefix optimization.
+func (*GCSFileSystem) SupportsGlob() bool {
+	return true
 }
 
 // Verify GCSFileSystem implements FileSystem interface at compile time.

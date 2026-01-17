@@ -53,6 +53,18 @@ func (p *parser) tokenize() {
 				token{tokenDot, ".", p.pos},
 			)
 			p.pos++
+		case ch == '[':
+			p.tokens = append(
+				p.tokens,
+				token{tokenLBracket, "[", p.pos},
+			)
+			p.pos++
+		case ch == ']':
+			p.tokens = append(
+				p.tokens,
+				token{tokenRBracket, "]", p.pos},
+			)
+			p.pos++
 		case ch == '$':
 			// Check for $$ dollar-quoted string
 			if p.pos+1 < len(p.input) && p.input[p.pos+1] == '$' {

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 
@@ -334,6 +335,129 @@ func (*S3FileSystem) Capabilities() FileSystemCapabilities {
 		SupportsDelete:  true,
 		ContextTimeout:  true,
 	}
+}
+
+// Glob expands a glob pattern to a list of matching S3 object keys.
+// Uses ListObjectsV2 with prefix optimization to efficiently list objects.
+// Handles pagination automatically for buckets with more than 1000 objects.
+// Applies retry logic with exponential backoff for rate limiting.
+func (fs *S3FileSystem) Glob(pattern string) ([]string, error) {
+	return fs.GlobContext(context.Background(), pattern)
+}
+
+// GlobContext expands a glob pattern with context support for cancellation.
+func (fs *S3FileSystem) GlobContext(ctx context.Context, pattern string) ([]string, error) {
+	// Validate the pattern
+	if err := ValidateGlobPattern(pattern); err != nil {
+		return nil, err
+	}
+
+	// Normalize path separators
+	pattern = normalizePath(pattern)
+
+	// Parse S3 path from pattern to extract bucket and key pattern
+	bucket, keyPattern, err := parseS3Path(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("s3: glob parse error: %w", err)
+	}
+
+	// If no glob characters, check if the object exists
+	if !ContainsGlobPattern(keyPattern) {
+		exists, err := fs.Exists(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("s3: checking path existence: %w", err)
+		}
+		if exists {
+			return []string{pattern}, nil
+		}
+		return nil, nil
+	}
+
+	// Extract the prefix (literal part before any wildcards) for optimization
+	prefix := ExtractPrefix(keyPattern)
+
+	// List objects with prefix optimization
+	matches, err := fs.listObjectsWithPrefix(ctx, bucket, prefix, keyPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort results alphabetically
+	sort.Strings(matches)
+
+	return matches, nil
+}
+
+// listObjectsWithPrefix lists S3 objects using the given prefix and filters by pattern.
+// Handles pagination automatically for buckets with more than 1000 objects.
+// Uses retry logic with exponential backoff for transient errors.
+func (fs *S3FileSystem) listObjectsWithPrefix(
+	ctx context.Context,
+	bucket, prefix, pattern string,
+) ([]string, error) {
+	var matches []string
+
+	// Create the list operation function for retry
+	listFn := func(continuationToken string) ([]string, string, error) {
+		var localMatches []string
+		var nextToken string
+
+		opts := minio.ListObjectsOptions{
+			Prefix:    prefix,
+			Recursive: true, // List all objects with the prefix recursively
+		}
+
+		// Handle pagination using minio's iterator
+		objectsCh := fs.client.ListObjects(ctx, bucket, opts)
+
+		for obj := range objectsCh {
+			if obj.Err != nil {
+				return nil, "", fmt.Errorf("s3: failed to list objects: %w", obj.Err)
+			}
+
+			// Skip "directory" markers (keys ending with /)
+			if strings.HasSuffix(obj.Key, s3PathSeparator) {
+				continue
+			}
+
+			// Check if the object key matches the pattern
+			fullPath := "s3://" + bucket + s3PathSeparator + obj.Key
+			matched, err := MatchPattern(pattern, obj.Key)
+			if err != nil {
+				return nil, "", fmt.Errorf("s3: pattern match error: %w", err)
+			}
+			if matched {
+				localMatches = append(localMatches, fullPath)
+			}
+		}
+
+		return localMatches, nextToken, nil
+	}
+
+	// Use retry logic if configured
+	if fs.config.RetryConfig.MaxRetries > 0 {
+		result := WithRetry(ctx, fs.config.RetryConfig, func() ([]string, error) {
+			m, _, err := listFn("")
+			return m, err
+		})
+		if result.LastError != nil {
+			return nil, result.LastError
+		}
+		matches = result.Value
+	} else {
+		m, _, err := listFn("")
+		if err != nil {
+			return nil, err
+		}
+		matches = m
+	}
+
+	return matches, nil
+}
+
+// SupportsGlob returns true because S3FileSystem has native glob support with prefix optimization.
+func (*S3FileSystem) SupportsGlob() bool {
+	return true
 }
 
 // Verify S3FileSystem implements FileSystem interface at compile time.

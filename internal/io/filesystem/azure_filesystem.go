@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -410,6 +411,119 @@ func (*AzureFileSystem) Capabilities() FileSystemCapabilities {
 		SupportsDelete:  true,
 		ContextTimeout:  true,
 	}
+}
+
+// Glob expands a glob pattern to a list of matching Azure blob keys.
+// Uses blob list API with prefix optimization to efficiently list blobs.
+// Handles pagination automatically using the Azure SDK pager.
+// Applies retry logic with exponential backoff for rate limiting.
+func (fs *AzureFileSystem) Glob(pattern string) ([]string, error) {
+	return fs.GlobContext(context.Background(), pattern)
+}
+
+// GlobContext expands a glob pattern with context support for cancellation.
+func (fs *AzureFileSystem) GlobContext(ctx context.Context, pattern string) ([]string, error) {
+	// Validate the pattern
+	if err := ValidateGlobPattern(pattern); err != nil {
+		return nil, err
+	}
+
+	// Normalize path separators
+	pattern = normalizePath(pattern)
+
+	// Parse Azure path from pattern to extract container and blob pattern
+	containerName, blobPattern, err := parseAzurePath(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("azure: glob parse error: %w", err)
+	}
+
+	// If no glob characters, check if the blob exists
+	if !ContainsGlobPattern(blobPattern) {
+		exists, err := fs.Exists(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("azure: checking path existence: %w", err)
+		}
+		if exists {
+			return []string{pattern}, nil
+		}
+		return nil, nil
+	}
+
+	// Extract the prefix (literal part before any wildcards) for optimization
+	prefix := ExtractPrefix(blobPattern)
+
+	// List blobs with prefix optimization
+	matches, err := fs.listBlobsWithPrefix(ctx, containerName, prefix, blobPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort results alphabetically
+	sort.Strings(matches)
+
+	return matches, nil
+}
+
+// listBlobsWithPrefix lists Azure blobs using the given prefix and filters by pattern.
+// Handles pagination automatically using the Azure SDK pager.
+// Uses retry logic with exponential backoff for transient errors.
+func (fs *AzureFileSystem) listBlobsWithPrefix(
+	ctx context.Context,
+	containerName, prefix, pattern string,
+) ([]string, error) {
+	// Create the list operation function for retry
+	listFn := func() ([]string, error) {
+		var matches []string
+
+		containerClient := fs.client.ServiceClient().NewContainerClient(containerName)
+
+		// Use flat listing with prefix for efficient listing
+		pager := containerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
+			Prefix: &prefix,
+		})
+
+		for pager.More() {
+			page, err := pager.NextPage(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("azure: failed to list blobs: %w", err)
+			}
+
+			for _, item := range page.Segment.BlobItems {
+				if item.Name == nil {
+					continue
+				}
+
+				// Skip "directory" markers (keys ending with /)
+				if strings.HasSuffix(*item.Name, azurePathSeparator) {
+					continue
+				}
+
+				// Check if the blob name matches the pattern
+				matched, err := MatchPattern(pattern, *item.Name)
+				if err != nil {
+					return nil, fmt.Errorf("azure: pattern match error: %w", err)
+				}
+				if matched {
+					fullPath := "azure://" + containerName + azurePathSeparator + *item.Name
+					matches = append(matches, fullPath)
+				}
+			}
+		}
+
+		return matches, nil
+	}
+
+	// Use retry logic if configured
+	if fs.config.RetryConfig.MaxRetries > 0 {
+		return WithRetryFunc(ctx, fs.config.RetryConfig, listFn)
+	}
+
+	return listFn()
+}
+
+// SupportsGlob returns true because AzureFileSystem has native glob support with prefix optimization.
+func (*AzureFileSystem) SupportsGlob() bool {
+	return true
 }
 
 // Verify AzureFileSystem implements FileSystem interface at compile time.

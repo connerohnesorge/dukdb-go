@@ -24,6 +24,10 @@ const (
 	tokenTilde       // ~ (bitwise NOT)
 	tokenShiftLeft   // << (left shift)
 	tokenShiftRight  // >> (right shift)
+
+	// Array literal tokens
+	tokenLBracket // [ (left square bracket)
+	tokenRBracket // ] (right square bracket)
 )
 
 type token struct {

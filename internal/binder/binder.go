@@ -71,8 +71,12 @@ type BoundTableRef struct {
 type BoundTableFunctionRef struct {
 	// Name is the function name (e.g., "read_csv", "read_json").
 	Name string
-	// Path is the file path for file-reading functions.
+	// Path is the file path for file-reading functions (single path case).
 	Path string
+	// Paths is a list of file paths when array syntax is used.
+	// Example: read_csv(['file1.csv', 'file2.csv'])
+	// When Paths is non-empty, Path is ignored.
+	Paths []string
 	// Options contains parsed options for the table function.
 	Options map[string]any
 	// Columns contains the schema determined by the table function.

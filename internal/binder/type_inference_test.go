@@ -814,3 +814,632 @@ func TestBooleanPredicates(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// String Function Type Inference Tests (Task 10.8)
+// Tests that inferFunctionResultType returns correct types for string functions
+// =============================================================================
+
+// TestInferStringFunctionReturnType_Boolean tests string functions that return BOOLEAN.
+func TestInferStringFunctionReturnType_Boolean(t *testing.T) {
+	booleanFuncs := []string{
+		"REGEXP_MATCHES",
+		"CONTAINS",
+		"PREFIX",
+		"SUFFIX",
+		"STARTS_WITH",
+		"ENDS_WITH",
+	}
+
+	for _, funcName := range booleanFuncs {
+		t.Run(funcName+"_returns_BOOLEAN", func(t *testing.T) {
+			args := []BoundExpr{
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+			}
+			result := inferFunctionResultType(funcName, args)
+			assert.Equal(t, dukdb.TYPE_BOOLEAN, result, "%s should return BOOLEAN", funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_BIGINT tests string functions that return BIGINT.
+func TestInferStringFunctionReturnType_BIGINT(t *testing.T) {
+	bigintFuncs := []string{
+		"POSITION",
+		"STRPOS",
+		"INSTR",
+		"ASCII",
+		"UNICODE",
+		"LEVENSHTEIN",
+		"DAMERAU_LEVENSHTEIN",
+		"HAMMING",
+		"HASH",
+	}
+
+	for _, funcName := range bigintFuncs {
+		t.Run(funcName+"_returns_BIGINT", func(t *testing.T) {
+			// Create appropriate args based on function
+			var args []BoundExpr
+			switch funcName {
+			case "ASCII", "UNICODE", "HASH":
+				args = []BoundExpr{&BoundLiteral{ValType: dukdb.TYPE_VARCHAR}}
+			default:
+				args = []BoundExpr{
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				}
+			}
+			result := inferFunctionResultType(funcName, args)
+			assert.Equal(t, dukdb.TYPE_BIGINT, result, "%s should return BIGINT", funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_DOUBLE tests string functions that return DOUBLE.
+func TestInferStringFunctionReturnType_DOUBLE(t *testing.T) {
+	doubleFuncs := []string{
+		"JACCARD",
+		"JARO_SIMILARITY",
+		"JARO_WINKLER_SIMILARITY",
+	}
+
+	for _, funcName := range doubleFuncs {
+		t.Run(funcName+"_returns_DOUBLE", func(t *testing.T) {
+			args := []BoundExpr{
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+			}
+			result := inferFunctionResultType(funcName, args)
+			assert.Equal(t, dukdb.TYPE_DOUBLE, result, "%s should return DOUBLE", funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_VARCHAR tests string functions that return VARCHAR.
+func TestInferStringFunctionReturnType_VARCHAR(t *testing.T) {
+	varcharFuncs := []string{
+		"REGEXP_REPLACE",
+		"REGEXP_EXTRACT",
+		"CONCAT_WS",
+		"LPAD",
+		"RPAD",
+		"REVERSE",
+		"REPEAT",
+		"LEFT",
+		"RIGHT",
+		"STRIP",
+		"LSTRIP",
+		"RSTRIP",
+		"CHR",
+		"MD5",
+		"SHA256",
+	}
+
+	for _, funcName := range varcharFuncs {
+		t.Run(funcName+"_returns_VARCHAR", func(t *testing.T) {
+			// Create appropriate args based on function
+			var args []BoundExpr
+			switch funcName {
+			case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "MD5", "SHA256":
+				args = []BoundExpr{&BoundLiteral{ValType: dukdb.TYPE_VARCHAR}}
+			case "CHR":
+				args = []BoundExpr{&BoundLiteral{ValType: dukdb.TYPE_INTEGER}}
+			case "REPEAT", "LEFT", "RIGHT":
+				args = []BoundExpr{
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+					&BoundLiteral{ValType: dukdb.TYPE_INTEGER},
+				}
+			case "LPAD", "RPAD":
+				args = []BoundExpr{
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+					&BoundLiteral{ValType: dukdb.TYPE_INTEGER},
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				}
+			default:
+				// REGEXP_REPLACE, REGEXP_EXTRACT, CONCAT_WS
+				args = []BoundExpr{
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+					&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				}
+			}
+			result := inferFunctionResultType(funcName, args)
+			assert.Equal(t, dukdb.TYPE_VARCHAR, result, "%s should return VARCHAR", funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_LIST tests string functions that return LIST (TYPE_ANY).
+func TestInferStringFunctionReturnType_LIST(t *testing.T) {
+	listFuncs := []string{
+		"REGEXP_EXTRACT_ALL",
+		"REGEXP_SPLIT_TO_ARRAY",
+		"STRING_SPLIT",
+		"STRING_SPLIT_REGEX",
+	}
+
+	for _, funcName := range listFuncs {
+		t.Run(funcName+"_returns_TYPE_ANY_for_LIST", func(t *testing.T) {
+			args := []BoundExpr{
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+			}
+			result := inferFunctionResultType(funcName, args)
+			// LIST types are represented as TYPE_ANY since there's no dedicated LIST type constant
+			assert.Equal(t, dukdb.TYPE_ANY, result, "%s should return TYPE_ANY (representing LIST)", funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_Comprehensive tests all string functions with proper argument types.
+func TestInferStringFunctionReturnType_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name     string
+		funcName string
+		argTypes []dukdb.Type
+		expected dukdb.Type
+	}{
+		// Boolean-returning functions
+		{
+			name:     "REGEXP_MATCHES returns BOOLEAN",
+			funcName: "REGEXP_MATCHES",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:     "CONTAINS returns BOOLEAN",
+			funcName: "CONTAINS",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:     "PREFIX returns BOOLEAN",
+			funcName: "PREFIX",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:     "SUFFIX returns BOOLEAN",
+			funcName: "SUFFIX",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:     "STARTS_WITH returns BOOLEAN",
+			funcName: "STARTS_WITH",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+		{
+			name:     "ENDS_WITH returns BOOLEAN",
+			funcName: "ENDS_WITH",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BOOLEAN,
+		},
+
+		// BIGINT-returning functions (position, encoding, distance)
+		{
+			name:     "POSITION returns BIGINT",
+			funcName: "POSITION",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "STRPOS returns BIGINT",
+			funcName: "STRPOS",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "INSTR returns BIGINT",
+			funcName: "INSTR",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "ASCII returns BIGINT",
+			funcName: "ASCII",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "UNICODE returns BIGINT",
+			funcName: "UNICODE",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "LEVENSHTEIN returns BIGINT",
+			funcName: "LEVENSHTEIN",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "DAMERAU_LEVENSHTEIN returns BIGINT",
+			funcName: "DAMERAU_LEVENSHTEIN",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "HAMMING returns BIGINT",
+			funcName: "HAMMING",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+		{
+			name:     "HASH returns BIGINT",
+			funcName: "HASH",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_BIGINT,
+		},
+
+		// DOUBLE-returning functions (similarity scores)
+		{
+			name:     "JACCARD returns DOUBLE",
+			funcName: "JACCARD",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_DOUBLE,
+		},
+		{
+			name:     "JARO_SIMILARITY returns DOUBLE",
+			funcName: "JARO_SIMILARITY",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_DOUBLE,
+		},
+		{
+			name:     "JARO_WINKLER_SIMILARITY returns DOUBLE",
+			funcName: "JARO_WINKLER_SIMILARITY",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_DOUBLE,
+		},
+
+		// VARCHAR-returning functions (hash, manipulation)
+		{
+			name:     "MD5 returns VARCHAR",
+			funcName: "MD5",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "SHA256 returns VARCHAR",
+			funcName: "SHA256",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "REVERSE returns VARCHAR",
+			funcName: "REVERSE",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "REPEAT returns VARCHAR",
+			funcName: "REPEAT",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "LEFT returns VARCHAR",
+			funcName: "LEFT",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "RIGHT returns VARCHAR",
+			funcName: "RIGHT",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "LPAD returns VARCHAR",
+			funcName: "LPAD",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "RPAD returns VARCHAR",
+			funcName: "RPAD",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "CHR returns VARCHAR",
+			funcName: "CHR",
+			argTypes: []dukdb.Type{dukdb.TYPE_INTEGER},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "CONCAT_WS returns VARCHAR",
+			funcName: "CONCAT_WS",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "REGEXP_REPLACE returns VARCHAR",
+			funcName: "REGEXP_REPLACE",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "REGEXP_EXTRACT returns VARCHAR",
+			funcName: "REGEXP_EXTRACT",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "STRIP returns VARCHAR",
+			funcName: "STRIP",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "LSTRIP returns VARCHAR",
+			funcName: "LSTRIP",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+		{
+			name:     "RSTRIP returns VARCHAR",
+			funcName: "RSTRIP",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_VARCHAR,
+		},
+
+		// LIST-returning functions (represented as TYPE_ANY)
+		{
+			name:     "REGEXP_EXTRACT_ALL returns TYPE_ANY for LIST",
+			funcName: "REGEXP_EXTRACT_ALL",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_ANY,
+		},
+		{
+			name:     "REGEXP_SPLIT_TO_ARRAY returns TYPE_ANY for LIST",
+			funcName: "REGEXP_SPLIT_TO_ARRAY",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_ANY,
+		},
+		{
+			name:     "STRING_SPLIT returns TYPE_ANY for LIST",
+			funcName: "STRING_SPLIT",
+			argTypes: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+			expected: dukdb.TYPE_ANY,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := make([]BoundExpr, len(tt.argTypes))
+			for i, typ := range tt.argTypes {
+				args[i] = &BoundLiteral{ValType: typ}
+			}
+			result := inferFunctionResultType(tt.funcName, args)
+			assert.Equal(t, tt.expected, result, "type mismatch for %s", tt.funcName)
+		})
+	}
+}
+
+// TestInferStringFunctionReturnType_CaseInsensitive tests that function names are case-insensitive.
+func TestInferStringFunctionReturnType_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		funcNameUpper string
+		funcNameLower string
+		funcNameMixed string
+		expected      dukdb.Type
+	}{
+		{"MD5", "md5", "Md5", dukdb.TYPE_VARCHAR},
+		{"SHA256", "sha256", "Sha256", dukdb.TYPE_VARCHAR},
+		{"LEVENSHTEIN", "levenshtein", "Levenshtein", dukdb.TYPE_BIGINT},
+		{"CONTAINS", "contains", "Contains", dukdb.TYPE_BOOLEAN},
+		{"JACCARD", "jaccard", "Jaccard", dukdb.TYPE_DOUBLE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.funcNameUpper+"_case_insensitive", func(t *testing.T) {
+			args := []BoundExpr{
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+				&BoundLiteral{ValType: dukdb.TYPE_VARCHAR},
+			}
+
+			resultUpper := inferFunctionResultType(tt.funcNameUpper, args)
+			resultLower := inferFunctionResultType(tt.funcNameLower, args)
+			resultMixed := inferFunctionResultType(tt.funcNameMixed, args)
+
+			assert.Equal(t, tt.expected, resultUpper, "upper case mismatch")
+			assert.Equal(t, tt.expected, resultLower, "lower case mismatch")
+			assert.Equal(t, tt.expected, resultMixed, "mixed case mismatch")
+		})
+	}
+}
+
+// TestGetFunctionArgTypes_StringFunctions tests getFunctionArgTypes for string functions.
+func TestGetFunctionArgTypes_StringFunctions(t *testing.T) {
+	tests := []struct {
+		name     string
+		funcName string
+		argCount int
+		expected []dukdb.Type
+	}{
+		// Regex functions
+		{
+			name:     "REGEXP_MATCHES expects 2 VARCHAR args",
+			funcName: "REGEXP_MATCHES",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "REGEXP_REPLACE expects 3+ VARCHAR args",
+			funcName: "REGEXP_REPLACE",
+			argCount: 3,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "REGEXP_EXTRACT expects 2 VARCHAR, optional INTEGER",
+			funcName: "REGEXP_EXTRACT",
+			argCount: 3,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+		},
+
+		// String manipulation functions
+		{
+			name:     "REVERSE expects 1 VARCHAR arg",
+			funcName: "REVERSE",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "REPEAT expects VARCHAR and INTEGER",
+			funcName: "REPEAT",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+		},
+		{
+			name:     "LEFT expects VARCHAR and INTEGER",
+			funcName: "LEFT",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+		},
+		{
+			name:     "RIGHT expects VARCHAR and INTEGER",
+			funcName: "RIGHT",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER},
+		},
+		{
+			name:     "LPAD expects VARCHAR, INTEGER, optional VARCHAR",
+			funcName: "LPAD",
+			argCount: 3,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "RPAD expects VARCHAR, INTEGER, optional VARCHAR",
+			funcName: "RPAD",
+			argCount: 3,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+		},
+
+		// Position functions
+		{
+			name:     "POSITION expects 2 VARCHAR args",
+			funcName: "POSITION",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "STRPOS expects 2 VARCHAR args",
+			funcName: "STRPOS",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "CONTAINS expects 2 VARCHAR args",
+			funcName: "CONTAINS",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "PREFIX expects 2 VARCHAR args",
+			funcName: "PREFIX",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+
+		// Encoding functions
+		{
+			name:     "ASCII expects 1 VARCHAR arg",
+			funcName: "ASCII",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "UNICODE expects 1 VARCHAR arg",
+			funcName: "UNICODE",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "CHR expects 1 INTEGER arg",
+			funcName: "CHR",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_INTEGER},
+		},
+
+		// Hash functions
+		{
+			name:     "MD5 expects 1 VARCHAR arg",
+			funcName: "MD5",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "SHA256 expects 1 VARCHAR arg",
+			funcName: "SHA256",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "HASH expects 1 VARCHAR arg",
+			funcName: "HASH",
+			argCount: 1,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR},
+		},
+
+		// Distance functions
+		{
+			name:     "LEVENSHTEIN expects 2 VARCHAR args",
+			funcName: "LEVENSHTEIN",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "DAMERAU_LEVENSHTEIN expects 2 VARCHAR args",
+			funcName: "DAMERAU_LEVENSHTEIN",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "HAMMING expects 2 VARCHAR args",
+			funcName: "HAMMING",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "JACCARD expects 2 VARCHAR args",
+			funcName: "JACCARD",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "JARO_SIMILARITY expects 2 VARCHAR args",
+			funcName: "JARO_SIMILARITY",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "JARO_WINKLER_SIMILARITY expects 2 VARCHAR args",
+			funcName: "JARO_WINKLER_SIMILARITY",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+
+		// Split functions
+		{
+			name:     "STRING_SPLIT expects 2 VARCHAR args",
+			funcName: "STRING_SPLIT",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+		{
+			name:     "REGEXP_SPLIT_TO_ARRAY expects 2 VARCHAR args",
+			funcName: "REGEXP_SPLIT_TO_ARRAY",
+			argCount: 2,
+			expected: []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getFunctionArgTypes(tt.funcName, tt.argCount)
+			assert.Equal(t, tt.expected, result, "arg types mismatch for %s", tt.funcName)
+		})
+	}
+}

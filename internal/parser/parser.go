@@ -3802,6 +3802,10 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 
 		return expr, nil
 
+	case tokenLBracket:
+		// Array literal: ['file1.csv', 'file2.csv']
+		return p.parseArrayLiteral()
+
 	case tokenIdent:
 		return p.parseIdentExpr()
 
@@ -3816,6 +3820,51 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 			tok.value,
 		)
 	}
+}
+
+// parseArrayLiteral parses an array literal expression: ['file1.csv', 'file2.csv']
+// This is used for specifying multiple files in table functions like read_csv.
+func (p *parser) parseArrayLiteral() (Expr, error) {
+	// Consume the opening bracket
+	if _, err := p.expect(tokenLBracket); err != nil {
+		return nil, err
+	}
+
+	var elements []Expr
+
+	// Check for empty array
+	if p.current().typ == tokenRBracket {
+		p.advance()
+		return &ArrayExpr{Elements: elements}, nil
+	}
+
+	// Parse elements separated by commas
+	for {
+		// Parse the element expression
+		elem, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, elem)
+
+		// Check for comma or closing bracket
+		if p.current().typ == tokenComma {
+			p.advance()
+			// Allow trailing comma: ['a', 'b',]
+			if p.current().typ == tokenRBracket {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	// Expect closing bracket
+	if _, err := p.expect(tokenRBracket); err != nil {
+		return nil, err
+	}
+
+	return &ArrayExpr{Elements: elements}, nil
 }
 
 func (p *parser) parseNumber(

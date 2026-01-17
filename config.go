@@ -18,10 +18,12 @@ var validAccessModes = map[string]bool{
 
 // validConfigKeys contains the recognized configuration keys.
 var validConfigKeys = map[string]bool{
-	"access_mode":     true,
-	"threads":         true,
-	"max_memory":      true,
-	"storage_format":  true,
+	"access_mode":         true,
+	"threads":             true,
+	"max_memory":          true,
+	"storage_format":      true,
+	"max_files_per_glob":  true,
+	"file_glob_timeout":   true,
 }
 
 // minThreads is the minimum number of threads allowed.
@@ -29,6 +31,25 @@ const minThreads = 1
 
 // maxThreads is the maximum number of threads allowed.
 const maxThreads = 128
+
+// DefaultMaxFilesPerGlob is the default limit on files matched by a glob pattern.
+// This limit prevents memory exhaustion when glob patterns match too many files.
+const DefaultMaxFilesPerGlob = 10000
+
+// minMaxFilesPerGlob is the minimum allowed value for max_files_per_glob.
+const minMaxFilesPerGlob = 1
+
+// maxMaxFilesPerGlob is the maximum allowed value for max_files_per_glob.
+const maxMaxFilesPerGlob = 1000000
+
+// DefaultFileGlobTimeout is the default timeout in seconds for cloud storage glob operations.
+const DefaultFileGlobTimeout = 60
+
+// minFileGlobTimeout is the minimum allowed timeout in seconds.
+const minFileGlobTimeout = 1
+
+// maxFileGlobTimeout is the maximum allowed timeout in seconds (10 minutes).
+const maxFileGlobTimeout = 600
 
 // ParseDSN parses a DSN string and returns a Config.
 // The DSN format is: path?option=value&option2=value2
@@ -105,12 +126,16 @@ func ParseDSN(dsn string) (*Config, error) {
 //   - AccessMode: "automatic"
 //   - Threads: runtime.NumCPU()
 //   - MaxMemory: "80%"
+//   - MaxFilesPerGlob: DefaultMaxFilesPerGlob (10000)
+//   - FileGlobTimeout: DefaultFileGlobTimeout (60 seconds)
 func NewConfig() *Config {
 	return &Config{
-		Path:       "",
-		AccessMode: "automatic",
-		Threads:    runtime.NumCPU(),
-		MaxMemory:  "80%",
+		Path:            "",
+		AccessMode:      "automatic",
+		Threads:         runtime.NumCPU(),
+		MaxMemory:       "80%",
+		MaxFilesPerGlob: DefaultMaxFilesPerGlob,
+		FileGlobTimeout: DefaultFileGlobTimeout,
 	}
 }
 
@@ -180,6 +205,20 @@ func parseOptions(
 				return err
 			}
 			config.Format = value
+
+		case "max_files_per_glob":
+			maxFiles, err := parseMaxFilesPerGlob(value)
+			if err != nil {
+				return err
+			}
+			config.MaxFilesPerGlob = maxFiles
+
+		case "file_glob_timeout":
+			timeout, err := parseFileGlobTimeout(value)
+			if err != nil {
+				return err
+			}
+			config.FileGlobTimeout = timeout
 		}
 	}
 
@@ -424,4 +463,62 @@ func ResolveMaxMemory(
 	}
 
 	return bytes, nil
+}
+
+// parseMaxFilesPerGlob parses and validates the max_files_per_glob option.
+func parseMaxFilesPerGlob(value string) (int, error) {
+	maxFiles, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"invalid max_files_per_glob value: %s (must be an integer)",
+				value,
+			),
+		}
+	}
+
+	if maxFiles < minMaxFilesPerGlob ||
+		maxFiles > maxMaxFilesPerGlob {
+		return 0, &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"max_files_per_glob must be between %d and %d, got %d",
+				minMaxFilesPerGlob,
+				maxMaxFilesPerGlob,
+				maxFiles,
+			),
+		}
+	}
+
+	return maxFiles, nil
+}
+
+// parseFileGlobTimeout parses and validates the file_glob_timeout option.
+func parseFileGlobTimeout(value string) (int, error) {
+	timeout, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"invalid file_glob_timeout value: %s (must be an integer in seconds)",
+				value,
+			),
+		}
+	}
+
+	if timeout < minFileGlobTimeout ||
+		timeout > maxFileGlobTimeout {
+		return 0, &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"file_glob_timeout must be between %d and %d seconds, got %d",
+				minFileGlobTimeout,
+				maxFileGlobTimeout,
+				timeout,
+			),
+		}
+	}
+
+	return timeout, nil
 }

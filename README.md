@@ -7,8 +7,10 @@ Pure Go implementation of a DuckDB-compatible database driver.
 - **Pure Go** - Zero CGO dependencies, compiles anywhere Go compiles
 - **database/sql Compatible** - Standard Go database interface
 - **Cloud Storage** - Native support for S3, GCS, Azure, and HTTP/HTTPS
+- **Glob Patterns** - Read multiple files with `*.csv`, `**/*.parquet`, `[0-9]` patterns
 - **Extended Type Support** - JSON, GEOMETRY, BIGNUM, VARIANT, LAMBDA types
 - **Math Functions** - 45+ mathematical functions for numerical analysis
+- **String Functions** - 30+ string functions for text processing and fuzzy matching
 - **Spatial Functions** - 30+ ST_* functions for GIS operations
 - **JSON Operators** - Path extraction with `->` and `->>` operators
 - **Cross-Platform** - Works with TinyGo, WebAssembly, and standard Go
@@ -280,6 +282,117 @@ FROM polar_coords;
 SELECT * FROM users WHERE permissions & 4 != 0; -- Has write permission
 ```
 
+## String Functions
+
+dukdb-go provides 30+ string functions for text processing, data validation, pattern matching, and fuzzy matching. See [docs/string-functions.md](docs/string-functions.md) for comprehensive documentation.
+
+### Regular Expressions (RE2)
+
+```sql
+-- Test if string matches pattern
+SELECT REGEXP_MATCHES('hello123', '[0-9]+');     -- true
+
+-- Replace matches (first only by default, 'g' for global)
+SELECT REGEXP_REPLACE('foo bar foo', 'foo', 'baz');       -- 'baz bar foo'
+SELECT REGEXP_REPLACE('foo bar foo', 'foo', 'baz', 'g');  -- 'baz bar baz'
+
+-- Extract matches
+SELECT REGEXP_EXTRACT('user@example.com', '([^@]+)@(.+)', 1);  -- 'user'
+SELECT REGEXP_EXTRACT('user@example.com', '([^@]+)@(.+)', 2);  -- 'example.com'
+
+-- Extract all matches
+SELECT REGEXP_EXTRACT_ALL('a1b2c3', '[0-9]+', 0);  -- ['1', '2', '3']
+
+-- Split by regex pattern
+SELECT REGEXP_SPLIT_TO_ARRAY('one,two;three', '[,;]');  -- ['one', 'two', 'three']
+```
+
+### String Manipulation
+
+```sql
+-- Concatenation with separator (skips NULLs)
+SELECT CONCAT_WS(', ', 'Alice', NULL, 'Bob');    -- 'Alice, Bob'
+
+-- Split string into array
+SELECT STRING_SPLIT('a,b,c', ',');               -- ['a', 'b', 'c']
+
+-- Padding
+SELECT LPAD('42', 5, '0');                       -- '00042'
+SELECT RPAD('hello', 10, '.');                   -- 'hello.....'
+
+-- Manipulation
+SELECT REVERSE('hello');                         -- 'olleh'
+SELECT REPEAT('ab', 3);                          -- 'ababab'
+SELECT LEFT('hello', 2);                         -- 'he'
+SELECT RIGHT('hello', 2);                        -- 'lo'
+
+-- Search
+SELECT POSITION('world' IN 'hello world');       -- 7 (1-based)
+SELECT CONTAINS('hello world', 'world');         -- true
+SELECT STARTS_WITH('hello', 'he');               -- true
+SELECT ENDS_WITH('hello', 'lo');                 -- true
+```
+
+### Cryptographic Hashes
+
+```sql
+-- MD5 and SHA256 (lowercase hex output)
+SELECT MD5('hello');     -- '5d41402abc4b2a76b9719d911017c592'
+SELECT SHA256('hello');  -- '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+
+-- General hash (FNV-1a, returns BIGINT)
+SELECT HASH('hello');    -- Returns a 64-bit integer
+```
+
+### String Distance (Fuzzy Matching)
+
+```sql
+-- Edit distance (lower = more similar)
+SELECT LEVENSHTEIN('kitten', 'sitting');           -- 3
+SELECT DAMERAU_LEVENSHTEIN('ab', 'ba');            -- 1 (transposition)
+SELECT HAMMING('karolin', 'kathrin');              -- 3 (equal-length only)
+
+-- Similarity ratios (0.0 to 1.0, higher = more similar)
+SELECT JACCARD('hello', 'hallo');                  -- ~0.6
+SELECT JARO_SIMILARITY('MARTHA', 'MARHTA');        -- ~0.944
+SELECT JARO_WINKLER_SIMILARITY('MARTHA', 'MARHTA'); -- ~0.961
+```
+
+### Encoding Functions
+
+```sql
+-- ASCII/Unicode code points
+SELECT ASCII('A');                                 -- 65
+SELECT CHR(65);                                    -- 'A'
+SELECT UNICODE('$');                               -- 36
+```
+
+### Practical Examples
+
+```sql
+-- Email validation
+SELECT * FROM users WHERE REGEXP_MATCHES(email, '^[^@]+@[^@]+\.[^@]+$');
+
+-- Data cleaning: normalize whitespace and case
+SELECT TRIM(LOWER(REGEXP_REPLACE(name, '\s+', ' ', 'g'))) AS clean_name
+FROM raw_data;
+
+-- Fuzzy name matching
+SELECT a.name, b.name, JARO_WINKLER_SIMILARITY(a.name, b.name) AS score
+FROM customers a, prospects b
+WHERE JARO_WINKLER_SIMILARITY(a.name, b.name) > 0.85;
+
+-- Log parsing
+SELECT
+    REGEXP_EXTRACT(line, '\[([^\]]+)\]', 1) AS timestamp,
+    REGEXP_EXTRACT(line, '(ERROR|WARN|INFO)', 1) AS level,
+    REGEXP_EXTRACT(line, '] (.+)$', 1) AS message
+FROM logs;
+
+-- Data integrity check
+SELECT *, MD5(CONCAT(id, name, email)) AS checksum FROM users;
+```
+
 ## Supported SQL Features
 
 ### DDL
@@ -302,8 +415,35 @@ SELECT * FROM users WHERE permissions & 4 != 0; -- Has write permission
 - CSV: `read_csv()`, `read_csv_auto()`
 - JSON: `read_json()`, `read_json_auto()`, `read_ndjson()`
 - Parquet: `read_parquet()` with column projection
-- Excel: `read_excel()`, `read_excel_auto()` (parser support)
+- XLSX: `read_xlsx()`, `read_xlsx_auto()`
+- Arrow IPC: `read_arrow()`, `read_arrow_auto()`
 - Iceberg: `iceberg_scan()` with time travel and partition pruning
+
+### Glob Patterns and Multi-File Reading
+
+Read multiple files with glob patterns:
+
+```sql
+-- Read all CSV files in a directory
+SELECT * FROM read_csv('data/*.csv');
+
+-- Recursive glob (all subdirectories)
+SELECT * FROM read_parquet('warehouse/**/*.parquet');
+
+-- Character classes and ranges
+SELECT * FROM read_json('logs/2024-0[1-6]-*.json');
+
+-- Array of specific files
+SELECT * FROM read_csv(['file1.csv', 'file2.csv', 'file3.csv']);
+
+-- Add source filename to results
+SELECT *, filename FROM read_csv('data/*.csv', filename=true);
+
+-- Hive partitioning (year=2024/month=01/)
+SELECT * FROM read_parquet('data/**/*.parquet', hive_partitioning=true);
+```
+
+See [docs/cloud-storage.md](docs/cloud-storage.md) for full glob pattern documentation.
 
 ## Apache Iceberg Support
 

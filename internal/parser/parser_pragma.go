@@ -220,6 +220,7 @@ func (p *parser) parseSet() (*SetStmt, error) {
 // parseSetValue parses the value part of a SET statement.
 // This handles:
 //   - String literals: 'value'
+//   - Numeric literals: 50000, -1
 //   - Identifiers: value
 //   - Multi-word identifiers: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ
 func (p *parser) parseSetValue() (string, error) {
@@ -231,6 +232,11 @@ func (p *parser) parseSetValue() (string, error) {
 			return val[1 : len(val)-1], nil
 		}
 		return val, nil
+	}
+
+	// Check for numeric literal (integer or decimal)
+	if p.current().typ == tokenNumber {
+		return p.advance().value, nil
 	}
 
 	// Parse identifier(s) - may be multi-word for isolation levels
