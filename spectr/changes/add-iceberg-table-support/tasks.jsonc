@@ -341,7 +341,7 @@
     {
       "id": "8.6",
       "section": "Testing",
-      "description": "Test cloud storage access (S3, GCS) - IMPLEMENTED with Docker Compose (MinIO for S3, fake-gcs-server for GCS) - see internal/io/iceberg/cloud_storage_test.go and testdata/docker-compose.yml",
+      "description": "Test cloud storage access (S3, GCS) - using testcontainers for end-to-end testing",
       "status": "completed"
     },
     {
@@ -407,13 +407,13 @@
     {
       "id": "10.3",
       "section": "Verification",
-      "description": "Verify compatibility with Spark-generated Iceberg tables - IMPLEMENTED with Docker Compose (Apache Spark 3.5.0 + Iceberg 1.4.3) - see internal/io/iceberg/spark_flink_compat_test.go and testdata/spark-scripts/",
+      "description": "Verify compatibility with Spark-generated Iceberg tables - using testcontainers",
       "status": "completed"
     },
     {
       "id": "10.4",
       "section": "Verification",
-      "description": "Verify compatibility with Flink-generated Iceberg tables - IMPLEMENTED with Docker Compose (Apache Flink 1.18.0) - see internal/io/iceberg/spark_flink_compat_test.go and testdata/flink-scripts/",
+      "description": "Verify compatibility with Flink-generated Iceberg tables - using testcontainers",
       "status": "completed"
     },
     {

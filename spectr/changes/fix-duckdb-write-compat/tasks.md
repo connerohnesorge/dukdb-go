@@ -72,6 +72,6 @@
 
 - [x] 9.1 Remove `skipOnFormatError` from all passing write tests
 - [x] 9.2 Update gap-analysis.md: GAP-001 status to IMPLEMENTED
-- [ ] 9.3 Document any remaining limitations or version requirements
-- [ ] 9.4 Add CI job for write compatibility testing
-- [ ] 9.5 Update duckdb-storage-format spec with implementation notes
+- [x] 9.3 Document any remaining limitations or version requirements
+- [x] 9.4 Add CI job for write compatibility testing
+- [x] 9.5 Update duckdb-storage-format spec with implementation notes

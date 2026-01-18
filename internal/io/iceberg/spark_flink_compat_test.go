@@ -2,11 +2,13 @@ package iceberg
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,22 +19,23 @@ func TestSparkGenerated_Compatibility(t *testing.T) {
 		t.Skip("Skipping Spark compatibility test in short mode")
 	}
 
-	if !isDockerComposeAvailable() {
-		t.Skip("docker-compose not available, skipping Spark test")
-	}
-
 	ctx := context.Background()
 	testDataDir := "./testdata"
 
-	// Start Spark container
-	t.Log("Starting Spark container...")
-	err := startDockerService(t, testDataDir, "spark")
-	require.NoError(t, err, "Failed to start Spark")
-	defer stopDockerService(t, testDataDir, "spark")
+	// Start containers using testcontainers
+	t.Log("Starting Docker Compose stack via testcontainers...")
+	stack, err := setupTestcontainers(t, ctx)
+	require.NoError(t, err, "Failed to setup testcontainers")
+	defer func() {
+		err := stack.Down(ctx)
+		if err != nil {
+			t.Logf("Warning: failed to stop compose stack: %v", err)
+		}
+	}()
 
 	// Wait for Spark to be ready
-	t.Log("Waiting for Spark to initialize...")
-	time.Sleep(15 * time.Second)
+	err = waitForSparkReady(t, ctx)
+	require.NoError(t, err)
 
 	// Generate Iceberg tables using Spark
 	t.Log("Generating Iceberg tables with Spark...")
@@ -198,22 +201,23 @@ func TestFlinkGenerated_Compatibility(t *testing.T) {
 		t.Skip("Skipping Flink compatibility test in short mode")
 	}
 
-	if !isDockerComposeAvailable() {
-		t.Skip("docker-compose not available, skipping Flink test")
-	}
-
 	ctx := context.Background()
 	testDataDir := "./testdata"
 
-	// Start Flink containers
-	t.Log("Starting Flink containers...")
-	err := startDockerService(t, testDataDir, "flink-jobmanager", "flink-taskmanager")
-	require.NoError(t, err, "Failed to start Flink")
-	defer stopDockerService(t, testDataDir, "flink-jobmanager", "flink-taskmanager")
+	// Start containers using testcontainers
+	t.Log("Starting Docker Compose stack via testcontainers...")
+	stack, err := setupTestcontainers(t, ctx)
+	require.NoError(t, err, "Failed to setup testcontainers")
+	defer func() {
+		err := stack.Down(ctx)
+		if err != nil {
+			t.Logf("Warning: failed to stop compose stack: %v", err)
+		}
+	}()
 
 	// Wait for Flink to be ready
-	t.Log("Waiting for Flink to initialize...")
-	time.Sleep(20 * time.Second)
+	err = waitForFlinkReady(t, ctx)
+	require.NoError(t, err)
 
 	// Generate Iceberg tables using Flink
 	t.Log("Generating Iceberg tables with Flink...")
@@ -391,4 +395,53 @@ type realCommand struct {
 
 func (c *realCommand) CombinedOutput() ([]byte, error) {
 	return c.cmd.CombinedOutput()
+}
+
+// setupTestcontainers starts the Docker Compose stack using testcontainers-go.
+func setupTestcontainers(t *testing.T, ctx context.Context) (compose.ComposeStack, error) {
+	t.Helper()
+
+	composeFile := filepath.Join("testdata", "docker-compose.yml")
+	stack, err := compose.NewDockerCompose(composeFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create compose stack: %w", err)
+	}
+
+	err = stack.Up(ctx, compose.Wait(false))
+	if err != nil {
+		return nil, fmt.Errorf("failed to start compose stack: %w", err)
+	}
+
+	return stack, nil
+}
+
+// waitForSparkReady waits for the Spark container to be ready.
+func waitForSparkReady(t *testing.T, ctx context.Context) error {
+	t.Helper()
+	t.Log("Waiting for Spark to be ready...")
+	// Check if spark-submit binary exists and is accessible
+	for i := 0; i < 60; i++ {
+		cmd := exec.CommandContext(ctx, "docker", "exec", "iceberg-spark", "test", "-f", "/opt/spark/bin/spark-submit")
+		if err := cmd.Run(); err == nil {
+			t.Log("Spark is ready (binary found)")
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for Spark")
+}
+
+// waitForFlinkReady waits for the Flink container to be ready.
+func waitForFlinkReady(t *testing.T, ctx context.Context) error {
+	t.Helper()
+	t.Log("Waiting for Flink to be ready...")
+	for i := 0; i < 60; i++ {
+		cmd := exec.CommandContext(ctx, "docker", "exec", "iceberg-flink-jobmanager", "flink", "--version")
+		if err := cmd.Run(); err == nil {
+			t.Log("Flink is ready")
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for Flink")
 }

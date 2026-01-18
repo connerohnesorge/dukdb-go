@@ -1,14 +1,34 @@
 package iceberg
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/stretchr/testify/require"
 )
+
+// setupCloudTestcontainers starts the Docker Compose stack using testcontainers-go.
+func setupCloudTestcontainers(t *testing.T, ctx context.Context) (compose.ComposeStack, error) {
+	t.Helper()
+
+	composeFile := filepath.Join("testdata", "docker-compose.yml")
+	stack, err := compose.NewDockerCompose(composeFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create compose stack: %w", err)
+	}
+
+	err = stack.Up(ctx, compose.Wait(false))
+	if err != nil {
+		return nil, fmt.Errorf("failed to start compose stack: %w", err)
+	}
+
+	return stack, nil
+}
 
 // TestCloudStorage_MinIO tests Iceberg tables on MinIO (S3-compatible storage).
 // This test requires Docker Compose to be available.
@@ -17,18 +37,18 @@ func TestCloudStorage_MinIO(t *testing.T) {
 		t.Skip("Skipping cloud storage test in short mode")
 	}
 
-	// Check if docker-compose is available
-	if !isDockerComposeAvailable() {
-		t.Skip("docker-compose not available, skipping cloud storage test")
-	}
+	ctx := context.Background()
 
-	testDataDir := "./testdata"
-
-	// Start Docker Compose services
-	t.Log("Starting MinIO container...")
-	err := startDockerService(t, testDataDir, "minio", "minio-setup")
-	require.NoError(t, err, "Failed to start MinIO")
-	defer stopDockerService(t, testDataDir, "minio", "minio-setup")
+	// Start containers using testcontainers
+	t.Log("Starting Docker Compose stack via testcontainers...")
+	stack, err := setupCloudTestcontainers(t, ctx)
+	require.NoError(t, err, "Failed to setup testcontainers")
+	defer func() {
+		err := stack.Down(ctx)
+		if err != nil {
+			t.Logf("Warning: failed to stop compose stack: %v", err)
+		}
+	}()
 
 	// Wait for MinIO to be ready
 	time.Sleep(5 * time.Second)
@@ -72,17 +92,18 @@ func TestCloudStorage_GCS(t *testing.T) {
 		t.Skip("Skipping cloud storage test in short mode")
 	}
 
-	if !isDockerComposeAvailable() {
-		t.Skip("docker-compose not available, skipping cloud storage test")
-	}
+	ctx := context.Background()
 
-	testDataDir := "./testdata"
-
-	// Start fake GCS server
-	t.Log("Starting fake GCS container...")
-	err := startDockerService(t, testDataDir, "fake-gcs")
-	require.NoError(t, err, "Failed to start fake GCS")
-	defer stopDockerService(t, testDataDir, "fake-gcs")
+	// Start containers using testcontainers
+	t.Log("Starting Docker Compose stack via testcontainers...")
+	stack, err := setupCloudTestcontainers(t, ctx)
+	require.NoError(t, err, "Failed to setup testcontainers")
+	defer func() {
+		err := stack.Down(ctx)
+		if err != nil {
+			t.Logf("Warning: failed to stop compose stack: %v", err)
+		}
+	}()
 
 	// Wait for fake GCS to be ready
 	time.Sleep(3 * time.Second)
@@ -121,52 +142,6 @@ func parseTableLocation(path string) (map[string]string, error) {
 	}, nil
 }
 
-// isDockerComposeAvailable checks if docker-compose is available on the system.
-func isDockerComposeAvailable() bool {
-	cmd := exec.Command("docker-compose", "--version")
-	err := cmd.Run()
-	if err != nil {
-		// Try docker compose (v2 syntax)
-		cmd = exec.Command("docker", "compose", "version")
-		err = cmd.Run()
-	}
-	return err == nil
-}
-
-// startDockerService starts specified Docker Compose services.
-func startDockerService(t *testing.T, dir string, services ...string) error {
-	args := []string{"compose", "-f", "docker-compose.yml", "up", "-d"}
-	args = append(args, services...)
-
-	cmd := exec.Command("docker", args...)
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	t.Logf("Running: docker %v", args)
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to start services: %w", err)
-	}
-
-	return nil
-}
-
-// stopDockerService stops specified Docker Compose services.
-func stopDockerService(t *testing.T, dir string, services ...string) {
-	args := []string{"compose", "-f", "docker-compose.yml", "down"}
-	args = append(args, services...)
-
-	cmd := exec.Command("docker", args...)
-	cmd.Dir = dir
-
-	t.Logf("Running: docker %v", args)
-	err := cmd.Run()
-	if err != nil {
-		t.Logf("Warning: failed to stop services: %v", err)
-	}
-}
-
 // TestCloudStorage_Integration is an integration test that verifies
 // cloud storage access works end-to-end.
 func TestCloudStorage_Integration(t *testing.T) {
@@ -174,16 +149,18 @@ func TestCloudStorage_Integration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	if !isDockerComposeAvailable() {
-		t.Skip("docker-compose not available, skipping integration test")
-	}
+	ctx := context.Background()
 
-	// This test would verify:
-	// 1. Writing Iceberg tables to S3/GCS
-	// 2. Reading them back
-	// 3. Time travel on cloud-stored tables
-	// 4. Partition pruning with cloud storage
-	// 5. Delete file handling on cloud storage
+	// Start containers using testcontainers
+	t.Log("Starting Docker Compose stack via testcontainers...")
+	stack, err := setupCloudTestcontainers(t, ctx)
+	require.NoError(t, err, "Failed to setup testcontainers")
+	defer func() {
+		err := stack.Down(ctx)
+		if err != nil {
+			t.Logf("Warning: failed to stop compose stack: %v", err)
+		}
+	}()
 
 	t.Run("end_to_end_s3", func(t *testing.T) {
 		t.Log("End-to-end S3 test placeholder")
