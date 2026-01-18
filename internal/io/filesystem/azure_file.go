@@ -12,6 +12,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 )
@@ -151,11 +152,28 @@ func (f *AzureFile) readRange(ctx context.Context, p []byte, off int64) (int, er
 
 	resp, err := f.blobClient.DownloadStream(ctx, opts)
 	if err != nil {
+		// Handle InvalidRange error for empty blobs or reads beyond blob size
+		if err.(*azcore.ResponseError) != nil && err.(*azcore.ResponseError).StatusCode == 416 {
+			// 416 indicates the requested range is beyond the blob size
+			// This happens when reading past EOF, which is normal
+			return 0, io.EOF
+		}
 		return 0, fmt.Errorf("azure: failed to download blob: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	return io.ReadFull(resp.Body, p)
+	// Read data from the response body.
+	// For partial reads (e.g., near end of blob), io.Copy or a manual read loop
+	// handles EOF correctly. io.ReadFull would fail with ErrUnexpectedEOF.
+	n, err := resp.Body.Read(p)
+	if err != nil && err != io.EOF {
+		return n, fmt.Errorf("azure: failed to read blob data: %w", err)
+	}
+	// If we got 0 bytes and got EOF, that's normal for end-of-blob
+	if n == 0 && err == io.EOF {
+		return 0, io.EOF
+	}
+	return n, nil
 }
 
 // Write writes data to the Azure blob buffer.
@@ -299,14 +317,15 @@ func (f *AzureFile) Stat() (FileInfo, error) {
 }
 
 // Close closes the Azure file and releases resources.
-// For write mode, uploads buffered data to Azure.
+// For write mode, uploads buffered data to Azure (even if empty).
 // For read mode, this is a no-op.
 // Close must be called to ensure data is persisted for write operations.
 func (f *AzureFile) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.writeMode && f.writeBuffer != nil && f.writeBuffer.Len() > 0 {
+	if f.writeMode && f.writeBuffer != nil {
+		// Upload even empty buffers to create zero-length blobs
 		return f.upload(context.Background())
 	}
 

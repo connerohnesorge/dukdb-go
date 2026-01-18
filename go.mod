@@ -214,6 +214,8 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
+	github.com/testcontainers/testcontainers-go/modules/azure v0.40.0 // indirect
+	github.com/testcontainers/testcontainers-go/modules/azurite v0.40.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/compose v0.40.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/minio v0.40.0 // indirect
 	github.com/theupdateframework/notary v0.7.0 // indirect
