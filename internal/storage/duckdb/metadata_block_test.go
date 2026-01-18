@@ -53,7 +53,12 @@ func TestWriteSubBlock_SingleBlock(t *testing.T) {
 
 	// Create small test data
 	testData := []byte("Hello, DuckDB metadata!")
-	require.LessOrEqual(t, len(testData), MetadataSubBlockDataSize, "Test data should fit in one sub-block")
+	require.LessOrEqual(
+		t,
+		len(testData),
+		MetadataSubBlockDataSize,
+		"Test data should fit in one sub-block",
+	)
 
 	// Write data
 	ptr, err := mbm.WriteSubBlock(testData)
@@ -84,7 +89,12 @@ func TestWriteSubBlock_MultipleBlocks(t *testing.T) {
 		testData[i] = byte(i % 256)
 	}
 
-	require.Greater(t, len(testData), MetadataSubBlockDataSize, "Test data should exceed one sub-block")
+	require.Greater(
+		t,
+		len(testData),
+		MetadataSubBlockDataSize,
+		"Test data should exceed one sub-block",
+	)
 
 	// Calculate expected number of sub-blocks
 	expectedBlocks := (len(testData) + MetadataSubBlockDataSize - 1) / MetadataSubBlockDataSize
@@ -97,7 +107,12 @@ func TestWriteSubBlock_MultipleBlocks(t *testing.T) {
 
 	// Verify sub-blocks were allocated
 	allocatedCount := mbm.AllocatedSubBlockCount()
-	assert.Equal(t, expectedBlocks, allocatedCount, "Should have allocated expected number of sub-blocks")
+	assert.Equal(
+		t,
+		expectedBlocks,
+		allocatedCount,
+		"Should have allocated expected number of sub-blocks",
+	)
 
 	// Read data back
 	readData, err := mbm.ReadSubBlock(ptr)
@@ -182,7 +197,12 @@ func TestMetaBlockPointer_InvalidBlockID(t *testing.T) {
 	// When decoding InvalidBlockID, the lower 56 bits are masked
 	// This is expected behavior: 0xFFFFFFFFFFFFFFFF & 0x00FFFFFFFFFFFFFF = 0x00FFFFFFFFFFFFFF
 	decoded := DecodeMetaBlockPointer(InvalidBlockID)
-	assert.Equal(t, uint64(0x00FFFFFFFFFFFFFF), decoded.BlockID, "Decoded should have lower 56 bits set")
+	assert.Equal(
+		t,
+		uint64(0x00FFFFFFFFFFFFFF),
+		decoded.BlockID,
+		"Decoded should have lower 56 bits set",
+	)
 	assert.Equal(t, uint8(0xFF), decoded.BlockIndex, "Decoded should have block index 0xFF")
 }
 
@@ -306,7 +326,12 @@ func TestReadSubBlock_ChainIntegrity(t *testing.T) {
 		// Find first mismatch for debugging
 		for i := 0; i < len(testData) && i < len(readData); i++ {
 			if testData[i] != readData[i] {
-				t.Errorf("First mismatch at byte %d: expected %d, got %d", i, testData[i], readData[i])
+				t.Errorf(
+					"First mismatch at byte %d: expected %d, got %d",
+					i,
+					testData[i],
+					readData[i],
+				)
 				break
 			}
 		}
@@ -339,7 +364,12 @@ func TestMetadataBlockManager_Reset(t *testing.T) {
 
 	// Verify state after reset
 	assert.Equal(t, InvalidBlockID, mbm.CurrentBlockID(), "Block ID should be invalid after reset")
-	assert.Equal(t, 0, mbm.AllocatedSubBlockCount(), "Should have 0 allocated sub-blocks after reset")
+	assert.Equal(
+		t,
+		0,
+		mbm.AllocatedSubBlockCount(),
+		"Should have 0 allocated sub-blocks after reset",
+	)
 
 	// Should be able to allocate again from index 0
 	ptr, err := mbm.AllocateSubBlock()
@@ -383,7 +413,12 @@ func TestMetadataBlockManager_Concurrent(t *testing.T) {
 	allocated := mbm.AllocatedSubBlockCount()
 
 	// May span multiple storage blocks
-	assert.GreaterOrEqual(t, totalExpected, allocated, "Should have allocated expected number of sub-blocks")
+	assert.GreaterOrEqual(
+		t,
+		totalExpected,
+		allocated,
+		"Should have allocated expected number of sub-blocks",
+	)
 }
 
 // TestReadSubBlock_InvalidPointer verifies error handling for invalid pointers.

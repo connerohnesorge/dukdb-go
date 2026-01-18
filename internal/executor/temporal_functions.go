@@ -491,7 +491,16 @@ func addMonths(t time.Time, months int) time.Time {
 		day = daysInMonth
 	}
 
-	return time.Date(newYear, newMonth, day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	return time.Date(
+		newYear,
+		newMonth,
+		day,
+		t.Hour(),
+		t.Minute(),
+		t.Second(),
+		t.Nanosecond(),
+		t.Location(),
+	)
 }
 
 // daysInMonthFor returns the number of days in the given month/year.
@@ -727,8 +736,8 @@ func dateDiff(part DatePart, start, end time.Time) int64 {
 
 	case DatePartWeek:
 		// Truncate to start of week and calculate difference
-		startWeek := start.Truncate(24 * time.Hour).AddDate(0, 0, -int(start.Weekday()))
-		endWeek := end.Truncate(24 * time.Hour).AddDate(0, 0, -int(end.Weekday()))
+		startWeek := start.Truncate(24*time.Hour).AddDate(0, 0, -int(start.Weekday()))
+		endWeek := end.Truncate(24*time.Hour).AddDate(0, 0, -int(end.Weekday()))
 		days := endWeek.Sub(startWeek).Hours() / 24
 		return int64(days / 7)
 
@@ -812,7 +821,7 @@ func truncateTime(t time.Time, part DatePart) time.Time {
 		return time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location())
 
 	case DatePartQuarter:
-		month := ((int(t.Month()) - 1) / 3) * 3 + 1
+		month := ((int(t.Month())-1)/3)*3 + 1
 		return time.Date(t.Year(), time.Month(month), 1, 0, 0, 0, 0, t.Location())
 
 	case DatePartMonth:
@@ -833,21 +842,57 @@ func truncateTime(t time.Time, part DatePart) time.Time {
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, t.Location())
 
 	case DatePartSecond:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, t.Location())
+		return time.Date(
+			t.Year(),
+			t.Month(),
+			t.Day(),
+			t.Hour(),
+			t.Minute(),
+			t.Second(),
+			0,
+			t.Location(),
+		)
 
 	case DatePartMillisecond:
 		// Truncate nanoseconds to milliseconds
 		ns := (t.Nanosecond() / 1_000_000) * 1_000_000
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), ns, t.Location())
+		return time.Date(
+			t.Year(),
+			t.Month(),
+			t.Day(),
+			t.Hour(),
+			t.Minute(),
+			t.Second(),
+			ns,
+			t.Location(),
+		)
 
 	case DatePartMicrosecond:
 		// Truncate nanoseconds to microseconds
 		ns := (t.Nanosecond() / 1_000) * 1_000
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), ns, t.Location())
+		return time.Date(
+			t.Year(),
+			t.Month(),
+			t.Day(),
+			t.Hour(),
+			t.Minute(),
+			t.Second(),
+			ns,
+			t.Location(),
+		)
 
 	case DatePartEpoch:
 		// Epoch truncation doesn't make sense, return as-is at second precision
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, t.Location())
+		return time.Date(
+			t.Year(),
+			t.Month(),
+			t.Day(),
+			t.Hour(),
+			t.Minute(),
+			t.Second(),
+			0,
+			t.Location(),
+		)
 	}
 
 	// Default to day truncation (should not reach here due to exhaustive switch)
@@ -1142,7 +1187,12 @@ func evalMakeDate(args []any) (any, error) {
 	if day < 1 || day > daysInMonth {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MAKE_DATE: day value %d is out of range for month %d (1-%d)", day, month, daysInMonth),
+			Msg: fmt.Sprintf(
+				"MAKE_DATE: day value %d is out of range for month %d (1-%d)",
+				day,
+				month,
+				daysInMonth,
+			),
 		}
 	}
 
@@ -1217,7 +1267,12 @@ func evalMakeTimestamp(args []any) (any, error) {
 	if day < 1 || day > daysInMonth {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MAKE_TIMESTAMP: day value %d is out of range for month %d (1-%d)", day, month, daysInMonth),
+			Msg: fmt.Sprintf(
+				"MAKE_TIMESTAMP: day value %d is out of range for month %d (1-%d)",
+				day,
+				month,
+				daysInMonth,
+			),
 		}
 	}
 
@@ -1241,7 +1296,10 @@ func evalMakeTimestamp(args []any) (any, error) {
 	if second < 0 || second >= 60 {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MAKE_TIMESTAMP: second value %f is out of range (0-59.999...)", second),
+			Msg: fmt.Sprintf(
+				"MAKE_TIMESTAMP: second value %f is out of range (0-59.999...)",
+				second,
+			),
 		}
 	}
 
@@ -1250,7 +1308,16 @@ func evalMakeTimestamp(args []any) (any, error) {
 	fractionalMicros := int((second - float64(wholeSeconds)) * 1_000_000)
 
 	// Construct the timestamp
-	t := time.Date(year, time.Month(month), day, hour, minute, wholeSeconds, fractionalMicros*1000, time.UTC)
+	t := time.Date(
+		year,
+		time.Month(month),
+		day,
+		hour,
+		minute,
+		wholeSeconds,
+		fractionalMicros*1000,
+		time.UTC,
+	)
 	return timeToTimestamp(t), nil
 }
 
@@ -1391,11 +1458,49 @@ type FormatToken struct {
 
 // Weekday names for formatting
 var weekdayAbbr = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
-var weekdayFull = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+var weekdayFull = []string{
+	"Sunday",
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+}
 
 // Month names for formatting
-var monthAbbr = []string{"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-var monthFull = []string{"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}
+var monthAbbr = []string{
+	"",
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+}
+
+var monthFull = []string{
+	"",
+	"January",
+	"February",
+	"March",
+	"April",
+	"May",
+	"June",
+	"July",
+	"August",
+	"September",
+	"October",
+	"November",
+	"December",
+}
 
 // parseStrftimeFormat parses a strftime format string into tokens.
 // Supported specifiers:
@@ -1436,7 +1541,23 @@ func parseStrftimeFormat(format string) []FormatToken {
 
 			spec := format[i+1]
 			switch spec {
-			case 'Y', 'y', 'm', 'd', 'H', 'I', 'M', 'S', 'f', 'p', 'j', 'W', 'w', 'a', 'A', 'b', 'B':
+			case 'Y',
+				'y',
+				'm',
+				'd',
+				'H',
+				'I',
+				'M',
+				'S',
+				'f',
+				'p',
+				'j',
+				'W',
+				'w',
+				'a',
+				'A',
+				'b',
+				'B':
 				tokens = append(tokens, FormatToken{
 					Type:      TokenSpecifier,
 					Specifier: spec,
@@ -1871,7 +1992,8 @@ func parseStrptime(input, format string) (time.Time, bool) {
 				// Full weekday - variable length
 				found := false
 				for _, name := range weekdayFull {
-					if len(input) >= inputIdx+len(name) && strings.EqualFold(input[inputIdx:inputIdx+len(name)], name) {
+					if len(input) >= inputIdx+len(name) &&
+						strings.EqualFold(input[inputIdx:inputIdx+len(name)], name) {
 						inputIdx += len(name)
 						found = true
 
@@ -1905,7 +2027,8 @@ func parseStrptime(input, format string) (time.Time, bool) {
 				// Full month - variable length
 				found := false
 				for m, name := range monthFull {
-					if m > 0 && len(input) >= inputIdx+len(name) && strings.EqualFold(input[inputIdx:inputIdx+len(name)], name) {
+					if m > 0 && len(input) >= inputIdx+len(name) &&
+						strings.EqualFold(input[inputIdx:inputIdx+len(name)], name) {
 						month = m
 						inputIdx += len(name)
 						found = true

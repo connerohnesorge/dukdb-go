@@ -702,7 +702,12 @@ func TestReader_StructColumn(t *testing.T) {
 	require.NotEqual(t, -1, addressIdx, "address column should exist")
 
 	// Address should be VARCHAR (JSON serialized).
-	require.Equal(t, dukdb.TYPE_VARCHAR, types[addressIdx], "struct column should be VARCHAR (JSON)")
+	require.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		types[addressIdx],
+		"struct column should be VARCHAR (JSON)",
+	)
 
 	// Read chunk and verify struct data.
 	chunk, err := reader.ReadChunk()

@@ -473,7 +473,13 @@ func TestNewReader_ManyColumns(t *testing.T) {
 	// Create object with 50 fields.
 	fields := make([]string, 50)
 	for i := range 50 {
-		fields[i] = `"` + "col" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + `": ` + string(rune('0'+i%10))
+		fields[i] = `"` + "col" + string(
+			rune('0'+i/10),
+		) + string(
+			rune('0'+i%10),
+		) + `": ` + string(
+			rune('0'+i%10),
+		)
 	}
 
 	jsonData := `[{` + strings.Join(fields, ", ") + `}]`

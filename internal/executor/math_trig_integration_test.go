@@ -56,9 +56,9 @@ func TestIntegration_COS_Function(t *testing.T) {
 		expected float64
 	}{
 		{"cos(0)", "SELECT COS(0)", 1.0},
-		{"cos(pi/2)", "SELECT COS(1.5707963267948966)", 0.0},  // pi/2
-		{"cos(pi)", "SELECT COS(3.141592653589793)", -1.0},    // pi
-		{"cos(pi/3)", "SELECT COS(1.0471975511965976)", 0.5},  // pi/3 = 60 degrees
+		{"cos(pi/2)", "SELECT COS(1.5707963267948966)", 0.0}, // pi/2
+		{"cos(pi)", "SELECT COS(3.141592653589793)", -1.0},   // pi
+		{"cos(pi/3)", "SELECT COS(1.0471975511965976)", 0.5}, // pi/3 = 60 degrees
 	}
 
 	for _, tt := range tests {
@@ -235,8 +235,8 @@ func TestIntegration_ATAN2_Function(t *testing.T) {
 		expected float64
 	}{
 		{"atan2(0, 1)", "SELECT ATAN2(0, 1)", 0.0},            // 0 degrees
-		{"atan2(1, 1)", "SELECT ATAN2(1, 1)", math.Pi / 4},   // 45 degrees
-		{"atan2(1, 0)", "SELECT ATAN2(1, 0)", math.Pi / 2},   // 90 degrees
+		{"atan2(1, 1)", "SELECT ATAN2(1, 1)", math.Pi / 4},    // 45 degrees
+		{"atan2(1, 0)", "SELECT ATAN2(1, 0)", math.Pi / 2},    // 90 degrees
 		{"atan2(-1, 0)", "SELECT ATAN2(-1, 0)", -math.Pi / 2}, // -90 degrees
 	}
 
@@ -550,13 +550,28 @@ func TestIntegration_TrigFunctions_WithTable(t *testing.T) {
 	_, err = executeMathQuery(t, exec, cat, "INSERT INTO angles VALUES (0, 0)")
 	require.NoError(t, err)
 
-	_, err = executeMathQuery(t, exec, cat, "INSERT INTO angles VALUES (0.7853981633974483, 45)") // pi/4
+	_, err = executeMathQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO angles VALUES (0.7853981633974483, 45)",
+	) // pi/4
 	require.NoError(t, err)
 
-	_, err = executeMathQuery(t, exec, cat, "INSERT INTO angles VALUES (1.5707963267948966, 90)") // pi/2
+	_, err = executeMathQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO angles VALUES (1.5707963267948966, 90)",
+	) // pi/2
 	require.NoError(t, err)
 
-	_, err = executeMathQuery(t, exec, cat, "INSERT INTO angles VALUES (3.141592653589793, 180)") // pi
+	_, err = executeMathQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO angles VALUES (3.141592653589793, 180)",
+	) // pi
 	require.NoError(t, err)
 
 	t.Run("SIN in SELECT with column", func(t *testing.T) {
@@ -572,14 +587,24 @@ func TestIntegration_TrigFunctions_WithTable(t *testing.T) {
 	})
 
 	t.Run("RADIANS conversion on degrees column", func(t *testing.T) {
-		result, err := executeMathQuery(t, exec, cat, "SELECT RADIANS(degrees), radians FROM angles")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT RADIANS(degrees), radians FROM angles",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 4)
 	})
 
 	t.Run("Trig functions in WHERE clause", func(t *testing.T) {
 		// Select angles where SIN(radians) > 0.5
-		result, err := executeMathQuery(t, exec, cat, "SELECT degrees FROM angles WHERE SIN(radians) > 0.5")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT degrees FROM angles WHERE SIN(radians) > 0.5",
+		)
 		require.NoError(t, err)
 		// Should match 45 and 90 degrees (sin(45) = 0.707, sin(90) = 1)
 		require.Len(t, result.Rows, 2)
@@ -587,7 +612,12 @@ func TestIntegration_TrigFunctions_WithTable(t *testing.T) {
 
 	t.Run("Combined trig functions with columns", func(t *testing.T) {
 		// Calculate sin^2 + cos^2 for each angle (should always be 1)
-		result, err := executeMathQuery(t, exec, cat, "SELECT POW(SIN(radians), 2) + POW(COS(radians), 2) FROM angles")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT POW(SIN(radians), 2) + POW(COS(radians), 2) FROM angles",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 4)
 

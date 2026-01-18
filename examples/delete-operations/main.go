@@ -44,24 +44,124 @@ func main() {
 		completion int
 		hours      float64
 	}{
-		{1, "Design Database Schema", "High", "Completed", "Alice", "2024-01-01", "2024-01-05", 100, 8.0},
-		{2, "Implement API Endpoints", "High", "In Progress", "Bob", "2024-01-02", "2024-01-10", 60, 16.0},
-		{3, "Write Unit Tests", "Medium", "Not Started", "Charlie", "2024-01-03", "2024-01-08", 0, 12.0},
-		{4, "Create Documentation", "Low", "Not Started", "David", "2024-01-04", "2024-01-15", 0, 6.0},
-		{5, "Setup CI/CD Pipeline", "High", "Completed", "Alice", "2024-01-05", "2024-01-07", 100, 4.0},
+		{
+			1,
+			"Design Database Schema",
+			"High",
+			"Completed",
+			"Alice",
+			"2024-01-01",
+			"2024-01-05",
+			100,
+			8.0,
+		},
+		{
+			2,
+			"Implement API Endpoints",
+			"High",
+			"In Progress",
+			"Bob",
+			"2024-01-02",
+			"2024-01-10",
+			60,
+			16.0,
+		},
+		{
+			3,
+			"Write Unit Tests",
+			"Medium",
+			"Not Started",
+			"Charlie",
+			"2024-01-03",
+			"2024-01-08",
+			0,
+			12.0,
+		},
+		{
+			4,
+			"Create Documentation",
+			"Low",
+			"Not Started",
+			"David",
+			"2024-01-04",
+			"2024-01-15",
+			0,
+			6.0,
+		},
+		{
+			5,
+			"Setup CI/CD Pipeline",
+			"High",
+			"Completed",
+			"Alice",
+			"2024-01-05",
+			"2024-01-07",
+			100,
+			4.0,
+		},
 		{6, "Code Review", "Medium", "In Progress", "Bob", "2024-01-06", "2024-01-09", 30, 3.0},
-		{7, "Deploy to Staging", "High", "Not Started", "Charlie", "2024-01-10", "2024-01-12", 0, 2.0},
-		{8, "Performance Testing", "Medium", "Not Started", "David", "2024-01-08", "2024-01-14", 0, 8.0},
+		{
+			7,
+			"Deploy to Staging",
+			"High",
+			"Not Started",
+			"Charlie",
+			"2024-01-10",
+			"2024-01-12",
+			0,
+			2.0,
+		},
+		{
+			8,
+			"Performance Testing",
+			"Medium",
+			"Not Started",
+			"David",
+			"2024-01-08",
+			"2024-01-14",
+			0,
+			8.0,
+		},
 		{9, "Security Audit", "High", "In Progress", "Alice", "2024-01-07", "2024-01-11", 45, 10.0},
-		{10, "User Acceptance Testing", "Low", "Not Started", "Bob", "2024-01-12", "2024-01-18", 0, 16.0},
+		{
+			10,
+			"User Acceptance Testing",
+			"Low",
+			"Not Started",
+			"Bob",
+			"2024-01-12",
+			"2024-01-18",
+			0,
+			16.0,
+		},
 		{11, "Bug Fixes", "High", "Not Started", "Charlie", "2024-01-13", "2024-01-16", 0, 20.0},
-		{12, "Release Preparation", "High", "Not Started", "David", "2024-01-15", "2024-01-17", 0, 4.0},
+		{
+			12,
+			"Release Preparation",
+			"High",
+			"Not Started",
+			"David",
+			"2024-01-15",
+			"2024-01-17",
+			0,
+			4.0,
+		},
 	}
 
 	for _, task := range tasks {
-		_, err = db.Exec(`INSERT INTO tasks (id, task_name, priority, status, assigned_to, created_date, due_date, completion_percentage, estimated_hours)
+		_, err = db.Exec(
+			`INSERT INTO tasks (id, task_name, priority, status, assigned_to, created_date, due_date, completion_percentage, estimated_hours)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			task.id, task.name, task.priority, task.status, task.assigned, task.created, task.due, task.completion, task.hours)
+			task.id,
+			task.name,
+			task.priority,
+			task.status,
+			task.assigned,
+			task.created,
+			task.due,
+			task.completion,
+			task.hours,
+		)
 		if err != nil {
 			log.Printf("Failed to insert task %s: %v", task.name, err)
 		}
@@ -84,7 +184,11 @@ func main() {
 
 	// Example 2: DELETE with multiple conditions (AND)
 	fmt.Println("\n=== Example 2: DELETE with multiple conditions (AND) ===")
-	result, err = db.Exec("DELETE FROM tasks WHERE priority = ? AND status = ?", "Low", "Not Started")
+	result, err = db.Exec(
+		"DELETE FROM tasks WHERE priority = ? AND status = ?",
+		"Low",
+		"Not Started",
+	)
 	if err != nil {
 		log.Printf("Failed to delete low priority tasks: %v", err)
 	} else {
@@ -94,7 +198,11 @@ func main() {
 
 	// Example 3: DELETE with OR conditions
 	fmt.Println("\n=== Example 3: DELETE with OR conditions ===")
-	result, err = db.Exec("DELETE FROM tasks WHERE estimated_hours < ? OR completion_percentage = ?", 3.0, 100)
+	result, err = db.Exec(
+		"DELETE FROM tasks WHERE estimated_hours < ? OR completion_percentage = ?",
+		3.0,
+		100,
+	)
 	if err != nil {
 		log.Printf("Failed to delete quick/completed tasks: %v", err)
 	} else {
@@ -114,7 +222,11 @@ func main() {
 
 	// Example 5: DELETE with date conditions
 	fmt.Println("\n=== Example 5: DELETE with date conditions ===")
-	result, err = db.Exec("DELETE FROM tasks WHERE due_date < ? AND status != ?", "2024-01-10", "Completed")
+	result, err = db.Exec(
+		"DELETE FROM tasks WHERE due_date < ? AND status != ?",
+		"2024-01-10",
+		"Completed",
+	)
 	if err != nil {
 		log.Printf("Failed to delete overdue tasks: %v", err)
 	} else {
@@ -134,7 +246,11 @@ func main() {
 
 	// Example 7: DELETE with NOT conditions
 	fmt.Println("\n=== Example 7: DELETE with NOT conditions ===")
-	result, err = db.Exec("DELETE FROM tasks WHERE priority != ? AND status != ?", "High", "In Progress")
+	result, err = db.Exec(
+		"DELETE FROM tasks WHERE priority != ? AND status != ?",
+		"High",
+		"In Progress",
+	)
 	if err != nil {
 		log.Printf("Failed to delete non-high/non-progress tasks: %v", err)
 	} else {
@@ -173,7 +289,9 @@ func main() {
 	// Example 10: Conditional DELETE with Go logic
 	fmt.Println("\n=== Example 10: Conditional DELETE with Go logic ===")
 	// Query tasks to evaluate for deletion
-	rows, err := db.Query("SELECT id, task_name, priority, status, completion_percentage FROM tasks")
+	rows, err := db.Query(
+		"SELECT id, task_name, priority, status, completion_percentage FROM tasks",
+	)
 	if err != nil {
 		log.Printf("Failed to query tasks: %v", err)
 	} else {
@@ -286,8 +404,12 @@ func displayTasks(db *sql.DB) {
 	}
 	defer rows.Close()
 
-	fmt.Println("ID | Task Name                    | Priority | Status      | Assigned | Due Date   | Comp% | Hours")
-	fmt.Println("---|------------------------------|----------|-------------|----------|------------|-------|------")
+	fmt.Println(
+		"ID | Task Name                    | Priority | Status      | Assigned | Due Date   | Comp% | Hours",
+	)
+	fmt.Println(
+		"---|------------------------------|----------|-------------|----------|------------|-------|------",
+	)
 
 	for rows.Next() {
 		var id, completion int

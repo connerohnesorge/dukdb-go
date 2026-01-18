@@ -612,11 +612,11 @@ const (
 	OpJSONText    // ->> (JSON extract as text, returns VARCHAR)
 
 	// Bitwise operators
-	OpBitwiseAnd   // & (bitwise AND)
-	OpBitwiseOr    // | (bitwise OR)
-	OpBitwiseXor   // ^ (bitwise XOR)
-	OpShiftLeft    // << (left shift)
-	OpShiftRight   // >> (right shift)
+	OpBitwiseAnd // & (bitwise AND)
+	OpBitwiseOr  // | (bitwise OR)
+	OpBitwiseXor // ^ (bitwise XOR)
+	OpShiftLeft  // << (left shift)
+	OpShiftRight // >> (right shift)
 )
 
 // UnaryExpr represents a unary expression (op a).
@@ -643,9 +643,9 @@ const (
 type FunctionCall struct {
 	Name     string
 	Args     []Expr
-	Distinct bool           // for aggregate functions like COUNT(DISTINCT x)
-	Star     bool           // for COUNT(*)
-	OrderBy  []OrderByExpr  // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
+	Distinct bool          // for aggregate functions like COUNT(DISTINCT x)
+	Star     bool          // for COUNT(*)
+	OrderBy  []OrderByExpr // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
 }
 
 func (*FunctionCall) exprNode() {}
@@ -1154,17 +1154,17 @@ type FuncParam struct {
 //	    [PARALLEL SAFE|UNSAFE|RESTRICTED]
 //	    AS 'body' | AS $$body$$
 type CreateFunctionStmt struct {
-	Schema      string         // Optional schema name
-	Name        string         // Function name
-	OrReplace   bool           // OR REPLACE clause
-	Params      []FuncParam    // Function parameters
-	Returns     dukdb.Type     // Return type
-	Language    string         // Language (default "sql")
-	Body        string         // Function body
-	Volatility  VolatilityType // VOLATILE, STABLE, or IMMUTABLE
-	Strict      bool           // STRICT (returns NULL if any argument is NULL)
-	Leakproof   bool           // LEAKPROOF (doesn't leak information)
-	ParallelSafe string        // PARALLEL SAFE, UNSAFE, or RESTRICTED (empty = default)
+	Schema       string         // Optional schema name
+	Name         string         // Function name
+	OrReplace    bool           // OR REPLACE clause
+	Params       []FuncParam    // Function parameters
+	Returns      dukdb.Type     // Return type
+	Language     string         // Language (default "sql")
+	Body         string         // Function body
+	Volatility   VolatilityType // VOLATILE, STABLE, or IMMUTABLE
+	Strict       bool           // STRICT (returns NULL if any argument is NULL)
+	Leakproof    bool           // LEAKPROOF (doesn't leak information)
+	ParallelSafe string         // PARALLEL SAFE, UNSAFE, or RESTRICTED (empty = default)
 }
 
 func (*CreateFunctionStmt) stmtNode() {}

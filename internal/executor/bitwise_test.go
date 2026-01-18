@@ -253,14 +253,14 @@ func TestBitCountValue(t *testing.T) {
 		// Basic cases
 		{"BIT_COUNT(0)", int64(0), int64(0), false},
 		{"BIT_COUNT(1)", int64(1), int64(1), false},
-		{"BIT_COUNT(7)", int64(7), int64(3), false},       // 111 in binary
-		{"BIT_COUNT(255)", int64(255), int64(8), false},   // 11111111 in binary
-		{"BIT_COUNT(256)", int64(256), int64(1), false},   // 100000000 in binary
-		{"BIT_COUNT(15)", int64(15), int64(4), false},     // 1111 in binary
+		{"BIT_COUNT(7)", int64(7), int64(3), false},     // 111 in binary
+		{"BIT_COUNT(255)", int64(255), int64(8), false}, // 11111111 in binary
+		{"BIT_COUNT(256)", int64(256), int64(1), false}, // 100000000 in binary
+		{"BIT_COUNT(15)", int64(15), int64(4), false},   // 1111 in binary
 
 		// Negative numbers (two's complement)
-		{"BIT_COUNT(-1)", int64(-1), int64(64), false},    // All bits set
-		{"BIT_COUNT(-2)", int64(-2), int64(63), false},    // All bits except last
+		{"BIT_COUNT(-1)", int64(-1), int64(64), false}, // All bits set
+		{"BIT_COUNT(-2)", int64(-2), int64(63), false}, // All bits except last
 
 		// NULL handling
 		{"BIT_COUNT(NULL)", nil, nil, false},

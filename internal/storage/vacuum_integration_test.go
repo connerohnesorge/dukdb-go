@@ -352,7 +352,12 @@ func TestVacuum_NoActiveTransactionsAllowsFullCleanup(t *testing.T) {
 
 	// Verify no active transactions
 	lowWatermark := mvccManager.GetLowWatermark()
-	assert.Equal(t, ^uint64(0), lowWatermark, "low watermark should be max uint64 with no active transactions")
+	assert.Equal(
+		t,
+		^uint64(0),
+		lowWatermark,
+		"low watermark should be max uint64 with no active transactions",
+	)
 
 	// Run vacuum - all old versions should be removed
 	vacuum := NewVacuum(mvccManager.GetLowWatermark, mockClock)
@@ -376,7 +381,13 @@ func TestVacuum_NoActiveTransactionsAllowsFullCleanup(t *testing.T) {
 		rowIdx := int(chain.RowID)
 		// Final value should be rowIdx*10 + numUpdates
 		expectedValue := int32(rowIdx*10 + numUpdates)
-		assert.Equal(t, expectedValue, head.Data[0].(int32), "row %d should have final value", rowIdx)
+		assert.Equal(
+			t,
+			expectedValue,
+			head.Data[0].(int32),
+			"row %d should have final value",
+			rowIdx,
+		)
 	}
 
 	// Verify statistics

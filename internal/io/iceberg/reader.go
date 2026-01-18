@@ -156,7 +156,11 @@ func NewReader(ctx context.Context, tableLocation string, opts *ReaderOptions) (
 }
 
 // NewReaderFromMetadata creates a new Iceberg reader from a specific metadata file.
-func NewReaderFromMetadata(ctx context.Context, metadataPath string, opts *ReaderOptions) (*Reader, error) {
+func NewReaderFromMetadata(
+	ctx context.Context,
+	metadataPath string,
+	opts *ReaderOptions,
+) (*Reader, error) {
 	if opts == nil {
 		opts = DefaultReaderOptions()
 	}
@@ -278,7 +282,11 @@ func (r *Reader) ReadChunk() (*storage.DataChunk, error) {
 		}
 
 		// Apply delete files with file path and position context
-		chunk, err = r.deleteApplier.ApplyDeletes(chunk, r.currentDataFilePath, r.currentFileRowPosition)
+		chunk, err = r.deleteApplier.ApplyDeletes(
+			chunk,
+			r.currentDataFilePath,
+			r.currentFileRowPosition,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("iceberg reader: failed to apply deletes: %w", err)
 		}
@@ -374,7 +382,13 @@ func (r *Reader) ensureInitialized() error {
 	deleteDataFiles := plan.DeleteFiles
 
 	// Set up delete file applier with proper context
-	r.deleteApplier = CreateDeleteApplier(r.ctx, deleteDataFiles, r.fs, r.table.Location(), r.columns)
+	r.deleteApplier = CreateDeleteApplier(
+		r.ctx,
+		deleteDataFiles,
+		r.fs,
+		r.table.Location(),
+		r.columns,
+	)
 
 	r.initialized = true
 	return nil
@@ -419,7 +433,10 @@ func (r *Reader) ensureParquetReader() error {
 
 	// Only support Parquet files
 	if dataFile.Format != FileFormatParquet {
-		return fmt.Errorf("iceberg reader: unsupported file format %q (only parquet is supported)", dataFile.Format)
+		return fmt.Errorf(
+			"iceberg reader: unsupported file format %q (only parquet is supported)",
+			dataFile.Format,
+		)
 	}
 
 	// Resolve the file path
@@ -600,7 +617,10 @@ func (h *SchemaEvolutionHandler) GetMissingColumns() []ColumnInfo {
 
 // ApplyEvolution applies schema evolution to a chunk.
 // Adds NULL columns for fields that exist in table schema but not file schema.
-func (h *SchemaEvolutionHandler) ApplyEvolution(chunk *storage.DataChunk, projection []ColumnInfo) (*storage.DataChunk, error) {
+func (h *SchemaEvolutionHandler) ApplyEvolution(
+	chunk *storage.DataChunk,
+	projection []ColumnInfo,
+) (*storage.DataChunk, error) {
 	if !h.NeedsEvolution() {
 		return chunk, nil
 	}

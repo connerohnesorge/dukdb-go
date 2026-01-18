@@ -111,8 +111,8 @@ func CreateFile(path string) (*FileManager, error) {
 	}
 
 	fm := &FileManager{
-		path:     path,
-		file:     file,
+		path: path,
+		file: file,
 		metadata: &Metadata{
 			Version:        DuckDBVersion,
 			BlockIndex:     make([]BlockInfo, 0),
@@ -266,7 +266,6 @@ func (fm *FileManager) DataBlocks() []BlockInfo {
 	return fm.blocks
 }
 
-
 func (fm *FileManager) WriteCatalog(data []byte) error {
 	// Write catalog to meta block location
 	if fm.metadata.ActiveHeader == nil {
@@ -331,7 +330,6 @@ func (fm *FileManager) ReadBlock(info BlockInfo) ([]byte, error) {
 	// This method is kept for backward compatibility but returns nil
 	return nil, nil
 }
-
 
 func (fm *FileManager) Finalize() error {
 	// Update the active header and write both headers

@@ -436,7 +436,7 @@ func TestHashIndexValidateAgainstTable(t *testing.T) {
 
 		// Create an index with entries for non-existent rows
 		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
-		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		err := idx.Insert([]any{int32(1)}, RowID(0)) // Valid
 		require.NoError(t, err)
 		err = idx.Insert([]any{int32(999)}, RowID(999)) // Invalid - row doesn't exist
 		require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestHashIndexLookupWithValidation(t *testing.T) {
 
 		// Create an index with both valid and invalid entries
 		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
-		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		err := idx.Insert([]any{int32(1)}, RowID(0)) // Valid
 		require.NoError(t, err)
 		err = idx.Insert([]any{int32(1)}, RowID(999)) // Invalid
 		require.NoError(t, err)
@@ -514,7 +514,7 @@ func TestHashIndexLookupWithValidation(t *testing.T) {
 
 		// Create an index with both valid and invalid entries
 		idx := NewHashIndex("idx_test", table.Name(), []string{"col1"}, false)
-		err := idx.Insert([]any{int32(1)}, RowID(0))   // Valid
+		err := idx.Insert([]any{int32(1)}, RowID(0)) // Valid
 		require.NoError(t, err)
 		err = idx.Insert([]any{int32(1)}, RowID(999)) // Invalid
 		require.NoError(t, err)

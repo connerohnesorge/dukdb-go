@@ -36,7 +36,11 @@ var GetTableNamesCompatibilityTests = []CompatibilityTest{
 	{Name: "GTN_SubqueryInSelect", Category: "gettablenames", Test: testGTNSubqueryInSelect},
 	{Name: "GTN_SubqueryInFrom", Category: "gettablenames", Test: testGTNSubqueryInFrom},
 	{Name: "GTN_SubqueryInHaving", Category: "gettablenames", Test: testGTNSubqueryInHaving},
-	{Name: "GTN_NestedSubqueries3Levels", Category: "gettablenames", Test: testGTNNestedSubqueries3Levels},
+	{
+		Name:     "GTN_NestedSubqueries3Levels",
+		Category: "gettablenames",
+		Test:     testGTNNestedSubqueries3Levels,
+	},
 
 	// CTE patterns
 	{Name: "GTN_SimpleCTE", Category: "gettablenames", Test: testGTNSimpleCTE},
@@ -98,41 +102,121 @@ func TestGetTableNames_Compatibility(t *testing.T) {
 		{"inner join", "SELECT * FROM a INNER JOIN b ON a.id = b.a_id", false, []string{"a", "b"}},
 		{"left join", "SELECT * FROM a LEFT JOIN b ON a.id = b.a_id", false, []string{"a", "b"}},
 		{"right join", "SELECT * FROM a RIGHT JOIN b ON a.id = b.a_id", false, []string{"a", "b"}},
-		{"full outer join", "SELECT * FROM a FULL OUTER JOIN b ON a.id = b.a_id", false, []string{"a", "b"}},
+		{
+			"full outer join",
+			"SELECT * FROM a FULL OUTER JOIN b ON a.id = b.a_id",
+			false,
+			[]string{"a", "b"},
+		},
 		{"cross join", "SELECT * FROM a CROSS JOIN b", false, []string{"a", "b"}},
-		{"multiple joins", "SELECT * FROM a JOIN b ON a.id = b.a_id JOIN c ON b.id = c.b_id", false, []string{"a", "b", "c"}},
+		{
+			"multiple joins",
+			"SELECT * FROM a JOIN b ON a.id = b.a_id JOIN c ON b.id = c.b_id",
+			false,
+			[]string{"a", "b", "c"},
+		},
 
 		// Subquery patterns
-		{"subquery in WHERE IN", "SELECT * FROM a WHERE id IN (SELECT a_id FROM b)", false, []string{"a", "b"}},
-		{"subquery in WHERE EXISTS", "SELECT * FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.a_id = a.id)", false, []string{"a", "b"}},
-		{"subquery in SELECT", "SELECT id, (SELECT COUNT(*) FROM b WHERE b.a_id = a.id) FROM a", false, []string{"a", "b"}},
+		{
+			"subquery in WHERE IN",
+			"SELECT * FROM a WHERE id IN (SELECT a_id FROM b)",
+			false,
+			[]string{"a", "b"},
+		},
+		{
+			"subquery in WHERE EXISTS",
+			"SELECT * FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.a_id = a.id)",
+			false,
+			[]string{"a", "b"},
+		},
+		{
+			"subquery in SELECT",
+			"SELECT id, (SELECT COUNT(*) FROM b WHERE b.a_id = a.id) FROM a",
+			false,
+			[]string{"a", "b"},
+		},
 		{"subquery in FROM", "SELECT * FROM (SELECT * FROM a) AS sub", false, []string{"a"}},
-		{"subquery in HAVING", "SELECT cat FROM a GROUP BY cat HAVING COUNT(*) > (SELECT AVG(cnt) FROM b)", false, []string{"a", "b"}},
-		{"nested subqueries 3 levels", "SELECT * FROM a WHERE id IN (SELECT id FROM b WHERE id IN (SELECT id FROM c))", false, []string{"a", "b", "c"}},
+		{
+			"subquery in HAVING",
+			"SELECT cat FROM a GROUP BY cat HAVING COUNT(*) > (SELECT AVG(cnt) FROM b)",
+			false,
+			[]string{"a", "b"},
+		},
+		{
+			"nested subqueries 3 levels",
+			"SELECT * FROM a WHERE id IN (SELECT id FROM b WHERE id IN (SELECT id FROM c))",
+			false,
+			[]string{"a", "b", "c"},
+		},
 
 		// CTE patterns
-		{"simple CTE", "WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp", false, []string{"users"}},
-		{"multiple CTEs", "WITH a AS (SELECT * FROM t1), b AS (SELECT * FROM t2) SELECT * FROM a, b", false, []string{"t1", "t2"}},
-		{"CTE with join", "WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp JOIN orders ON tmp.id = orders.user_id", false, []string{"orders", "users"}},
+		{
+			"simple CTE",
+			"WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp",
+			false,
+			[]string{"users"},
+		},
+		{
+			"multiple CTEs",
+			"WITH a AS (SELECT * FROM t1), b AS (SELECT * FROM t2) SELECT * FROM a, b",
+			false,
+			[]string{"t1", "t2"},
+		},
+		{
+			"CTE with join",
+			"WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp JOIN orders ON tmp.id = orders.user_id",
+			false,
+			[]string{"orders", "users"},
+		},
 
 		// Set operations
 		{"UNION", "SELECT * FROM a UNION SELECT * FROM b", false, []string{"a", "b"}},
 		{"UNION ALL", "SELECT * FROM a UNION ALL SELECT * FROM b", false, []string{"a", "b"}},
 		{"INTERSECT", "SELECT * FROM a INTERSECT SELECT * FROM b", false, []string{"a", "b"}},
 		{"EXCEPT", "SELECT * FROM a EXCEPT SELECT * FROM b", false, []string{"a", "b"}},
-		{"chained unions", "SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c", false, []string{"a", "b", "c"}},
+		{
+			"chained unions",
+			"SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c",
+			false,
+			[]string{"a", "b", "c"},
+		},
 
 		// DML patterns
-		{"INSERT VALUES", "INSERT INTO users (id, name) VALUES (1, 'test')", false, []string{"users"}},
-		{"INSERT SELECT", "INSERT INTO archive SELECT * FROM users WHERE deleted = true", false, []string{"archive", "users"}},
+		{
+			"INSERT VALUES",
+			"INSERT INTO users (id, name) VALUES (1, 'test')",
+			false,
+			[]string{"users"},
+		},
+		{
+			"INSERT SELECT",
+			"INSERT INTO archive SELECT * FROM users WHERE deleted = true",
+			false,
+			[]string{"archive", "users"},
+		},
 		{"UPDATE simple", "UPDATE users SET name = 'test' WHERE id = 1", false, []string{"users"}},
-		{"UPDATE FROM", "UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id", false, []string{"stats", "users"}},
+		{
+			"UPDATE FROM",
+			"UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id",
+			false,
+			[]string{"stats", "users"},
+		},
 		{"DELETE simple", "DELETE FROM users WHERE id = 1", false, []string{"users"}},
-		{"DELETE with subquery", "DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)", false, []string{"deleted", "users"}},
+		{
+			"DELETE with subquery",
+			"DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)",
+			false,
+			[]string{"deleted", "users"},
+		},
 
 		// DDL patterns
 		{"CREATE TABLE", "CREATE TABLE users (id INT, name VARCHAR)", false, []string{"users"}},
-		{"CREATE TABLE AS SELECT", "CREATE TABLE archive AS SELECT * FROM users", false, []string{"archive", "users"}},
+		{
+			"CREATE TABLE AS SELECT",
+			"CREATE TABLE archive AS SELECT * FROM users",
+			false,
+			[]string{"archive", "users"},
+		},
 		{"DROP TABLE", "DROP TABLE users", false, []string{"users"}},
 
 		// Qualified names
@@ -141,7 +225,12 @@ func TestGetTableNames_Compatibility(t *testing.T) {
 
 		// Edge cases
 		{"empty result", "SELECT 1 + 1", false, []string{}},
-		{"self join", "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.manager_id", false, []string{"users"}},
+		{
+			"self join",
+			"SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.manager_id",
+			false,
+			[]string{"users"},
+		},
 		{"table alias only", "SELECT u.id FROM users u", false, []string{"users"}},
 	}
 
@@ -221,7 +310,11 @@ func testGTNFullOuterJoin(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a FULL OUTER JOIN b ON a.id = b.a_id", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a FULL OUTER JOIN b ON a.id = b.a_id",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, tables)
 }
@@ -241,7 +334,11 @@ func testGTNMultipleJoins(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a JOIN b ON a.id = b.a_id JOIN c ON b.id = c.b_id", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a JOIN b ON a.id = b.a_id JOIN c ON b.id = c.b_id",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, tables)
 }
@@ -251,7 +348,11 @@ func testGTNSubqueryWhereIn(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a WHERE id IN (SELECT a_id FROM b)", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a WHERE id IN (SELECT a_id FROM b)",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, tables)
 }
@@ -261,7 +362,11 @@ func testGTNSubqueryWhereExists(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.a_id = a.id)", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.a_id = a.id)",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, tables)
 }
@@ -271,7 +376,11 @@ func testGTNSubqueryInSelect(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT id, (SELECT COUNT(*) FROM b WHERE b.a_id = a.id) FROM a", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT id, (SELECT COUNT(*) FROM b WHERE b.a_id = a.id) FROM a",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, tables)
 }
@@ -291,7 +400,11 @@ func testGTNSubqueryInHaving(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT cat FROM a GROUP BY cat HAVING COUNT(*) > (SELECT AVG(cnt) FROM b)", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT cat FROM a GROUP BY cat HAVING COUNT(*) > (SELECT AVG(cnt) FROM b)",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, tables)
 }
@@ -301,7 +414,11 @@ func testGTNNestedSubqueries3Levels(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a WHERE id IN (SELECT id FROM b WHERE id IN (SELECT id FROM c))", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a WHERE id IN (SELECT id FROM b WHERE id IN (SELECT id FROM c))",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, tables)
 }
@@ -311,7 +428,11 @@ func testGTNSimpleCTE(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp",
+		false,
+	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"users"}, tables)
 }
@@ -321,7 +442,11 @@ func testGTNMultipleCTEs(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "WITH a AS (SELECT * FROM t1), b AS (SELECT * FROM t2) SELECT * FROM a, b", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"WITH a AS (SELECT * FROM t1), b AS (SELECT * FROM t2) SELECT * FROM a, b",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"t1", "t2"}, tables)
 }
@@ -331,7 +456,11 @@ func testGTNCTEWithJoin(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp JOIN orders ON tmp.id = orders.user_id", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"WITH tmp AS (SELECT * FROM users) SELECT * FROM tmp JOIN orders ON tmp.id = orders.user_id",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"orders", "users"}, tables)
 }
@@ -381,7 +510,11 @@ func testGTNChainedUnions(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, tables)
 }
@@ -391,7 +524,11 @@ func testGTNInsertValues(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "INSERT INTO users (id, name) VALUES (1, 'test')", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"INSERT INTO users (id, name) VALUES (1, 'test')",
+		false,
+	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"users"}, tables)
 }
@@ -401,7 +538,11 @@ func testGTNInsertSelect(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "INSERT INTO archive SELECT * FROM users WHERE deleted = true", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"INSERT INTO archive SELECT * FROM users WHERE deleted = true",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"archive", "users"}, tables)
 }
@@ -421,7 +562,11 @@ func testGTNUpdateFrom(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"stats", "users"}, tables)
 }
@@ -441,7 +586,11 @@ func testGTNDeleteWithSubquery(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)",
+		false,
+	)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"deleted", "users"}, tables)
 }
@@ -511,7 +660,11 @@ func testGTNSelfJoin(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	tables, err := dukdb.GetTableNames(conn, "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.manager_id", false)
+	tables, err := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.manager_id",
+		false,
+	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"users"}, tables)
 }

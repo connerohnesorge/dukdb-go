@@ -124,7 +124,10 @@ func WrapAsPromise(fn func() (interface{}, error)) js.Value {
 
 // WrapAsPromiseWithContext wraps a blocking Go function with context as a JavaScript Promise.
 // The context can be used for cancellation.
-func WrapAsPromiseWithContext(ctx context.Context, fn func(ctx context.Context) (interface{}, error)) js.Value {
+func WrapAsPromiseWithContext(
+	ctx context.Context,
+	fn func(ctx context.Context) (interface{}, error),
+) js.Value {
 	promiseConstructor := js.Global().Get("Promise")
 
 	handler := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {

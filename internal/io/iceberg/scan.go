@@ -145,7 +145,11 @@ func (p *ScanPlanner) CreateScanPlan(ctx context.Context, opts *ScanOptions) (*S
 
 	// Step 4: Apply partition pruning to manifests
 	dataManifests := p.filterDataManifests(manifests)
-	prunedManifests := p.applyPartitionPruningToManifests(dataManifests, opts.PartitionFilters, partSpec)
+	prunedManifests := p.applyPartitionPruningToManifests(
+		dataManifests,
+		opts.PartitionFilters,
+		partSpec,
+	)
 
 	// Step 5: Read data files from manifests
 	dataFiles, err := p.readDataFilesFromManifests(ctx, prunedManifests)
@@ -243,7 +247,10 @@ func (p *ScanPlanner) applyPartitionPruningToManifests(
 }
 
 // readDataFilesFromManifests reads all data files from the given manifests.
-func (p *ScanPlanner) readDataFilesFromManifests(ctx context.Context, manifests []*ManifestFile) ([]*DataFile, error) {
+func (p *ScanPlanner) readDataFilesFromManifests(
+	ctx context.Context,
+	manifests []*ManifestFile,
+) ([]*DataFile, error) {
 	var allFiles []*DataFile
 
 	for _, manifest := range manifests {
@@ -402,7 +409,10 @@ func compareValues(a, b any) int {
 }
 
 // applyColumnStatsPruning filters files based on column statistics (min/max bounds).
-func (p *ScanPlanner) applyColumnStatsPruning(files []*DataFile, filters []ColumnFilterExpr) []*DataFile {
+func (p *ScanPlanner) applyColumnStatsPruning(
+	files []*DataFile,
+	filters []ColumnFilterExpr,
+) []*DataFile {
 	if len(filters) == 0 {
 		return files
 	}
@@ -423,7 +433,11 @@ func (p *ScanPlanner) applyColumnStatsPruning(files []*DataFile, filters []Colum
 }
 
 // fileMatchesColumnFilters checks if a file's column stats might match the filters.
-func (p *ScanPlanner) fileMatchesColumnFilters(file *DataFile, filters []ColumnFilterExpr, schema any) bool {
+func (p *ScanPlanner) fileMatchesColumnFilters(
+	file *DataFile,
+	filters []ColumnFilterExpr,
+	schema any,
+) bool {
 	for _, filter := range filters {
 		// Find column ID by name
 		colID := p.findColumnID(filter.ColumnName)
@@ -475,7 +489,10 @@ func (p *ScanPlanner) findColumnID(columnName string) int {
 
 // boundsMatchFilter checks if min/max bounds might match a filter.
 // Returns true if we cannot prune (might match), false if we can prune (definitely doesn't match).
-func (p *ScanPlanner) boundsMatchFilter(lowerBound, upperBound []byte, filter ColumnFilterExpr) bool {
+func (p *ScanPlanner) boundsMatchFilter(
+	lowerBound, upperBound []byte,
+	filter ColumnFilterExpr,
+) bool {
 	// For now, skip complex bound checking - this requires proper deserialization
 	// of the binary bounds based on column type.
 	// TODO: Implement proper bound deserialization and comparison.
@@ -551,7 +568,8 @@ func (plan *ScanPlan) SplitFileTasks(maxRowsPerTask int64) []FileScanTask {
 	tasks := make([]FileScanTask, 0)
 
 	for _, file := range plan.DataFiles {
-		if maxRowsPerTask <= 0 || file.RecordCount <= maxRowsPerTask || len(file.SplitOffsets) == 0 {
+		if maxRowsPerTask <= 0 || file.RecordCount <= maxRowsPerTask ||
+			len(file.SplitOffsets) == 0 {
 			// Single task for small files or no split info
 			tasks = append(tasks, FileScanTask{
 				DataFile: file,

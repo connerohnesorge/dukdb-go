@@ -348,7 +348,7 @@ func exportColumnDef(w *persistence.BinaryWriter, c *ColumnDef) error {
 
 	// For complex types, we would use persistence.SerializeTypeInfo if it matched exactly
 	// but here we just write the basic properties for brevity in removing legacy.
-	
+
 	return w.WritePropertyEnd()
 }
 

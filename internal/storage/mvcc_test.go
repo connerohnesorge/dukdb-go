@@ -10,24 +10,27 @@ import (
 
 // mockTransactionContext implements TransactionContext for testing.
 type mockTransactionContext struct {
-	txnID               uint64
-	isolationLevel      parser.IsolationLevel
-	startTime           time.Time
-	statementTime       time.Time
-	committedTxns       map[uint64]bool
-	abortedTxns         map[uint64]bool
-	snapshot            *Snapshot
+	txnID                uint64
+	isolationLevel       parser.IsolationLevel
+	startTime            time.Time
+	statementTime        time.Time
+	committedTxns        map[uint64]bool
+	abortedTxns          map[uint64]bool
+	snapshot             *Snapshot
 	activeTxnsAtSnapshot map[uint64]bool
 }
 
-func newMockTransactionContext(txnID uint64, isolation parser.IsolationLevel) *mockTransactionContext {
+func newMockTransactionContext(
+	txnID uint64,
+	isolation parser.IsolationLevel,
+) *mockTransactionContext {
 	return &mockTransactionContext{
-		txnID:               txnID,
-		isolationLevel:      isolation,
-		startTime:           time.Now(),
-		statementTime:       time.Now(),
-		committedTxns:       make(map[uint64]bool),
-		abortedTxns:         make(map[uint64]bool),
+		txnID:                txnID,
+		isolationLevel:       isolation,
+		startTime:            time.Now(),
+		statementTime:        time.Now(),
+		committedTxns:        make(map[uint64]bool),
+		abortedTxns:          make(map[uint64]bool),
 		activeTxnsAtSnapshot: make(map[uint64]bool),
 	}
 }
@@ -1063,8 +1066,11 @@ func TestRepeatableReadVisibility_TransactionSnapshotVsStatementSnapshot(t *test
 
 	// Second statement - STILL should NOT see T2's data
 	// This is the key difference from READ COMMITTED!
-	assert.False(t, checker.IsVisible(t2Row, t1),
-		"Second statement should STILL not see T2's data (REPEATABLE READ uses transaction snapshot)")
+	assert.False(
+		t,
+		checker.IsVisible(t2Row, t1),
+		"Second statement should STILL not see T2's data (REPEATABLE READ uses transaction snapshot)",
+	)
 }
 
 // TestRepeatableReadVisibility_AbortedTransactionNotVisible tests that rows
@@ -1304,7 +1310,7 @@ func TestRepeatableReadVisibility_MultipleScenarios(t *testing.T) {
 	t1 := newMockTransactionContext(100, parser.IsolationLevelRepeatableRead)
 	t1.startTime = baseTime
 	t1.setSnapshot(NewSnapshot(baseTime, []uint64{200})) // T2 was active at snapshot
-	t1.setCommitted(10)                                   // Old committed transaction
+	t1.setCommitted(10)                                  // Old committed transaction
 
 	// Scenario 1: T1 sees data committed before snapshot
 	t.Run("sees data committed before snapshot", func(t *testing.T) {
@@ -1398,7 +1404,7 @@ func TestRepeatableReadVisibility_SnapshotTimingScenario(t *testing.T) {
 	t1 := newMockTransactionContext(100, parser.IsolationLevelRepeatableRead)
 	t1.startTime = t1StartTime
 	t1.setSnapshot(NewSnapshot(t1StartTime, []uint64{}))
-	t1.setCommitted(10) // T0
+	t1.setCommitted(10)  // T0
 	t1.setCommitted(200) // T2
 
 	// D1: Created by T0, committed before T1's snapshot
@@ -1982,7 +1988,7 @@ func TestSerializableVisibility_MultipleScenarios(t *testing.T) {
 	t1 := newMockTransactionContext(100, parser.IsolationLevelSerializable)
 	t1.startTime = baseTime
 	t1.setSnapshot(NewSnapshot(baseTime, []uint64{200})) // T2 was active at snapshot
-	t1.setCommitted(10)                                   // Old committed transaction
+	t1.setCommitted(10)                                  // Old committed transaction
 
 	// Scenario 1: T1 sees data committed before snapshot
 	t.Run("sees data committed before snapshot", func(t *testing.T) {
@@ -2155,8 +2161,13 @@ func TestSerializableVisibility_IdenticalToRepeatableRead(t *testing.T) {
 			serializableResult := serializableChecker.IsVisible(tc.version, serializableTxn)
 			repeatableReadResult := repeatableReadChecker.IsVisible(tc.version, repeatableReadTxn)
 
-			assert.Equal(t, repeatableReadResult, serializableResult,
-				"SERIALIZABLE and REPEATABLE READ should have identical visibility for: %s", tc.name)
+			assert.Equal(
+				t,
+				repeatableReadResult,
+				serializableResult,
+				"SERIALIZABLE and REPEATABLE READ should have identical visibility for: %s",
+				tc.name,
+			)
 		})
 	}
 }

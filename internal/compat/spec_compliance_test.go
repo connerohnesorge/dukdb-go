@@ -798,7 +798,15 @@ func TestSpecTypeNormalization(t *testing.T) {
 
 	for _, tc := range typeVariants {
 		t.Run(tc.input, func(t *testing.T) {
-			s, err := secret.BindCreateSecret(ctx, "type_test_"+tc.input, tc.input, "", "", false, nil)
+			s, err := secret.BindCreateSecret(
+				ctx,
+				"type_test_"+tc.input,
+				tc.input,
+				"",
+				"",
+				false,
+				nil,
+			)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, s.Type)
 		})

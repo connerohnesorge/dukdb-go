@@ -103,7 +103,7 @@ func (c *ColumnData) GetValue(rowIdx uint64) (any, bool) {
 		return nil, false
 	}
 
-	return c.decodeFixedValue(c.Data[offset:offset+uint64(valueSize)]), true
+	return c.decodeFixedValue(c.Data[offset : offset+uint64(valueSize)]), true
 }
 
 // getListValue retrieves a LIST value at the given row index.
@@ -646,7 +646,8 @@ func (r *RowGroupReader) ReadColumn(colIdx int) (*ColumnData, error) {
 				// Decompress the STRUCT's child columns (the struct fields)
 				// For LIST(STRUCT), the struct's fields are stored as children of the STRUCT child
 				// The ChildPointer points to STRUCT metadata, and we need to decompress its fields
-				if dp.ChildPointer != nil && (dp.ChildPointer.ChildPointer != nil || len(dp.ChildPointer.ChildPointers) > 0) {
+				if dp.ChildPointer != nil &&
+					(dp.ChildPointer.ChildPointer != nil || len(dp.ChildPointer.ChildPointers) > 0) {
 					childrenData, fieldsErr := decompressStructFields(
 						r.blockManager,
 						dp.ChildPointer, // The STRUCT's DataPointer
@@ -711,7 +712,8 @@ func (r *RowGroupReader) ReadColumn(colIdx int) (*ColumnData, error) {
 
 			// Decompress the STRUCT's child columns (key and value) using the MAP's ChildPointer
 			// dp.ChildPointer points to the STRUCT's metadata which contains the field DataPointers
-			if dp.ChildPointer != nil && (dp.ChildPointer.ChildPointer != nil || len(dp.ChildPointer.ChildPointers) > 0) {
+			if dp.ChildPointer != nil &&
+				(dp.ChildPointer.ChildPointer != nil || len(dp.ChildPointer.ChildPointers) > 0) {
 				childrenData, fieldsErr := decompressStructFields(
 					r.blockManager,
 					dp.ChildPointer, // Use the MAP's ChildPointer (which is the STRUCT's DataPointer)
@@ -1027,7 +1029,11 @@ func decompressListColumn(
 	}
 
 	if uint64(dp.Block.Offset) >= uint64(len(block.Data)) {
-		return nil, fmt.Errorf("list offset %d exceeds block size %d", dp.Block.Offset, len(block.Data))
+		return nil, fmt.Errorf(
+			"list offset %d exceeds block size %d",
+			dp.Block.Offset,
+			len(block.Data),
+		)
 	}
 
 	blockData := block.Data[dp.Block.Offset:]
@@ -1272,7 +1278,8 @@ func decompressStructFields(
 		childData.TupleCount = tupleCount
 
 		// For nested STRUCT types, we need to recursively decompress the nested struct's fields
-		if fieldType == TypeStruct && fields[i].TypeModifiers != nil && len(fields[i].TypeModifiers.StructFields) > 0 {
+		if fieldType == TypeStruct && fields[i].TypeModifiers != nil &&
+			len(fields[i].TypeModifiers.StructFields) > 0 {
 			// Set the struct field definitions
 			childData.StructFields = fields[i].TypeModifiers.StructFields
 
@@ -1324,7 +1331,11 @@ func decompressMapColumn(
 	}
 
 	if uint64(dp.Block.Offset) >= uint64(len(block.Data)) {
-		return nil, fmt.Errorf("map offset %d exceeds block size %d", dp.Block.Offset, len(block.Data))
+		return nil, fmt.Errorf(
+			"map offset %d exceeds block size %d",
+			dp.Block.Offset,
+			len(block.Data),
+		)
 	}
 
 	blockData := block.Data[dp.Block.Offset:]
@@ -1368,7 +1379,11 @@ func decompressMapColumn(
 
 		// Read validity for STRUCT entries if present
 		if dp.ChildPointer.ValidityPointer != nil {
-			childData.Validity, _ = readValidityFromPointer(blockManager, dp.ChildPointer.ValidityPointer, totalChildElements)
+			childData.Validity, _ = readValidityFromPointer(
+				blockManager,
+				dp.ChildPointer.ValidityPointer,
+				totalChildElements,
+			)
 		}
 	}
 
@@ -1476,7 +1491,11 @@ func decompressConstantVarSize(compressedData []byte, tupleCount uint64) ([]byte
 // For single-string segments (e.g., 1 row), the format is different:
 // - 8-byte header
 // - string_t entry (4-byte length + 12-byte inline data)
-func decodeUncompressedStrings(data []byte, tupleCount uint64, blockManager *BlockManager) ([]byte, error) {
+func decodeUncompressedStrings(
+	data []byte,
+	tupleCount uint64,
+	blockManager *BlockManager,
+) ([]byte, error) {
 	if tupleCount == 0 {
 		return []byte{}, nil
 	}
@@ -1572,7 +1591,11 @@ func decodeUncompressedStrings(data []byte, tupleCount uint64, blockManager *Blo
 			// The overflow block contains: [4-byte length][string data]
 			overflowDataStart := uint32(overflowOffsetInBlock)
 			if overflowDataStart+4 > uint32(len(overflowBlock.Data)) {
-				return nil, fmt.Errorf("overflow offset %d out of bounds in block %d", overflowDataStart, overflowBlockID)
+				return nil, fmt.Errorf(
+					"overflow offset %d out of bounds in block %d",
+					overflowDataStart,
+					overflowBlockID,
+				)
 			}
 
 			// Read length from overflow block (should match stringLen)
@@ -1590,7 +1613,9 @@ func decodeUncompressedStrings(data []byte, tupleCount uint64, blockManager *Blo
 			}
 
 			result = binary.LittleEndian.AppendUint32(result, stringLen)
-			result = append(result, overflowBlock.Data[stringDataStart:stringDataStart+stringLen]...)
+			result = append(
+				result,
+				overflowBlock.Data[stringDataStart:stringDataStart+stringLen]...)
 
 			overflowIdx++
 		} else {
@@ -1708,8 +1733,13 @@ func decodeDictionaryStrings(data []byte, tupleCount uint64) ([]byte, error) {
 		strEndPos := strStart + strLen
 
 		if strEndPos > uint32(len(data)) {
-			return nil, fmt.Errorf("string bounds exceed data at index %d: start=%d, len=%d, data_len=%d",
-				i, strStart, strLen, len(data))
+			return nil, fmt.Errorf(
+				"string bounds exceed data at index %d: start=%d, len=%d, data_len=%d",
+				i,
+				strStart,
+				strLen,
+				len(data),
+			)
 		}
 
 		uniqueStrings[i] = data[strStart:strEndPos]
@@ -1762,7 +1792,12 @@ func decodeDictionaryStrings(data []byte, tupleCount uint64) ([]byte, error) {
 }
 
 // synthesizeConstantFromStats creates constant data from statistics min value.
-func synthesizeConstantFromStats(statData []byte, typeID LogicalTypeID, valueSize int, tupleCount uint64) ([]byte, error) {
+func synthesizeConstantFromStats(
+	statData []byte,
+	typeID LogicalTypeID,
+	valueSize int,
+	tupleCount uint64,
+) ([]byte, error) {
 	if valueSize <= 0 {
 		// Variable-size type - statistics contain length-prefixed data
 		if len(statData) < 4 {
@@ -1849,7 +1884,11 @@ func extractEmbeddedValidityMask(
 			return nil, fmt.Errorf("variable-size types not supported for RLE validity extraction")
 		}
 		if valuesRegionSize%valueSize != 0 {
-			return nil, fmt.Errorf("values region size %d not divisible by valueSize %d", valuesRegionSize, valueSize)
+			return nil, fmt.Errorf(
+				"values region size %d not divisible by valueSize %d",
+				valuesRegionSize,
+				valueSize,
+			)
 		}
 		numUniqueValues := valuesRegionSize / valueSize
 
@@ -1873,12 +1912,19 @@ func extractEmbeddedValidityMask(
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported compression type for validity extraction: %s", compression.String())
+		return nil, fmt.Errorf(
+			"unsupported compression type for validity extraction: %s",
+			compression.String(),
+		)
 	}
 
 	// Validate offset
 	if validityOffset >= len(compressedData) {
-		return nil, fmt.Errorf("validity offset %d exceeds data length %d", validityOffset, len(compressedData))
+		return nil, fmt.Errorf(
+			"validity offset %d exceeds data length %d",
+			validityOffset,
+			len(compressedData),
+		)
 	}
 
 	// Extract and decode validity mask

@@ -142,7 +142,11 @@ func TestAnalyzeFilterPlacementForInnerJoin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := fp.AnalyzeFilterPlacementForInnerJoin(tt.filterCols, tt.leftTableIndices, tt.rightTableIndices)
+			result := fp.AnalyzeFilterPlacementForInnerJoin(
+				tt.filterCols,
+				tt.leftTableIndices,
+				tt.rightTableIndices,
+			)
 			if result != tt.expectedPlacement {
 				t.Errorf("%s: expected %s, got %s", tt.description, tt.expectedPlacement, result)
 			}
@@ -190,7 +194,11 @@ func TestAnalyzeFilterPlacementForLeftJoin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := fp.AnalyzeFilterPlacementForLeftJoin(tt.filterCols, tt.leftTableIndices, tt.rightTableIndices)
+			result := fp.AnalyzeFilterPlacementForLeftJoin(
+				tt.filterCols,
+				tt.leftTableIndices,
+				tt.rightTableIndices,
+			)
 			if result != tt.expectedPlacement {
 				t.Errorf("%s: expected %s, got %s", tt.description, tt.expectedPlacement, result)
 			}
@@ -230,7 +238,11 @@ func TestAnalyzeFilterPlacementForRightJoin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := fp.AnalyzeFilterPlacementForRightJoin(tt.filterCols, tt.leftTableIndices, tt.rightTableIndices)
+			result := fp.AnalyzeFilterPlacementForRightJoin(
+				tt.filterCols,
+				tt.leftTableIndices,
+				tt.rightTableIndices,
+			)
 			if result != tt.expectedPlacement {
 				t.Errorf("%s: expected %s, got %s", tt.description, tt.expectedPlacement, result)
 			}
@@ -310,7 +322,12 @@ func TestExtractPredicatesForSubquery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			canPush := fp.ExtractPredicatesForSubquery(tt.filterCols, tt.outerTableIndices)
 			if canPush != tt.expectedCanPush {
-				t.Errorf("%s: expected canPush=%v, got %v", tt.description, tt.expectedCanPush, canPush)
+				t.Errorf(
+					"%s: expected canPush=%v, got %v",
+					tt.description,
+					tt.expectedCanPush,
+					canPush,
+				)
 			}
 		})
 	}
@@ -321,10 +338,10 @@ func TestSplitANDConjuncts(t *testing.T) {
 	fp := NewFilterPushdown()
 
 	tests := []struct {
-		name               string
-		expr               BoundExpr
-		expectedPartCount  int
-		description        string
+		name              string
+		expr              BoundExpr
+		expectedPartCount int
+		description       string
 	}{
 		{
 			name: "Single predicate",
@@ -372,15 +389,23 @@ func TestSplitANDConjuncts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parts := fp.SplitANDConjuncts(tt.expr, func(e BoundExpr) (left, right BoundExpr, isAND bool) {
-				if m, ok := e.(*fpTestExpr); ok {
-					return m.left, m.right, m.isAND
-				}
-				return nil, nil, false
-			})
+			parts := fp.SplitANDConjuncts(
+				tt.expr,
+				func(e BoundExpr) (left, right BoundExpr, isAND bool) {
+					if m, ok := e.(*fpTestExpr); ok {
+						return m.left, m.right, m.isAND
+					}
+					return nil, nil, false
+				},
+			)
 
 			if len(parts) != tt.expectedPartCount {
-				t.Errorf("%s: expected %d parts, got %d", tt.description, tt.expectedPartCount, len(parts))
+				t.Errorf(
+					"%s: expected %d parts, got %d",
+					tt.description,
+					tt.expectedPartCount,
+					len(parts),
+				)
 			}
 		})
 	}
@@ -391,9 +416,9 @@ func TestCombineWithAND(t *testing.T) {
 	fp := NewFilterPushdown()
 
 	tests := []struct {
-		name               string
-		exprCount          int
-		description        string
+		name        string
+		exprCount   int
+		description string
 	}{
 		{
 			name:        "No expressions",
@@ -428,9 +453,9 @@ func TestCombineWithAND(t *testing.T) {
 
 			result := fp.CombineWithAND(exprs, func(left, right BoundExpr) BoundExpr {
 				return &fpTestExpr{
-					isAND:  true,
-					left:   left,
-					right:  right,
+					isAND: true,
+					left:  left,
+					right: right,
 				}
 			})
 
@@ -524,7 +549,11 @@ func TestDocumentation_NULLSemantics(t *testing.T) {
 	leftTableIndices := map[int]bool{0: true}
 	rightTableIndices := map[int]bool{1: true}
 
-	placement := fp.AnalyzeFilterPlacementForLeftJoin(filterCols, leftTableIndices, rightTableIndices)
+	placement := fp.AnalyzeFilterPlacementForLeftJoin(
+		filterCols,
+		leftTableIndices,
+		rightTableIndices,
+	)
 
 	if placement != keepAbove {
 		t.Errorf("NULL semantics violated: expected %s, got %s", keepAbove, placement)
@@ -642,14 +671,17 @@ func TestFilterPushdownJoinCorrectness_InnerJoin(t *testing.T) {
 	// Test case: Filter on left table should be pushable to left child
 	// Scenario: SELECT * FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.x > 5
 	// Expected: Filter "t1.x > 5" can push to t1 scan
-	filterCols := map[int]bool{0: true}       // t1.x
-	leftCols := map[int]bool{0: true}        // t1 columns
-	rightCols := map[int]bool{1: true}       // t2 columns
+	filterCols := map[int]bool{0: true} // t1.x
+	leftCols := map[int]bool{0: true}   // t1 columns
+	rightCols := map[int]bool{1: true}  // t2 columns
 
 	// Should be able to push this filter to left
 	placement := fp.AnalyzeFilterPlacementForInnerJoin(filterCols, leftCols, rightCols)
 	if placement != "LEFT_ONLY" {
-		t.Errorf("Expected LEFT_ONLY placement for left-only filter in INNER JOIN, got %s", placement)
+		t.Errorf(
+			"Expected LEFT_ONLY placement for left-only filter in INNER JOIN, got %s",
+			placement,
+		)
 	}
 
 	// Verify the filter can actually push to the left child
@@ -659,7 +691,7 @@ func TestFilterPushdownJoinCorrectness_InnerJoin(t *testing.T) {
 
 	// Test case 2: Filter on right table
 	// Scenario: SELECT * FROM t1 JOIN t2 ON t1.id = t2.id WHERE t2.y < 10
-	filterCols2 := map[int]bool{1: true}      // t2.y
+	filterCols2 := map[int]bool{1: true} // t2.y
 	placement2 := fp.AnalyzeFilterPlacementForInnerJoin(filterCols2, leftCols, rightCols)
 	if placement2 != "RIGHT_ONLY" {
 		t.Errorf("Expected RIGHT_ONLY placement for right-only filter, got %s", placement2)
@@ -671,7 +703,7 @@ func TestFilterPushdownJoinCorrectness_InnerJoin(t *testing.T) {
 
 	// Test case 3: Filter on both tables - must stay above join
 	// Scenario: SELECT * FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.x > 5 AND t2.y < 10
-	filterColsBoth := map[int]bool{0: true, 1: true}  // Both t1 and t2
+	filterColsBoth := map[int]bool{0: true, 1: true} // Both t1 and t2
 	placementBoth := fp.AnalyzeFilterPlacementForInnerJoin(filterColsBoth, leftCols, rightCols)
 	if placementBoth != "BOTH_SIDES" {
 		t.Errorf("Expected BOTH_SIDES placement, got %s", placementBoth)
@@ -691,7 +723,7 @@ func TestFilterPushdownJoinCorrectness_RightJoin(t *testing.T) {
 	fp := NewFilterPushdown()
 
 	// Test RIGHT JOIN filter placement
-	filterCols := map[int]bool{1: true}       // Right table filter
+	filterCols := map[int]bool{1: true} // Right table filter
 	leftCols := map[int]bool{0: true}
 	rightCols := map[int]bool{1: true}
 
@@ -704,7 +736,11 @@ func TestFilterPushdownJoinCorrectness_RightJoin(t *testing.T) {
 	filterLeft := map[int]bool{0: true}
 	placementLeft := fp.AnalyzeFilterPlacementForRightJoin(filterLeft, leftCols, rightCols)
 	if placementLeft != keepAbove {
-		t.Errorf("Expected %s for left table filter in RIGHT JOIN, got %s", keepAbove, placementLeft)
+		t.Errorf(
+			"Expected %s for left table filter in RIGHT JOIN, got %s",
+			keepAbove,
+			placementLeft,
+		)
 	}
 }
 
@@ -716,46 +752,50 @@ func TestFilterPushdownOuterJoinSemantics_LeftJoin(t *testing.T) {
 	fp := NewFilterPushdown()
 
 	examples := []struct {
-		name            string
-		sqlExample      string
-		filterCols      map[int]bool
-		leftTableIndices map[int]bool
+		name              string
+		sqlExample        string
+		filterCols        map[int]bool
+		leftTableIndices  map[int]bool
 		rightTableIndices map[int]bool
-		expectedResult  string
-		reason          string
+		expectedResult    string
+		reason            string
 	}{
 		{
-			name:             "LEFT JOIN - filter on left only (safe to push)",
-			sqlExample:       "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t1.val > 100",
-			filterCols:       map[int]bool{0: true},
-			leftTableIndices: map[int]bool{0: true},
+			name:              "LEFT JOIN - filter on left only (safe to push)",
+			sqlExample:        "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t1.val > 100",
+			filterCols:        map[int]bool{0: true},
+			leftTableIndices:  map[int]bool{0: true},
 			rightTableIndices: map[int]bool{1: true},
-			expectedResult:   "LEFT_ONLY",
-			reason:           "Filter on left table only - can push safely",
+			expectedResult:    "LEFT_ONLY",
+			reason:            "Filter on left table only - can push safely",
 		},
 		{
-			name:             "LEFT JOIN - filter on right (MUST NOT push)",
-			sqlExample:       "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.val > 100",
-			filterCols:       map[int]bool{1: true},
-			leftTableIndices: map[int]bool{0: true},
+			name:              "LEFT JOIN - filter on right (MUST NOT push)",
+			sqlExample:        "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.val > 100",
+			filterCols:        map[int]bool{1: true},
+			leftTableIndices:  map[int]bool{0: true},
 			rightTableIndices: map[int]bool{1: true},
-			expectedResult:   keepAbove,
-			reason:           "Filter on right table - must keep above. Pushing would eliminate t1 rows with NULL t2",
+			expectedResult:    keepAbove,
+			reason:            "Filter on right table - must keep above. Pushing would eliminate t1 rows with NULL t2",
 		},
 		{
-			name:             "LEFT JOIN - filter on both tables (MUST NOT push)",
-			sqlExample:       "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t1.val > 100 AND t2.status = 'active'",
-			filterCols:       map[int]bool{0: true, 1: true},
-			leftTableIndices: map[int]bool{0: true},
+			name:              "LEFT JOIN - filter on both tables (MUST NOT push)",
+			sqlExample:        "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t1.val > 100 AND t2.status = 'active'",
+			filterCols:        map[int]bool{0: true, 1: true},
+			leftTableIndices:  map[int]bool{0: true},
 			rightTableIndices: map[int]bool{1: true},
-			expectedResult:   keepAbove,
-			reason:           "Filter references right table which may be NULL - must keep above",
+			expectedResult:    keepAbove,
+			reason:            "Filter references right table which may be NULL - must keep above",
 		},
 	}
 
 	for _, ex := range examples {
 		t.Run(ex.name, func(t *testing.T) {
-			result := fp.AnalyzeFilterPlacementForLeftJoin(ex.filterCols, ex.leftTableIndices, ex.rightTableIndices)
+			result := fp.AnalyzeFilterPlacementForLeftJoin(
+				ex.filterCols,
+				ex.leftTableIndices,
+				ex.rightTableIndices,
+			)
 			if result != ex.expectedResult {
 				t.Errorf("SQL: %s\nExpected: %s, Got: %s\nReason: %s",
 					ex.sqlExample, ex.expectedResult, result, ex.reason)
@@ -771,7 +811,11 @@ func TestFilterPushdownOuterJoinSemantics_RightAndFullJoin(t *testing.T) {
 	// RIGHT JOIN tests
 	t.Run("RIGHT JOIN - filter on right only (safe to push)", func(t *testing.T) {
 		filterCols := map[int]bool{1: true}
-		result := fp.AnalyzeFilterPlacementForRightJoin(filterCols, map[int]bool{0: true}, map[int]bool{1: true})
+		result := fp.AnalyzeFilterPlacementForRightJoin(
+			filterCols,
+			map[int]bool{0: true},
+			map[int]bool{1: true},
+		)
 		if result != "RIGHT_ONLY" {
 			t.Errorf("Expected RIGHT_ONLY, got %s", result)
 		}
@@ -779,7 +823,11 @@ func TestFilterPushdownOuterJoinSemantics_RightAndFullJoin(t *testing.T) {
 
 	t.Run("RIGHT JOIN - filter on left (MUST NOT push)", func(t *testing.T) {
 		filterCols := map[int]bool{0: true}
-		result := fp.AnalyzeFilterPlacementForRightJoin(filterCols, map[int]bool{0: true}, map[int]bool{1: true})
+		result := fp.AnalyzeFilterPlacementForRightJoin(
+			filterCols,
+			map[int]bool{0: true},
+			map[int]bool{1: true},
+		)
 		if result != keepAbove {
 			t.Errorf("Expected %s, got %s", keepAbove, result)
 		}
@@ -787,19 +835,19 @@ func TestFilterPushdownOuterJoinSemantics_RightAndFullJoin(t *testing.T) {
 
 	// FULL OUTER JOIN tests - no filters can be pushed
 	t.Run("FULL JOIN - any filter (MUST NOT push)", func(t *testing.T) {
-		filterCols1 := map[int]bool{0: true}  // Left table
+		filterCols1 := map[int]bool{0: true} // Left table
 		result1 := fp.AnalyzeFilterPlacementForFullJoin(filterCols1)
 		if result1 != keepAbove {
 			t.Errorf("Expected %s for full join, got %s", keepAbove, result1)
 		}
 
-		filterCols2 := map[int]bool{1: true}  // Right table
+		filterCols2 := map[int]bool{1: true} // Right table
 		result2 := fp.AnalyzeFilterPlacementForFullJoin(filterCols2)
 		if result2 != keepAbove {
 			t.Errorf("Expected %s for full join, got %s", keepAbove, result2)
 		}
 
-		filterCols3 := map[int]bool{0: true, 1: true}  // Both tables
+		filterCols3 := map[int]bool{0: true, 1: true} // Both tables
 		result3 := fp.AnalyzeFilterPlacementForFullJoin(filterCols3)
 		if result3 != keepAbove {
 			t.Errorf("Expected %s for full join, got %s", keepAbove, result3)
@@ -833,7 +881,10 @@ func TestFilterPlacementExplainAnalysis(t *testing.T) {
 	// Verify consistent behavior:
 	// 1. Filter on left-only should be LEFT_ONLY
 	if placement != "LEFT_ONLY" {
-		t.Errorf("Filter classification should be LEFT_ONLY for left-only filter, got %s", placement)
+		t.Errorf(
+			"Filter classification should be LEFT_ONLY for left-only filter, got %s",
+			placement,
+		)
 	}
 
 	// 2. The analysis should be deterministic (same input = same output)
@@ -1028,7 +1079,11 @@ func TestFilterPushdownPerformanceBenefit(t *testing.T) {
 			// For left child
 			canPushLeft := fp.CanPushFilterToChild(tc.filterCols, tc.leftCols)
 			if tc.canPush && !canPushLeft {
-				t.Errorf("Should be able to push filter %v to left child %v", tc.filterCols, tc.leftCols)
+				t.Errorf(
+					"Should be able to push filter %v to left child %v",
+					tc.filterCols,
+					tc.leftCols,
+				)
 			}
 		})
 	}
@@ -1099,7 +1154,7 @@ func TestEdgeCase_FilterWithSubqueries(t *testing.T) {
 
 	// Test uncorrelated subquery filter
 	// Columns: Only references subquery columns, not this table
-	outerTableIndices := map[int]bool{0: true} // t1
+	outerTableIndices := map[int]bool{0: true}  // t1
 	subqueryFilterCols := map[int]bool{1: true} // t2 (from subquery)
 
 	canPush := fp.ExtractPredicatesForSubquery(subqueryFilterCols, outerTableIndices)

@@ -308,8 +308,16 @@ TXN010,CUST-110,SKU-TAB-010,1,240.00,299.99,2023-01-09T14:40:00Z,STORE-S002,{dis
 	defer rows.Close()
 
 	fmt.Println("Data Quality Metrics:")
-	fmt.Printf("%-25s | %-12s | %-15s | %-15s | %-15s | %-12s | %-12s\n",
-		"Metric Type", "Total/Count", "Unique/Category 1", "Category 2", "Category 3", "Average", "Min/Max")
+	fmt.Printf(
+		"%-25s | %-12s | %-15s | %-15s | %-15s | %-12s | %-12s\n",
+		"Metric Type",
+		"Total/Count",
+		"Unique/Category 1",
+		"Category 2",
+		"Category 3",
+		"Average",
+		"Min/Max",
+	)
 	fmt.Println(strings.Repeat("-", 120))
 
 	for rows.Next() {
@@ -321,8 +329,16 @@ TXN010,CUST-110,SKU-TAB-010,1,240.00,299.99,2023-01-09T14:40:00Z,STORE-S002,{dis
 			log.Fatal("Failed to scan row:", err)
 		}
 
-		fmt.Printf("%-25s | %-12.0f | %-15.0f | %-15.0f | %-15.0f | %-12.2f | %-12.2f\n",
-			metricType, col1.Float64, col2.Float64, col3.Float64, col4.Float64, col5.Float64, col6.Float64)
+		fmt.Printf(
+			"%-25s | %-12.0f | %-15.0f | %-15.0f | %-15.0f | %-12.2f | %-12.2f\n",
+			metricType,
+			col1.Float64,
+			col2.Float64,
+			col3.Float64,
+			col4.Float64,
+			col5.Float64,
+			col6.Float64,
+		)
 	}
 
 	// Example 6: Complex business logic transformation
@@ -482,7 +498,15 @@ TXN010,CUST-110,SKU-TAB-010,1,240.00,299.99,2023-01-09T14:40:00Z,STORE-S002,{dis
 		var recordCount sql.NullInt64
 		var totalGross, avgAmount, netAmount, profit sql.NullFloat64
 
-		err := rows.Scan(&stage, &description, &recordCount, &totalGross, &avgAmount, &netAmount, &profit)
+		err := rows.Scan(
+			&stage,
+			&description,
+			&recordCount,
+			&totalGross,
+			&avgAmount,
+			&netAmount,
+			&profit,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}

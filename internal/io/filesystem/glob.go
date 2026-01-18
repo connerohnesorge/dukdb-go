@@ -12,10 +12,10 @@ import (
 
 // Constants used throughout the glob matching.
 const (
-	pathSeparator       = "/"
-	currentDir          = "."
-	recursiveWildcard   = "**"
-	hiddenFilePrefix    = "."
+	pathSeparator     = "/"
+	currentDir        = "."
+	recursiveWildcard = "**"
+	hiddenFilePrefix  = "."
 )
 
 // ErrInvalidGlobPattern is returned when a glob pattern is invalid.
@@ -141,7 +141,10 @@ func (gm *GlobMatcher) expandPattern(segments []PatternSegment, basePath string)
 }
 
 // expandWildcard expands a wildcard pattern (* or ? or [...]) at the current directory level.
-func (gm *GlobMatcher) expandWildcard(pattern, basePath string, remaining []PatternSegment) ([]string, error) {
+func (gm *GlobMatcher) expandWildcard(
+	pattern, basePath string,
+	remaining []PatternSegment,
+) ([]string, error) {
 	dirPath := basePath
 	if dirPath == "" {
 		dirPath = currentDir
@@ -158,7 +161,8 @@ func (gm *GlobMatcher) expandWildcard(pattern, basePath string, remaining []Patt
 		name := entry.Name()
 
 		// Skip hidden files unless pattern explicitly matches them
-		if strings.HasPrefix(name, hiddenFilePrefix) && !strings.HasPrefix(pattern, hiddenFilePrefix) {
+		if strings.HasPrefix(name, hiddenFilePrefix) &&
+			!strings.HasPrefix(pattern, hiddenFilePrefix) {
 			continue
 		}
 
@@ -189,7 +193,10 @@ func (gm *GlobMatcher) expandWildcard(pattern, basePath string, remaining []Patt
 }
 
 // expandRecursive expands ** to match zero or more directories.
-func (gm *GlobMatcher) expandRecursive(basePath string, remaining []PatternSegment) ([]string, error) {
+func (gm *GlobMatcher) expandRecursive(
+	basePath string,
+	remaining []PatternSegment,
+) ([]string, error) {
 	var results []string
 
 	// First, try matching with zero directories (** matches nothing)

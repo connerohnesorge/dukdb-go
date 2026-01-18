@@ -81,18 +81,18 @@ func generateConnID() uint64 {
 // EngineConn represents a connection to the engine.
 // It implements the BackendConn interface.
 type EngineConn struct {
-	mu                        sync.Mutex
-	id                        uint64 // Unique connection ID, assigned at creation
-	engine                    *Engine
-	txn                       *Transaction
-	closed                    bool
-	inTxn                     bool                 // Whether BEGIN was explicitly called (explicit transaction mode)
-	defaultIsolationLevel     parser.IsolationLevel // Default isolation level for new transactions
-	currentIsolationLevel     parser.IsolationLevel // Isolation level of current transaction (if any)
+	mu                    sync.Mutex
+	id                    uint64 // Unique connection ID, assigned at creation
+	engine                *Engine
+	txn                   *Transaction
+	closed                bool
+	inTxn                 bool                  // Whether BEGIN was explicitly called (explicit transaction mode)
+	defaultIsolationLevel parser.IsolationLevel // Default isolation level for new transactions
+	currentIsolationLevel parser.IsolationLevel // Isolation level of current transaction (if any)
 
 	// Glob settings - initialized from config, can be overridden via SET
-	maxFilesPerGlob           int // Max files a glob pattern can match (default: 10000)
-	fileGlobTimeout           int // Timeout for cloud storage glob operations in seconds (default: 60)
+	maxFilesPerGlob int // Max files a glob pattern can match (default: 10000)
+	fileGlobTimeout int // Timeout for cloud storage glob operations in seconds (default: 60)
 }
 
 // undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
@@ -387,7 +387,9 @@ func (c *EngineConn) handleSavepoint(stmt *parser.SavepointStmt) (int64, error) 
 }
 
 // handleRollbackToSavepoint rolls back to a savepoint.
-func (c *EngineConn) handleRollbackToSavepoint(stmt *parser.RollbackToSavepointStmt) (int64, error) {
+func (c *EngineConn) handleRollbackToSavepoint(
+	stmt *parser.RollbackToSavepointStmt,
+) (int64, error) {
 	// Must be in a transaction
 	if !c.inTxn {
 		return 0, errors.New("ROLLBACK TO SAVEPOINT can only be used in transaction block")
@@ -724,7 +726,9 @@ func (c *EngineConn) Query(
 // getOptimizationHints runs the cost-based optimizer on a bound statement
 // and returns planner hints derived from the optimized plan.
 // Returns nil if optimization is disabled or fails.
-func (c *EngineConn) getOptimizationHints(boundStmt binder.BoundStatement) *planner.OptimizationHints {
+func (c *EngineConn) getOptimizationHints(
+	boundStmt binder.BoundStatement,
+) *planner.OptimizationHints {
 	opt := c.engine.Optimizer()
 	if opt == nil || !opt.IsEnabled() {
 		return nil

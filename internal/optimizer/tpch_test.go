@@ -1,6 +1,6 @@
 // Package optimizer provides cost-based query optimization for dukdb-go.
 //
-// TPC-H Benchmark Tests
+// # TPC-H Benchmark Tests
 //
 // This file contains TPC-H-like benchmark queries to test the cost-based optimizer.
 // The queries are simplified versions of TPC-H queries that exercise multi-table
@@ -43,9 +43,21 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchCustomerRows,
 			PageCount: 1500,
 			Columns: []ColumnStatistics{
-				{ColumnName: "c_custkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchCustomerRows},
-				{ColumnName: "c_name", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: tpchCustomerRows},
-				{ColumnName: "c_nationkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchNationRows},
+				{
+					ColumnName:    "c_custkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchCustomerRows,
+				},
+				{
+					ColumnName:    "c_name",
+					ColumnType:    dukdb.TYPE_VARCHAR,
+					DistinctCount: tpchCustomerRows,
+				},
+				{
+					ColumnName:    "c_nationkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchNationRows,
+				},
 				{ColumnName: "c_mktsegment", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 5},
 			},
 		},
@@ -63,8 +75,16 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchOrdersRows,
 			PageCount: 15000,
 			Columns: []ColumnStatistics{
-				{ColumnName: "o_orderkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchOrdersRows},
-				{ColumnName: "o_custkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchCustomerRows},
+				{
+					ColumnName:    "o_orderkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchOrdersRows,
+				},
+				{
+					ColumnName:    "o_custkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchCustomerRows,
+				},
 				{ColumnName: "o_orderdate", ColumnType: dukdb.TYPE_DATE, DistinctCount: 2500},
 				{ColumnName: "o_orderstatus", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 3},
 			},
@@ -83,10 +103,26 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchLineitemRows,
 			PageCount: 60000,
 			Columns: []ColumnStatistics{
-				{ColumnName: "l_orderkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchOrdersRows},
-				{ColumnName: "l_partkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchPartRows},
-				{ColumnName: "l_suppkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchSupplierRows},
-				{ColumnName: "l_extendedprice", ColumnType: dukdb.TYPE_DOUBLE, DistinctCount: 1000000},
+				{
+					ColumnName:    "l_orderkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchOrdersRows,
+				},
+				{
+					ColumnName:    "l_partkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchPartRows,
+				},
+				{
+					ColumnName:    "l_suppkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchSupplierRows,
+				},
+				{
+					ColumnName:    "l_extendedprice",
+					ColumnType:    dukdb.TYPE_DOUBLE,
+					DistinctCount: 1000000,
+				},
 				{ColumnName: "l_discount", ColumnType: dukdb.TYPE_DOUBLE, DistinctCount: 11},
 				{ColumnName: "l_returnflag", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: 3},
 			},
@@ -107,9 +143,21 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchNationRows,
 			PageCount: 1,
 			Columns: []ColumnStatistics{
-				{ColumnName: "n_nationkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchNationRows},
-				{ColumnName: "n_name", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: tpchNationRows},
-				{ColumnName: "n_regionkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchRegionRows},
+				{
+					ColumnName:    "n_nationkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchNationRows,
+				},
+				{
+					ColumnName:    "n_name",
+					ColumnType:    dukdb.TYPE_VARCHAR,
+					DistinctCount: tpchNationRows,
+				},
+				{
+					ColumnName:    "n_regionkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchRegionRows,
+				},
 			},
 		},
 		columns: []ColumnInfo{
@@ -125,8 +173,16 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchRegionRows,
 			PageCount: 1,
 			Columns: []ColumnStatistics{
-				{ColumnName: "r_regionkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchRegionRows},
-				{ColumnName: "r_name", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: tpchRegionRows},
+				{
+					ColumnName:    "r_regionkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchRegionRows,
+				},
+				{
+					ColumnName:    "r_name",
+					ColumnType:    dukdb.TYPE_VARCHAR,
+					DistinctCount: tpchRegionRows,
+				},
 			},
 		},
 		columns: []ColumnInfo{
@@ -141,9 +197,21 @@ func setupTPCHCatalog() *mockCatalog {
 			RowCount:  tpchSupplierRows,
 			PageCount: 100,
 			Columns: []ColumnStatistics{
-				{ColumnName: "s_suppkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchSupplierRows},
-				{ColumnName: "s_name", ColumnType: dukdb.TYPE_VARCHAR, DistinctCount: tpchSupplierRows},
-				{ColumnName: "s_nationkey", ColumnType: dukdb.TYPE_INTEGER, DistinctCount: tpchNationRows},
+				{
+					ColumnName:    "s_suppkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchSupplierRows,
+				},
+				{
+					ColumnName:    "s_name",
+					ColumnType:    dukdb.TYPE_VARCHAR,
+					DistinctCount: tpchSupplierRows,
+				},
+				{
+					ColumnName:    "s_nationkey",
+					ColumnType:    dukdb.TYPE_INTEGER,
+					DistinctCount: tpchNationRows,
+				},
 			},
 		},
 		columns: []ColumnInfo{
@@ -184,7 +252,11 @@ func createTPCHQ3Plan() LogicalPlanNode {
 	customerFilter := &mockLogicalFilter{
 		child: customerScan,
 		condition: &mockBinaryExpr{
-			left:    &mockColumnRef{table: "c", column: "c_mktsegment", colType: dukdb.TYPE_VARCHAR},
+			left: &mockColumnRef{
+				table:   "c",
+				column:  "c_mktsegment",
+				colType: dukdb.TYPE_VARCHAR,
+			},
 			op:      OpEq,
 			right:   &mockLiteral{value: "BUILDING", valType: dukdb.TYPE_VARCHAR},
 			resType: dukdb.TYPE_BOOLEAN,
@@ -559,7 +631,11 @@ func createTPCHQ10Plan() LogicalPlanNode {
 	lineitemFilter := &mockLogicalFilter{
 		child: lineitemScan,
 		condition: &mockBinaryExpr{
-			left:    &mockColumnRef{table: "l", column: "l_returnflag", colType: dukdb.TYPE_VARCHAR},
+			left: &mockColumnRef{
+				table:   "l",
+				column:  "l_returnflag",
+				colType: dukdb.TYPE_VARCHAR,
+			},
 			op:      OpEq,
 			right:   &mockLiteral{value: "R", valType: dukdb.TYPE_VARCHAR},
 			resType: dukdb.TYPE_BOOLEAN,
@@ -701,10 +777,18 @@ func TestTPCHPlanCostComparison(t *testing.T) {
 			assert.Greater(t, resultWithStats.EstimatedCost.TotalCost, 0.0)
 			assert.Greater(t, resultWithoutStats.EstimatedCost.TotalCost, 0.0)
 
-			t.Logf("%s with stats: cost=%.2f, rows=%.2f",
-				tc.name, resultWithStats.EstimatedCost.TotalCost, resultWithStats.EstimatedCost.OutputRows)
-			t.Logf("%s without stats: cost=%.2f, rows=%.2f",
-				tc.name, resultWithoutStats.EstimatedCost.TotalCost, resultWithoutStats.EstimatedCost.OutputRows)
+			t.Logf(
+				"%s with stats: cost=%.2f, rows=%.2f",
+				tc.name,
+				resultWithStats.EstimatedCost.TotalCost,
+				resultWithStats.EstimatedCost.OutputRows,
+			)
+			t.Logf(
+				"%s without stats: cost=%.2f, rows=%.2f",
+				tc.name,
+				resultWithoutStats.EstimatedCost.TotalCost,
+				resultWithoutStats.EstimatedCost.OutputRows,
+			)
 
 			// The costs will differ, but both should be reasonable
 			// With accurate statistics, we expect different (typically better) estimates
@@ -768,14 +852,38 @@ func TestJoinOrderOptimizerOnTPCH(t *testing.T) {
 	t.Run("3-table join", func(t *testing.T) {
 		// customer, orders, lineitem
 		tables := []TableRef{
-			{Schema: "main", Table: "customer", Alias: "c", Cardinality: tpchCustomerRows, Width: 64},
+			{
+				Schema:      "main",
+				Table:       "customer",
+				Alias:       "c",
+				Cardinality: tpchCustomerRows,
+				Width:       64,
+			},
 			{Schema: "main", Table: "orders", Alias: "o", Cardinality: tpchOrdersRows, Width: 32},
-			{Schema: "main", Table: "lineitem", Alias: "l", Cardinality: tpchLineitemRows, Width: 80},
+			{
+				Schema:      "main",
+				Table:       "lineitem",
+				Alias:       "l",
+				Cardinality: tpchLineitemRows,
+				Width:       80,
+			},
 		}
 
 		predicates := []JoinPredicate{
-			{LeftTable: "c", LeftColumn: "c_custkey", RightTable: "o", RightColumn: "o_custkey", IsEquality: true},
-			{LeftTable: "o", LeftColumn: "o_orderkey", RightTable: "l", RightColumn: "l_orderkey", IsEquality: true},
+			{
+				LeftTable:   "c",
+				LeftColumn:  "c_custkey",
+				RightTable:  "o",
+				RightColumn: "o_custkey",
+				IsEquality:  true,
+			},
+			{
+				LeftTable:   "o",
+				LeftColumn:  "o_orderkey",
+				RightTable:  "l",
+				RightColumn: "l_orderkey",
+				IsEquality:  true,
+			},
 		}
 
 		plan, err := joinOptimizer.OptimizeJoinOrder(tables, predicates)
@@ -793,16 +901,52 @@ func TestJoinOrderOptimizerOnTPCH(t *testing.T) {
 		tables := []TableRef{
 			{Schema: "main", Table: "nation", Alias: "n", Cardinality: tpchNationRows, Width: 32},
 			{Schema: "main", Table: "region", Alias: "r", Cardinality: tpchRegionRows, Width: 24},
-			{Schema: "main", Table: "supplier", Alias: "s", Cardinality: tpchSupplierRows, Width: 48},
-			{Schema: "main", Table: "customer", Alias: "c", Cardinality: tpchCustomerRows, Width: 64},
+			{
+				Schema:      "main",
+				Table:       "supplier",
+				Alias:       "s",
+				Cardinality: tpchSupplierRows,
+				Width:       48,
+			},
+			{
+				Schema:      "main",
+				Table:       "customer",
+				Alias:       "c",
+				Cardinality: tpchCustomerRows,
+				Width:       64,
+			},
 			{Schema: "main", Table: "orders", Alias: "o", Cardinality: tpchOrdersRows, Width: 32},
 		}
 
 		predicates := []JoinPredicate{
-			{LeftTable: "n", LeftColumn: "n_regionkey", RightTable: "r", RightColumn: "r_regionkey", IsEquality: true},
-			{LeftTable: "s", LeftColumn: "s_nationkey", RightTable: "n", RightColumn: "n_nationkey", IsEquality: true},
-			{LeftTable: "c", LeftColumn: "c_nationkey", RightTable: "n", RightColumn: "n_nationkey", IsEquality: true},
-			{LeftTable: "c", LeftColumn: "c_custkey", RightTable: "o", RightColumn: "o_custkey", IsEquality: true},
+			{
+				LeftTable:   "n",
+				LeftColumn:  "n_regionkey",
+				RightTable:  "r",
+				RightColumn: "r_regionkey",
+				IsEquality:  true,
+			},
+			{
+				LeftTable:   "s",
+				LeftColumn:  "s_nationkey",
+				RightTable:  "n",
+				RightColumn: "n_nationkey",
+				IsEquality:  true,
+			},
+			{
+				LeftTable:   "c",
+				LeftColumn:  "c_nationkey",
+				RightTable:  "n",
+				RightColumn: "n_nationkey",
+				IsEquality:  true,
+			},
+			{
+				LeftTable:   "c",
+				LeftColumn:  "c_custkey",
+				RightTable:  "o",
+				RightColumn: "o_custkey",
+				IsEquality:  true,
+			},
 		}
 
 		plan, err := joinOptimizer.OptimizeJoinOrder(tables, predicates)
@@ -867,8 +1011,20 @@ func BenchmarkJoinOrderOptimizer3Tables(b *testing.B) {
 	}
 
 	predicates := []JoinPredicate{
-		{LeftTable: "c", LeftColumn: "c_custkey", RightTable: "o", RightColumn: "o_custkey", IsEquality: true},
-		{LeftTable: "o", LeftColumn: "o_orderkey", RightTable: "l", RightColumn: "l_orderkey", IsEquality: true},
+		{
+			LeftTable:   "c",
+			LeftColumn:  "c_custkey",
+			RightTable:  "o",
+			RightColumn: "o_custkey",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "o",
+			LeftColumn:  "o_orderkey",
+			RightTable:  "l",
+			RightColumn: "l_orderkey",
+			IsEquality:  true,
+		},
 	}
 
 	b.ResetTimer()
@@ -894,10 +1050,34 @@ func BenchmarkJoinOrderOptimizer5Tables(b *testing.B) {
 	}
 
 	predicates := []JoinPredicate{
-		{LeftTable: "n", LeftColumn: "n_regionkey", RightTable: "r", RightColumn: "r_regionkey", IsEquality: true},
-		{LeftTable: "s", LeftColumn: "s_nationkey", RightTable: "n", RightColumn: "n_nationkey", IsEquality: true},
-		{LeftTable: "c", LeftColumn: "c_nationkey", RightTable: "n", RightColumn: "n_nationkey", IsEquality: true},
-		{LeftTable: "c", LeftColumn: "c_custkey", RightTable: "o", RightColumn: "o_custkey", IsEquality: true},
+		{
+			LeftTable:   "n",
+			LeftColumn:  "n_regionkey",
+			RightTable:  "r",
+			RightColumn: "r_regionkey",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "s",
+			LeftColumn:  "s_nationkey",
+			RightTable:  "n",
+			RightColumn: "n_nationkey",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "c",
+			LeftColumn:  "c_nationkey",
+			RightTable:  "n",
+			RightColumn: "n_nationkey",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "c",
+			LeftColumn:  "c_custkey",
+			RightTable:  "o",
+			RightColumn: "o_custkey",
+			IsEquality:  true,
+		},
 	}
 
 	b.ResetTimer()

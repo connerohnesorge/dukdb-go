@@ -499,7 +499,11 @@ func (e *Executor) createCloudArrowStreamReader(
 }
 
 // resolveArrowFilePaths resolves a path or glob pattern to a list of file paths.
-func (e *Executor) resolveArrowFilePaths(ctx context.Context, pathOrPattern string, multiOpts *ArrowMultiFileOptions) ([]string, error) {
+func (e *Executor) resolveArrowFilePaths(
+	ctx context.Context,
+	pathOrPattern string,
+	multiOpts *ArrowMultiFileOptions,
+) ([]string, error) {
 	// Check if it's a glob pattern
 	if fileio.IsGlobPattern(pathOrPattern) {
 		return e.expandArrowGlobPattern(ctx, pathOrPattern, multiOpts)
@@ -530,7 +534,11 @@ func (e *Executor) resolveArrowFilePaths(ctx context.Context, pathOrPattern stri
 }
 
 // expandArrowGlobPattern expands a glob pattern to a list of file paths.
-func (e *Executor) expandArrowGlobPattern(ctx context.Context, pattern string, multiOpts *ArrowMultiFileOptions) ([]string, error) {
+func (e *Executor) expandArrowGlobPattern(
+	ctx context.Context,
+	pattern string,
+	multiOpts *ArrowMultiFileOptions,
+) ([]string, error) {
 	var fs filesystem.FileSystem
 	if filesystem.IsCloudURL(pattern) {
 		provider := NewFileSystemProvider(e.getSecretManager())
@@ -786,7 +794,11 @@ func (e *Executor) executeReadArrowMultiFile(
 }
 
 // sniffArrowSchema reads the schema from an Arrow file without reading all data.
-func (e *Executor) sniffArrowSchema(ctx context.Context, path string, opts *arrow.ReaderOptions) (fileio.FileSchema, error) {
+func (e *Executor) sniffArrowSchema(
+	ctx context.Context,
+	path string,
+	opts *arrow.ReaderOptions,
+) (fileio.FileSchema, error) {
 	var reader *arrow.Reader
 	var closer io.Closer
 
@@ -866,7 +878,11 @@ func (e *Executor) sniffArrowSchema(ctx context.Context, path string, opts *arro
 }
 
 // readArrowFileChunks reads all chunks from an Arrow file.
-func (e *Executor) readArrowFileChunks(ctx context.Context, path string, opts *arrow.ReaderOptions) ([]*storage.DataChunk, error) {
+func (e *Executor) readArrowFileChunks(
+	ctx context.Context,
+	path string,
+	opts *arrow.ReaderOptions,
+) ([]*storage.DataChunk, error) {
 	var reader *arrow.Reader
 	var closer io.Closer
 

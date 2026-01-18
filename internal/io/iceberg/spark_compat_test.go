@@ -154,7 +154,12 @@ func TestSparkCompat_MetadataJSONStructure(t *testing.T) {
 	t.Run("CurrentSchemaID", func(t *testing.T) {
 		currentSchemaID, ok := metadata["current-schema-id"].(float64)
 		require.True(t, ok, "current-schema-id must be present")
-		assert.GreaterOrEqual(t, currentSchemaID, float64(0), "current-schema-id must be non-negative")
+		assert.GreaterOrEqual(
+			t,
+			currentSchemaID,
+			float64(0),
+			"current-schema-id must be non-negative",
+		)
 	})
 
 	t.Run("PartitionSpecs", func(t *testing.T) {
@@ -513,7 +518,9 @@ func TestSparkCompat_ValidUUIDs(t *testing.T) {
 	entries, err := os.ReadDir(metadataDir)
 	require.NoError(t, err)
 
-	uuidPattern := regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+	uuidPattern := regexp.MustCompile(
+		`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`,
+	)
 
 	for _, entry := range entries {
 		name := entry.Name()

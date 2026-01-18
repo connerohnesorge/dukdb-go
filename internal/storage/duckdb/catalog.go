@@ -851,14 +851,14 @@ const (
 
 // Property IDs for Constraint.
 const (
-	PropConstraintType    = 260 // Constraint type
-	PropConstraintName    = 261 // Constraint name
-	PropConstraintCols    = 262 // Column indices
-	PropConstraintExpr    = 263 // Check expression
-	PropConstraintFK      = 264 // Foreign key info
-	PropFKSchema          = 265 // FK referenced schema
-	PropFKTable           = 266 // FK referenced table
-	PropFKColumns         = 267 // FK referenced columns
-	PropFKOnDelete        = 268 // FK on delete action
-	PropFKOnUpdate        = 269 // FK on update action
+	PropConstraintType = 260 // Constraint type
+	PropConstraintName = 261 // Constraint name
+	PropConstraintCols = 262 // Column indices
+	PropConstraintExpr = 263 // Check expression
+	PropConstraintFK   = 264 // Foreign key info
+	PropFKSchema       = 265 // FK referenced schema
+	PropFKTable        = 266 // FK referenced table
+	PropFKColumns      = 267 // FK referenced columns
+	PropFKOnDelete     = 268 // FK on delete action
+	PropFKOnUpdate     = 269 // FK on update action
 )

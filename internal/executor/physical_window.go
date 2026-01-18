@@ -334,7 +334,10 @@ func (w *PhysicalWindowExecutor) sortPartitions() {
 
 // compareByOrderBy compares two rows by ORDER BY expressions.
 // Handles NULL values (NULLS FIRST or NULLS LAST per column) and DESC ordering.
-func (w *PhysicalWindowExecutor) compareByOrderBy(a, b WindowRow, orderBy []binder.BoundWindowOrder) int {
+func (w *PhysicalWindowExecutor) compareByOrderBy(
+	a, b WindowRow,
+	orderBy []binder.BoundWindowOrder,
+) int {
 	for _, order := range orderBy {
 		rowMapA := w.buildRowMap(a.Values)
 		rowMapB := w.buildRowMap(b.Values)
@@ -424,7 +427,10 @@ func (w *PhysicalWindowExecutor) getPeerGroupForRow(partition *WindowPartition, 
 }
 
 // getPeerGroupStart returns the starting index of the peer group at peerGroupIdx.
-func (w *PhysicalWindowExecutor) getPeerGroupStart(partition *WindowPartition, peerGroupIdx int) int {
+func (w *PhysicalWindowExecutor) getPeerGroupStart(
+	partition *WindowPartition,
+	peerGroupIdx int,
+) int {
 	if peerGroupIdx < 0 || peerGroupIdx >= len(partition.PeerBoundaries) {
 		return 0
 	}
@@ -977,7 +983,8 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 	case "NTILE":
 		buckets := int64(1)
 		if len(windowExpr.Args) > 0 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[0], nil); err == nil && val != nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[0], nil); err == nil &&
+				val != nil {
 				buckets = toInt64Value(val)
 			}
 		}
@@ -988,7 +995,8 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 		offset := 1
 		var defaultVal any
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil && val != nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+				val != nil {
 				offset = int(toInt64Value(val))
 			}
 		}
@@ -1007,7 +1015,8 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 		offset := 1
 		var defaultVal any
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil && val != nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+				val != nil {
 				offset = int(toInt64Value(val))
 			}
 		}
@@ -1039,7 +1048,8 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 	case "NTH_VALUE":
 		n := 1
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil && val != nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+				val != nil {
 				n = int(toInt64Value(val))
 			}
 		}
@@ -1069,7 +1079,14 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 		if !countStar {
 			expr = &windowExpr.Args[0]
 		}
-		return w.evaluateWindowCount(partition, frame, expr, windowExpr.Filter, windowExpr.Distinct, countStar)
+		return w.evaluateWindowCount(
+			partition,
+			frame,
+			expr,
+			windowExpr.Filter,
+			windowExpr.Distinct,
+			countStar,
+		)
 
 	case "AVG":
 		var expr *binder.BoundExpr
@@ -1124,7 +1141,11 @@ func (w *PhysicalWindowExecutor) evaluateDenseRank(partition *WindowPartition, r
 
 // evaluateNtile distributes rows into the specified number of buckets.
 // If rows don't divide evenly, earlier buckets get one extra row.
-func (w *PhysicalWindowExecutor) evaluateNtile(partition *WindowPartition, rowIdx int, buckets int64) int64 {
+func (w *PhysicalWindowExecutor) evaluateNtile(
+	partition *WindowPartition,
+	rowIdx int,
+	buckets int64,
+) int64 {
 	if buckets <= 0 {
 		buckets = 1
 	}
@@ -1380,7 +1401,10 @@ func (w *PhysicalWindowExecutor) evaluateNthValue(
 
 // evaluatePercentRank returns (rank - 1) / (n - 1) where rank uses gaps.
 // Returns 0.0 if partition has only one row.
-func (w *PhysicalWindowExecutor) evaluatePercentRank(partition *WindowPartition, rowIdx int) float64 {
+func (w *PhysicalWindowExecutor) evaluatePercentRank(
+	partition *WindowPartition,
+	rowIdx int,
+) float64 {
 	n := len(partition.Rows)
 	if n <= 1 {
 		return 0.0

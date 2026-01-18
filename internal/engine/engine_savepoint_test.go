@@ -151,26 +151,29 @@ func TestTransaction_RollbackToSavepoint(t *testing.T) {
 		assert.False(t, found)
 	})
 
-	t.Run("rollback to savepoint with nil undoFunc skips undo but truncates log", func(t *testing.T) {
-		tm := NewTransactionManager()
-		txn := tm.Begin()
+	t.Run(
+		"rollback to savepoint with nil undoFunc skips undo but truncates log",
+		func(t *testing.T) {
+			tm := NewTransactionManager()
+			txn := tm.Begin()
 
-		txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{1}})
+			txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{1}})
 
-		err := txn.CreateSavepoint("sp1", time.Now())
-		require.NoError(t, err)
+			err := txn.CreateSavepoint("sp1", time.Now())
+			require.NoError(t, err)
 
-		txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{2}})
-		txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{3}})
+			txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{2}})
+			txn.RecordUndo(UndoOperation{TableName: "t1", OpType: UndoInsert, RowIDs: []uint64{3}})
 
-		// Rollback with nil undoFunc
-		err = txn.RollbackToSavepoint("sp1", nil)
-		require.NoError(t, err)
+			// Rollback with nil undoFunc
+			err = txn.RollbackToSavepoint("sp1", nil)
+			require.NoError(t, err)
 
-		// Undo log should still be truncated
-		undoLog := txn.GetUndoLog()
-		assert.Len(t, undoLog, 1)
-	})
+			// Undo log should still be truncated
+			undoLog := txn.GetUndoLog()
+			assert.Len(t, undoLog, 1)
+		},
+	)
 
 	t.Run("rollback to non-existent savepoint fails", func(t *testing.T) {
 		tm := NewTransactionManager()

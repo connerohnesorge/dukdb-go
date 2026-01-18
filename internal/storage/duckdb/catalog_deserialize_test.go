@@ -167,7 +167,11 @@ func assertTypeModifiersEqual(t *testing.T, expected, actual *TypeModifiers) {
 		assert.Equal(t, expected.StructFields[i].Type, actual.StructFields[i].Type)
 		if expected.StructFields[i].TypeModifiers != nil {
 			require.NotNil(t, actual.StructFields[i].TypeModifiers)
-			assertTypeModifiersEqual(t, expected.StructFields[i].TypeModifiers, actual.StructFields[i].TypeModifiers)
+			assertTypeModifiersEqual(
+				t,
+				expected.StructFields[i].TypeModifiers,
+				actual.StructFields[i].TypeModifiers,
+			)
 		}
 	}
 
@@ -437,9 +441,21 @@ func TestConstraintRoundTrip(t *testing.T) {
 
 			if tc.constraint.ForeignKey != nil {
 				require.NotNil(t, deserialized.ForeignKey)
-				assert.Equal(t, tc.constraint.ForeignKey.ReferencedSchema, deserialized.ForeignKey.ReferencedSchema)
-				assert.Equal(t, tc.constraint.ForeignKey.ReferencedTable, deserialized.ForeignKey.ReferencedTable)
-				assert.Equal(t, tc.constraint.ForeignKey.ReferencedColumns, deserialized.ForeignKey.ReferencedColumns)
+				assert.Equal(
+					t,
+					tc.constraint.ForeignKey.ReferencedSchema,
+					deserialized.ForeignKey.ReferencedSchema,
+				)
+				assert.Equal(
+					t,
+					tc.constraint.ForeignKey.ReferencedTable,
+					deserialized.ForeignKey.ReferencedTable,
+				)
+				assert.Equal(
+					t,
+					tc.constraint.ForeignKey.ReferencedColumns,
+					deserialized.ForeignKey.ReferencedColumns,
+				)
 				assert.Equal(t, tc.constraint.ForeignKey.OnDelete, deserialized.ForeignKey.OnDelete)
 				assert.Equal(t, tc.constraint.ForeignKey.OnUpdate, deserialized.ForeignKey.OnUpdate)
 			} else {
@@ -566,7 +582,11 @@ func TestTableCatalogEntryRoundTrip(t *testing.T) {
 	require.Equal(t, len(original.Constraints), len(deserialized.Constraints))
 	assert.Equal(t, original.Constraints[0].Type, deserialized.Constraints[0].Type)
 	assert.Equal(t, original.Constraints[0].Name, deserialized.Constraints[0].Name)
-	assert.Equal(t, original.Constraints[0].ColumnIndices, deserialized.Constraints[0].ColumnIndices)
+	assert.Equal(
+		t,
+		original.Constraints[0].ColumnIndices,
+		deserialized.Constraints[0].ColumnIndices,
+	)
 }
 
 // TestViewCatalogEntryRoundTrip verifies that ViewCatalogEntry serializes and deserializes correctly.
@@ -735,8 +755,8 @@ func TestNestedTypeModifiersRoundTrip(t *testing.T) {
 	original := TypeModifiers{
 		ChildTypeID: TypeMap,
 		ChildType: &TypeModifiers{
-			KeyTypeID: TypeVarchar,
-			KeyType:   &TypeModifiers{},
+			KeyTypeID:   TypeVarchar,
+			KeyType:     &TypeModifiers{},
 			ValueTypeID: TypeStruct,
 			ValueType: &TypeModifiers{
 				StructFields: []StructField{

@@ -163,7 +163,6 @@ func suggestKeyword(token string) string {
 	return ""
 }
 
-
 // isProbableKeywordTypo checks if a token looks like a typo of a SQL keyword.
 // This is used to reject potential typos as table aliases, column aliases, etc.
 // Returns true if the token is likely a typo of a SQL keyword.

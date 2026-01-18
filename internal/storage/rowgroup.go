@@ -291,24 +291,25 @@ func (rg *DuckDBRowGroup) HasIndex(columnIdx uint16) bool {
 
 // SerializeRowGroup serializes a DuckDB row group to binary format.
 // Format:
-//   [RowGroupMetadata]
-//     - RowCount: uint64 (8 bytes)
-//     - ColumnCount: uint16 (2 bytes)
-//     - Flags: uint32 (4 bytes)
-//     - StartId: uint64 (8 bytes)
-//   [For each column segment]
-//     - TypeID: uint32 (4 bytes)
-//     - CompressionType: uint8 (1 byte)
-//     - DataLength: uint64 (8 bytes)
-//     - ValidityLength: uint32 (4 bytes)
-//     - Data: [DataLength bytes]
-//     - Validity: [ValidityLength bytes]
-//   [Index Data]
-//     - IndexCount: uint16 (2 bytes) - number of indexed columns
-//     - For each indexed column:
-//       - ColumnIndex: uint16 (2 bytes)
-//       - IndexDataLength: uint32 (4 bytes)
-//       - IndexData: [IndexDataLength bytes]
+//
+//	[RowGroupMetadata]
+//	  - RowCount: uint64 (8 bytes)
+//	  - ColumnCount: uint16 (2 bytes)
+//	  - Flags: uint32 (4 bytes)
+//	  - StartId: uint64 (8 bytes)
+//	[For each column segment]
+//	  - TypeID: uint32 (4 bytes)
+//	  - CompressionType: uint8 (1 byte)
+//	  - DataLength: uint64 (8 bytes)
+//	  - ValidityLength: uint32 (4 bytes)
+//	  - Data: [DataLength bytes]
+//	  - Validity: [ValidityLength bytes]
+//	[Index Data]
+//	  - IndexCount: uint16 (2 bytes) - number of indexed columns
+//	  - For each indexed column:
+//	    - ColumnIndex: uint16 (2 bytes)
+//	    - IndexDataLength: uint32 (4 bytes)
+//	    - IndexData: [IndexDataLength bytes]
 func SerializeRowGroup(rg *DuckDBRowGroup) ([]byte, error) {
 	if rg == nil {
 		return nil, fmt.Errorf("cannot serialize nil row group")
@@ -472,7 +473,8 @@ func DeserializeRowGroup(data []byte) (*DuckDBRowGroup, error) {
 		offset += 4
 
 		// Check if this is an empty segment
-		if typeID == uint32(compression.LogicalTypeInvalid) && dataLength == 0 && validityLength == 0 {
+		if typeID == uint32(compression.LogicalTypeInvalid) && dataLength == 0 &&
+			validityLength == 0 {
 			rg.ColumnData[i] = nil
 			continue
 		}
@@ -489,7 +491,12 @@ func DeserializeRowGroup(data []byte) (*DuckDBRowGroup, error) {
 		// Read Data
 		if dataLength > 0 {
 			if offset+int(dataLength) > len(data) {
-				return nil, fmt.Errorf("data too short for column %d data at offset %d (need %d bytes)", i, offset, dataLength)
+				return nil, fmt.Errorf(
+					"data too short for column %d data at offset %d (need %d bytes)",
+					i,
+					offset,
+					dataLength,
+				)
 			}
 			col.Data = make([]byte, dataLength)
 			copy(col.Data, data[offset:offset+int(dataLength)])
@@ -499,7 +506,12 @@ func DeserializeRowGroup(data []byte) (*DuckDBRowGroup, error) {
 		// Read Validity bitmap
 		if validityLength > 0 {
 			if offset+int(validityLength)*8 > len(data) {
-				return nil, fmt.Errorf("data too short for column %d validity at offset %d (need %d bytes)", i, offset, validityLength*8)
+				return nil, fmt.Errorf(
+					"data too short for column %d validity at offset %d (need %d bytes)",
+					i,
+					offset,
+					validityLength*8,
+				)
 			}
 			col.Validity = make([]uint64, validityLength)
 			for j := uint32(0); j < validityLength; j++ {
@@ -520,7 +532,11 @@ func DeserializeRowGroup(data []byte) (*DuckDBRowGroup, error) {
 		// Read each index
 		for i := uint16(0); i < indexCount; i++ {
 			if offset+6 > len(data) { // ColumnIndex (2) + IndexDataLength (4)
-				return nil, fmt.Errorf("data too short for index %d metadata at offset %d", i, offset)
+				return nil, fmt.Errorf(
+					"data too short for index %d metadata at offset %d",
+					i,
+					offset,
+				)
 			}
 
 			colIdx := readUint16(data[offset:])
@@ -530,7 +546,12 @@ func DeserializeRowGroup(data []byte) (*DuckDBRowGroup, error) {
 			offset += 4
 
 			if offset+int(indexDataLength) > len(data) {
-				return nil, fmt.Errorf("data too short for index %d data at offset %d (need %d bytes)", i, offset, indexDataLength)
+				return nil, fmt.Errorf(
+					"data too short for index %d data at offset %d (need %d bytes)",
+					i,
+					offset,
+					indexDataLength,
+				)
 			}
 
 			indexData := make([]byte, indexDataLength)

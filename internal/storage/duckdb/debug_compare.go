@@ -97,7 +97,12 @@ func (r *ComparisonReport) String() string {
 	}
 
 	fmt.Fprintf(&buf, "Total differences: %d bytes\n", r.TotalDifferences)
-	fmt.Fprintf(&buf, "First difference at offset: %d (0x%x)\n\n", r.FirstDifference, r.FirstDifference)
+	fmt.Fprintf(
+		&buf,
+		"First difference at offset: %d (0x%x)\n\n",
+		r.FirstDifference,
+		r.FirstDifference,
+	)
 
 	// Group differences by section
 	sectionDiffs := make(map[string][]DifferenceLocation)
@@ -302,7 +307,10 @@ func HexDumpSideBySide(data1, data2 []byte, offset int64) string {
 
 	// Print header
 	fmt.Fprintf(&buf, "Offset    File1                                            File2\n")
-	fmt.Fprintf(&buf, "--------  -----------------------------------------------  -----------------------------------------------\n")
+	fmt.Fprintf(
+		&buf,
+		"--------  -----------------------------------------------  -----------------------------------------------\n",
+	)
 
 	for i := 0; i < maxLen; i += 16 {
 		// Print offset

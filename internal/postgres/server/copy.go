@@ -32,13 +32,13 @@ const (
 // CopyOptions holds options for COPY commands.
 type CopyOptions struct {
 	Format    CopyFormat
-	Header    bool      // Include header row (CSV only)
-	Delimiter byte      // Field delimiter (default: tab for text, comma for CSV)
-	Null      string    // NULL value string (default: empty for CSV, \N for text)
-	Quote     byte      // Quote character for CSV (default: ")
-	Escape    byte      // Escape character for CSV (default: ")
-	Columns   []string  // Specific columns to copy
-	Encoding  string    // Character encoding
+	Header    bool     // Include header row (CSV only)
+	Delimiter byte     // Field delimiter (default: tab for text, comma for CSV)
+	Null      string   // NULL value string (default: empty for CSV, \N for text)
+	Quote     byte     // Quote character for CSV (default: ")
+	Escape    byte     // Escape character for CSV (default: ")
+	Columns   []string // Specific columns to copy
+	Encoding  string   // Character encoding
 }
 
 // DefaultCopyOptions returns default options for COPY commands.
@@ -65,10 +65,10 @@ const ServerCopyDone byte = 'c'
 
 // CopyCommand represents a parsed COPY command.
 type CopyCommand struct {
-	IsFrom      bool        // true for FROM, false for TO
-	Table       string      // Table name for COPY table
-	Query       string      // Query for COPY (SELECT ...)
-	Destination string      // STDOUT, STDIN, or file path
+	IsFrom      bool   // true for FROM, false for TO
+	Table       string // Table name for COPY table
+	Query       string // Query for COPY (SELECT ...)
+	Destination string // STDOUT, STDIN, or file path
 	Options     *CopyOptions
 }
 
@@ -248,7 +248,9 @@ func parseOptionsList(optStr string, opts *CopyOptions) error {
 // parseOldStyleOptions parses old-style COPY options.
 func parseOldStyleOptions(rest string, opts *CopyOptions) error {
 	// Look for FORMAT, HEADER, DELIMITER keywords
-	re := regexp.MustCompile(`(?i)(FORMAT|HEADER|DELIMITER|NULL|QUOTE|ESCAPE)\s*(['"]?[^,\s]+['"]?)?`)
+	re := regexp.MustCompile(
+		`(?i)(FORMAT|HEADER|DELIMITER|NULL|QUOTE|ESCAPE)\s*(['"]?[^,\s]+['"]?)?`,
+	)
 	matches := re.FindAllStringSubmatch(rest, -1)
 
 	for _, match := range matches {
@@ -291,7 +293,8 @@ func applyOption(key, value string, opts *CopyOptions) error {
 
 	case "HEADER":
 		// HEADER with no value or TRUE means include header
-		if value == "" || strings.ToUpper(value) == "TRUE" || strings.ToUpper(value) == "ON" || value == "1" {
+		if value == "" || strings.ToUpper(value) == "TRUE" || strings.ToUpper(value) == "ON" ||
+			value == "1" {
 			opts.Header = true
 		} else if strings.ToUpper(value) == "FALSE" || strings.ToUpper(value) == "OFF" || value == "0" {
 			opts.Header = false
@@ -362,7 +365,12 @@ func splitOptionsRespectQuotes(s string) []string {
 }
 
 // handleCopyCommand handles COPY TO STDOUT and COPY FROM STDIN commands.
-func (h *Handler) handleCopyCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleCopyCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	cmd, err := ParseCopyCommand(query)
 	if err != nil {
 		return NewPgError(CodeSyntaxError, err.Error())
@@ -374,11 +382,18 @@ func (h *Handler) handleCopyCommand(ctx context.Context, query string, writer wi
 		return h.handleCopyToStdout(ctx, cmd, writer)
 	}
 
-	return NewPgError(CodeFeatureNotSupported, "only COPY TO STDOUT and COPY FROM STDIN are supported via wire protocol")
+	return NewPgError(
+		CodeFeatureNotSupported,
+		"only COPY TO STDOUT and COPY FROM STDIN are supported via wire protocol",
+	)
 }
 
 // handleCopyToStdout handles COPY table TO STDOUT or COPY (SELECT ...) TO STDOUT.
-func (h *Handler) handleCopyToStdout(ctx context.Context, cmd *CopyCommand, writer wire.DataWriter) error {
+func (h *Handler) handleCopyToStdout(
+	ctx context.Context,
+	cmd *CopyCommand,
+	writer wire.DataWriter,
+) error {
 	// Build the SELECT query
 	var selectQuery string
 	if cmd.Query != "" {
@@ -431,7 +446,12 @@ func (h *Handler) handleCopyToStdout(ctx context.Context, cmd *CopyCommand, writ
 }
 
 // handleCopyFromStdin handles COPY table FROM STDIN.
-func (h *Handler) handleCopyFromStdin(ctx context.Context, cmd *CopyCommand, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleCopyFromStdin(
+	ctx context.Context,
+	cmd *CopyCommand,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if cmd.Table == "" {
 		return NewPgError(CodeSyntaxError, "COPY FROM STDIN requires a table name")
 	}
@@ -553,7 +573,12 @@ func buildColumnsForCopy(columnNames []string) wire.Columns {
 }
 
 // insertRow inserts a single row into the table.
-func (h *Handler) insertRow(ctx context.Context, table string, columns []string, values []any) error {
+func (h *Handler) insertRow(
+	ctx context.Context,
+	table string,
+	columns []string,
+	values []any,
+) error {
 	// Build INSERT statement
 	placeholders := make([]string, len(columns))
 	for i := range columns {

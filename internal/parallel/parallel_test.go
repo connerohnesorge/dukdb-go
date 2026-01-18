@@ -824,9 +824,9 @@ func TestPrioritizeLargeMorsels(t *testing.T) {
 	PrioritizeLargeMorsels(morsels)
 
 	// Larger morsels should have higher priority
-	assert.Equal(t, 1, morsels[0].Priority)  // 1000 rows / 1000 = 1
-	assert.Equal(t, 4, morsels[1].Priority)  // 4000 rows / 1000 = 4
-	assert.Equal(t, 0, morsels[2].Priority)  // 500 rows / 1000 = 0
+	assert.Equal(t, 1, morsels[0].Priority) // 1000 rows / 1000 = 1
+	assert.Equal(t, 4, morsels[1].Priority) // 4000 rows / 1000 = 4
+	assert.Equal(t, 0, morsels[2].Priority) // 500 rows / 1000 = 0
 }
 
 // TestMorselPrioritySorting tests that high priority morsels are processed first.

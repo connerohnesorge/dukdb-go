@@ -100,7 +100,9 @@ func main() {
 	}
 
 	// Query the view
-	rows, err = db.Query("SELECT city, COUNT(*) FROM users_view GROUP BY city ORDER BY COUNT(*) DESC")
+	rows, err = db.Query(
+		"SELECT city, COUNT(*) FROM users_view GROUP BY city ORDER BY COUNT(*) DESC",
+	)
 	if err != nil {
 		log.Fatalf("Failed to query view: %v", err)
 	}

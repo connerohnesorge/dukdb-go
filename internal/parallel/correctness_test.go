@@ -38,9 +38,9 @@ func createTestDataChunks(rowCount int, chunkSize int) []*storage.DataChunk {
 		chunk := storage.NewDataChunkWithCapacity(types, end-i)
 		for j := i; j < end; j++ {
 			row := []any{
-				int32(j),              // id
-				int64(j * 10),         // value
-				"row_" + itoa(j),      // name
+				int32(j),         // id
+				int64(j * 10),    // value
+				"row_" + itoa(j), // name
 			}
 			chunk.AppendRow(row)
 		}
@@ -274,8 +274,14 @@ func TestParallelHashJoinCorrectness(t *testing.T) {
 				InnerJoin,
 				tc.partitions,
 			)
-			join.SetBuildSchema([]string{"id", "value"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
-			join.SetProbeSchema([]string{"id", "name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+			join.SetBuildSchema(
+				[]string{"id", "value"},
+				[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+			)
+			join.SetProbeSchema(
+				[]string{"id", "name"},
+				[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -365,9 +371,9 @@ func TestParallelAggregateCorrectness(t *testing.T) {
 
 			agg := NewParallelAggregate(
 				source,
-				[]int{0},                            // Group by first column
-				[]string{"group_id"},                // Group column names
-				[]dukdb.Type{dukdb.TYPE_INTEGER},    // Group column types
+				[]int{0},                         // Group by first column
+				[]string{"group_id"},             // Group column names
+				[]dukdb.Type{dukdb.TYPE_INTEGER}, // Group column types
 				aggregates,
 				numWorkers,
 			)
@@ -387,7 +393,12 @@ func TestParallelAggregateCorrectness(t *testing.T) {
 }
 
 // sequentialAggregate performs a simple sequential aggregation for comparison.
-func sequentialAggregate(chunks []*storage.DataChunk, groupByCol int, aggType AggregateType, valueCol int) [][]any {
+func sequentialAggregate(
+	chunks []*storage.DataChunk,
+	groupByCol int,
+	aggType AggregateType,
+	valueCol int,
+) [][]any {
 	// Group values
 	groups := make(map[any]float64)
 	counts := make(map[any]int64)
@@ -605,9 +616,9 @@ func TestCorrectnessNullHandling(t *testing.T) {
 
 	agg := NewParallelAggregate(
 		source,
-		[]int{},                       // No grouping
-		[]string{},                    // No group columns
-		[]dukdb.Type{},                // No group types
+		[]int{},        // No grouping
+		[]string{},     // No group columns
+		[]dukdb.Type{}, // No group types
 		aggregates,
 		2,
 	)
@@ -662,8 +673,14 @@ func TestCorrectnessDuplicateKeys(t *testing.T) {
 		InnerJoin,
 		4,
 	)
-	join.SetBuildSchema([]string{"key", "build_name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
-	join.SetProbeSchema([]string{"key", "probe_name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	join.SetBuildSchema(
+		[]string{"key", "build_name"},
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+	)
+	join.SetProbeSchema(
+		[]string{"key", "probe_name"},
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+	)
 
 	ctx := context.Background()
 	resultChan, err := join.Execute(pool, ctx)

@@ -294,7 +294,11 @@ func ReadFileHeader(r io.ReaderAt) (*FileHeader, error) {
 		return nil, fmt.Errorf("failed to read file header: %w", err)
 	}
 	if n < MagicByteOffset+4 {
-		return nil, fmt.Errorf("file too small: read %d bytes, need at least %d", n, MagicByteOffset+4)
+		return nil, fmt.Errorf(
+			"file too small: read %d bytes, need at least %d",
+			n,
+			MagicByteOffset+4,
+		)
 	}
 
 	header := &FileHeader{}
@@ -408,7 +412,11 @@ func serializeDatabaseHeader(header *DatabaseHeader) []byte {
 // deserializeDatabaseHeader deserializes a DatabaseHeader from bytes.
 func deserializeDatabaseHeader(data []byte) (*DatabaseHeader, error) {
 	if len(data) < DatabaseHeaderDataSize {
-		return nil, fmt.Errorf("database header data too short: got %d bytes, need %d", len(data), DatabaseHeaderDataSize)
+		return nil, fmt.Errorf(
+			"database header data too short: got %d bytes, need %d",
+			len(data),
+			DatabaseHeaderDataSize,
+		)
 	}
 
 	br := NewBinaryReader(bytes.NewReader(data))

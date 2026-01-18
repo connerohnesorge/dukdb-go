@@ -27,9 +27,9 @@ func main() {
 
 	// Configuration
 	const (
-		numRows      = 100000  // 100k rows for demonstration
-		batchSize    = 10000   // Process in batches
-		memoryLimit  = "1GB"   // Memory limit for DuckDB
+		numRows     = 100000 // 100k rows for demonstration
+		batchSize   = 10000  // Process in batches
+		memoryLimit = "1GB"  // Memory limit for DuckDB
 	)
 
 	// Example 1: Generate large CSV file
@@ -46,7 +46,12 @@ func main() {
 
 	generationTime := time.Since(startTime)
 	fileSize := getFileSize(largeCSVFile)
-	fmt.Printf("Generated %s in %v (%.2f MB)\n", largeCSVFile, generationTime, float64(fileSize)/(1024*1024))
+	fmt.Printf(
+		"Generated %s in %v (%.2f MB)\n",
+		largeCSVFile,
+		generationTime,
+		float64(fileSize)/(1024*1024),
+	)
 
 	// Example 2: Efficient reading with sampling
 	fmt.Println("\n2. Efficient reading with sampling:")
@@ -59,7 +64,9 @@ func main() {
 
 	// Read with sampling
 	startTime = time.Now()
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM read_csv_auto('%s', sample_size=%d)", largeCSVFile, 1000))
+	rows, err := db.Query(
+		fmt.Sprintf("SELECT * FROM read_csv_auto('%s', sample_size=%d)", largeCSVFile, 1000),
+	)
 	if err != nil {
 		log.Fatal("Failed to read CSV with sampling:", err)
 	}
@@ -77,7 +84,8 @@ func main() {
 
 	startTime = time.Now()
 	var totalSales float64
-	err = db.QueryRow(fmt.Sprintf("SELECT SUM(sale_amount) FROM read_csv_auto('%s')", largeCSVFile)).Scan(&totalSales)
+	err = db.QueryRow(fmt.Sprintf("SELECT SUM(sale_amount) FROM read_csv_auto('%s')", largeCSVFile)).
+		Scan(&totalSales)
 	if err != nil {
 		log.Fatal("Failed to calculate total sales:", err)
 	}
@@ -190,7 +198,12 @@ func main() {
 
 	// Collect results
 	for result := range results {
-		fmt.Printf("Partition %s: %d orders, $%.2f total\n", result.partition, result.count, result.total)
+		fmt.Printf(
+			"Partition %s: %d orders, $%.2f total\n",
+			result.partition,
+			result.count,
+			result.total,
+		)
 	}
 
 	partitionTime := time.Since(startTime)
@@ -282,7 +295,13 @@ func main() {
 			log.Fatal("Failed to scan row:", err)
 		}
 
-		fmt.Printf("%s: %d orders, $%.2f total, $%.2f avg\n", month[:7], orderCount, totalSales, avgOrderValue)
+		fmt.Printf(
+			"%s: %d orders, $%.2f total, $%.2f avg\n",
+			month[:7],
+			orderCount,
+			totalSales,
+			avgOrderValue,
+		)
 	}
 
 	aggTime := time.Since(startTime)
@@ -310,7 +329,8 @@ func main() {
 
 	// Query with index
 	var customerTotal float64
-	err = db.QueryRow("SELECT SUM(sale_amount) FROM sales_data WHERE customer_id = 12345").Scan(&customerTotal)
+	err = db.QueryRow("SELECT SUM(sale_amount) FROM sales_data WHERE customer_id = 12345").
+		Scan(&customerTotal)
 	if err != nil {
 		log.Fatal("Failed to query with index:", err)
 	}

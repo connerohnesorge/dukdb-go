@@ -15,8 +15,8 @@ func TestBitPackCodec_Type(t *testing.T) {
 
 func TestBitPackCodec_NewBitPackCodec(t *testing.T) {
 	tests := []struct {
-		name      string
-		bitWidth  int
+		name        string
+		bitWidth    int
 		shouldPanic bool
 	}{
 		{"valid 1 bit", 1, false},

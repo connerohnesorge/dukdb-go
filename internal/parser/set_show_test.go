@@ -121,7 +121,7 @@ func TestParseSetErrors(t *testing.T) {
 		},
 		{
 			name:    "SET without value",
-			sql:      "SET default_transaction_isolation =",
+			sql:     "SET default_transaction_isolation =",
 			wantErr: true,
 		},
 	}

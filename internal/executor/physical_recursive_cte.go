@@ -179,10 +179,10 @@ func (op *PhysicalRecursiveCTEOperator) executeRecursivePlan(
 
 	// Create a context with the work table
 	cteCtx := &cteExecutionContext{
-		executor:    op.executor,
-		ctx:         op.ctx,
-		cteName:     op.plan.CTEName,
-		workResult:  workResult,
+		executor:   op.executor,
+		ctx:        op.ctx,
+		cteName:    op.plan.CTEName,
+		workResult: workResult,
 	}
 
 	// Execute the recursive plan with CTE context
@@ -204,7 +204,9 @@ type cteExecutionContext struct {
 }
 
 // executeWithCTE executes a plan, replacing CTEScan nodes with work table data.
-func (cte *cteExecutionContext) executeWithCTE(plan planner.PhysicalPlan) (*ExecutionResult, error) {
+func (cte *cteExecutionContext) executeWithCTE(
+	plan planner.PhysicalPlan,
+) (*ExecutionResult, error) {
 	switch p := plan.(type) {
 	case *planner.PhysicalCTEScan:
 		// If this is a scan of our CTE, return the work table data

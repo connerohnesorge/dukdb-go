@@ -54,7 +54,11 @@ func TestIntegration_CreateIndexThenQueryUsesIndex(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Step 1: Create a table with some data
-	_, err = conn.Execute(ctx, "CREATE TABLE test_idx (id INTEGER, name VARCHAR, value INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE test_idx (id INTEGER, name VARCHAR, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -125,7 +129,11 @@ func TestIntegration_CreateIndexThenQueryUsesIndex(t *testing.T) {
 				t.Logf("testPred implements BinaryPredicateExpr: false")
 			}
 
-			matches := im.FindApplicableIndexes("main", "test_idx", []optimizer.PredicateExpr{testPred})
+			matches := im.FindApplicableIndexes(
+				"main",
+				"test_idx",
+				[]optimizer.PredicateExpr{testPred},
+			)
 			t.Logf("IndexMatcher.FindApplicableIndexes returned %d matches", len(matches))
 			for _, m := range matches {
 				t.Logf("  Match: Index=%s, MatchedColumns=%d, Selectivity=%f",
@@ -183,7 +191,11 @@ func TestIntegration_CompositeIndexUsage(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -196,7 +208,11 @@ func TestIntegration_CompositeIndexUsage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create composite index on (customer_id, order_date)
-	_, err = conn.Execute(ctx, "CREATE INDEX idx_orders_composite ON orders(customer_id, order_date)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE INDEX idx_orders_composite ON orders(customer_id, order_date)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Test 1: Query with both composite key columns - should use index
@@ -256,7 +272,11 @@ func TestIntegration_IndexNotMatchingQuery(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table with index on 'id' column
-	_, err = conn.Execute(ctx, "CREATE TABLE products (id INTEGER, name VARCHAR, price INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE products (id INTEGER, name VARCHAR, price INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_products_id ON products(id)", nil)
@@ -347,7 +367,11 @@ func TestIntegration_MultipleIndexesSameTable(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table with multiple indexes
-	_, err = conn.Execute(ctx, "CREATE TABLE users (id INTEGER, email VARCHAR, status VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE users (id INTEGER, email VARCHAR, status VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_users_id ON users(id)", nil)
@@ -444,7 +468,11 @@ func TestIntegration_IndexUsageAfterInsert(t *testing.T) {
 	assert.Equal(t, "Second item", rows[0]["description"])
 
 	// Insert more data
-	_, err = conn.Execute(ctx, "INSERT INTO items VALUES (4, 'Fourth item'), (5, 'Fifth item')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO items VALUES (4, 'Fourth item'), (5, 'Fifth item')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query for new data should also use index
@@ -647,7 +675,12 @@ func tracePlanTree(t *testing.T, plan optimizer.LogicalPlanNode, depth int) {
 						PredicateColumn() string
 						PredicateTable() string
 					}); ok {
-						t.Logf("%s    Column: %s, Table: %s", indent, colRef.PredicateColumn(), colRef.PredicateTable())
+						t.Logf(
+							"%s    Column: %s, Table: %s",
+							indent,
+							colRef.PredicateColumn(),
+							colRef.PredicateTable(),
+						)
 					}
 				}
 				if right != nil {
@@ -834,11 +867,19 @@ func TestExplainShowsIndexName_CompositeIndex(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create composite index
-	_, err = conn.Execute(ctx, "CREATE INDEX idx_orders_customer_date ON orders(customer_id, order_date)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE INDEX idx_orders_customer_date ON orders(customer_id, order_date)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -883,7 +924,11 @@ func TestExplainShowsIndexName_MultipleIndexes(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE products (id INTEGER, name VARCHAR, category VARCHAR, price INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE products (id INTEGER, name VARCHAR, category VARCHAR, price INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create multiple indexes
@@ -953,15 +998,27 @@ func TestExplainShowsIndexName_UniqueIndex(t *testing.T) {
 	ec := conn.(*EngineConn)
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE accounts (id INTEGER, email VARCHAR, status VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE accounts (id INTEGER, email VARCHAR, status VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create unique index
-	_, err = conn.Execute(ctx, "CREATE UNIQUE INDEX idx_accounts_email_unique ON accounts(email)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE UNIQUE INDEX idx_accounts_email_unique ON accounts(email)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO accounts VALUES (1, 'alice@example.com', 'active')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO accounts VALUES (1, 'alice@example.com', 'active')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify the plan uses IndexScan
@@ -1009,7 +1066,11 @@ func TestExplainAnalyzeShowsIndexName(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO items VALUES (1, 'Item 1'), (2, 'Item 2'), (3, 'Item 3')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO items VALUES (1, 'Item 1'), (2, 'Item 2'), (3, 'Item 3')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify the plan uses IndexScan
@@ -1053,7 +1114,11 @@ func TestExplainShowsIndexName_SeqScanWhenNoIndex(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table WITHOUT index
-	_, err = conn.Execute(ctx, "CREATE TABLE logs (id INTEGER, message VARCHAR, level VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE logs (id INTEGER, message VARCHAR, level VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data

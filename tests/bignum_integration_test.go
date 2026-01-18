@@ -147,7 +147,11 @@ func TestBignumNullHandling(t *testing.T) {
 		err = db.QueryRow(`SELECT id, value FROM bignum_null_test WHERE id = 2`).Scan(&id, &value)
 		require.NoError(t, err)
 		assert.Equal(t, 2, id)
-		assert.False(t, value.Valid, "SQL NULL via parameter should result in NullString.Valid = false")
+		assert.False(
+			t,
+			value.Valid,
+			"SQL NULL via parameter should result in NullString.Valid = false",
+		)
 	})
 
 	t.Run("Query NULL with IS NULL", func(t *testing.T) {
@@ -252,7 +256,15 @@ func TestBignumMultipleRows(t *testing.T) {
 		require.True(t, ok)
 		actual, ok := new(big.Int).SetString(results[i].value, 10)
 		require.True(t, ok)
-		assert.Equal(t, 0, expected.Cmp(actual), "row %d: expected %s, got %s", i, td.value, results[i].value)
+		assert.Equal(
+			t,
+			0,
+			expected.Cmp(actual),
+			"row %d: expected %s, got %s",
+			i,
+			td.value,
+			results[i].value,
+		)
 	}
 }
 
@@ -589,7 +601,9 @@ func TestBignumArithmetic(t *testing.T) {
 
 		// Multiplication
 		product := new(big.Int).Mul(bigA, bigB)
-		expectedProduct, ok := new(big.Int).SetString("121932631137021795226185032733622923332237463801111263526900", 10)
+		expectedProduct, ok := new(
+			big.Int,
+		).SetString("121932631137021795226185032733622923332237463801111263526900", 10)
 		require.True(t, ok)
 		assert.Equal(t, 0, expectedProduct.Cmp(product))
 

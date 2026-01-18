@@ -213,9 +213,9 @@ func generateOID(s string) int64 {
 
 // Well-known PostgreSQL OIDs for built-in namespaces
 const (
-	pgCatalogNamespaceOID        int64 = 11
+	pgCatalogNamespaceOID         int64 = 11
 	informationSchemaNamespaceOID int64 = 13
-	publicNamespaceOID           int64 = 2200
+	publicNamespaceOID            int64 = 2200
 )
 
 // getNamespaceOID returns the OID for a schema name.

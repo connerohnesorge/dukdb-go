@@ -27,12 +27,12 @@ func TestGlobSettingsDefaults(t *testing.T) {
 
 func TestGlobSettingsDSNParsing(t *testing.T) {
 	tests := []struct {
-		name               string
-		dsn                string
-		wantMaxFiles       int
-		wantTimeout        int
-		wantErr            bool
-		errType            ErrorType
+		name         string
+		dsn          string
+		wantMaxFiles int
+		wantTimeout  int
+		wantErr      bool
+		errType      ErrorType
 	}{
 		// Default values
 		{

@@ -1075,9 +1075,9 @@ func (op *PhysicalAggregateOperator) collectValuesWithOrderBy(
 
 // aggregateResult holds the result of computing aggregates for one group.
 type aggregateResult struct {
-	index     int     // Original position in groupOrder
-	rowValues []any   // Computed row values (GROUP BY + aggregates)
-	err       error   // Error if computation failed
+	index     int   // Original position in groupOrder
+	rowValues []any // Computed row values (GROUP BY + aggregates)
+	err       error // Error if computation failed
 }
 
 // computeAggregatesParallel computes aggregates for multiple groups in parallel.

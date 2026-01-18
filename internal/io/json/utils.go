@@ -151,7 +151,11 @@ func tryParseBoolean(s string) (parsed, ok bool) {
 // Returns the converted value and whether conversion succeeded.
 //
 //nolint:exhaustive // We only handle types that JSON can infer to.
-func convertValue(value any, targetType dukdb.Type, dateFormat, timestampFormat string) (any, bool) {
+func convertValue(
+	value any,
+	targetType dukdb.Type,
+	dateFormat, timestampFormat string,
+) (any, bool) {
 	if value == nil {
 		return nil, true
 	}

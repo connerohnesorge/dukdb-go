@@ -488,7 +488,13 @@ func TestCreatePhysicalIndexScan_Success(t *testing.T) {
 	err := cat.CreateTable(tableDef)
 	require.NoError(t, err)
 
-	indexDef := catalog.NewIndexDef("idx_orders_customer", "main", "orders", []string{"customer_id"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_orders_customer",
+		"main",
+		"orders",
+		[]string{"customer_id"},
+		false,
+	)
 	err = cat.CreateIndex(indexDef)
 	require.NoError(t, err)
 
@@ -699,8 +705,8 @@ func TestCreatePhysicalIndexScan_WithLookupKeys(t *testing.T) {
 	lookupKey := &binder.BoundLiteral{Value: int64(42), ValType: dukdb.TYPE_INTEGER}
 
 	hint := &AccessHint{
-		Method:    "IndexScan",
-		IndexName: "idx_users_id",
+		Method:     "IndexScan",
+		IndexName:  "idx_users_id",
 		LookupKeys: []any{lookupKey},
 	}
 
@@ -822,7 +828,11 @@ func TestIsIndexOnlyScan_CoveringIndex(t *testing.T) {
 
 	// Test 3: SELECT * (nil projections) - should NOT be covering (email not in index)
 	result = isIndexOnlyScan(indexDef, nil, tableDef)
-	assert.False(t, result, "should not be index-only for SELECT * when index doesn't cover all columns")
+	assert.False(
+		t,
+		result,
+		"should not be index-only for SELECT * when index doesn't cover all columns",
+	)
 }
 
 // TestIsIndexOnlyScan_FullTableIndex verifies behavior when index covers all columns.

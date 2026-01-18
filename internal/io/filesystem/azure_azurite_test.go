@@ -44,8 +44,8 @@ const (
 	azuriteAccountName = "devstoreaccount1"
 	// This is the well-known Azurite development key - it's intentionally public.
 	//nolint:gosec // This is a well-known development key for Azurite, not a real secret
-	azuriteAccountKey  = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
-	azuriteContainer   = "dukdb-azurite-test"
+	azuriteAccountKey = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
+	azuriteContainer  = "dukdb-azurite-test"
 )
 
 // getAzuriteConfig returns an AzureConfig configured for Azurite testing.
@@ -87,7 +87,12 @@ func getAzuriteContainer() string {
 }
 
 // ensureAzuriteContainer creates the test container if it does not exist.
-func ensureAzuriteContainer(ctx context.Context, t *testing.T, fs *AzureFileSystem, containerName string) {
+func ensureAzuriteContainer(
+	ctx context.Context,
+	t *testing.T,
+	fs *AzureFileSystem,
+	containerName string,
+) {
 	t.Helper()
 
 	client := fs.GetClient()

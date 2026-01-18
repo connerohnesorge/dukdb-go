@@ -135,7 +135,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to scan row: %v", err)
 		}
-		fmt.Printf("Order %d: Customer=%s, Total=$%.2f, Status=%s\n", orderID, customer, total, status)
+		fmt.Printf(
+			"Order %d: Customer=%s, Total=$%.2f, Status=%s\n",
+			orderID,
+			customer,
+			total,
+			status,
+		)
 	}
 	if err = rows.Err(); err != nil {
 		log.Fatalf("Error reading rows: %v", err)
@@ -228,7 +234,9 @@ func main() {
 
 	// Example 5: Creating a view from JSON
 	fmt.Println("\n=== Example 5: Creating View from JSON ===")
-	_, err = db.Exec(fmt.Sprintf("CREATE VIEW orders_view AS SELECT * FROM read_json('%s')", sampleFile))
+	_, err = db.Exec(
+		fmt.Sprintf("CREATE VIEW orders_view AS SELECT * FROM read_json('%s')", sampleFile),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create view: %v", err)
 	}
@@ -291,7 +299,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to scan row: %v", err)
 		}
-		fmt.Printf("  Order %d: $%.2f (%s) - Shipping: %s\n", orderID, total, valueCategory, shipping)
+		fmt.Printf(
+			"  Order %d: $%.2f (%s) - Shipping: %s\n",
+			orderID,
+			total,
+			valueCategory,
+			shipping,
+		)
 	}
 
 	// Example 7: Export query results
@@ -315,7 +329,11 @@ func main() {
 	_, err = db.Exec(query)
 	if err != nil {
 		// If COPY with complex query fails, try simpler approach
-		query = fmt.Sprintf("COPY (SELECT order_id, customer, total, status FROM read_json('%s')) TO '%s'", sampleFile, outputFile)
+		query = fmt.Sprintf(
+			"COPY (SELECT order_id, customer, total, status FROM read_json('%s')) TO '%s'",
+			sampleFile,
+			outputFile,
+		)
 		_, err = db.Exec(query)
 		if err != nil {
 			fmt.Printf("Note: Complex COPY query not supported in this version. Export skipped.\n")

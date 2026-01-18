@@ -653,9 +653,9 @@ func TestToPgErrorWithContextAlreadyPgError(t *testing.T) {
 
 func TestAddHintForError(t *testing.T) {
 	tests := []struct {
-		name        string
-		pgErr       *PgError
-		expectHint  bool
+		name         string
+		pgErr        *PgError
+		expectHint   bool
 		existingHint string
 	}{
 		{
@@ -689,7 +689,7 @@ func TestAddHintForError(t *testing.T) {
 				Message: "table does not exist",
 				Hint:    "Custom hint",
 			},
-			expectHint: true,
+			expectHint:   true,
 			existingHint: "Custom hint",
 		},
 		{
@@ -723,11 +723,11 @@ func TestSuggestSimilarNames(t *testing.T) {
 	candidates := []string{"users", "orders", "products", "customers", "user_settings"}
 
 	tests := []struct {
-		name       string
-		input      string
-		threshold  float64
-		expectAny  bool
-		expectLen  int
+		name      string
+		input     string
+		threshold float64
+		expectAny bool
+		expectLen int
 	}{
 		{
 			name:      "exact match",
@@ -785,10 +785,10 @@ func TestSuggestSimilarNamesEmptyCandidates(t *testing.T) {
 
 func TestCalculateSimilarity(t *testing.T) {
 	tests := []struct {
-		name     string
-		a, b     string
-		minSim   float64
-		maxSim   float64
+		name   string
+		a, b   string
+		minSim float64
+		maxSim float64
 	}{
 		{"identical strings", "hello", "hello", 1.0, 1.0},
 		{"empty strings identical", "", "", 1.0, 1.0}, // empty strings are identical

@@ -565,7 +565,10 @@ func NewAggregateHashTable(aggregates []AggregateFunc) *AggregateHashTable {
 }
 
 // NewAggregateHashTableWithCapacity creates an AggregateHashTable with pre-allocated capacity.
-func NewAggregateHashTableWithCapacity(aggregates []AggregateFunc, capacity int) *AggregateHashTable {
+func NewAggregateHashTableWithCapacity(
+	aggregates []AggregateFunc,
+	capacity int,
+) *AggregateHashTable {
 	return &AggregateHashTable{
 		entries:    make(map[uint64][]*AggregateEntry, capacity),
 		aggregates: aggregates,
@@ -670,7 +673,10 @@ func (t *AggregateHashTable) Merge(other *AggregateHashTable) error {
 
 // ToDataChunk converts the hash table to a DataChunk.
 // groupByCols are the names of the group-by columns.
-func (t *AggregateHashTable) ToDataChunk(groupByCols []string, groupByTypes []dukdb.Type) *storage.DataChunk {
+func (t *AggregateHashTable) ToDataChunk(
+	groupByCols []string,
+	groupByTypes []dukdb.Type,
+) *storage.DataChunk {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -817,7 +823,10 @@ func NewParallelAggregate(
 }
 
 // Execute runs parallel aggregation and returns the result.
-func (a *ParallelAggregate) Execute(pool *ThreadPool, ctx context.Context) (*storage.DataChunk, error) {
+func (a *ParallelAggregate) Execute(
+	pool *ThreadPool,
+	ctx context.Context,
+) (*storage.DataChunk, error) {
 	if a.Source == nil {
 		// No source, return empty result
 		return a.emptyResult(), nil
@@ -882,7 +891,12 @@ func (a *ParallelAggregate) Execute(pool *ThreadPool, ctx context.Context) (*sto
 }
 
 // localAggregate performs local aggregation for a single worker.
-func (a *ParallelAggregate) localAggregate(workerID int, morselChan <-chan Morsel, ctx context.Context, errChan chan<- error) {
+func (a *ParallelAggregate) localAggregate(
+	workerID int,
+	morselChan <-chan Morsel,
+	ctx context.Context,
+	errChan chan<- error,
+) {
 	localTable := a.LocalTables[workerID]
 
 	for {
@@ -1255,7 +1269,10 @@ func NewSimpleAggregation(source ParallelSource, aggregates []AggregateFunc) *Si
 }
 
 // Execute runs simple aggregation and returns the result.
-func (a *SimpleAggregation) Execute(pool *ThreadPool, ctx context.Context) (*storage.DataChunk, error) {
+func (a *SimpleAggregation) Execute(
+	pool *ThreadPool,
+	ctx context.Context,
+) (*storage.DataChunk, error) {
 	if a.Source == nil {
 		return a.emptyResult(), nil
 	}

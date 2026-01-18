@@ -2156,15 +2156,45 @@ func testWindowNullInOrderBy(
 	require.Len(t, results, 4)
 
 	// Non-NULL values should have lower row numbers than NULL values
-	assert.LessOrEqual(t, results[1], results[2], "id=1 (value=10) should have lower rn than id=2 (NULL)")
-	assert.LessOrEqual(t, results[1], results[4], "id=1 (value=10) should have lower rn than id=4 (NULL)")
-	assert.LessOrEqual(t, results[3], results[2], "id=3 (value=30) should have lower rn than id=2 (NULL)")
-	assert.LessOrEqual(t, results[3], results[4], "id=3 (value=30) should have lower rn than id=4 (NULL)")
+	assert.LessOrEqual(
+		t,
+		results[1],
+		results[2],
+		"id=1 (value=10) should have lower rn than id=2 (NULL)",
+	)
+	assert.LessOrEqual(
+		t,
+		results[1],
+		results[4],
+		"id=1 (value=10) should have lower rn than id=4 (NULL)",
+	)
+	assert.LessOrEqual(
+		t,
+		results[3],
+		results[2],
+		"id=3 (value=30) should have lower rn than id=2 (NULL)",
+	)
+	assert.LessOrEqual(
+		t,
+		results[3],
+		results[4],
+		"id=3 (value=30) should have lower rn than id=4 (NULL)",
+	)
 
 	// The two non-NULL values (10 and 30) should have row numbers 1 and 2
-	assert.ElementsMatch(t, []int64{1, 2}, []int64{results[1], results[3]}, "non-NULL values should be 1 and 2")
+	assert.ElementsMatch(
+		t,
+		[]int64{1, 2},
+		[]int64{results[1], results[3]},
+		"non-NULL values should be 1 and 2",
+	)
 	// The two NULL values should have row numbers 3 and 4
-	assert.ElementsMatch(t, []int64{3, 4}, []int64{results[2], results[4]}, "NULL values should be 3 and 4")
+	assert.ElementsMatch(
+		t,
+		[]int64{3, 4},
+		[]int64{results[2], results[4]},
+		"NULL values should be 3 and 4",
+	)
 }
 
 func testWindowNullInAggregate(

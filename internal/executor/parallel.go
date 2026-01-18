@@ -196,13 +196,22 @@ func NewParallelExecutorWithDefaults() *ParallelExecutor {
 // Execute runs a physical plan with parallel execution if beneficial.
 // It automatically decides whether to use parallel or sequential execution
 // based on cost analysis and configuration.
-func (e *ParallelExecutor) Execute(ctx context.Context, plan planner.PhysicalPlan, storage *storage.Storage) (*storage.DataChunk, error) {
+func (e *ParallelExecutor) Execute(
+	ctx context.Context,
+	plan planner.PhysicalPlan,
+	storage *storage.Storage,
+) (*storage.DataChunk, error) {
 	return e.ExecuteWithPool(ctx, plan, storage, e.Pool)
 }
 
 // ExecuteWithPool uses a provided thread pool (for connection-level pooling).
 // This allows different connections to share or have separate thread pools.
-func (e *ParallelExecutor) ExecuteWithPool(ctx context.Context, plan planner.PhysicalPlan, stor *storage.Storage, pool *parallel.ThreadPool) (*storage.DataChunk, error) {
+func (e *ParallelExecutor) ExecuteWithPool(
+	ctx context.Context,
+	plan planner.PhysicalPlan,
+	stor *storage.Storage,
+	pool *parallel.ThreadPool,
+) (*storage.DataChunk, error) {
 	e.statistics.QueriesExecuted.Add(1)
 
 	// Check if we should parallelize this plan
@@ -236,7 +245,10 @@ func (e *ParallelExecutor) ExecuteWithPool(ctx context.Context, plan planner.Phy
 
 // ShouldParallelize determines if a plan should use parallel execution.
 // It considers estimated cardinality, cost model, and configuration.
-func (e *ParallelExecutor) ShouldParallelize(plan planner.PhysicalPlan, stor *storage.Storage) bool {
+func (e *ParallelExecutor) ShouldParallelize(
+	plan planner.PhysicalPlan,
+	stor *storage.Storage,
+) bool {
 	e.mu.RLock()
 	config := e.Config
 	e.mu.RUnlock()
@@ -389,7 +401,10 @@ func calculateParallelOverhead(plan planner.PhysicalPlan, numWorkers int) float6
 }
 
 // compilePlan transforms a physical plan into executable pipelines.
-func (e *ParallelExecutor) compilePlan(plan planner.PhysicalPlan, stor *storage.Storage) ([]*parallel.Pipeline, error) {
+func (e *ParallelExecutor) compilePlan(
+	plan planner.PhysicalPlan,
+	stor *storage.Storage,
+) ([]*parallel.Pipeline, error) {
 	// Create pipeline based on plan type
 	switch p := plan.(type) {
 	case *planner.PhysicalScan:
@@ -419,7 +434,10 @@ func (e *ParallelExecutor) compilePlan(plan planner.PhysicalPlan, stor *storage.
 }
 
 // compileScan compiles a table scan into a pipeline.
-func (e *ParallelExecutor) compileScan(plan *planner.PhysicalScan, stor *storage.Storage) ([]*parallel.Pipeline, error) {
+func (e *ParallelExecutor) compileScan(
+	plan *planner.PhysicalScan,
+	stor *storage.Storage,
+) ([]*parallel.Pipeline, error) {
 	if stor == nil {
 		return nil, nil
 	}
@@ -464,7 +482,10 @@ func (e *ParallelExecutor) compileScan(plan *planner.PhysicalScan, stor *storage
 }
 
 // compileHashJoin compiles a hash join into pipelines.
-func (e *ParallelExecutor) compileHashJoin(plan *planner.PhysicalHashJoin, stor *storage.Storage) ([]*parallel.Pipeline, error) {
+func (e *ParallelExecutor) compileHashJoin(
+	plan *planner.PhysicalHashJoin,
+	stor *storage.Storage,
+) ([]*parallel.Pipeline, error) {
 	// Build pipelines for both sides
 	leftPipes, err := e.compilePlan(plan.Left, stor)
 	if err != nil {
@@ -485,7 +506,10 @@ func (e *ParallelExecutor) compileHashJoin(plan *planner.PhysicalHashJoin, stor 
 }
 
 // compileAggregate compiles an aggregate into pipelines.
-func (e *ParallelExecutor) compileAggregate(plan *planner.PhysicalHashAggregate, stor *storage.Storage) ([]*parallel.Pipeline, error) {
+func (e *ParallelExecutor) compileAggregate(
+	plan *planner.PhysicalHashAggregate,
+	stor *storage.Storage,
+) ([]*parallel.Pipeline, error) {
 	// Build child pipelines first
 	childPipes, err := e.compilePlan(plan.Child, stor)
 	if err != nil {
@@ -496,7 +520,10 @@ func (e *ParallelExecutor) compileAggregate(plan *planner.PhysicalHashAggregate,
 }
 
 // compileSort compiles a sort into pipelines.
-func (e *ParallelExecutor) compileSort(plan *planner.PhysicalSort, stor *storage.Storage) ([]*parallel.Pipeline, error) {
+func (e *ParallelExecutor) compileSort(
+	plan *planner.PhysicalSort,
+	stor *storage.Storage,
+) ([]*parallel.Pipeline, error) {
 	// Build child pipelines first
 	childPipes, err := e.compilePlan(plan.Child, stor)
 	if err != nil {
@@ -570,7 +597,11 @@ func newStorageTableReader(table *storage.Table, tableDef interface {
 	}
 }
 
-func (r *storageTableReader) ReadRowGroup(tableOID uint64, rowGroupID int, projections []int) (*storage.DataChunk, error) {
+func (r *storageTableReader) ReadRowGroup(
+	tableOID uint64,
+	rowGroupID int,
+	projections []int,
+) (*storage.DataChunk, error) {
 	if r.table == nil {
 		return nil, nil
 	}
@@ -702,7 +733,10 @@ type ParallelExplainAnnotator struct {
 }
 
 // NewParallelExplainAnnotator creates a new ParallelExplainAnnotator.
-func NewParallelExplainAnnotator(config ParallelConfig, stor *storage.Storage) *ParallelExplainAnnotator {
+func NewParallelExplainAnnotator(
+	config ParallelConfig,
+	stor *storage.Storage,
+) *ParallelExplainAnnotator {
 	return &ParallelExplainAnnotator{
 		Config:  config,
 		Storage: stor,
@@ -718,7 +752,11 @@ func (a *ParallelExplainAnnotator) Annotate(plan planner.PhysicalPlan) string {
 }
 
 // annotatePlan recursively annotates a plan tree.
-func (a *ParallelExplainAnnotator) annotatePlan(sb *strings.Builder, plan planner.PhysicalPlan, indent int) {
+func (a *ParallelExplainAnnotator) annotatePlan(
+	sb *strings.Builder,
+	plan planner.PhysicalPlan,
+	indent int,
+) {
 	prefix := strings.Repeat("  ", indent)
 
 	// Check if this plan would be parallelized

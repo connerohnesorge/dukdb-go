@@ -263,31 +263,31 @@ func TestCorrectnessAggregateCorrectness(t *testing.T) {
 		query string
 	}{
 		{
-			name: "count_all",
+			name:  "count_all",
 			query: "SELECT COUNT(*) FROM small_uniform",
 		},
 		{
-			name: "count_column",
+			name:  "count_column",
 			query: "SELECT COUNT(value) FROM small_uniform",
 		},
 		{
-			name: "count_distinct",
+			name:  "count_distinct",
 			query: "SELECT COUNT(DISTINCT category) FROM small_uniform",
 		},
 		{
-			name: "sum_aggregate",
+			name:  "sum_aggregate",
 			query: "SELECT SUM(price) FROM small_uniform",
 		},
 		{
-			name: "avg_aggregate",
+			name:  "avg_aggregate",
 			query: "SELECT AVG(price) FROM small_uniform",
 		},
 		{
-			name: "min_max",
+			name:  "min_max",
 			query: "SELECT MIN(price), MAX(price) FROM small_uniform",
 		},
 		{
-			name: "group_by_avg",
+			name:  "group_by_avg",
 			query: "SELECT category, AVG(price) FROM small_uniform GROUP BY category ORDER BY category",
 		},
 		{
@@ -339,7 +339,7 @@ func TestCorrectnessFilterCorrectness(t *testing.T) {
 			desc:  "OR conditions",
 		},
 		{
-			name:  "complex_boolean",
+			name: "complex_boolean",
 			query: `SELECT COUNT(*) FROM orders WHERE (amount > 5000 AND status = 'Completed')
 					OR (amount < 100 AND status = 'Cancelled')`,
 			desc: "Complex boolean logic",
@@ -347,27 +347,27 @@ func TestCorrectnessFilterCorrectness(t *testing.T) {
 		{
 			name:  "null_filter",
 			query: "SELECT COUNT(*) FROM orders WHERE status IS NULL",
-			desc: "IS NULL filter",
+			desc:  "IS NULL filter",
 		},
 		{
 			name:  "not_null_filter",
 			query: "SELECT COUNT(*) FROM orders WHERE status IS NOT NULL",
-			desc: "IS NOT NULL filter",
+			desc:  "IS NOT NULL filter",
 		},
 		{
 			name:  "between_filter",
 			query: "SELECT COUNT(*) FROM small_uniform WHERE value BETWEEN 30 AND 70",
-			desc: "BETWEEN filter",
+			desc:  "BETWEEN filter",
 		},
 		{
 			name:  "in_filter",
 			query: "SELECT COUNT(*) FROM small_uniform WHERE category IN ('A', 'B', 'C')",
-			desc: "IN filter",
+			desc:  "IN filter",
 		},
 		{
 			name:  "like_filter",
 			query: "SELECT COUNT(*) FROM customers WHERE name LIKE '%Customer_1%'",
-			desc: "LIKE pattern matching",
+			desc:  "LIKE pattern matching",
 		},
 	}
 
@@ -476,7 +476,11 @@ func TestCorrectnessEdgeCases(t *testing.T) {
 
 // Helper: CompareQueryResults compares results from two queries
 // This would be implemented to actually run queries and compare results
-func (s *CorrectnessTestSuite) CompareQueryResults(ctx context.Context, db *sql.DB, query string) (int64, error) {
+func (s *CorrectnessTestSuite) CompareQueryResults(
+	ctx context.Context,
+	db *sql.DB,
+	query string,
+) (int64, error) {
 	var count int64
 	err := db.QueryRowContext(ctx, query).Scan(&count)
 	return count, err

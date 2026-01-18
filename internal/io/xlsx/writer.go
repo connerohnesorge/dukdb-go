@@ -191,7 +191,11 @@ func (w *Writer) writeRow(chunk *storage.DataChunk, rowIdx int) error {
 	for colIdx := 0; colIdx < chunk.ColumnCount(); colIdx++ {
 		cell := CellAddress(colIdx, w.row)
 		if cell == "" {
-			return fmt.Errorf("xlsx: failed to generate cell address for row %d, column %d", w.row, colIdx)
+			return fmt.Errorf(
+				"xlsx: failed to generate cell address for row %d, column %d",
+				w.row,
+				colIdx,
+			)
 		}
 
 		vec := chunk.GetVector(colIdx)
@@ -266,7 +270,11 @@ func (w *Writer) writeCellValue(cell string, value any, typ dukdb.Type) error {
 			return w.applyDateFormat(cell)
 		}
 
-	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_TZ:
+	case dukdb.TYPE_TIMESTAMP,
+		dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_TIMESTAMP_TZ:
 		if t, ok := value.(time.Time); ok {
 			// Write as Excel date serial number (includes time component)
 			serial := timeToExcelDate(t)

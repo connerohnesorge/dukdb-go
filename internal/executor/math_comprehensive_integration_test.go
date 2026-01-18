@@ -28,7 +28,12 @@ func setupComprehensiveTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeComprehensiveQuery executes a SQL query and returns the result
-func executeComprehensiveQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeComprehensiveQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -78,11 +83,26 @@ func TestComprehensive_MathFunctions_InSelectClauses(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO select_test VALUES (1, 4.0, 3.0, 0.5)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO select_test VALUES (1, 4.0, 3.0, 0.5)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO select_test VALUES (2, 9.0, 12.0, 1.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO select_test VALUES (2, 9.0, 12.0, 1.0)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO select_test VALUES (3, 16.0, 5.0, 0.25)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO select_test VALUES (3, 16.0, 5.0, 0.25)",
+	)
 	require.NoError(t, err)
 
 	t.Run("Multiple math functions in SELECT", func(t *testing.T) {
@@ -163,7 +183,12 @@ func TestComprehensive_MathFunctions_InWhereClauses(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO where_test VALUES (4, 25.0, 'B')")
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO where_test VALUES (5, 100.0, 'A')")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO where_test VALUES (5, 100.0, 'A')",
+	)
 	require.NoError(t, err)
 
 	t.Run("SQRT in WHERE clause", func(t *testing.T) {
@@ -288,8 +313,12 @@ func TestComprehensive_MathFunctions_InComputedColumns(t *testing.T) {
 	})
 
 	t.Run("Computed column with trig functions", func(t *testing.T) {
-		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT x, ATAN2(y, x) AS angle_rad, DEGREES(ATAN2(y, x)) AS angle_deg FROM computed_test")
+		result, err := executeComprehensiveQuery(
+			t,
+			exec,
+			cat,
+			"SELECT x, ATAN2(y, x) AS angle_rad, DEGREES(ATAN2(y, x)) AS angle_deg FROM computed_test",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 	})
@@ -315,9 +344,19 @@ func TestComprehensive_MathFunctions_WithAggregates(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO aggregate_test VALUES ('A', 9.0)")
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO aggregate_test VALUES ('B', 16.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO aggregate_test VALUES ('B', 16.0)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO aggregate_test VALUES ('B', 25.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO aggregate_test VALUES ('B', 25.0)",
+	)
 	require.NoError(t, err)
 
 	t.Run("Math function inside aggregate", func(t *testing.T) {
@@ -504,11 +543,26 @@ func TestComprehensive_BitwiseOperators_ComplexExpressions(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO bitwise_test VALUES (1, 5, 3)")    // 0101, 0011
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO bitwise_test VALUES (1, 5, 3)",
+	) // 0101, 0011
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO bitwise_test VALUES (2, 12, 10)")  // 1100, 1010
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO bitwise_test VALUES (2, 12, 10)",
+	) // 1100, 1010
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO bitwise_test VALUES (3, 255, 15)") // 11111111, 00001111
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO bitwise_test VALUES (3, 255, 15)",
+	) // 11111111, 00001111
 	require.NoError(t, err)
 
 	t.Run("Bitwise AND with columns", func(t *testing.T) {
@@ -610,7 +664,12 @@ func TestComprehensive_TypeCoercion_MixedTypes(t *testing.T) {
 
 	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO type_test VALUES (4, 4.0, 4)")
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO type_test VALUES (9, 9.5, 1000000000)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO type_test VALUES (9, 9.5, 1000000000)",
+	)
 	require.NoError(t, err)
 
 	t.Run("SQRT with integer input", func(t *testing.T) {
@@ -704,11 +763,26 @@ func TestComprehensive_FinancialCalculations(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO transactions VALUES (1, 19.99, 0.0825, 2)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO transactions VALUES (1, 19.99, 0.0825, 2)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO transactions VALUES (2, 49.95, 0.0825, 1)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO transactions VALUES (2, 49.95, 0.0825, 1)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO transactions VALUES (3, 9.50, 0.0825, 5)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO transactions VALUES (3, 9.50, 0.0825, 5)",
+	)
 	require.NoError(t, err)
 
 	t.Run("Calculate tax rounded to cents", func(t *testing.T) {
@@ -804,11 +878,26 @@ func TestComprehensive_ScientificCalculations_Trigonometry(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO geometry VALUES (1, 3.0, 4.0, 5.0, 45.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO geometry VALUES (1, 3.0, 4.0, 5.0, 45.0)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO geometry VALUES (2, 1.0, 1.0, 1.0, 90.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO geometry VALUES (2, 1.0, 1.0, 1.0, 90.0)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO geometry VALUES (3, 0.0, 5.0, 10.0, 180.0)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO geometry VALUES (3, 0.0, 5.0, 10.0, 180.0)",
+	)
 	require.NoError(t, err)
 
 	t.Run("Calculate distance from origin", func(t *testing.T) {
@@ -869,8 +958,12 @@ func TestComprehensive_ScientificCalculations_Trigonometry(t *testing.T) {
 	})
 
 	t.Run("Pythagorean identity verification", func(t *testing.T) {
-		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT id, POW(SIN(RADIANS(angle_deg)), 2) + POW(COS(RADIANS(angle_deg)), 2) AS identity FROM geometry")
+		result, err := executeComprehensiveQuery(
+			t,
+			exec,
+			cat,
+			"SELECT id, POW(SIN(RADIANS(angle_deg)), 2) + POW(COS(RADIANS(angle_deg)), 2) AS identity FROM geometry",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 		// All values should be 1.0
@@ -931,15 +1024,40 @@ func TestComprehensive_BitwiseOperations_FlagsMasks(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert users with different permission combinations
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO permissions VALUES (1, 1, 'reader')")           // READ only
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO permissions VALUES (1, 1, 'reader')",
+	) // READ only
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO permissions VALUES (2, 3, 'editor')")           // READ + WRITE
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO permissions VALUES (2, 3, 'editor')",
+	) // READ + WRITE
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO permissions VALUES (3, 7, 'developer')")        // READ + WRITE + EXECUTE
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO permissions VALUES (3, 7, 'developer')",
+	) // READ + WRITE + EXECUTE
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO permissions VALUES (4, 15, 'admin')")           // All permissions
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO permissions VALUES (4, 15, 'admin')",
+	) // All permissions
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO permissions VALUES (5, 0, 'guest')")            // No permissions
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO permissions VALUES (5, 0, 'guest')",
+	) // No permissions
 	require.NoError(t, err)
 
 	t.Run("Check if user has READ permission", func(t *testing.T) {
@@ -1000,8 +1118,12 @@ func TestComprehensive_BitwiseOperations_FlagsMasks(t *testing.T) {
 
 	t.Run("Revoke permission using AND NOT", func(t *testing.T) {
 		// Simulate revoking WRITE permission using XOR for toggle
-		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT user_id, permissions & ~2 AS new_permissions FROM permissions WHERE user_id = 2")
+		result, err := executeComprehensiveQuery(
+			t,
+			exec,
+			cat,
+			"SELECT user_id, permissions & ~2 AS new_permissions FROM permissions WHERE user_id = 2",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 		// editor (3) & ~WRITE(2) = 3 & ~2 = 1 (READ only)
@@ -1189,18 +1311,42 @@ func TestComprehensive_RealWorldScenarios(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO sensor_data VALUES (1, 23.5, 1000)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO sensor_data VALUES (1, 23.5, 1000)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO sensor_data VALUES (1, 24.1, 2000)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO sensor_data VALUES (1, 24.1, 2000)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO sensor_data VALUES (2, 18.2, 1000)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO sensor_data VALUES (2, 18.2, 1000)",
+	)
 	require.NoError(t, err)
-	_, err = executeComprehensiveQuery(t, exec, cat, "INSERT INTO sensor_data VALUES (2, 17.8, 2000)")
+	_, err = executeComprehensiveQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO sensor_data VALUES (2, 17.8, 2000)",
+	)
 	require.NoError(t, err)
 
 	t.Run("Calculate average reading per sensor", func(t *testing.T) {
-		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT sensor_id, ROUND(AVG(reading), 2) AS avg_reading FROM sensor_data GROUP BY sensor_id")
+		result, err := executeComprehensiveQuery(
+			t,
+			exec,
+			cat,
+			"SELECT sensor_id, ROUND(AVG(reading), 2) AS avg_reading FROM sensor_data GROUP BY sensor_id",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 2)
 	})
@@ -1216,8 +1362,12 @@ func TestComprehensive_RealWorldScenarios(t *testing.T) {
 	t.Run("Normalize readings to 0-1 range", func(t *testing.T) {
 		// Simple normalization: (value - min) / (max - min)
 		// Min = 17.8, Max = 24.1
-		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT sensor_id, reading, ROUND((reading - 17.8) / (24.1 - 17.8), 3) AS normalized FROM sensor_data")
+		result, err := executeComprehensiveQuery(
+			t,
+			exec,
+			cat,
+			"SELECT sensor_id, reading, ROUND((reading - 17.8) / (24.1 - 17.8), 3) AS normalized FROM sensor_data",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 4)
 	})

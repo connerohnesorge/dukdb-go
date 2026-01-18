@@ -227,7 +227,12 @@ func TestDukdbGoIcebergSimpleTable(t *testing.T) {
 
 	// Verify expected results
 	assert.Equal(t, int64(100), rowCount, "simple_table should have 100 rows")
-	assert.ElementsMatch(t, []string{"id", "name", "value"}, columns, "Should have expected columns")
+	assert.ElementsMatch(
+		t,
+		[]string{"id", "name", "value"},
+		columns,
+		"Should have expected columns",
+	)
 }
 
 // TestDuckDBCompatibilitySimpleTable compares dukdb-go results with DuckDB CLI.
@@ -401,7 +406,9 @@ func TestDuckDBCompatibilityTimeTravel(t *testing.T) {
 			if duckdbAvailable {
 				query := fmt.Sprintf(
 					"SELECT COUNT(*) as cnt FROM iceberg_scan('%s', allow_moved_paths = true, version = '%d');",
-					tablePath, tc.snapshotID)
+					tablePath,
+					tc.snapshotID,
+				)
 				duckdbResult := queryDuckDB(t, query)
 
 				if duckdbResult.Error != nil {

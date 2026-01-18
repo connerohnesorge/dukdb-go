@@ -733,7 +733,11 @@ func parseBinaryNumeric(data []byte) (string, error) {
 	// Validate length
 	expectedLen := 8 + ndigits*2
 	if len(data) != expectedLen {
-		return "", fmt.Errorf("invalid binary numeric length: expected %d, got %d", expectedLen, len(data))
+		return "", fmt.Errorf(
+			"invalid binary numeric length: expected %d, got %d",
+			expectedLen,
+			len(data),
+		)
 	}
 
 	// Handle special values

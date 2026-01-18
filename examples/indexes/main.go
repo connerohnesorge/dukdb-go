@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"time"
+
 	_ "github.com/dukdb/dukdb-go"
 )
 
@@ -44,7 +45,7 @@ func main() {
 
 	// Create indexes
 	fmt.Println("1. Creating indexes")
-	
+
 	_, err = db.Exec("CREATE INDEX idx_category ON products(category)")
 	if err != nil {
 		log.Printf("Failed to create index: %v", err)
@@ -89,7 +90,8 @@ func demonstrateQueryOptimization(db *sql.DB) {
 	fmt.Println("\n   Range query on price (uses index):")
 	start = time.Now()
 	var avgPrice float64
-	err := db.QueryRow("SELECT AVG(price) FROM products WHERE price BETWEEN 100 AND 500").Scan(&avgPrice)
+	err := db.QueryRow("SELECT AVG(price) FROM products WHERE price BETWEEN 100 AND 500").
+		Scan(&avgPrice)
 	if err == nil {
 		elapsed := time.Since(start)
 		fmt.Printf("   ✓ Average price: $%.2f in %v\n", avgPrice, elapsed)
@@ -98,7 +100,7 @@ func demonstrateQueryOptimization(db *sql.DB) {
 
 func showIndexUsage(db *sql.DB) {
 	fmt.Println("\n3. Index Information")
-	
+
 	// Show that queries are optimized
 	fmt.Println("   Indexes created:")
 	fmt.Println("   - idx_category: ON products(category)")

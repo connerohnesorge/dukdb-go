@@ -18,14 +18,22 @@ type mockBackendConn struct {
 	executeErr    error
 }
 
-func (m *mockBackendConn) Query(ctx context.Context, query string, args []driver.NamedValue) ([]map[string]interface{}, []string, error) {
+func (m *mockBackendConn) Query(
+	ctx context.Context,
+	query string,
+	args []driver.NamedValue,
+) ([]map[string]interface{}, []string, error) {
 	if m.queryErr != nil {
 		return nil, nil, m.queryErr
 	}
 	return m.queryResults, m.queryColumns, nil
 }
 
-func (m *mockBackendConn) Execute(ctx context.Context, query string, args []driver.NamedValue) (int64, error) {
+func (m *mockBackendConn) Execute(
+	ctx context.Context,
+	query string,
+	args []driver.NamedValue,
+) (int64, error) {
 	if m.executeErr != nil {
 		return 0, m.executeErr
 	}
@@ -518,7 +526,13 @@ func TestPLpgSQLExecutor_SimpleFunction(t *testing.T) {
 	err := pm.CreateFunction(context.Background(), fn)
 	require.NoError(t, err)
 
-	result, err := pm.ExecuteFunction(context.Background(), conn, "public", "add_numbers", []interface{}{10, 20})
+	result, err := pm.ExecuteFunction(
+		context.Background(),
+		conn,
+		"public",
+		"add_numbers",
+		[]interface{}{10, 20},
+	)
 	require.NoError(t, err)
 	// Result comes from expression evaluation via SQL
 	assert.NotNil(t, result)
@@ -542,7 +556,13 @@ func TestPLpgSQLManager_SQLFunction(t *testing.T) {
 	err := pm.CreateFunction(context.Background(), fn)
 	require.NoError(t, err)
 
-	result, err := pm.ExecuteFunction(context.Background(), conn, "public", "sql_add", []interface{}{10, 20})
+	result, err := pm.ExecuteFunction(
+		context.Background(),
+		conn,
+		"public",
+		"sql_add",
+		[]interface{}{10, 20},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(30), result)
 }
@@ -564,7 +584,13 @@ func TestPLpgSQLManager_StrictFunction(t *testing.T) {
 	require.NoError(t, err)
 
 	// With STRICT, NULL input returns NULL without executing
-	result, err := pm.ExecuteFunction(context.Background(), conn, "public", "strict_fn", []interface{}{nil})
+	result, err := pm.ExecuteFunction(
+		context.Background(),
+		conn,
+		"public",
+		"strict_fn",
+		[]interface{}{nil},
+	)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -647,12 +673,17 @@ func TestParseParameters(t *testing.T) {
 			expected: []FunctionParameter{{Name: "x", Type: "INTEGER", Mode: ModeInOut}},
 		},
 		{
-			input:    "a INTEGER, b INTEGER",
-			expected: []FunctionParameter{{Name: "a", Type: "INTEGER", Mode: ModeIn}, {Name: "b", Type: "INTEGER", Mode: ModeIn}},
+			input: "a INTEGER, b INTEGER",
+			expected: []FunctionParameter{
+				{Name: "a", Type: "INTEGER", Mode: ModeIn},
+				{Name: "b", Type: "INTEGER", Mode: ModeIn},
+			},
 		},
 		{
-			input:    "a INTEGER DEFAULT 0",
-			expected: []FunctionParameter{{Name: "a", Type: "INTEGER", Mode: ModeIn, DefaultValue: "0"}},
+			input: "a INTEGER DEFAULT 0",
+			expected: []FunctionParameter{
+				{Name: "a", Type: "INTEGER", Mode: ModeIn, DefaultValue: "0"},
+			},
 		},
 	}
 

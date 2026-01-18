@@ -235,9 +235,9 @@ func TestLargeNumbers(t *testing.T) {
 	tracker.InitializeTable("bigTable", 1000000000) // 1 billion rows
 
 	// Record large modifications
-	tracker.RecordInsert("bigTable", 100000000)  // 100 million inserts
-	tracker.RecordUpdate("bigTable", 50000000)   // 50 million updates
-	tracker.RecordDelete("bigTable", 50000000)   // 50 million deletes
+	tracker.RecordInsert("bigTable", 100000000) // 100 million inserts
+	tracker.RecordUpdate("bigTable", 50000000)  // 50 million updates
+	tracker.RecordDelete("bigTable", 50000000)  // 50 million deletes
 
 	// Verify calculations with large numbers
 	mod := tracker.GetTableModification("bigTable")

@@ -44,7 +44,12 @@ func TestCompressionRoundTrip_Constant(t *testing.T) {
 		require.NoError(t, err, "decompression should succeed")
 
 		// Verify decompressed data matches original
-		assert.Equal(t, len(originalData), len(decompressed), "decompressed size should match original")
+		assert.Equal(
+			t,
+			len(originalData),
+			len(decompressed),
+			"decompressed size should match original",
+		)
 		assert.Equal(t, originalData, decompressed, "decompressed data should match original")
 
 		// Verify all values are correct
@@ -138,7 +143,12 @@ func TestCompressionRoundTrip_RLE(t *testing.T) {
 
 		// Metadata offset should be within the data
 		assert.LessOrEqual(t, metadataOffset, uint64(len(compressed)))
-		assert.GreaterOrEqual(t, metadataOffset, uint64(8), "metadata offset should be after header")
+		assert.GreaterOrEqual(
+			t,
+			metadataOffset,
+			uint64(8),
+			"metadata offset should be after header",
+		)
 
 		// Decompress
 		decompressed, err := DecompressRLE(compressed, valueSize, 9)
@@ -286,7 +296,10 @@ func TestCompressionRoundTrip_Uncompressed(t *testing.T) {
 
 		originalData := make([]byte, count*valueSize)
 		for i := 0; i < count; i++ {
-			binary.LittleEndian.PutUint32(originalData[i*valueSize:], uint32(i*7+13)) // Pseudo-random
+			binary.LittleEndian.PutUint32(
+				originalData[i*valueSize:],
+				uint32(i*7+13),
+			) // Pseudo-random
 		}
 
 		// Compress (should pass through)
@@ -375,7 +388,12 @@ func TestCompressionRoundTrip_PFORDelta(t *testing.T) {
 		require.True(t, ok)
 
 		// Verify compression is beneficial
-		assert.Less(t, len(compressed), len(originalData), "compressed should be smaller than original")
+		assert.Less(
+			t,
+			len(compressed),
+			len(originalData),
+			"compressed should be smaller than original",
+		)
 
 		// Decompress
 		decompressed, err := DecompressPFORDelta(compressed, valueSize, count)
@@ -474,7 +492,12 @@ func TestCompressionRoundTrip_AllTypes(t *testing.T) {
 			}
 
 			// Decompress
-			decompressed, err := Decompress(tc.compression, compressed, actualValueSize, actualCount)
+			decompressed, err := Decompress(
+				tc.compression,
+				compressed,
+				actualValueSize,
+				actualCount,
+			)
 			require.NoError(t, err, "decompression should succeed")
 
 			// Verify round-trip

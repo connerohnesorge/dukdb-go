@@ -24,7 +24,10 @@ func main() {
 
 	// Example 1: Custom delimiter
 	fmt.Println("\n1. Reading CSV with custom delimiter (|):")
-	createCSVFile("pipe_delimited.csv", "id|name|department|salary\n1|John Doe|Engineering|75000\n2|Jane Smith|Marketing|65000\n3|Bob Johnson|Sales|55000")
+	createCSVFile(
+		"pipe_delimited.csv",
+		"id|name|department|salary\n1|John Doe|Engineering|75000\n2|Jane Smith|Marketing|65000\n3|Bob Johnson|Sales|55000",
+	)
 	defer os.Remove("pipe_delimited.csv")
 
 	rows, err := db.Query("SELECT * FROM read_csv('pipe_delimited.csv', delimiter = '|')")
@@ -37,10 +40,15 @@ func main() {
 
 	// Example 2: No header row
 	fmt.Println("\n2. Reading CSV without header row:")
-	createCSVFile("no_header.csv", "1001,Product A,19.99,150\n1002,Product B,29.99,200\n1003,Product C,39.99,75")
+	createCSVFile(
+		"no_header.csv",
+		"1001,Product A,19.99,150\n1002,Product B,29.99,200\n1003,Product C,39.99,75",
+	)
 	defer os.Remove("no_header.csv")
 
-	rows, err = db.Query("SELECT * FROM read_csv('no_header.csv', header = false, columns = ['product_id', 'product_name', 'price', 'stock'])")
+	rows, err = db.Query(
+		"SELECT * FROM read_csv('no_header.csv', header = false, columns = ['product_id', 'product_name', 'price', 'stock'])",
+	)
 	if err != nil {
 		log.Fatal("Failed to read CSV:", err)
 	}
@@ -50,7 +58,10 @@ func main() {
 
 	// Example 3: Custom null string
 	fmt.Println("\n3. Reading CSV with custom null representation (N/A):")
-	createCSVFile("custom_null.csv", "order_id,customer_id,product_id,quantity,discount\n1,101,201,5,N/A\n2,102,202,3,0.1\n3,103,203,N/A,0.2\n4,104,204,10,N/A")
+	createCSVFile(
+		"custom_null.csv",
+		"order_id,customer_id,product_id,quantity,discount\n1,101,201,5,N/A\n2,102,202,3,0.1\n3,103,203,N/A,0.2\n4,104,204,10,N/A",
+	)
 	defer os.Remove("custom_null.csv")
 
 	rows, err = db.Query("SELECT * FROM read_csv('custom_null.csv', nullstr = 'N/A')")
@@ -79,10 +90,15 @@ func main() {
 
 	// Example 5: Multiple options combined
 	fmt.Println("\n5. Reading CSV with multiple options (tab delimiter, no header, custom null):")
-	createCSVFile("complex.csv", "101\t2023-01-15\t100.50\t\n102\t2023-01-16\tNULL\t15.00\n103\t2023-01-17\t250.00\t20.00")
+	createCSVFile(
+		"complex.csv",
+		"101\t2023-01-15\t100.50\t\n102\t2023-01-16\tNULL\t15.00\n103\t2023-01-17\t250.00\t20.00",
+	)
 	defer os.Remove("complex.csv")
 
-	rows, err = db.Query("SELECT * FROM read_csv('complex.csv', delimiter = '\t', header = false, nullstr = 'NULL', columns = ['transaction_id', 'date', 'amount', 'fee'])")
+	rows, err = db.Query(
+		"SELECT * FROM read_csv('complex.csv', delimiter = '\t', header = false, nullstr = 'NULL', columns = ['transaction_id', 'date', 'amount', 'fee'])",
+	)
 	if err != nil {
 		log.Fatal("Failed to read CSV:", err)
 	}
@@ -113,7 +129,10 @@ id,name,score
 
 	// Example 7: Date format specification
 	fmt.Println("\n7. Reading CSV with custom date format:")
-	createCSVFile("custom_date.csv", "event_id,event_date,description\n1,15/01/2023,New Year Sale\n2,28/02/2023,Spring Collection\n3,15/03/2023,Summer Preview")
+	createCSVFile(
+		"custom_date.csv",
+		"event_id,event_date,description\n1,15/01/2023,New Year Sale\n2,28/02/2023,Spring Collection\n3,15/03/2023,Summer Preview",
+	)
 	defer os.Remove("custom_date.csv")
 
 	rows, err = db.Query("SELECT * FROM read_csv('custom_date.csv', dateformat := '%d/%m/%Y')")

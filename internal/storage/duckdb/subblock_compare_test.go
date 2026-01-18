@@ -23,7 +23,13 @@ func TestSubBlockComparison(t *testing.T) {
 	createTableWithCLI(t, cliFile, "CREATE TABLE test (id INTEGER, name VARCHAR)")
 
 	// Create table with dukdb-go
-	createTableWithGo(t, goFile, "test", []string{"id", "name"}, []LogicalTypeID{TypeInteger, TypeVarchar})
+	createTableWithGo(
+		t,
+		goFile,
+		"test",
+		[]string{"id", "name"},
+		[]LogicalTypeID{TypeInteger, TypeVarchar},
+	)
 
 	// Read sub-block 1 from both files
 	cliSB1 := readSubBlock1FromFile(t, cliFile)
@@ -332,7 +338,12 @@ func createTableWithCLI(t *testing.T, dbPath, createSQL string) {
 }
 
 // createTableWithGo creates a table using dukdb-go
-func createTableWithGo(t *testing.T, dbPath, tableName string, colNames []string, colTypes []LogicalTypeID) {
+func createTableWithGo(
+	t *testing.T,
+	dbPath, tableName string,
+	colNames []string,
+	colTypes []LogicalTypeID,
+) {
 	// Remove existing file
 	_ = os.Remove(dbPath)
 

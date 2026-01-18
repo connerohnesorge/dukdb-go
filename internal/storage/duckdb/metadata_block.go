@@ -133,7 +133,12 @@ func (m *MetadataBlockManager) WriteSubBlock(data []byte) (MetaBlockPointer, err
 	for i := 0; i < numBlocks; i++ {
 		ptr, err := m.AllocateSubBlock()
 		if err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to allocate sub-block %d/%d: %w", i+1, numBlocks, err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to allocate sub-block %d/%d: %w",
+				i+1,
+				numBlocks,
+				err,
+			)
 		}
 		ptrs[i] = ptr
 	}
@@ -155,7 +160,12 @@ func (m *MetadataBlockManager) WriteSubBlock(data []byte) (MetaBlockPointer, err
 
 		// Write to sub-block
 		if err := m.writeToSubBlock(ptrs[i], nextBlockPtr, chunk); err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to write sub-block %d/%d: %w", i+1, numBlocks, err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to write sub-block %d/%d: %w",
+				i+1,
+				numBlocks,
+				err,
+			)
 		}
 	}
 
@@ -164,9 +174,17 @@ func (m *MetadataBlockManager) WriteSubBlock(data []byte) (MetaBlockPointer, err
 
 // writeToSubBlock writes data to a specific sub-block within a storage block.
 // Format: [nextBlockPtr: 8 bytes][data: up to 4088 bytes]
-func (m *MetadataBlockManager) writeToSubBlock(ptr MetaBlockPointer, nextBlockPtr uint64, data []byte) error {
+func (m *MetadataBlockManager) writeToSubBlock(
+	ptr MetaBlockPointer,
+	nextBlockPtr uint64,
+	data []byte,
+) error {
 	if len(data) > MetadataSubBlockDataSize {
-		return fmt.Errorf("data too large for sub-block: %d bytes (max %d)", len(data), MetadataSubBlockDataSize)
+		return fmt.Errorf(
+			"data too large for sub-block: %d bytes (max %d)",
+			len(data),
+			MetadataSubBlockDataSize,
+		)
 	}
 
 	if ptr.BlockIndex >= MetadataBlocksPerStorage {
@@ -284,7 +302,11 @@ func (m *MetadataBlockManager) ReadSubBlock(ptr MetaBlockPointer) ([]byte, error
 
 		// Check bounds
 		if subBlockOffset+MetadataSubBlockSize > uint64(len(block.Data)) {
-			return nil, fmt.Errorf("sub-block offset %d exceeds block size %d", subBlockOffset, len(block.Data))
+			return nil, fmt.Errorf(
+				"sub-block offset %d exceeds block size %d",
+				subBlockOffset,
+				len(block.Data),
+			)
 		}
 
 		// Read next block pointer (first 8 bytes)

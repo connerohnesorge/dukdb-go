@@ -15,8 +15,8 @@ import (
 // Format:
 //   - First value: stored directly (8 bytes for float64, 4 bytes for float32)
 //   - Subsequent values: XOR with previous value
-//     - If XOR == 0: store single '0' bit
-//     - If XOR != 0: store '1' bit + leading zeros count + significant bits
+//   - If XOR == 0: store single '0' bit
+//   - If XOR != 0: store '1' bit + leading zeros count + significant bits
 //
 // This is particularly effective for sensor data, stock prices, and other
 // time-series where consecutive values have small differences.
@@ -45,7 +45,11 @@ func (c *ChimpCodec) Compress(data []byte) ([]byte, error) {
 	}
 
 	if len(data)%valueSize != 0 {
-		return nil, fmt.Errorf("data length %d is not a multiple of value size %d", len(data), valueSize)
+		return nil, fmt.Errorf(
+			"data length %d is not a multiple of value size %d",
+			len(data),
+			valueSize,
+		)
 	}
 
 	numValues := len(data) / valueSize
@@ -63,7 +67,12 @@ func (c *ChimpCodec) Compress(data []byte) ([]byte, error) {
 	return c.compressFloat32(data, numValues, bw, buf)
 }
 
-func (c *ChimpCodec) compressFloat64(data []byte, numValues int, bw *bitWriter, buf *bytes.Buffer) ([]byte, error) {
+func (c *ChimpCodec) compressFloat64(
+	data []byte,
+	numValues int,
+	bw *bitWriter,
+	buf *bytes.Buffer,
+) ([]byte, error) {
 	// Store first value directly
 	firstBits := binary.LittleEndian.Uint64(data[0:8])
 	if err := binary.Write(buf, binary.LittleEndian, firstBits); err != nil {
@@ -144,7 +153,12 @@ func (c *ChimpCodec) compressFloat64(data []byte, numValues int, bw *bitWriter, 
 	return buf.Bytes(), nil
 }
 
-func (c *ChimpCodec) compressFloat32(data []byte, numValues int, bw *bitWriter, buf *bytes.Buffer) ([]byte, error) {
+func (c *ChimpCodec) compressFloat32(
+	data []byte,
+	numValues int,
+	bw *bitWriter,
+	buf *bytes.Buffer,
+) ([]byte, error) {
 	// Store first value directly
 	firstBits := binary.LittleEndian.Uint32(data[0:4])
 	if err := binary.Write(buf, binary.LittleEndian, firstBits); err != nil {
@@ -237,7 +251,11 @@ func (c *ChimpCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 	}
 
 	if destSize%valueSize != 0 {
-		return nil, fmt.Errorf("destination size %d is not a multiple of value size %d", destSize, valueSize)
+		return nil, fmt.Errorf(
+			"destination size %d is not a multiple of value size %d",
+			destSize,
+			valueSize,
+		)
 	}
 
 	numValues := destSize / valueSize
@@ -255,7 +273,12 @@ func (c *ChimpCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 	return c.decompressFloat32(r, br, numValues, destSize)
 }
 
-func (c *ChimpCodec) decompressFloat64(r *bytes.Reader, br *bitReader, numValues int, destSize int) ([]byte, error) {
+func (c *ChimpCodec) decompressFloat64(
+	r *bytes.Reader,
+	br *bitReader,
+	numValues int,
+	destSize int,
+) ([]byte, error) {
 	result := make([]byte, destSize)
 
 	// Read first value
@@ -331,7 +354,12 @@ func (c *ChimpCodec) decompressFloat64(r *bytes.Reader, br *bitReader, numValues
 	return result, nil
 }
 
-func (c *ChimpCodec) decompressFloat32(r *bytes.Reader, br *bitReader, numValues int, destSize int) ([]byte, error) {
+func (c *ChimpCodec) decompressFloat32(
+	r *bytes.Reader,
+	br *bitReader,
+	numValues int,
+	destSize int,
+) ([]byte, error) {
 	result := make([]byte, destSize)
 
 	// Read first value

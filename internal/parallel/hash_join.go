@@ -542,7 +542,10 @@ func (j *ParallelHashJoin) OutputColumns() []string {
 
 // Execute runs all three phases of the hash join with proper synchronization.
 // Returns a channel that produces result chunks.
-func (j *ParallelHashJoin) Execute(pool *ThreadPool, ctx context.Context) (<-chan *storage.DataChunk, error) {
+func (j *ParallelHashJoin) Execute(
+	pool *ThreadPool,
+	ctx context.Context,
+) (<-chan *storage.DataChunk, error) {
 	// Validate inputs
 	if j.BuildSource == nil {
 		return nil, ErrNoBuildSource
@@ -754,7 +757,8 @@ func (j *ParallelHashJoin) BuildHashTables(workers []*Worker, ctx context.Contex
 					entries := j.PartitionQueues[partition]
 
 					// Check if we need to spill
-					if j.SpillManager != nil && j.SpillManager.ShouldSpill(partition, len(entries)) {
+					if j.SpillManager != nil &&
+						j.SpillManager.ShouldSpill(partition, len(entries)) {
 						_, err := j.SpillManager.Spill(partition, entries)
 						if err != nil {
 							select {
@@ -803,7 +807,11 @@ func (j *ParallelHashJoin) BuildHashTables(workers []*Worker, ctx context.Contex
 
 // ParallelProbe probes hash tables with probe-side data.
 // Phase 3: Probe phase is read-only, enabling full parallelism.
-func (j *ParallelHashJoin) ParallelProbe(workers []*Worker, ctx context.Context, resultChan chan<- *storage.DataChunk) error {
+func (j *ParallelHashJoin) ParallelProbe(
+	workers []*Worker,
+	ctx context.Context,
+	resultChan chan<- *storage.DataChunk,
+) error {
 	morsels := j.ProbeSource.GenerateMorsels()
 	if len(morsels) == 0 {
 		// For right/full joins, still need to emit unmatched build rows
@@ -1023,7 +1031,8 @@ func (j *ParallelHashJoin) emitUnmatchedBuildRows(resultChan chan<- *storage.Dat
 
 		for entryIdx, entry := range entries {
 			// Check if this entry was matched
-			if entryIdx < len(j.BuildMatched[partition]) && j.BuildMatched[partition][entryIdx].Load() {
+			if entryIdx < len(j.BuildMatched[partition]) &&
+				j.BuildMatched[partition][entryIdx].Load() {
 				continue // Was matched, skip
 			}
 

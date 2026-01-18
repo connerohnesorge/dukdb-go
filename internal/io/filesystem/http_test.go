@@ -349,7 +349,11 @@ func (m *MockHTTPServer) handleGet(w http.ResponseWriter, r *http.Request, data 
 	_, _ = w.Write(data)
 }
 
-func (m *MockHTTPServer) handleRangeRequest(w http.ResponseWriter, rangeHeader string, data []byte) {
+func (m *MockHTTPServer) handleRangeRequest(
+	w http.ResponseWriter,
+	rangeHeader string,
+	data []byte,
+) {
 	// Parse Range header: bytes=start-end or bytes=start-
 	var start, end int64
 	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); err != nil {

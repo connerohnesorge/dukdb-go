@@ -1101,12 +1101,33 @@ func TestDeserializeTypeInfoInvalidData(t *testing.T) {
 	}{
 		{
 			name: "invalid varint overflow",
-			data: []byte{0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02}, // Invalid varint
+			data: []byte{
+				0x01,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0x02,
+			}, // Invalid varint
 			desc: "varint overflow should cause error",
 		},
 		{
 			name: "string too large",
-			data: []byte{0x01, 0x04, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}, // Type=4, Name with length=2GB
+			data: []byte{
+				0x01,
+				0x04,
+				0x02,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
+				0x0F,
+			}, // Type=4, Name with length=2GB
 			desc: "extremely large string length should cause error",
 		},
 	}
@@ -1226,17 +1247,17 @@ func TestSerializeStructType(t *testing.T) {
 		{
 			name: "multiple fields",
 			fields: []StructField{
-				{Name: "id", TypeID: 4},      // INTEGER
-				{Name: "name", TypeID: 18},   // VARCHAR
-				{Name: "age", TypeID: 4},     // INTEGER
-				{Name: "active", TypeID: 1},  // BOOLEAN
+				{Name: "id", TypeID: 4},     // INTEGER
+				{Name: "name", TypeID: 18},  // VARCHAR
+				{Name: "age", TypeID: 4},    // INTEGER
+				{Name: "active", TypeID: 1}, // BOOLEAN
 			},
 		},
 		{
 			name: "fields with unicode names",
 			fields: []StructField{
-				{Name: "名前", TypeID: 18},    // Japanese "name"
-				{Name: "年齢", TypeID: 4},     // Japanese "age"
+				{Name: "名前", TypeID: 18}, // Japanese "name"
+				{Name: "年齢", TypeID: 4},  // Japanese "age"
 			},
 		},
 		{
@@ -1351,10 +1372,10 @@ func TestStructTypeRoundTrip(t *testing.T) {
 		{
 			name: "person struct",
 			fields: []StructField{
-				{Name: "id", TypeID: 4},       // INTEGER
-				{Name: "name", TypeID: 18},    // VARCHAR
-				{Name: "age", TypeID: 4},      // INTEGER
-				{Name: "email", TypeID: 18},   // VARCHAR
+				{Name: "id", TypeID: 4},     // INTEGER
+				{Name: "name", TypeID: 18},  // VARCHAR
+				{Name: "age", TypeID: 4},    // INTEGER
+				{Name: "email", TypeID: 18}, // VARCHAR
 			},
 		},
 		{
@@ -1383,7 +1404,10 @@ func TestStructTypeRoundTrip(t *testing.T) {
 		{
 			name: "long field names",
 			fields: []StructField{
-				{Name: "very_long_field_name_that_exceeds_normal_limits_but_should_still_work", TypeID: 18},
+				{
+					Name:   "very_long_field_name_that_exceeds_normal_limits_but_should_still_work",
+					TypeID: 18,
+				},
 				{Name: "another_extremely_long_field_name_for_testing_purposes", TypeID: 4},
 			},
 		},
@@ -1523,10 +1547,10 @@ func TestDeserializeStructTypeInvalidData(t *testing.T) {
 func TestStructTypeWithComplexTypes(t *testing.T) {
 	// Test struct containing various complex type references
 	fields := []StructField{
-		{Name: "id", TypeID: 4},        // INTEGER
-		{Name: "tags", TypeID: 25},     // LIST
-		{Name: "metadata", TypeID: 27}, // MAP
-		{Name: "address", TypeID: 26},  // STRUCT (nested)
+		{Name: "id", TypeID: 4},           // INTEGER
+		{Name: "tags", TypeID: 25},        // LIST
+		{Name: "metadata", TypeID: 27},    // MAP
+		{Name: "address", TypeID: 26},     // STRUCT (nested)
 		{Name: "union_field", TypeID: 30}, // UNION
 	}
 
@@ -1636,58 +1660,58 @@ func TestStructTypeMaxFields(t *testing.T) {
 // TestSerializeListType tests serialization of LIST types with various element types
 func TestSerializeListType(t *testing.T) {
 	tests := []struct {
-		name           string
-		elementTypeID  int
+		name            string
+		elementTypeID   int
 		elementTypeName string
 	}{
 		{
-			name:           "LIST(INTEGER)",
-			elementTypeID:  4,
+			name:            "LIST(INTEGER)",
+			elementTypeID:   4,
 			elementTypeName: "INTEGER",
 		},
 		{
-			name:           "LIST(VARCHAR)",
-			elementTypeID:  18,
+			name:            "LIST(VARCHAR)",
+			elementTypeID:   18,
 			elementTypeName: "VARCHAR",
 		},
 		{
-			name:           "LIST(BIGINT)",
-			elementTypeID:  5,
+			name:            "LIST(BIGINT)",
+			elementTypeID:   5,
 			elementTypeName: "BIGINT",
 		},
 		{
-			name:           "LIST(BOOLEAN)",
-			elementTypeID:  1,
+			name:            "LIST(BOOLEAN)",
+			elementTypeID:   1,
 			elementTypeName: "BOOLEAN",
 		},
 		{
-			name:           "LIST(DOUBLE)",
-			elementTypeID:  11,
+			name:            "LIST(DOUBLE)",
+			elementTypeID:   11,
 			elementTypeName: "DOUBLE",
 		},
 		{
-			name:           "LIST(DATE)",
-			elementTypeID:  13,
+			name:            "LIST(DATE)",
+			elementTypeID:   13,
 			elementTypeName: "DATE",
 		},
 		{
-			name:           "LIST(TIMESTAMP)",
-			elementTypeID:  12,
+			name:            "LIST(TIMESTAMP)",
+			elementTypeID:   12,
 			elementTypeName: "TIMESTAMP",
 		},
 		{
-			name:           "LIST(STRUCT) - nested complex type",
-			elementTypeID:  26,
+			name:            "LIST(STRUCT) - nested complex type",
+			elementTypeID:   26,
 			elementTypeName: "STRUCT",
 		},
 		{
-			name:           "LIST(LIST) - nested list",
-			elementTypeID:  25,
+			name:            "LIST(LIST) - nested list",
+			elementTypeID:   25,
 			elementTypeName: "LIST",
 		},
 		{
-			name:           "LIST(MAP) - nested map",
-			elementTypeID:  27,
+			name:            "LIST(MAP) - nested map",
+			elementTypeID:   27,
 			elementTypeName: "MAP",
 		},
 	}
@@ -1882,7 +1906,13 @@ func TestListTypeRoundTrip(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify complete match
-			assert.Equal(t, tt.elementTypeID, elementTypeID, "%s: element type ID mismatch", tt.description)
+			assert.Equal(
+				t,
+				tt.elementTypeID,
+				elementTypeID,
+				"%s: element type ID mismatch",
+				tt.description,
+			)
 		})
 	}
 }
@@ -2018,7 +2048,7 @@ func TestListTypeMultipleSequential(t *testing.T) {
 	w := NewBinaryWriter()
 
 	// Serialize three list types
-	err := SerializeListType(w, 4)  // LIST(INTEGER)
+	err := SerializeListType(w, 4) // LIST(INTEGER)
 	require.NoError(t, err)
 	err = SerializeListType(w, 18) // LIST(VARCHAR)
 	require.NoError(t, err)
@@ -2484,7 +2514,13 @@ func TestMapTypeRoundTrip(t *testing.T) {
 
 			// Verify complete match
 			assert.Equal(t, tt.keyTypeID, keyTypeID, "%s: key type ID mismatch", tt.description)
-			assert.Equal(t, tt.valueTypeID, valueTypeID, "%s: value type ID mismatch", tt.description)
+			assert.Equal(
+				t,
+				tt.valueTypeID,
+				valueTypeID,
+				"%s: value type ID mismatch",
+				tt.description,
+			)
 		})
 	}
 }
@@ -2494,7 +2530,7 @@ func TestMapTypeNestedMap(t *testing.T) {
 	// Create MAP(VARCHAR, MAP) by using MAP type ID (27) as the value type
 	// In practice, we'd need to serialize the inner MAP separately, but this test
 	// validates that the structure can handle nested map type IDs
-	const keyTypeID = 18  // VARCHAR
+	const keyTypeID = 18   // VARCHAR
 	const valueTypeID = 27 // MAP
 
 	// Serialize outer map: MAP(VARCHAR, MAP)
@@ -2665,9 +2701,9 @@ func TestMapTypeMultipleSequential(t *testing.T) {
 	w := NewBinaryWriter()
 
 	// Serialize three map types
-	err := SerializeMapType(w, 18, 4)  // MAP(VARCHAR, INTEGER)
+	err := SerializeMapType(w, 18, 4) // MAP(VARCHAR, INTEGER)
 	require.NoError(t, err)
-	err = SerializeMapType(w, 4, 18)  // MAP(INTEGER, VARCHAR)
+	err = SerializeMapType(w, 4, 18) // MAP(INTEGER, VARCHAR)
 	require.NoError(t, err)
 	err = SerializeMapType(w, 18, 27) // MAP(VARCHAR, MAP)
 	require.NoError(t, err)
@@ -3049,7 +3085,13 @@ func TestDeserializeUnionType(t *testing.T) {
 			require.Equal(t, len(tt.members), len(members), "member count should match")
 			for i, expected := range tt.members {
 				assert.Equal(t, expected.Name, members[i].Name, "member %d name should match", i)
-				assert.Equal(t, expected.TypeID, members[i].TypeID, "member %d type ID should match", i)
+				assert.Equal(
+					t,
+					expected.TypeID,
+					members[i].TypeID,
+					"member %d type ID should match",
+					i,
+				)
 			}
 		})
 	}
@@ -3062,7 +3104,7 @@ func TestUnionTypeRoundTrip(t *testing.T) {
 		members []UnionMember
 	}{
 		{
-			name: "empty union",
+			name:    "empty union",
 			members: []UnionMember{},
 		},
 		{
@@ -3242,7 +3284,7 @@ func TestNestedUnionType(t *testing.T) {
 		{
 			name: "UNION containing MAP type",
 			members: []UnionMember{
-				{Name: "map", TypeID: 27},    // MAP type
+				{Name: "map", TypeID: 27},   // MAP type
 				{Name: "value", TypeID: 18}, // VARCHAR
 			},
 			description: "union with nested map type",
@@ -3527,7 +3569,12 @@ func TestNewTypesRoundTrip(t *testing.T) {
 
 			// Verify round-trip
 			assert.Equal(t, tt.typeID, deserializedTypeID, "type ID should match after round-trip")
-			assert.Equal(t, tt.typeName, deserializedTypeName, "type name should match after round-trip")
+			assert.Equal(
+				t,
+				tt.typeName,
+				deserializedTypeName,
+				"type name should match after round-trip",
+			)
 		})
 	}
 }
@@ -3544,9 +3591,9 @@ func TestNewTypesConstants(t *testing.T) {
 func TestNewTypesInComplexStructures(t *testing.T) {
 	t.Run("STRUCT with BIT field", func(t *testing.T) {
 		fields := []StructField{
-			{Name: "id", TypeID: 4},         // INTEGER
+			{Name: "id", TypeID: 4},                // INTEGER
 			{Name: "is_active", TypeID: TypeIDBit}, // BIT
-			{Name: "name", TypeID: 18},      // VARCHAR
+			{Name: "name", TypeID: 18},             // VARCHAR
 		}
 
 		w := NewBinaryWriter()
@@ -3562,7 +3609,7 @@ func TestNewTypesInComplexStructures(t *testing.T) {
 
 	t.Run("STRUCT with TIME_TZ field", func(t *testing.T) {
 		fields := []StructField{
-			{Name: "event", TypeID: 18},            // VARCHAR
+			{Name: "event", TypeID: 18},                // VARCHAR
 			{Name: "local_time", TypeID: TypeIDTimeTZ}, // TIME_TZ
 		}
 
@@ -3683,7 +3730,7 @@ func TestDeepNestedTypes(t *testing.T) {
 			testFunc: func(t *testing.T) {
 				// Outermost struct with a STRUCT field
 				fields := []StructField{
-					{Name: "id", TypeID: 4},              // INTEGER
+					{Name: "id", TypeID: 4},             // INTEGER
 					{Name: "nested_struct", TypeID: 26}, // STRUCT
 				}
 
@@ -3707,8 +3754,8 @@ func TestDeepNestedTypes(t *testing.T) {
 				//   data: LIST(MAP)
 				// }
 				fields := []StructField{
-					{Name: "id", TypeID: 4},        // INTEGER
-					{Name: "data", TypeID: 25},     // LIST (of MAP)
+					{Name: "id", TypeID: 4},    // INTEGER
+					{Name: "data", TypeID: 25}, // LIST (of MAP)
 				}
 
 				w := NewBinaryWriter()
@@ -4052,9 +4099,9 @@ func BenchmarkDeserializeTypeInfo_Decimal(b *testing.B) {
 
 func BenchmarkSerializeStructType_Simple(b *testing.B) {
 	fields := []StructField{
-		{Name: "id", TypeID: 5},      // INTEGER
-		{Name: "name", TypeID: 14},   // VARCHAR
-		{Name: "active", TypeID: 2},  // BOOLEAN
+		{Name: "id", TypeID: 5},     // INTEGER
+		{Name: "name", TypeID: 14},  // VARCHAR
+		{Name: "active", TypeID: 2}, // BOOLEAN
 	}
 
 	b.ResetTimer()
@@ -4071,9 +4118,9 @@ func BenchmarkSerializeStructType_Simple(b *testing.B) {
 
 func BenchmarkDeserializeStructType_Simple(b *testing.B) {
 	fields := []StructField{
-		{Name: "id", TypeID: 5},      // INTEGER
-		{Name: "name", TypeID: 14},   // VARCHAR
-		{Name: "active", TypeID: 2},  // BOOLEAN
+		{Name: "id", TypeID: 5},     // INTEGER
+		{Name: "name", TypeID: 14},  // VARCHAR
+		{Name: "active", TypeID: 2}, // BOOLEAN
 	}
 
 	w := NewBinaryWriter()
@@ -4190,9 +4237,9 @@ func BenchmarkDeserializeMapType(b *testing.B) {
 
 func BenchmarkSerializeUnionType(b *testing.B) {
 	members := []UnionMember{
-		{Name: "int_val", TypeID: 5},    // INTEGER
-		{Name: "str_val", TypeID: 14},   // VARCHAR
-		{Name: "bool_val", TypeID: 2},   // BOOLEAN
+		{Name: "int_val", TypeID: 5},  // INTEGER
+		{Name: "str_val", TypeID: 14}, // VARCHAR
+		{Name: "bool_val", TypeID: 2}, // BOOLEAN
 	}
 
 	b.ResetTimer()
@@ -4209,9 +4256,9 @@ func BenchmarkSerializeUnionType(b *testing.B) {
 
 func BenchmarkDeserializeUnionType(b *testing.B) {
 	members := []UnionMember{
-		{Name: "int_val", TypeID: 5},    // INTEGER
-		{Name: "str_val", TypeID: 14},   // VARCHAR
-		{Name: "bool_val", TypeID: 2},   // BOOLEAN
+		{Name: "int_val", TypeID: 5},  // INTEGER
+		{Name: "str_val", TypeID: 14}, // VARCHAR
+		{Name: "bool_val", TypeID: 2}, // BOOLEAN
 	}
 
 	w := NewBinaryWriter()
@@ -4235,8 +4282,8 @@ func BenchmarkDeserializeUnionType(b *testing.B) {
 
 func BenchmarkCatalogSerialization_RoundTrip_Simple(b *testing.B) {
 	fields := []StructField{
-		{Name: "id", TypeID: 5},      // INTEGER
-		{Name: "name", TypeID: 14},   // VARCHAR
+		{Name: "id", TypeID: 5},    // INTEGER
+		{Name: "name", TypeID: 14}, // VARCHAR
 	}
 
 	b.ResetTimer()
@@ -4262,11 +4309,11 @@ func BenchmarkCatalogSerialization_RoundTrip_Simple(b *testing.B) {
 func BenchmarkCatalogSerialization_RoundTrip_Complex(b *testing.B) {
 	// Complex nested structure
 	fields := []StructField{
-		{Name: "id", TypeID: 5},      // INTEGER
-		{Name: "data", TypeID: 26},   // STRUCT
-		{Name: "tags", TypeID: 25},   // LIST
-		{Name: "meta", TypeID: 27},   // MAP
-		{Name: "flags", TypeID: 28},  // UNION
+		{Name: "id", TypeID: 5},     // INTEGER
+		{Name: "data", TypeID: 26},  // STRUCT
+		{Name: "tags", TypeID: 25},  // LIST
+		{Name: "meta", TypeID: 27},  // MAP
+		{Name: "flags", TypeID: 28}, // UNION
 	}
 
 	b.ResetTimer()

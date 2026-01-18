@@ -382,7 +382,8 @@ func TestEnvelope(t *testing.T) {
 			assert.NotNil(t, env)
 
 			// Verify envelope type
-			if tt.expectedBB.MinX == tt.expectedBB.MaxX && tt.expectedBB.MinY == tt.expectedBB.MaxY {
+			if tt.expectedBB.MinX == tt.expectedBB.MaxX &&
+				tt.expectedBB.MinY == tt.expectedBB.MaxY {
 				assert.Equal(t, GeometryPoint, env.Type)
 			} else if tt.expectedBB.MinX == tt.expectedBB.MaxX || tt.expectedBB.MinY == tt.expectedBB.MaxY {
 				assert.Equal(t, GeometryLineString, env.Type)
@@ -416,7 +417,16 @@ func TestPointInPolygon(t *testing.T) {
 
 	for _, tt := range tests {
 		result := pointInPolygon(tt.px, tt.py, polygon)
-		assert.Equal(t, tt.expected, result, "pointInPolygon(%v, %v) = %v, expected %v", tt.px, tt.py, result, tt.expected)
+		assert.Equal(
+			t,
+			tt.expected,
+			result,
+			"pointInPolygon(%v, %v) = %v, expected %v",
+			tt.px,
+			tt.py,
+			result,
+			tt.expected,
+		)
 	}
 }
 
@@ -519,7 +529,7 @@ func TestAllCoordinates(t *testing.T) {
 
 	allCoords, err := g.AllCoordinates()
 	require.NoError(t, err)
-	assert.Len(t, allCoords, 2) // Exterior + 1 hole
+	assert.Len(t, allCoords, 2)    // Exterior + 1 hole
 	assert.Len(t, allCoords[0], 5) // Exterior ring
 	assert.Len(t, allCoords[1], 5) // Hole
 }
@@ -822,15 +832,15 @@ func TestHaversinePrecision(t *testing.T) {
 		tolerancePercent float64
 	}{
 		{
-			name:             "Equator crossing",
-			lon1:             0, lat1: 0,
+			name: "Equator crossing",
+			lon1: 0, lat1: 0,
 			lon2: 1, lat2: 0,
 			expectedKm:       111.32, // ~111km per degree at equator
 			tolerancePercent: 1.0,
 		},
 		{
-			name:             "North-South at meridian",
-			lon1:             0, lat1: 0,
+			name: "North-South at meridian",
+			lon1: 0, lat1: 0,
 			lon2: 0, lat2: 1,
 			expectedKm:       111.32,
 			tolerancePercent: 1.0,

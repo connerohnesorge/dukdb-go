@@ -67,7 +67,10 @@ func NewIcebergTableDiscovery(opts IcebergDiscoveryOptions) *IcebergTableDiscove
 // Discovery logic:
 //  1. If the path itself is an Iceberg table (has metadata/ subdirectory), return it.
 //  2. Otherwise, scan subdirectories looking for Iceberg tables.
-func (d *IcebergTableDiscovery) DiscoverTables(ctx context.Context, path string) ([]*IcebergTableEntry, error) {
+func (d *IcebergTableDiscovery) DiscoverTables(
+	ctx context.Context,
+	path string,
+) ([]*IcebergTableEntry, error) {
 	// Get or create filesystem for the path
 	fs, err := d.getFilesystem(path)
 	if err != nil {
@@ -95,7 +98,11 @@ func (d *IcebergTableDiscovery) DiscoverTables(ctx context.Context, path string)
 // DiscoverTable discovers a single Iceberg table at the given path.
 // The path should point directly to an Iceberg table root directory.
 // Returns an error if the path is not a valid Iceberg table.
-func (d *IcebergTableDiscovery) DiscoverTable(ctx context.Context, path string, name string) (*IcebergTableEntry, error) {
+func (d *IcebergTableDiscovery) DiscoverTable(
+	ctx context.Context,
+	path string,
+	name string,
+) (*IcebergTableEntry, error) {
 	// Get or create filesystem for the path
 	fs, err := d.getFilesystem(path)
 	if err != nil {
@@ -109,7 +116,10 @@ func (d *IcebergTableDiscovery) DiscoverTable(ctx context.Context, path string, 
 	}
 
 	if !isTable {
-		return nil, fmt.Errorf("path %s is not a valid Iceberg table (no metadata directory found)", path)
+		return nil, fmt.Errorf(
+			"path %s is not a valid Iceberg table (no metadata directory found)",
+			path,
+		)
 	}
 
 	// Use provided name or derive from path
@@ -141,7 +151,11 @@ func (d *IcebergTableDiscovery) getFilesystem(path string) (filesystem.FileSyste
 // isIcebergTable checks if a path is an Iceberg table.
 // A path is considered an Iceberg table if it has a 'metadata' subdirectory
 // containing at least one .metadata.json file.
-func (d *IcebergTableDiscovery) isIcebergTable(_ context.Context, fs filesystem.FileSystem, path string) (bool, error) {
+func (d *IcebergTableDiscovery) isIcebergTable(
+	_ context.Context,
+	fs filesystem.FileSystem,
+	path string,
+) (bool, error) {
 	metadataDir := filepath.Join(path, "metadata")
 
 	// Check if metadata directory exists
@@ -169,7 +183,12 @@ func (d *IcebergTableDiscovery) isIcebergTable(_ context.Context, fs filesystem.
 }
 
 // loadTableEntry loads Iceberg metadata and creates a catalog entry.
-func (d *IcebergTableDiscovery) loadTableEntry(ctx context.Context, fs filesystem.FileSystem, path string, name string) (*IcebergTableEntry, error) {
+func (d *IcebergTableDiscovery) loadTableEntry(
+	ctx context.Context,
+	fs filesystem.FileSystem,
+	path string,
+	name string,
+) (*IcebergTableEntry, error) {
 	// Create metadata reader with options
 	reader := iceberg.NewMetadataReaderWithOptions(fs, d.metadataOpts)
 
@@ -195,7 +214,11 @@ func (d *IcebergTableDiscovery) loadTableEntry(ctx context.Context, fs filesyste
 }
 
 // discoverTablesInDirectory scans a directory for Iceberg tables.
-func (d *IcebergTableDiscovery) discoverTablesInDirectory(ctx context.Context, fs filesystem.FileSystem, path string) ([]*IcebergTableEntry, error) {
+func (d *IcebergTableDiscovery) discoverTablesInDirectory(
+	ctx context.Context,
+	fs filesystem.FileSystem,
+	path string,
+) ([]*IcebergTableEntry, error) {
 	entries, err := fs.ReadDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory %s: %w", path, err)

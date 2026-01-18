@@ -287,8 +287,12 @@ func (a *ART) insertRecursive(node *ARTNode, key []byte, value any, depth int) *
 			for i, k := range newNode4.keys {
 				if insertKey < k {
 					// Insert before this position
-					newNode4.keys = append(newNode4.keys[:i], append([]byte{insertKey}, newNode4.keys[i:]...)...)
-					newNode4.children = append(newNode4.children[:i], append([]*ARTNode{newLeaf}, newNode4.children[i:]...)...)
+					newNode4.keys = append(
+						newNode4.keys[:i],
+						append([]byte{insertKey}, newNode4.keys[i:]...)...)
+					newNode4.children = append(
+						newNode4.children[:i],
+						append([]*ARTNode{newLeaf}, newNode4.children[i:]...)...)
 					inserted = true
 					break
 				}
@@ -417,9 +421,9 @@ func (a *ART) findChild(node *ARTNode, key byte) int {
 //nolint:funlen // Node growth handling requires multiple cases
 func (a *ART) addChild(node *ARTNode, key byte, child *ARTNode) *ARTNode {
 	const (
-		node4Max   = 4
-		node16Max  = 16
-		node48Max  = 48
+		node4Max    = 4
+		node16Max   = 16
+		node48Max   = 48
 		emptyMarker = 0xFF
 	)
 
@@ -432,8 +436,12 @@ func (a *ART) addChild(node *ARTNode, key byte, child *ARTNode) *ARTNode {
 				insertIdx++
 			}
 			// Insert key and child at the right position
-			node.keys = append(node.keys[:insertIdx], append([]byte{key}, node.keys[insertIdx:]...)...)
-			node.children = append(node.children[:insertIdx], append([]*ARTNode{child}, node.children[insertIdx:]...)...)
+			node.keys = append(
+				node.keys[:insertIdx],
+				append([]byte{key}, node.keys[insertIdx:]...)...)
+			node.children = append(
+				node.children[:insertIdx],
+				append([]*ARTNode{child}, node.children[insertIdx:]...)...)
 			return node
 		}
 		// Grow to Node16
@@ -452,8 +460,12 @@ func (a *ART) addChild(node *ARTNode, key byte, child *ARTNode) *ARTNode {
 			for insertIdx < len(node.keys) && node.keys[insertIdx] < key {
 				insertIdx++
 			}
-			node.keys = append(node.keys[:insertIdx], append([]byte{key}, node.keys[insertIdx:]...)...)
-			node.children = append(node.children[:insertIdx], append([]*ARTNode{child}, node.children[insertIdx:]...)...)
+			node.keys = append(
+				node.keys[:insertIdx],
+				append([]byte{key}, node.keys[insertIdx:]...)...)
+			node.children = append(
+				node.children[:insertIdx],
+				append([]*ARTNode{child}, node.children[insertIdx:]...)...)
 			return node
 		}
 		// Grow to Node48
@@ -1235,7 +1247,11 @@ func encodeStringKey(value string) []byte {
 //	)
 func EncodeCompositeKey(values []any, types []dukdb.Type) ([]byte, error) {
 	if len(values) != len(types) {
-		return nil, fmt.Errorf("values length (%d) does not match types length (%d)", len(values), len(types))
+		return nil, fmt.Errorf(
+			"values length (%d) does not match types length (%d)",
+			len(values),
+			len(types),
+		)
 	}
 
 	var result []byte
@@ -1471,7 +1487,11 @@ func DecodeCompositeKey(key []byte, types []dukdb.Type) ([]any, error) {
 
 	for i, keyType := range types {
 		if offset >= len(key) {
-			return nil, fmt.Errorf("key too short: expected %d components, ran out at component %d", len(types), i)
+			return nil, fmt.Errorf(
+				"key too short: expected %d components, ran out at component %d",
+				len(types),
+				i,
+			)
 		}
 
 		// Check for NULL marker
@@ -1597,7 +1617,10 @@ func DecodeCompositeKey(key []byte, types []dukdb.Type) ([]any, error) {
 				}
 			}
 			if nullPos == -1 {
-				return nil, fmt.Errorf("no null terminator found for VARCHAR/BLOB at component %d", i)
+				return nil, fmt.Errorf(
+					"no null terminator found for VARCHAR/BLOB at component %d",
+					i,
+				)
 			}
 			encodedLen = nullPos - offset + 1 // Include null terminator
 			decoded, err = decodeKey(key[offset:offset+encodedLen], keyType)

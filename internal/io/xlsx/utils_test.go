@@ -83,12 +83,12 @@ func TestParseCell(t *testing.T) {
 		{"a1", 0, 1, false},   // lowercase
 		{" A1 ", 0, 1, false}, // whitespace
 		{"", 0, 0, true},
-		{"1", 0, 0, true},     // no column
-		{"A", 0, 0, true},     // no row
-		{"A0", 0, 0, true},    // row must be >= 1
-		{"A-1", 0, 0, true},   // invalid row
-		{"1A", 0, 0, true},    // wrong order
-		{"A1B", 0, 0, true},   // extra letters
+		{"1", 0, 0, true},   // no column
+		{"A", 0, 0, true},   // no row
+		{"A0", 0, 0, true},  // row must be >= 1
+		{"A-1", 0, 0, true}, // invalid row
+		{"1A", 0, 0, true},  // wrong order
+		{"A1B", 0, 0, true}, // extra letters
 	}
 
 	for _, tt := range tests {
@@ -154,9 +154,9 @@ func TestCellAddress(t *testing.T) {
 		{25, 10, "Z10"},
 		{26, 100, "AA100"},
 		{51, 1000, "AZ1000"},
-		{-1, 1, ""},  // invalid column
-		{0, 0, ""},   // invalid row
-		{0, -1, ""},  // invalid row
+		{-1, 1, ""}, // invalid column
+		{0, 0, ""},  // invalid row
+		{0, -1, ""}, // invalid row
 	}
 
 	for _, tt := range tests {

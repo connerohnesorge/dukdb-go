@@ -3,7 +3,7 @@
 // This file documents the DESCRIBE message support for statement introspection
 // in the extended query protocol.
 //
-// DESCRIBE Message Protocol
+// # DESCRIBE Message Protocol
 //
 // The PostgreSQL DESCRIBE message ('D') allows clients to introspect prepared
 // statements and portals without executing them. This is essential for clients
@@ -182,19 +182,35 @@ func enhanceWithComparisonPatterns(query string, params []uint32) {
 		{regexp.MustCompile(`(?i)(?:^|\s)\w+_id\s*=\s*\$(\d+)`), OidInt8},
 
 		// Common count/quantity columns (usually integers)
-		{regexp.MustCompile(`(?i)(?:count|quantity|amount|num|number)\s*[<>=]+\s*\$(\d+)`), OidInt8},
+		{
+			regexp.MustCompile(`(?i)(?:count|quantity|amount|num|number)\s*[<>=]+\s*\$(\d+)`),
+			OidInt8,
+		},
 
 		// Common name/text columns
 		{regexp.MustCompile(`(?i)(?:name|title|description|label|text)\s*=\s*\$(\d+)`), OidText},
 
 		// Date columns
-		{regexp.MustCompile(`(?i)(?:date|created|updated|modified)_?(?:at|on)?\s*[<>=]+\s*\$(\d+)`), OidTimestampTZ},
+		{
+			regexp.MustCompile(
+				`(?i)(?:date|created|updated|modified)_?(?:at|on)?\s*[<>=]+\s*\$(\d+)`,
+			),
+			OidTimestampTZ,
+		},
 
 		// Boolean columns
-		{regexp.MustCompile(`(?i)(?:is_|has_|can_|should_|enable|active|visible|deleted)\w*\s*=\s*\$(\d+)`), OidBool},
+		{
+			regexp.MustCompile(
+				`(?i)(?:is_|has_|can_|should_|enable|active|visible|deleted)\w*\s*=\s*\$(\d+)`,
+			),
+			OidBool,
+		},
 
 		// Price/money columns (usually numeric)
-		{regexp.MustCompile(`(?i)(?:price|cost|amount|total|balance)\s*[<>=]+\s*\$(\d+)`), OidNumeric},
+		{
+			regexp.MustCompile(`(?i)(?:price|cost|amount|total|balance)\s*[<>=]+\s*\$(\d+)`),
+			OidNumeric,
+		},
 	}
 
 	for _, p := range columnPatterns {
@@ -221,7 +237,12 @@ func enhanceWithFunctionPatterns(query string, params []uint32) {
 		oid     uint32
 	}{
 		// String functions
-		{regexp.MustCompile(`(?i)(?:length|char_length|upper|lower|trim|ltrim|rtrim)\s*\(\s*\$(\d+)`), OidText},
+		{
+			regexp.MustCompile(
+				`(?i)(?:length|char_length|upper|lower|trim|ltrim|rtrim)\s*\(\s*\$(\d+)`,
+			),
+			OidText,
+		},
 
 		// Numeric functions
 		{regexp.MustCompile(`(?i)(?:abs|round|ceil|floor|sqrt)\s*\(\s*\$(\d+)`), OidNumeric},
@@ -231,10 +252,18 @@ func enhanceWithFunctionPatterns(query string, params []uint32) {
 		{regexp.MustCompile(`(?i)(?:age|date_trunc)\s*\([^,]+,\s*\$(\d+)`), OidTimestampTZ},
 
 		// Array functions
-		{regexp.MustCompile(`(?i)array_length\s*\(\s*\$(\d+)`), OidUnknown}, // Array type, unknown element
+		{
+			regexp.MustCompile(`(?i)array_length\s*\(\s*\$(\d+)`),
+			OidUnknown,
+		}, // Array type, unknown element
 
 		// JSON functions
-		{regexp.MustCompile(`(?i)(?:json_extract|jsonb_extract|json_array_length)\s*\(\s*\$(\d+)`), OidJSONB},
+		{
+			regexp.MustCompile(
+				`(?i)(?:json_extract|jsonb_extract|json_array_length)\s*\(\s*\$(\d+)`,
+			),
+			OidJSONB,
+		},
 	}
 
 	for _, p := range functionPatterns {

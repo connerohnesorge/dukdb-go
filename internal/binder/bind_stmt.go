@@ -240,7 +240,10 @@ func (b *Binder) bindSelect(
 
 		// Validate that both sides have the same number of columns
 		if len(bound.Columns) != len(right.Columns) {
-			return nil, b.errorf("each %s query must have the same number of columns", setOpName(s.SetOp))
+			return nil, b.errorf(
+				"each %s query must have the same number of columns",
+				setOpName(s.SetOp),
+			)
 		}
 	}
 
@@ -562,7 +565,11 @@ func (b *Binder) bindSecretSystemFunction(ref parser.TableRef) (*BoundTableRef, 
 	for i, argExpr := range tableFunc.Args {
 		lit, ok := argExpr.(*parser.Literal)
 		if !ok {
-			return nil, b.errorf("table function %s argument %d must be a literal value", tableFunc.Name, i)
+			return nil, b.errorf(
+				"table function %s argument %d must be a literal value",
+				tableFunc.Name,
+				i,
+			)
 		}
 		options[fmt.Sprintf("arg%d", i)] = lit.Value
 	}
@@ -675,7 +682,8 @@ func (b *Binder) bindUnnestTableFunction(ref parser.TableRef) (*BoundTableRef, e
 		// For now, default to VARCHAR if we can't determine it
 		elemType = dukdb.TYPE_VARCHAR
 		// Try to get the actual element type from BoundArrayExpr
-		if boundArray, ok := arrayExpr.(*BoundArrayExpr); ok && boundArray.ElemType != dukdb.TYPE_INVALID {
+		if boundArray, ok := arrayExpr.(*BoundArrayExpr); ok &&
+			boundArray.ElemType != dukdb.TYPE_INVALID {
 			elemType = boundArray.ElemType
 		}
 	case dukdb.TYPE_ARRAY:
@@ -1019,7 +1027,10 @@ func extractHivePartitionColumns(path string) []string {
 // inferJSONSchema reads a JSON file and infers its schema.
 // It supports glob patterns - if a glob is detected, it expands the pattern
 // and uses the first matching file for schema inference.
-func (b *Binder) inferJSONSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferJSONSchema(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Check for glob patterns and resolve to actual file path
 	resolvedPath, err := b.resolveJSONPath(path, options)
 	if err != nil {
@@ -1214,7 +1225,10 @@ func (b *Binder) resolveJSONPath(path string, options map[string]any) (string, e
 }
 
 // inferParquetSchema reads a Parquet file and infers its schema.
-func (b *Binder) inferParquetSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferParquetSchema(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Check for glob patterns and resolve to actual file path
 	resolvedPath, err := b.resolveParquetPath(path, options)
 	if err != nil {
@@ -1390,7 +1404,10 @@ func (b *Binder) resolveParquetPath(path string, options map[string]any) (string
 // inferXLSXSchema reads an XLSX file and infers its schema.
 // It supports glob patterns - if a glob is detected, it expands the pattern
 // and uses the first matching file for schema inference.
-func (b *Binder) inferXLSXSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferXLSXSchema(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Check for glob patterns and resolve to actual file path
 	resolvedPath, err := b.resolveXLSXPath(path, options)
 	if err != nil {
@@ -1573,7 +1590,10 @@ func (b *Binder) resolveXLSXPath(path string, options map[string]any) (string, e
 // This function defaults to the file format (random access).
 // It supports glob patterns - if a glob is detected, it expands the pattern
 // and uses the first matching file for schema inference.
-func (b *Binder) inferArrowSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferArrowSchema(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Check for glob patterns and resolve to actual file path
 	resolvedPath, err := b.resolveArrowPath(path, options)
 	if err != nil {
@@ -1730,7 +1750,10 @@ func (b *Binder) resolveArrowPath(path string, options map[string]any) (string, 
 // It detects whether the file is in file format or stream format based on magic bytes.
 // It supports glob patterns - if a glob is detected, it expands the pattern
 // and uses the first matching file for schema inference.
-func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferArrowSchemaAuto(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Check for glob patterns and resolve to actual file path
 	resolvedPath, err := b.resolveArrowPath(path, options)
 	if err != nil {
@@ -1884,7 +1907,10 @@ func (b *Binder) inferArrowSchemaAuto(path string, options map[string]any) ([]*c
 }
 
 // inferIcebergScanSchema reads an Iceberg table and infers its schema.
-func (b *Binder) inferIcebergScanSchema(path string, options map[string]any) ([]*catalog.ColumnDef, error) {
+func (b *Binder) inferIcebergScanSchema(
+	path string,
+	options map[string]any,
+) ([]*catalog.ColumnDef, error) {
 	// Build reader options from options map
 	opts := iceberg.DefaultReaderOptions()
 
@@ -2703,7 +2729,10 @@ func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 		case "CSV", "PARQUET", "JSON", "NDJSON", "ARROW", "ARROW_STREAM", "ARROWS":
 			// Valid formats
 		default:
-			return b.errorf("unsupported FORMAT: %s (supported: CSV, PARQUET, JSON, NDJSON, ARROW, ARROW_STREAM)", formatStr)
+			return b.errorf(
+				"unsupported FORMAT: %s (supported: CSV, PARQUET, JSON, NDJSON, ARROW, ARROW_STREAM)",
+				formatStr,
+			)
 		}
 	}
 
@@ -2717,7 +2746,10 @@ func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 		case "UNCOMPRESSED", "SNAPPY", "GZIP", "ZSTD", "LZ4", "LZ4_RAW", "BROTLI", "NONE":
 			// Valid codecs
 		default:
-			return b.errorf("unsupported CODEC: %s (supported: UNCOMPRESSED, SNAPPY, GZIP, ZSTD, LZ4, LZ4_RAW, BROTLI, NONE)", codecStr)
+			return b.errorf(
+				"unsupported CODEC: %s (supported: UNCOMPRESSED, SNAPPY, GZIP, ZSTD, LZ4, LZ4_RAW, BROTLI, NONE)",
+				codecStr,
+			)
 		}
 	}
 
@@ -2731,7 +2763,10 @@ func (b *Binder) validateCopyOptions(stmt *BoundCopyStmt) error {
 		case "NONE", "GZIP", "ZSTD", "SNAPPY", "LZ4":
 			// Valid compressions
 		default:
-			return b.errorf("unsupported COMPRESSION: %s (supported: NONE, GZIP, ZSTD, SNAPPY, LZ4)", compStr)
+			return b.errorf(
+				"unsupported COMPRESSION: %s (supported: NONE, GZIP, ZSTD, SNAPPY, LZ4)",
+				compStr,
+			)
 		}
 	}
 
@@ -2839,11 +2874,17 @@ func (b *Binder) bindNonRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 	// Validate that the recursive CTE has a UNION ALL structure
 	if cte.Query.SetOp != parser.SetOpUnionAll {
-		return nil, b.errorf("recursive CTE %s must use UNION ALL between base case and recursive case", cte.Name)
+		return nil, b.errorf(
+			"recursive CTE %s must use UNION ALL between base case and recursive case",
+			cte.Name,
+		)
 	}
 
 	if cte.Query.Right == nil {
-		return nil, b.errorf("recursive CTE %s must have a UNION ALL with base and recursive parts", cte.Name)
+		return nil, b.errorf(
+			"recursive CTE %s must have a UNION ALL with base and recursive parts",
+			cte.Name,
+		)
 	}
 
 	// First, bind the base case (left side of UNION ALL) without the CTE binding
@@ -2908,8 +2949,12 @@ func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 
 	// Validate that recursive case has same number of columns
 	if len(recursiveCaseQuery.Columns) != len(baseCaseQuery.Columns) {
-		return nil, b.errorf("recursive CTE %s: base case has %d columns but recursive case has %d columns",
-			cte.Name, len(baseCaseQuery.Columns), len(recursiveCaseQuery.Columns))
+		return nil, b.errorf(
+			"recursive CTE %s: base case has %d columns but recursive case has %d columns",
+			cte.Name,
+			len(baseCaseQuery.Columns),
+			len(recursiveCaseQuery.Columns),
+		)
 	}
 
 	// Update the placeholder binding with both the base and recursive queries

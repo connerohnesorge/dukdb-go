@@ -7,11 +7,11 @@
 // This test file provides a comprehensive verification that indexes are actually
 // being used in query execution. It demonstrates the complete flow:
 //
-//   1. Create a table with data
-//   2. Run query without index (EXPLAIN shows Scan)
-//   3. CREATE INDEX on a column
-//   4. Run same query (EXPLAIN shows IndexScan)
-//   5. Verify results are identical
+//  1. Create a table with data
+//  2. Run query without index (EXPLAIN shows Scan)
+//  3. CREATE INDEX on a column
+//  4. Run same query (EXPLAIN shows IndexScan)
+//  5. Verify results are identical
 //
 // The tests serve as both verification and documentation of the index usage
 // feature implemented in the fix-index-usage change proposal.
@@ -22,7 +22,6 @@
 //   - EXPLAIN output clearly indicates which scan type is used
 //   - Query results are identical regardless of scan type
 //   - Both point lookups (=) and range queries (<, >, BETWEEN) use indexes
-//
 package engine
 
 import (
@@ -550,7 +549,11 @@ func TestVerifyIndexUsage_EXPLAIN_Format(t *testing.T) {
 	// =========================================================================
 	t.Log("")
 	t.Log("--- EXPLAIN ANALYZE Format ---")
-	explainAnalyze, _, err := conn.Query(ctx, "EXPLAIN ANALYZE SELECT * FROM explain_format WHERE id = 1", nil)
+	explainAnalyze, _, err := conn.Query(
+		ctx,
+		"EXPLAIN ANALYZE SELECT * FROM explain_format WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.NotEmpty(t, explainAnalyze)
 

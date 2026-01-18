@@ -143,7 +143,11 @@ func TestQueryPgClass(t *testing.T) {
 		assert.Equal(t, pgClassColumns, result.Columns)
 
 		// Should have tables, views, indexes, and sequences
-		assert.GreaterOrEqual(t, len(result.Rows), 4) // At least 2 tables + 1 view + 1 index + 1 sequence
+		assert.GreaterOrEqual(
+			t,
+			len(result.Rows),
+			4,
+		) // At least 2 tables + 1 view + 1 index + 1 sequence
 	})
 
 	t.Run("filter by relkind table", func(t *testing.T) {
@@ -331,7 +335,9 @@ func TestQueryPgSettings(t *testing.T) {
 	})
 
 	t.Run("filter by category", func(t *testing.T) {
-		result := pgCat.Query("SELECT * FROM pg_catalog.pg_settings WHERE category = 'Preset Options'")
+		result := pgCat.Query(
+			"SELECT * FROM pg_catalog.pg_settings WHERE category = 'Preset Options'",
+		)
 		require.NotNil(t, result)
 		assert.GreaterOrEqual(t, len(result.Rows), 2) // server_version, server_version_num
 	})

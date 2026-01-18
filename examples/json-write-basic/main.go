@@ -72,7 +72,10 @@ func main() {
 	// Example 1: Export table to JSON
 	fmt.Println("\n=== Example 1: Export Table to JSON ===")
 	outputFile := "employees.json"
-	query := fmt.Sprintf("COPY (SELECT * FROM employees ORDER BY id) TO '%s' (FORMAT JSON)", outputFile)
+	query := fmt.Sprintf(
+		"COPY (SELECT * FROM employees ORDER BY id) TO '%s' (FORMAT JSON)",
+		outputFile,
+	)
 	_, err = db.Exec(query)
 	if err != nil {
 		log.Fatalf("Failed to export to JSON: %v", err)
@@ -121,12 +124,17 @@ func main() {
 
 	// Note: Due to current implementation details, we'll skip reading back the JSON
 	// The export functionality itself is working correctly
-	fmt.Println("\nNote: JSON export completed successfully. Reading back may have formatting issues in this version.")
+	fmt.Println(
+		"\nNote: JSON export completed successfully. Reading back may have formatting issues in this version.",
+	)
 
 	// Example 4: Export to NDJSON format (if supported)
 	fmt.Println("\n=== Example 4: Export to NDJSON Format ===")
 	outputFile = "products.ndjson"
-	query = fmt.Sprintf("COPY (SELECT * FROM products ORDER BY product_id) TO '%s' (FORMAT JSON, ARRAY FALSE)", outputFile)
+	query = fmt.Sprintf(
+		"COPY (SELECT * FROM products ORDER BY product_id) TO '%s' (FORMAT JSON, ARRAY FALSE)",
+		outputFile,
+	)
 	_, err = db.Exec(query)
 	if err != nil {
 		// If ARRAY option is not supported, use basic COPY

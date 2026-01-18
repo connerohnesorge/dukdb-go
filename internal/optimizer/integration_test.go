@@ -3,9 +3,9 @@ package optimizer
 import (
 	"testing"
 
+	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	dukdb "github.com/dukdb/dukdb-go"
 )
 
 // TestStatisticsAndLearningIntegration verifies that statistics collection,

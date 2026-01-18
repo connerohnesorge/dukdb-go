@@ -15,11 +15,12 @@ import (
 //
 // Dictionary compression layout:
 // 1. Header (20 bytes): dictionary_compression_header_t
-//    - dict_size (uint32): SIZE in bytes of dictionary data (NOT count!)
-//    - dict_end (uint32): Absolute end offset of entire compressed segment
-//    - index_buffer_offset (uint32): Offset to index buffer
-//    - index_buffer_count (uint32): Number of unique strings (index entries)
-//    - bitpacking_width (uint32): Bit width for selection buffer
+//   - dict_size (uint32): SIZE in bytes of dictionary data (NOT count!)
+//   - dict_end (uint32): Absolute end offset of entire compressed segment
+//   - index_buffer_offset (uint32): Offset to index buffer
+//   - index_buffer_count (uint32): Number of unique strings (index entries)
+//   - bitpacking_width (uint32): Bit width for selection buffer
+//
 // 2. Selection buffer: Bit-packed indices into index buffer (one per tuple)
 // 3. Index buffer: Array of uint32 offsets into dictionary
 // 4. Dictionary: Concatenated string data (no length prefixes, no null terminators)
@@ -191,7 +192,12 @@ func verifyDictionaryFormat(t *testing.T, data []byte, tupleCount uint64) {
 	dictDataStart := indexBufferOffset + indexBufferCount*4
 	dictDataSize := dictEnd - dictDataStart
 	t.Logf("Expected dict_size=%d, calculated dict data size=%d", dictSize, dictDataSize)
-	assert.Equal(t, dictSize, dictDataSize, "dict_size should match calculated dictionary data size")
+	assert.Equal(
+		t,
+		dictSize,
+		dictDataSize,
+		"dict_size should match calculated dictionary data size",
+	)
 
 	// Calculate selection buffer size
 	selectionBufferOffset := uint32(20) // After header
@@ -200,11 +206,20 @@ func verifyDictionaryFormat(t *testing.T, data []byte, tupleCount uint64) {
 	t.Logf("Calculated offsets:")
 	t.Logf("  selection_buffer: offset=%d, size=%d", selectionBufferOffset, selectionBufferSize)
 	t.Logf("  index_buffer: offset=%d, size=%d", indexBufferOffset, indexBufferCount*4)
-	t.Logf("  dictionary: offset=%d, size=%d", indexBufferOffset+indexBufferCount*4, dictEnd-(indexBufferOffset+indexBufferCount*4))
+	t.Logf(
+		"  dictionary: offset=%d, size=%d",
+		indexBufferOffset+indexBufferCount*4,
+		dictEnd-(indexBufferOffset+indexBufferCount*4),
+	)
 
 	// Verify offsets are within bounds
 	require.LessOrEqual(t, int(indexBufferOffset), len(data), "index_buffer_offset out of bounds")
-	require.LessOrEqual(t, int(indexBufferOffset+indexBufferCount*4), len(data), "index buffer out of bounds")
+	require.LessOrEqual(
+		t,
+		int(indexBufferOffset+indexBufferCount*4),
+		len(data),
+		"index buffer out of bounds",
+	)
 
 	// Read index buffer
 	indexBuffer := make([]uint32, indexBufferCount)
@@ -234,7 +249,12 @@ func verifyDictionaryFormat(t *testing.T, data []byte, tupleCount uint64) {
 		}
 
 		if startOffset > endOffset || endOffset > uint32(len(dictData)) {
-			t.Errorf("Invalid dictionary offsets: start=%d, end=%d, dict_len=%d", startOffset, endOffset, len(dictData))
+			t.Errorf(
+				"Invalid dictionary offsets: start=%d, end=%d, dict_len=%d",
+				startOffset,
+				endOffset,
+				len(dictData),
+			)
 			continue
 		}
 
@@ -268,7 +288,9 @@ func TestDictionaryCompressionDocumentation(t *testing.T) {
 	t.Log("")
 	t.Log("Format comparison:")
 	t.Log("  DICTIONARY compression:")
-	t.Log("    - Header (20 bytes): dict_size, dict_end, index_buffer_offset, index_buffer_count, bitpacking_width")
+	t.Log(
+		"    - Header (20 bytes): dict_size, dict_end, index_buffer_offset, index_buffer_count, bitpacking_width",
+	)
 	t.Log("    - Selection buffer: Bit-packed indices (one per tuple) into index buffer")
 	t.Log("    - Index buffer: Array of uint32 offsets into dictionary")
 	t.Log("    - Dictionary: Concatenated string bytes (no length prefixes)")

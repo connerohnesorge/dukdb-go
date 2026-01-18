@@ -61,7 +61,7 @@ func levenshteinValue(str1 any, str2 any) (any, error) {
 
 			matrix[i][j] = minInt(
 				minInt(matrix[i-1][j]+1, matrix[i][j-1]+1), // deletion, insertion
-				matrix[i-1][j-1]+cost,                       // substitution
+				matrix[i-1][j-1]+cost,                      // substitution
 			)
 		}
 	}
@@ -118,11 +118,11 @@ func damerauLevenshteinValue(str1 any, str2 any) (any, error) {
 
 			matrix[i+1][j+1] = minInt(
 				minInt(
-					matrix[i][j]+cost,    // substitution
-					matrix[i+1][j]+1,     // insertion
+					matrix[i][j]+cost, // substitution
+					matrix[i+1][j]+1,  // insertion
 				),
 				minInt(
-					matrix[i][j+1]+1,     // deletion
+					matrix[i][j+1]+1, // deletion
 					matrix[lastMatchRow][lastMatchCol]+((i-lastMatchRow-1)+1+(j-lastMatchCol-1)), // transposition
 				),
 			)

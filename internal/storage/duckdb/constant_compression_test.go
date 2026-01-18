@@ -137,7 +137,15 @@ func TestConstantCompressionFormat(t *testing.T) {
 }
 
 // testConstantColumn verifies a single column that should use CONSTANT compression
-func testConstantColumn(t *testing.T, storage *DuckDBStorage, rgReader *RowGroupReader, colIdx int, colName string, expectedType LogicalTypeID, expectedValue interface{}) {
+func testConstantColumn(
+	t *testing.T,
+	storage *DuckDBStorage,
+	rgReader *RowGroupReader,
+	colIdx int,
+	colName string,
+	expectedType LogicalTypeID,
+	expectedValue interface{},
+) {
 	// Get the DataPointer for the column
 	dp, err := rgReader.resolveDataPointerLocked(colIdx)
 	require.NoError(t, err, "failed to resolve data pointer for %s", colName)
@@ -168,7 +176,11 @@ func testConstantColumn(t *testing.T, storage *DuckDBStorage, rgReader *RowGroup
 			t.Logf("  Statistics.StatData length: %d", len(dp.Statistics.StatData))
 
 			if len(dp.Statistics.StatData) > 0 {
-				t.Logf("  Statistics data (%d bytes): %x", len(dp.Statistics.StatData), dp.Statistics.StatData)
+				t.Logf(
+					"  Statistics data (%d bytes): %x",
+					len(dp.Statistics.StatData),
+					dp.Statistics.StatData,
+				)
 				verifyConstantFormat(t, dp.Statistics.StatData, expectedType, expectedValue)
 			} else if dp.Statistics.HasNull {
 				t.Logf("  All NULL values - no constant data stored")
@@ -220,7 +232,12 @@ func testConstantColumn(t *testing.T, storage *DuckDBStorage, rgReader *RowGroup
 }
 
 // verifyConstantFormat checks the CONSTANT compression format structure
-func verifyConstantFormat(t *testing.T, data []byte, logicalType LogicalTypeID, expectedValue interface{}) {
+func verifyConstantFormat(
+	t *testing.T,
+	data []byte,
+	logicalType LogicalTypeID,
+	expectedValue interface{},
+) {
 	t.Logf("  Verifying CONSTANT compression format:")
 
 	switch logicalType {
@@ -398,8 +415,8 @@ func TestConstantCompressionEdgeCases(t *testing.T) {
 	tempDir := t.TempDir()
 
 	testCases := []struct {
-		name     string
-		createSQL string
+		name       string
+		createSQL  string
 		verifyFunc func(t *testing.T, storage *DuckDBStorage)
 	}{
 		{
@@ -487,7 +504,9 @@ func TestConstantCompressionEdgeCases(t *testing.T) {
 						t.Logf("  StatData length: %d", len(dp.Statistics.StatData))
 
 						if dp.Statistics.HasNull && len(dp.Statistics.StatData) == 0 {
-							t.Skip("Statistics deserialization issue - HasNull incorrectly set to true")
+							t.Skip(
+								"Statistics deserialization issue - HasNull incorrectly set to true",
+							)
 						}
 					}
 					require.True(t, valid, "value should be valid")

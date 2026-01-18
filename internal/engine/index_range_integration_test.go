@@ -41,7 +41,11 @@ func TestRangePredicate_LessThan(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table and index
-	_, err = conn.Execute(ctx, "CREATE TABLE range_test (id INTEGER, value INTEGER, name VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE range_test (id INTEGER, value INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_range_value ON range_test(value)", nil)
@@ -278,7 +282,11 @@ func TestRangePredicate_NotBetween(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test: WHERE value NOT BETWEEN 30 AND 70
-	rows, _, err := conn.Query(ctx, "SELECT * FROM range_test WHERE value NOT BETWEEN 30 AND 70", nil)
+	rows, _, err := conn.Query(
+		ctx,
+		"SELECT * FROM range_test WHERE value NOT BETWEEN 30 AND 70",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Should return rows with values 10, 20, 80, 90, 100
@@ -456,7 +464,11 @@ func TestRangePredicate_SingleElementRange(t *testing.T) {
 	assert.Equal(t, int32(30), rows[0]["value"])
 
 	// Test: WHERE value >= 50 AND value <= 50 (single value range)
-	rows, _, err = conn.Query(ctx, "SELECT * FROM range_test WHERE value >= 50 AND value <= 50", nil)
+	rows, _, err = conn.Query(
+		ctx,
+		"SELECT * FROM range_test WHERE value >= 50 AND value <= 50",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(rows), "Should return exactly 1 row")
 	assert.Equal(t, int32(50), rows[0]["value"])
@@ -489,10 +501,18 @@ func TestRangePredicate_CompositeIndex_PartialRange(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table with composite index
-	_, err = conn.Execute(ctx, "CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE orders (customer_id INTEGER, order_date INTEGER, amount INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
-	_, err = conn.Execute(ctx, "CREATE INDEX idx_orders_cust_date ON orders(customer_id, order_date)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE INDEX idx_orders_cust_date ON orders(customer_id, order_date)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -508,7 +528,11 @@ func TestRangePredicate_CompositeIndex_PartialRange(t *testing.T) {
 
 	// Test: customer_id = 1 AND order_date BETWEEN 20240101 AND 20240131
 	// This should use the index for customer_id lookup and range on order_date
-	rows, _, err := conn.Query(ctx, "SELECT * FROM orders WHERE customer_id = 1 AND order_date BETWEEN 20240101 AND 20240131", nil)
+	rows, _, err := conn.Query(
+		ctx,
+		"SELECT * FROM orders WHERE customer_id = 1 AND order_date BETWEEN 20240101 AND 20240131",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Should return customer 1's orders in January (20240101 and 20240115)
@@ -543,7 +567,11 @@ func TestRangePredicate_CompositeIndex_RangeOnFirstColumn(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table with composite index
-	_, err = conn.Execute(ctx, "CREATE TABLE products (category INTEGER, price INTEGER, name VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE products (category INTEGER, price INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_products ON products(category, price)", nil)
@@ -713,7 +741,11 @@ func TestRangePredicate_VarcharRange(t *testing.T) {
 	require.Equal(t, 3, len(rows), "Should return 3 names >= 'charlie'")
 
 	// Test: name BETWEEN 'bob' AND 'david'
-	rows, _, err = conn.Query(ctx, "SELECT * FROM range_test WHERE name BETWEEN 'bob' AND 'david'", nil)
+	rows, _, err = conn.Query(
+		ctx,
+		"SELECT * FROM range_test WHERE name BETWEEN 'bob' AND 'david'",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(rows), "Should return bob, charlie, david")
 }
@@ -891,7 +923,11 @@ func BenchmarkRangePredicate_WithIndex(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Query for ~10% of data (100 rows out of 1000)
-		_, _, err := conn.Query(ctx, "SELECT * FROM bench_range WHERE value BETWEEN 200 AND 299", nil)
+		_, _, err := conn.Query(
+			ctx,
+			"SELECT * FROM bench_range WHERE value BETWEEN 200 AND 299",
+			nil,
+		)
 		if err != nil {
 			b.Fatalf("Query failed: %v", err)
 		}
@@ -943,7 +979,11 @@ func BenchmarkRangePredicate_WithoutIndex(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Query for ~10% of data (100 rows out of 1000)
-		_, _, err := conn.Query(ctx, "SELECT * FROM bench_range_noidx WHERE value BETWEEN 200 AND 299", nil)
+		_, _, err := conn.Query(
+			ctx,
+			"SELECT * FROM bench_range_noidx WHERE value BETWEEN 200 AND 299",
+			nil,
+		)
 		if err != nil {
 			b.Fatalf("Query failed: %v", err)
 		}

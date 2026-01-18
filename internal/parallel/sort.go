@@ -80,7 +80,12 @@ func NewSortKey(column int, columnName string) SortKey {
 }
 
 // NewSortKeyWithOrder creates a SortKey with specified order.
-func NewSortKeyWithOrder(column int, columnName string, order SortOrder, nulls NullsPosition) SortKey {
+func NewSortKeyWithOrder(
+	column int,
+	columnName string,
+	order SortOrder,
+	nulls NullsPosition,
+) SortKey {
 	return SortKey{
 		Column:     column,
 		ColumnName: columnName,
@@ -396,7 +401,11 @@ func NewParallelSort(source ParallelSource, keys []SortKey) *ParallelSort {
 }
 
 // NewParallelSortWithOptions creates a ParallelSort with custom options.
-func NewParallelSortWithOptions(source ParallelSource, keys []SortKey, numPartitions, limit, offset int) *ParallelSort {
+func NewParallelSortWithOptions(
+	source ParallelSource,
+	keys []SortKey,
+	numPartitions, limit, offset int,
+) *ParallelSort {
 	return &ParallelSort{
 		Source:        source,
 		SortKeys:      keys,
@@ -472,7 +481,11 @@ func (s *ParallelSort) Execute(pool *ThreadPool, ctx context.Context) (*storage.
 
 // PartitionData partitions input data by hash of sort key.
 // Phase 1: Workers partition data into per-partition queues.
-func (s *ParallelSort) PartitionData(workers []*Worker, morsels []Morsel, ctx context.Context) error {
+func (s *ParallelSort) PartitionData(
+	workers []*Worker,
+	morsels []Morsel,
+	ctx context.Context,
+) error {
 	// Initialize partitions
 	s.partitions = make([]*SortedPartition, s.NumPartitions)
 	for i := 0; i < s.NumPartitions; i++ {

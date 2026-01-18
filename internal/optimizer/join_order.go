@@ -19,21 +19,21 @@ const (
 
 // JoinPredicate represents a join condition between two tables.
 type JoinPredicate struct {
-	LeftTable    string // Left table name/alias
-	LeftColumn   string // Left column name
-	RightTable   string // Right table name/alias
-	RightColumn  string // Right column name
-	IsEquality   bool   // True for equality join (col = col)
+	LeftTable   string // Left table name/alias
+	LeftColumn  string // Left column name
+	RightTable  string // Right table name/alias
+	RightColumn string // Right column name
+	IsEquality  bool   // True for equality join (col = col)
 }
 
 // JoinRelation represents a set of joined tables.
 type JoinRelation struct {
-	Tables     []string        // Table names in this relation
-	Cost       PlanCost        // Cost of this relation
-	BestPlan   interface{}     // Best plan for this relation
-	Predicates []JoinPredicate // Applicable predicates
-	Cardinality float64        // Estimated output rows
-	Width       int32          // Average row width in bytes
+	Tables      []string        // Table names in this relation
+	Cost        PlanCost        // Cost of this relation
+	BestPlan    interface{}     // Best plan for this relation
+	Predicates  []JoinPredicate // Applicable predicates
+	Cardinality float64         // Estimated output rows
+	Width       int32           // Average row width in bytes
 }
 
 // JoinGraph represents relationships between tables via join predicates.
@@ -89,7 +89,10 @@ type JoinOrderOptimizer struct {
 }
 
 // NewJoinOrderOptimizer creates a new JoinOrderOptimizer.
-func NewJoinOrderOptimizer(estimator *CardinalityEstimator, costModel *CostModel) *JoinOrderOptimizer {
+func NewJoinOrderOptimizer(
+	estimator *CardinalityEstimator,
+	costModel *CostModel,
+) *JoinOrderOptimizer {
 	return &JoinOrderOptimizer{
 		estimator:   estimator,
 		costModel:   costModel,
@@ -154,7 +157,10 @@ func (o *JoinOrderOptimizer) OptimizeJoinOrder(
 }
 
 // buildJoinGraph constructs a join graph from tables and predicates.
-func (o *JoinOrderOptimizer) buildJoinGraph(tables []TableRef, predicates []JoinPredicate) *JoinGraph {
+func (o *JoinOrderOptimizer) buildJoinGraph(
+	tables []TableRef,
+	predicates []JoinPredicate,
+) *JoinGraph {
 	graph := &JoinGraph{
 		Tables:     make([]string, len(tables)),
 		Predicates: predicates,
@@ -439,7 +445,11 @@ func (o *JoinOrderOptimizer) greedyOptimize(graph *JoinGraph, tables []TableRef)
 		// Find the pair with minimum join cost
 		for i := 0; i < len(relations); i++ {
 			for j := i + 1; j < len(relations); j++ {
-				pred := o.findConnectingPredicate(relations[i].Tables, relations[j].Tables, graph.Predicates)
+				pred := o.findConnectingPredicate(
+					relations[i].Tables,
+					relations[j].Tables,
+					graph.Predicates,
+				)
 				cost := o.calculateJoinCost(relations[i], relations[j], pred)
 
 				if bestI == -1 || cost.TotalCost < bestCost.TotalCost {
@@ -667,7 +677,12 @@ func (o *JoinOrderOptimizer) enumeratePartitions(subset []int, s1Size int) [][][
 }
 
 // generatePartitions recursively generates partitions.
-func (o *JoinOrderOptimizer) generatePartitions(subset []int, s1Size, start int, current []int, result *[][][]int) {
+func (o *JoinOrderOptimizer) generatePartitions(
+	subset []int,
+	s1Size, start int,
+	current []int,
+	result *[][][]int,
+) {
 	if len(current) == s1Size {
 		// Create the partition
 		s1 := make([]int, len(current))
@@ -725,7 +740,11 @@ func ExtractJoinPredicates(condition ExprNode, leftTables, rightTables []string)
 }
 
 // extractFromExpr recursively extracts join predicates from an expression.
-func extractFromExpr(expr ExprNode, leftSet, rightSet map[string]bool, predicates *[]JoinPredicate) {
+func extractFromExpr(
+	expr ExprNode,
+	leftSet, rightSet map[string]bool,
+	predicates *[]JoinPredicate,
+) {
 	if expr == nil {
 		return
 	}

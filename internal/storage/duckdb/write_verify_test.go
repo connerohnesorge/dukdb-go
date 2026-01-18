@@ -32,11 +32,11 @@
 //
 // ## Current Status (January 2026)
 //
-// - **Catalog/Schema Writing**: Tests verify catalog structure can be created
-// - **Row Data Writing**: Implementation is in progress. Tests use skipOnDuckDBError
-//   to gracefully skip when DuckDB CLI encounters format incompatibilities
-// - **DuckDB CLI Compatibility**: Tests detect known format issues and skip appropriately
-//   rather than failing, allowing development to proceed incrementally
+//   - **Catalog/Schema Writing**: Tests verify catalog structure can be created
+//   - **Row Data Writing**: Implementation is in progress. Tests use skipOnDuckDBError
+//     to gracefully skip when DuckDB CLI encounters format incompatibilities
+//   - **DuckDB CLI Compatibility**: Tests detect known format issues and skip appropriately
+//     rather than failing, allowing development to proceed incrementally
 //
 // ## Expected Error Patterns
 //
@@ -223,7 +223,7 @@ func TestWriteMultipleDataTypes(t *testing.T) {
 
 		// Verify schema with DuckDB CLI
 		output, err := runDuckDBCommandNoFail(dbPath, "DESCRIBE types_test;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "col_int")
 		assert.Contains(t, output, "col_varchar")
 		assert.Contains(t, output, "col_bigint")
@@ -250,7 +250,7 @@ func TestWriteMultipleDataTypes(t *testing.T) {
 
 		// Verify schema
 		output, err := runDuckDBCommandNoFail(dbPath, "DESCRIBE dates;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "event_date")
 	})
 }
@@ -301,12 +301,15 @@ func TestWriteNullValues(t *testing.T) {
 
 		// Verify with DuckDB CLI
 		output, err := runDuckDBCommandNoFail(dbPath, "DESCRIBE nulltest;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "id")
 		assert.Contains(t, output, "value")
 
 		// Try to select and verify NULLs are preserved
-		selectOutput, selectErr := runDuckDBCommandNoFail(dbPath, "SELECT * FROM nulltest WHERE value IS NULL;")
+		selectOutput, selectErr := runDuckDBCommandNoFail(
+			dbPath,
+			"SELECT * FROM nulltest WHERE value IS NULL;",
+		)
 		if selectErr == nil && strings.Contains(selectOutput, "2") {
 			t.Logf("NULL values correctly preserved in DuckDB file")
 		} else {
@@ -398,7 +401,13 @@ func TestWriteLargeDataset(t *testing.T) {
 		for i := 0; i < rowCount; i++ {
 			rows[i] = []any{
 				int32(i + 1),
-				"value_" + string(rune('0'+((i/100)%10))) + string(rune('0'+((i/10)%10))) + string(rune('0'+(i%10))),
+				"value_" + string(
+					rune('0'+((i/100)%10)),
+				) + string(
+					rune('0'+((i/10)%10)),
+				) + string(
+					rune('0'+(i%10)),
+				),
 			}
 		}
 
@@ -412,7 +421,7 @@ func TestWriteLargeDataset(t *testing.T) {
 
 		// Verify table exists
 		output, err := runDuckDBCommandNoFail(dbPath, "SHOW TABLES;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "large_table")
 
 		// Try to count rows
@@ -455,7 +464,7 @@ func TestWriteEmptyTable(t *testing.T) {
 
 		// Verify table exists
 		output, err := runDuckDBCommandNoFail(dbPath, "SHOW TABLES;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "empty_table")
 
 		// Verify schema
@@ -507,7 +516,7 @@ func TestWriteWideTable(t *testing.T) {
 
 		// Verify table exists
 		output, err := runDuckDBCommandNoFail(dbPath, "SHOW TABLES;")
-			skipOnDuckDBError(t, output, err)
+		skipOnDuckDBError(t, output, err)
 		assert.Contains(t, output, "wide_table")
 
 		// Verify schema has all columns

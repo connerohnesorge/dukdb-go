@@ -67,7 +67,9 @@ func TestBindCreateView(t *testing.T) {
 	})
 
 	t.Run("duplicate view with IF NOT EXISTS", func(t *testing.T) {
-		stmt, err := parser.Parse("CREATE VIEW IF NOT EXISTS existing_view AS SELECT * FROM test_table")
+		stmt, err := parser.Parse(
+			"CREATE VIEW IF NOT EXISTS existing_view AS SELECT * FROM test_table",
+		)
 		require.NoError(t, err)
 
 		bound, err := binder.Bind(stmt)

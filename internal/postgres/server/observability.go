@@ -125,17 +125,21 @@ func NewNoopTracer() *NoopTracer {
 }
 
 // StartSpan starts a no-op span.
-func (t *NoopTracer) StartSpan(ctx context.Context, name string, _ ...SpanOption) (context.Context, Span) {
+func (t *NoopTracer) StartSpan(
+	ctx context.Context,
+	name string,
+	_ ...SpanOption,
+) (context.Context, Span) {
 	return ctx, &NoopSpan{}
 }
 
 // NoopSpan is a no-op span implementation.
 type NoopSpan struct{}
 
-func (s *NoopSpan) End()                                        {}
-func (s *NoopSpan) SetStatus(_ SpanStatusCode, _ string)        {}
-func (s *NoopSpan) SetAttribute(_ string, _ any)                {}
-func (s *NoopSpan) RecordError(_ error)                         {}
+func (s *NoopSpan) End()                                 {}
+func (s *NoopSpan) SetStatus(_ SpanStatusCode, _ string) {}
+func (s *NoopSpan) SetAttribute(_ string, _ any)         {}
+func (s *NoopSpan) RecordError(_ error)                  {}
 
 // QueryTracer wraps query execution with tracing.
 type QueryTracer struct {
@@ -151,7 +155,11 @@ func NewQueryTracer(tracer Tracer) *QueryTracer {
 }
 
 // TraceQuery wraps a query execution with a tracing span.
-func (qt *QueryTracer) TraceQuery(ctx context.Context, query string, fn func(context.Context) error) error {
+func (qt *QueryTracer) TraceQuery(
+	ctx context.Context,
+	query string,
+	fn func(context.Context) error,
+) error {
 	ctx, span := qt.tracer.StartSpan(ctx, "pg.query", WithSpanKind(SpanKindServer))
 	defer span.End()
 
@@ -241,7 +249,12 @@ func (pm *PrometheusMetrics) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var cumulative int64
 		for i, count := range stats.Histogram {
 			cumulative += count
-			writeMetric(&sb, "dukdb_query_duration_ms_bucket", cumulative, map[string]string{"le": bucketLabels[i]})
+			writeMetric(
+				&sb,
+				"dukdb_query_duration_ms_bucket",
+				cumulative,
+				map[string]string{"le": bucketLabels[i]},
+			)
 		}
 		writeMetric(&sb, "dukdb_query_duration_ms_count", stats.TotalQueries, nil)
 
@@ -251,7 +264,12 @@ func (pm *PrometheusMetrics) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			sb.WriteString("\n# HELP dukdb_query_errors_by_state Query errors by SQLSTATE\n")
 			sb.WriteString("# TYPE dukdb_query_errors_by_state counter\n")
 			for sqlState, count := range errorCounts {
-				writeMetric(&sb, "dukdb_query_errors_by_state", count, map[string]string{"sqlstate": sqlState})
+				writeMetric(
+					&sb,
+					"dukdb_query_errors_by_state",
+					count,
+					map[string]string{"sqlstate": sqlState},
+				)
 			}
 		}
 	}

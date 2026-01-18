@@ -213,8 +213,14 @@ func benchmarkParallelHashJoin(b *testing.B, numWorkers int) {
 			InnerJoin,
 			SelectPartitionCount(50000, numWorkers),
 		)
-		join.SetBuildSchema([]string{"id", "value"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
-		join.SetProbeSchema([]string{"id", "name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+		join.SetBuildSchema(
+			[]string{"id", "value"},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+		)
+		join.SetProbeSchema(
+			[]string{"id", "name"},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+		)
 
 		ctx := context.Background()
 		resultChan, err := join.Execute(pool, ctx)
@@ -343,7 +349,7 @@ func createSortBenchmarkData(rowCount int) *benchmarkSource {
 		chunk := storage.NewDataChunkWithCapacity(types, end-i)
 		for j := i; j < end; j++ {
 			// Pseudo-random distribution
-			value := int32((j * 7 + 13) % rowCount)
+			value := int32((j*7 + 13) % rowCount)
 			chunk.AppendRow([]any{value, int64(j)})
 		}
 		chunks = append(chunks, chunk)
@@ -363,7 +369,10 @@ func benchmarkParallelSort(b *testing.B, numWorkers int) {
 
 	for i := 0; i < b.N; i++ {
 		sortOp := NewParallelSort(source, []SortKey{NewSortKey(0, "value")})
-		sortOp.SetSchema([]string{"value", "id"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
+		sortOp.SetSchema(
+			[]string{"value", "id"},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+		)
 
 		ctx := context.Background()
 		result, err := sortOp.Execute(pool, ctx)
@@ -449,8 +458,14 @@ func BenchmarkScaling(b *testing.B) {
 					InnerJoin,
 					SelectPartitionCount(50000, workers),
 				)
-				join.SetBuildSchema([]string{"id", "value"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
-				join.SetProbeSchema([]string{"id", "name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+				join.SetBuildSchema(
+					[]string{"id", "value"},
+					[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+				)
+				join.SetProbeSchema(
+					[]string{"id", "name"},
+					[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+				)
 
 				ctx := context.Background()
 				resultChan, _ := join.Execute(pool, ctx)
@@ -491,7 +506,10 @@ func BenchmarkScaling(b *testing.B) {
 
 				start := time.Now()
 				sortOp := NewParallelSort(sortSource, []SortKey{NewSortKey(0, "value")})
-				sortOp.SetSchema([]string{"value", "id"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
+				sortOp.SetSchema(
+					[]string{"value", "id"},
+					[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+				)
 				ctx := context.Background()
 				_, _ = sortOp.Execute(pool, ctx)
 				return time.Since(start)
@@ -597,7 +615,11 @@ func BenchmarkMorselDistribution(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			morsels := make([]Morsel, numMorsels)
 			for j := range morsels {
-				morsels[j] = Morsel{TableID: 1, StartRow: uint64(j * 100), EndRow: uint64((j + 1) * 100)}
+				morsels[j] = Morsel{
+					TableID:  1,
+					StartRow: uint64(j * 100),
+					EndRow:   uint64((j + 1) * 100),
+				}
 			}
 
 			wd := NewWorkDistributorWithCapacity(4, false, numMorsels)
@@ -620,7 +642,11 @@ func BenchmarkMorselDistribution(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			morsels := make([]Morsel, numMorsels)
 			for j := range morsels {
-				morsels[j] = Morsel{TableID: 1, StartRow: uint64(j * 100), EndRow: uint64((j + 1) * 100)}
+				morsels[j] = Morsel{
+					TableID:  1,
+					StartRow: uint64(j * 100),
+					EndRow:   uint64((j + 1) * 100),
+				}
 			}
 
 			wd := NewWorkDistributorWithCapacity(4, true, numMorsels)

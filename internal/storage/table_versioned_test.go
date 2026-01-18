@@ -42,7 +42,10 @@ func newMockMVCCTransaction(id uint64) *mockMVCCTransaction {
 }
 
 // newMockMVCCTransactionWithIsolation creates a mock transaction with specific isolation level.
-func newMockMVCCTransactionWithIsolation(id uint64, level parser.IsolationLevel) *mockMVCCTransaction {
+func newMockMVCCTransactionWithIsolation(
+	id uint64,
+	level parser.IsolationLevel,
+) *mockMVCCTransaction {
 	txn := newMockMVCCTransaction(id)
 	txn.isolationLevel = level
 	switch level {

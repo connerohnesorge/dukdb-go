@@ -78,7 +78,8 @@ func inferTypeFromCell(f *excelize.File, sheet, cell string) dukdb.Type {
 		}
 		// Check if integer or float
 		value, _ := f.GetCellValue(sheet, cell)
-		if value != "" && !strings.Contains(value, ".") && !strings.Contains(value, "E") && !strings.Contains(value, "e") {
+		if value != "" && !strings.Contains(value, ".") && !strings.Contains(value, "E") &&
+			!strings.Contains(value, "e") {
 			// Try to parse as integer
 			if _, err := strconv.ParseInt(value, 10, 64); err == nil {
 				return dukdb.TYPE_BIGINT
@@ -388,7 +389,10 @@ func convertValueToType(value string, typ dukdb.Type, emptyAsNull bool) any {
 		}
 		return value
 
-	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS:
+	case dukdb.TYPE_TIMESTAMP,
+		dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS:
 		// First try to parse as an Excel serial number
 		if serial, err := strconv.ParseFloat(value, 64); err == nil {
 			// Check if it looks like a reasonable date serial (1-3000000 covers dates from 1900-10000)
@@ -432,7 +436,9 @@ func convertValueToType(value string, typ dukdb.Type, emptyAsNull bool) any {
 				hours := int(totalSeconds / 3600)
 				minutes := int(math.Mod(totalSeconds/60, 60))
 				seconds := int(math.Mod(totalSeconds, 60))
-				micros := int((totalSeconds - math.Floor(totalSeconds)) * float64(microsecondsPerSecond))
+				micros := int(
+					(totalSeconds - math.Floor(totalSeconds)) * float64(microsecondsPerSecond),
+				)
 				return time.Date(1970, 1, 1, hours, minutes, seconds, micros*1000, time.UTC)
 			}
 		}

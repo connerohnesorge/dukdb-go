@@ -48,7 +48,11 @@ func TestDDLStandardSQLSyntax(t *testing.T) {
 	})
 
 	t.Run("CREATE TABLE with PRIMARY KEY", func(t *testing.T) {
-		_, err := conn.Execute(ctx, "CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR)",
+			nil,
+		)
 		require.NoError(t, err)
 	})
 }
@@ -243,7 +247,11 @@ func TestDDLEdgeCases(t *testing.T) {
 	})
 
 	t.Run("Multiple columns with similar names", func(t *testing.T) {
-		_, err := conn.Execute(ctx, "CREATE TABLE test (id INTEGER, id_copy INTEGER, id_backup INTEGER)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE test (id INTEGER, id_copy INTEGER, id_backup INTEGER)",
+			nil,
+		)
 		require.NoError(t, err)
 	})
 }
@@ -277,7 +285,11 @@ func TestDDLReservedWords(t *testing.T) {
 	})
 
 	t.Run("Normal column names should always work", func(t *testing.T) {
-		_, err := conn.Execute(ctx, "CREATE TABLE normal_table (id INTEGER, name VARCHAR, value DOUBLE)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE normal_table (id INTEGER, name VARCHAR, value DOUBLE)",
+			nil,
+		)
 		require.NoError(t, err)
 	})
 }
@@ -362,7 +374,11 @@ func TestDDLViewEdgeCases(t *testing.T) {
 
 	t.Run("View with complex query", func(t *testing.T) {
 		// Testing aggregate functions in view definitions
-		_, err := conn.Execute(ctx, "CREATE TABLE orders (id INTEGER, user_id INTEGER, amount DOUBLE)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE orders (id INTEGER, user_id INTEGER, amount DOUBLE)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		_, err = conn.Execute(ctx, `
@@ -391,7 +407,11 @@ func TestDDLViewEdgeCases(t *testing.T) {
 		// t.Skip("Feature not yet implemented: parser support for qualified column names in view definitions")
 		_, err := conn.Execute(ctx, "CREATE TABLE users (id INTEGER, name VARCHAR)", nil)
 		require.NoError(t, err)
-		_, err = conn.Execute(ctx, "CREATE TABLE posts (id INTEGER, user_id INTEGER, title VARCHAR)", nil)
+		_, err = conn.Execute(
+			ctx,
+			"CREATE TABLE posts (id INTEGER, user_id INTEGER, title VARCHAR)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		_, err = conn.Execute(ctx, `
@@ -436,7 +456,11 @@ func TestDDLIndexEdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Index on multiple columns", func(t *testing.T) {
-		_, err := conn.Execute(ctx, "CREATE TABLE users (first_name VARCHAR, last_name VARCHAR, age INTEGER)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE users (first_name VARCHAR, last_name VARCHAR, age INTEGER)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		_, err = conn.Execute(ctx, "CREATE INDEX idx_name ON users (first_name, last_name)", nil)
@@ -444,7 +468,11 @@ func TestDDLIndexEdgeCases(t *testing.T) {
 	})
 
 	t.Run("Multiple indexes on same table", func(t *testing.T) {
-		_, err := conn.Execute(ctx, "CREATE TABLE products (id INTEGER, name VARCHAR, price DOUBLE)", nil)
+		_, err := conn.Execute(
+			ctx,
+			"CREATE TABLE products (id INTEGER, name VARCHAR, price DOUBLE)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		_, err = conn.Execute(ctx, "CREATE INDEX idx_products_id ON products (id)", nil)

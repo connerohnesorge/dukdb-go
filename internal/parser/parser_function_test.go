@@ -159,7 +159,9 @@ func TestParseCreateFunction(t *testing.T) {
 
 func TestParseCreateFunctionAST(t *testing.T) {
 	t.Run("simple SQL UDF", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION add(a INTEGER, b INTEGER) RETURNS INTEGER AS 'SELECT a + b'")
+		stmt, err := Parse(
+			"CREATE FUNCTION add(a INTEGER, b INTEGER) RETURNS INTEGER AS 'SELECT a + b'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -183,7 +185,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("Python UDF with dollar-quoted body", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION py_len(s VARCHAR) RETURNS INTEGER LANGUAGE python AS $$import sys; return len(s)$$")
+		stmt, err := Parse(
+			"CREATE FUNCTION py_len(s VARCHAR) RETURNS INTEGER LANGUAGE python AS $$import sys; return len(s)$$",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -199,7 +203,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with all attributes", func(t *testing.T) {
-		stmt, err := Parse("CREATE OR REPLACE FUNCTION safe_div(a DOUBLE, b DOUBLE) RETURNS DOUBLE LANGUAGE sql IMMUTABLE STRICT LEAKPROOF PARALLEL SAFE AS 'SELECT CASE WHEN b=0 THEN NULL ELSE a/b END'")
+		stmt, err := Parse(
+			"CREATE OR REPLACE FUNCTION safe_div(a DOUBLE, b DOUBLE) RETURNS DOUBLE LANGUAGE sql IMMUTABLE STRICT LEAKPROOF PARALLEL SAFE AS 'SELECT CASE WHEN b=0 THEN NULL ELSE a/b END'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -217,7 +223,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with schema qualification", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION myschema.myfunc(x INTEGER) RETURNS INTEGER AS 'SELECT x'")
+		stmt, err := Parse(
+			"CREATE FUNCTION myschema.myfunc(x INTEGER) RETURNS INTEGER AS 'SELECT x'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -239,7 +247,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with STABLE volatility", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION read_config(key VARCHAR) RETURNS VARCHAR STABLE AS 'SELECT value FROM config WHERE name = key'")
+		stmt, err := Parse(
+			"CREATE FUNCTION read_config(key VARCHAR) RETURNS VARCHAR STABLE AS 'SELECT value FROM config WHERE name = key'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -249,7 +259,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with VOLATILE volatility", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION rand_val() RETURNS INTEGER VOLATILE AS 'SELECT random()'")
+		stmt, err := Parse(
+			"CREATE FUNCTION rand_val() RETURNS INTEGER VOLATILE AS 'SELECT random()'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -259,7 +271,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with PARALLEL UNSAFE", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION unsafe_op(x INTEGER) RETURNS INTEGER PARALLEL UNSAFE AS 'SELECT x'")
+		stmt, err := Parse(
+			"CREATE FUNCTION unsafe_op(x INTEGER) RETURNS INTEGER PARALLEL UNSAFE AS 'SELECT x'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -269,7 +283,9 @@ func TestParseCreateFunctionAST(t *testing.T) {
 	})
 
 	t.Run("UDF with PARALLEL RESTRICTED", func(t *testing.T) {
-		stmt, err := Parse("CREATE FUNCTION restricted_op(x INTEGER) RETURNS INTEGER PARALLEL RESTRICTED AS 'SELECT x'")
+		stmt, err := Parse(
+			"CREATE FUNCTION restricted_op(x INTEGER) RETURNS INTEGER PARALLEL RESTRICTED AS 'SELECT x'",
+		)
 		require.NoError(t, err)
 
 		fn, ok := stmt.(*CreateFunctionStmt)
@@ -301,7 +317,9 @@ $$`
 func TestCreateFunctionTableExtractor(t *testing.T) {
 	// CREATE FUNCTION should not extract any table references
 	// even if the body references tables (the body is opaque)
-	stmt, err := Parse("CREATE FUNCTION get_user(id INTEGER) RETURNS VARCHAR AS 'SELECT name FROM users WHERE id = id'")
+	stmt, err := Parse(
+		"CREATE FUNCTION get_user(id INTEGER) RETURNS VARCHAR AS 'SELECT name FROM users WHERE id = id'",
+	)
 	require.NoError(t, err)
 
 	fn, ok := stmt.(*CreateFunctionStmt)

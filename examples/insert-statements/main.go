@@ -63,19 +63,19 @@ func main() {
 		birth_date, created_at, meeting_time, is_active, float_val, double_val
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		1,
-		32767,           // SMALLINT max value
+		32767,               // SMALLINT max value
 		9223372036854775807, // BIGINT max value
-		1234.56,         // DECIMAL
-		4.75,            // NUMERIC
-		"Sample Product", // VARCHAR
+		1234.56,             // DECIMAL
+		4.75,                // NUMERIC
+		"Sample Product",    // VARCHAR
 		"This is a detailed description that can be very long", // TEXT
-		"PRD001",        // CHAR(10)
-		"1990-05-15",    // DATE
+		"PRD001",              // CHAR(10)
+		"1990-05-15",          // DATE
 		"2024-01-15 14:30:00", // TIMESTAMP
-		"09:00:00",      // TIME
-		true,            // BOOLEAN
-		3.14159,         // FLOAT
-		2.71828182846,   // DOUBLE
+		"09:00:00",            // TIME
+		true,                  // BOOLEAN
+		3.14159,               // FLOAT
+		2.71828182846,         // DOUBLE
 	)
 	if err != nil {
 		log.Printf("Failed to insert basic data: %v", err)
@@ -90,10 +90,10 @@ func main() {
 	) VALUES (?, ?, ?, ?, ?, ?)`,
 		2,
 		"Product with NULLs",
-		nil,  // NULL price
+		nil, // NULL price
 		false,
-		nil,  // NULL date
-		nil,  // NULL metadata
+		nil, // NULL date
+		nil, // NULL metadata
 	)
 	if err != nil {
 		log.Printf("Failed to insert NULL data: %v", err)
@@ -160,10 +160,10 @@ func main() {
 	defer stmt.Close()
 
 	bulkData := []struct {
-		id       int
-		name     string
-		price    float64
-		active   bool
+		id        int
+		name      string
+		price     float64
+		active    bool
 		birthDate string
 	}{
 		{6, "Bulk Product 1", 99.99, true, "2020-01-01"},
@@ -215,8 +215,12 @@ func main() {
 		jsonSize  sql.NullInt64
 	}
 
-	fmt.Println("ID | Name                 | Price    | Active | Birth Date | Blob Size | JSON Size")
-	fmt.Println("---|----------------------|----------|--------|------------|-----------|----------")
+	fmt.Println(
+		"ID | Name                 | Price    | Active | Birth Date | Blob Size | JSON Size",
+	)
+	fmt.Println(
+		"---|----------------------|----------|--------|------------|-----------|----------",
+	)
 
 	for rows.Next() {
 		var p productSummary
@@ -259,7 +263,8 @@ func main() {
 	// Example 9: Verify binary data
 	fmt.Println("\n=== Verifying binary data ===")
 	var binaryDataRetrieved []byte
-	err = db.QueryRow("SELECT binary_data FROM data_types_demo WHERE id = ?", 3).Scan(&binaryDataRetrieved)
+	err = db.QueryRow("SELECT binary_data FROM data_types_demo WHERE id = ?", 3).
+		Scan(&binaryDataRetrieved)
 	if err != nil {
 		log.Printf("Failed to retrieve binary data: %v", err)
 	} else {
@@ -270,7 +275,8 @@ func main() {
 	// Example 10: Verify JSON data
 	fmt.Println("\n=== Verifying JSON data ===")
 	var jsonDataRetrieved string
-	err = db.QueryRow("SELECT metadata FROM data_types_demo WHERE id = ?", 4).Scan(&jsonDataRetrieved)
+	err = db.QueryRow("SELECT metadata FROM data_types_demo WHERE id = ?", 4).
+		Scan(&jsonDataRetrieved)
 	if err != nil {
 		log.Printf("Failed to retrieve JSON data: %v", err)
 	} else {

@@ -115,7 +115,10 @@ func sqlExample(tablePath string) {
 	err = db.QueryRow(metadataQuery).Scan(&formatVersion, &rowCount)
 	if err != nil {
 		// iceberg_metadata might have different columns, just log the error
-		log.Printf("Note: Could not get metadata (this is expected if iceberg_metadata is not registered): %v", err)
+		log.Printf(
+			"Note: Could not get metadata (this is expected if iceberg_metadata is not registered): %v",
+			err,
+		)
 	} else {
 		fmt.Printf("\nTable metadata: format_version=%d, row_count=%d\n", formatVersion, rowCount)
 	}

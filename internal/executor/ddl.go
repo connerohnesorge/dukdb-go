@@ -156,7 +156,13 @@ func (e *Executor) executeCreateIndex(
 	}
 
 	// Create index definition in catalog
-	indexDef := catalog.NewIndexDef(plan.Index, plan.Schema, plan.Table, plan.Columns, plan.IsUnique)
+	indexDef := catalog.NewIndexDef(
+		plan.Index,
+		plan.Schema,
+		plan.Table,
+		plan.Columns,
+		plan.IsUnique,
+	)
 
 	// Add to catalog
 	if err := e.catalog.CreateIndexInSchema(plan.Schema, indexDef); err != nil {
@@ -201,7 +207,11 @@ func (e *Executor) executeCreateIndex(
 }
 
 // populateIndex populates an index with existing rows from a table.
-func (e *Executor) populateIndex(tableName string, index *storage.HashIndex, colIndices []int) error {
+func (e *Executor) populateIndex(
+	tableName string,
+	index *storage.HashIndex,
+	colIndices []int,
+) error {
 	// Get the table from storage
 	table, ok := e.storage.GetTable(tableName)
 	if !ok {
@@ -551,7 +561,11 @@ func (e *Executor) executeAlterTable(
 		if !ok {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeCatalog,
-				Msg:  fmt.Sprintf("column %s does not exist in table %s", plan.DropColumn, plan.Table),
+				Msg: fmt.Sprintf(
+					"column %s does not exist in table %s",
+					plan.DropColumn,
+					plan.Table,
+				),
 			}
 		}
 

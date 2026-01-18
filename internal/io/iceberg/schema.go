@@ -185,7 +185,10 @@ func (m *SchemaMapper) FindColumnByName(schema *iceberg.Schema, name string) (*C
 
 // ProjectSchema creates a projected schema containing only the specified columns.
 // The columns can be specified by name.
-func (m *SchemaMapper) ProjectSchema(schema *iceberg.Schema, columnNames []string) ([]ColumnInfo, error) {
+func (m *SchemaMapper) ProjectSchema(
+	schema *iceberg.Schema,
+	columnNames []string,
+) ([]ColumnInfo, error) {
 	allColumns, err := m.MapSchemaToColumnInfo(schema)
 	if err != nil {
 		return nil, err
@@ -221,7 +224,9 @@ func NewSchemaEvolutionChecker() *SchemaEvolutionChecker {
 }
 
 // GetAddedColumns returns columns that were added between oldSchema and newSchema.
-func (c *SchemaEvolutionChecker) GetAddedColumns(oldSchema, newSchema *iceberg.Schema) ([]ColumnInfo, error) {
+func (c *SchemaEvolutionChecker) GetAddedColumns(
+	oldSchema, newSchema *iceberg.Schema,
+) ([]ColumnInfo, error) {
 	oldColumns, err := c.mapper.MapSchemaToColumnInfo(oldSchema)
 	if err != nil {
 		return nil, err
@@ -250,7 +255,9 @@ func (c *SchemaEvolutionChecker) GetAddedColumns(oldSchema, newSchema *iceberg.S
 }
 
 // GetDroppedColumns returns columns that were dropped between oldSchema and newSchema.
-func (c *SchemaEvolutionChecker) GetDroppedColumns(oldSchema, newSchema *iceberg.Schema) ([]ColumnInfo, error) {
+func (c *SchemaEvolutionChecker) GetDroppedColumns(
+	oldSchema, newSchema *iceberg.Schema,
+) ([]ColumnInfo, error) {
 	oldColumns, err := c.mapper.MapSchemaToColumnInfo(oldSchema)
 	if err != nil {
 		return nil, err
@@ -280,7 +287,9 @@ func (c *SchemaEvolutionChecker) GetDroppedColumns(oldSchema, newSchema *iceberg
 
 // GetRenamedColumns returns columns that were renamed between oldSchema and newSchema.
 // Returns a map from old name to new name.
-func (c *SchemaEvolutionChecker) GetRenamedColumns(oldSchema, newSchema *iceberg.Schema) (map[string]string, error) {
+func (c *SchemaEvolutionChecker) GetRenamedColumns(
+	oldSchema, newSchema *iceberg.Schema,
+) (map[string]string, error) {
 	oldColumns, err := c.mapper.MapSchemaToColumnInfo(oldSchema)
 	if err != nil {
 		return nil, err

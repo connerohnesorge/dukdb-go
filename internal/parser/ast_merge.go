@@ -11,10 +11,10 @@ import (
 type MergeActionType int
 
 const (
-	MergeActionUpdate   MergeActionType = iota // UPDATE existing row
-	MergeActionDelete                          // DELETE matched row
-	MergeActionInsert                          // INSERT new row
-	MergeActionDoNothing                       // DO NOTHING
+	MergeActionUpdate    MergeActionType = iota // UPDATE existing row
+	MergeActionDelete                           // DELETE matched row
+	MergeActionInsert                           // INSERT new row
+	MergeActionDoNothing                        // DO NOTHING
 )
 
 // MergeAction represents an action to perform when a MERGE condition matches.

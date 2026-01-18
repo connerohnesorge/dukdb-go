@@ -396,7 +396,10 @@ func (e *ExchangeOp) Name() string {
 }
 
 // Execute processes input chunk and redistributes according to exchange type.
-func (e *ExchangeOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (e *ExchangeOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if input == nil || input.Count() == 0 {
 		return input, nil
 	}
@@ -505,7 +508,10 @@ func (f *FilterOp) Name() string {
 }
 
 // Execute applies the filter to the input chunk.
-func (f *FilterOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (f *FilterOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if f.Filter == nil || input == nil {
 		return input, nil
 	}
@@ -530,7 +536,10 @@ func (p *ProjectOp) Name() string {
 }
 
 // Execute applies the projection to the input chunk.
-func (p *ProjectOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (p *ProjectOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if len(p.Projections) == 0 || input == nil {
 		return input, nil
 	}
@@ -895,7 +904,10 @@ func (s *SortBreakerOp) Name() string {
 }
 
 // Execute collects input chunks for sorting.
-func (s *SortBreakerOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (s *SortBreakerOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if input == nil || input.Count() == 0 {
 		return nil, nil
 	}
@@ -968,7 +980,12 @@ type AggregateBreakerOp struct {
 }
 
 // NewAggregateBreakerOp creates a new AggregateBreakerOp.
-func NewAggregateBreakerOp(groupBy []int, groupByCols []string, groupByTypes []dukdb.Type, aggregates []AggregateFunc) *AggregateBreakerOp {
+func NewAggregateBreakerOp(
+	groupBy []int,
+	groupByCols []string,
+	groupByTypes []dukdb.Type,
+	aggregates []AggregateFunc,
+) *AggregateBreakerOp {
 	return &AggregateBreakerOp{
 		GroupBy:      groupBy,
 		GroupByCols:  groupByCols,
@@ -989,7 +1006,10 @@ func (a *AggregateBreakerOp) Name() string {
 }
 
 // Execute processes input chunks for aggregation.
-func (a *AggregateBreakerOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (a *AggregateBreakerOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if input == nil || input.Count() == 0 {
 		return nil, nil
 	}
@@ -1067,7 +1087,10 @@ func (h *HashBuildOp) Name() string {
 }
 
 // Execute inserts build tuples into the hash tables.
-func (h *HashBuildOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (h *HashBuildOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if input == nil || input.Count() == 0 {
 		return nil, nil
 	}
@@ -1149,7 +1172,10 @@ func (w *WindowBreakerOp) Name() string {
 }
 
 // Execute collects input chunks for window processing.
-func (w *WindowBreakerOp) Execute(state map[int]any, input *storage.DataChunk) (*storage.DataChunk, error) {
+func (w *WindowBreakerOp) Execute(
+	state map[int]any,
+	input *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if input == nil || input.Count() == 0 {
 		return nil, nil
 	}

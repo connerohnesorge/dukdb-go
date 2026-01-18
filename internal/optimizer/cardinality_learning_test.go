@@ -110,7 +110,7 @@ func TestMemoryBoundsRespected(t *testing.T) {
 	learner := NewCardinalityLearner(maxSize, 1) // Allow immediate corrections
 
 	// Record observations for more signatures than maxSize
-	for i := 0; i < maxSize + 50; i++ {
+	for i := 0; i < maxSize+50; i++ {
 		sig := "SeqScan(table=t" + string(rune(i)) + ")"
 		learner.RecordObservation(sig, 100, 100)
 	}
@@ -239,9 +239,9 @@ func TestMultipleOperators(t *testing.T) {
 
 	// Record different correction ratios for each
 	for i := 0; i < 5; i++ {
-		learner.RecordObservation(sig1, 100, 100)   // 1.0x
-		learner.RecordObservation(sig2, 100, 150)   // 1.5x
-		learner.RecordObservation(sig3, 100, 200)   // 2.0x
+		learner.RecordObservation(sig1, 100, 100) // 1.0x
+		learner.RecordObservation(sig2, 100, 150) // 1.5x
+		learner.RecordObservation(sig3, 100, 200) // 2.0x
 	}
 
 	// Each should have learned its own correction

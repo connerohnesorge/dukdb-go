@@ -191,7 +191,9 @@ func TestUnnestInJoin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cross join with UNNEST
-	rows, err := db.Query("SELECT n.id, u.unnest FROM nums n, UNNEST(['a', 'b']) AS u ORDER BY n.id, u.unnest")
+	rows, err := db.Query(
+		"SELECT n.id, u.unnest FROM nums n, UNNEST(['a', 'b']) AS u ORDER BY n.id, u.unnest",
+	)
 	require.NoError(t, err)
 	defer rows.Close()
 

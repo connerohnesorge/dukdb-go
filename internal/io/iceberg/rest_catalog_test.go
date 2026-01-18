@@ -17,9 +17,9 @@ import (
 // TestOAuth2TokenExpiration tests the token expiration logic.
 func TestOAuth2TokenExpiration(t *testing.T) {
 	tests := []struct {
-		name      string
-		token     *OAuth2Token
-		wantExp   bool
+		name    string
+		token   *OAuth2Token
+		wantExp bool
 	}{
 		{
 			name:    "nil token is expired",
@@ -197,8 +197,8 @@ func TestRESTCatalogGetConfig(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"defaults": map[string]string{
-					"warehouse":        "s3://my-warehouse",
-					"default-catalog":  "my-catalog",
+					"warehouse":       "s3://my-warehouse",
+					"default-catalog": "my-catalog",
 				},
 				"overrides": map[string]string{
 					"s3.access-key": "override-key",

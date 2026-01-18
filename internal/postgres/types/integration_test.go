@@ -271,7 +271,11 @@ func TestTypeSystemIntegration(t *testing.T) {
 			// Step 6: Verify type name lookup
 			typeName := mapper.GetTypeName(mapping.PostgresOID)
 			if (typeName == "" || typeName == "unknown") && mapping.PostgresOID != OID_UNKNOWN {
-				t.Logf("Warning: GetTypeName(%d) = %q (may be expected for some types)", mapping.PostgresOID, typeName)
+				t.Logf(
+					"Warning: GetTypeName(%d) = %q (may be expected for some types)",
+					mapping.PostgresOID,
+					typeName,
+				)
 			}
 		})
 	}
@@ -495,7 +499,12 @@ func TestArrayElementOIDMapping(t *testing.T) {
 			// Array -> Element
 			elementOID := GetArrayElementOID(tt.arrayOID)
 			if elementOID != tt.elementOID {
-				t.Errorf("GetArrayElementOID(%d) = %d, want %d", tt.arrayOID, elementOID, tt.elementOID)
+				t.Errorf(
+					"GetArrayElementOID(%d) = %d, want %d",
+					tt.arrayOID,
+					elementOID,
+					tt.elementOID,
+				)
 			}
 
 			// Element -> Array
@@ -925,7 +934,12 @@ func TestDuckDBArrayTypes(t *testing.T) {
 		t.Run(tc.duckDBType, func(t *testing.T) {
 			oid := mapper.DuckDBToPostgresOID(tc.duckDBType)
 			if oid != tc.expectedOID {
-				t.Errorf("DuckDBToPostgresOID(%q) = %d, want %d", tc.duckDBType, oid, tc.expectedOID)
+				t.Errorf(
+					"DuckDBToPostgresOID(%q) = %d, want %d",
+					tc.duckDBType,
+					oid,
+					tc.expectedOID,
+				)
 			}
 		})
 	}
@@ -952,7 +966,12 @@ func TestParameterizedDuckDBTypes(t *testing.T) {
 		t.Run(tc.duckDBType, func(t *testing.T) {
 			oid := mapper.DuckDBToPostgresOID(tc.duckDBType)
 			if oid != tc.expectedOID {
-				t.Errorf("DuckDBToPostgresOID(%q) = %d, want %d", tc.duckDBType, oid, tc.expectedOID)
+				t.Errorf(
+					"DuckDBToPostgresOID(%q) = %d, want %d",
+					tc.duckDBType,
+					oid,
+					tc.expectedOID,
+				)
 			}
 		})
 	}

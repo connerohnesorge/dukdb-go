@@ -238,9 +238,9 @@ func TestScanWithVisibility_MixedVisibility(t *testing.T) {
 	}
 
 	assert.Len(t, allValues, 3)
-	assert.Contains(t, allValues, int32(1)) // Committed row
-	assert.Contains(t, allValues, int32(2)) // Uncommitted (dirty read)
-	assert.Contains(t, allValues, int32(5)) // Own row
+	assert.Contains(t, allValues, int32(1))    // Committed row
+	assert.Contains(t, allValues, int32(2))    // Uncommitted (dirty read)
+	assert.Contains(t, allValues, int32(5))    // Own row
 	assert.NotContains(t, allValues, int32(3)) // Deleted row
 	assert.NotContains(t, allValues, int32(4)) // Aborted row
 }

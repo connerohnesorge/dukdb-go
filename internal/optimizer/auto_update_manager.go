@@ -33,23 +33,23 @@ type AutoUpdateManager struct {
 	tracker *ModificationTracker
 
 	// Configuration
-	threshold        float64           // Ratio threshold for triggering ANALYZE (fixed at 0.10)
-	batchInterval    time.Duration     // How long to wait before executing batched ANALYZE
-	maxBatchSize     int               // Maximum tables to ANALYZE in one batch
-	analyzeFunc      AnalyzeFuncType   // User-provided ANALYZE implementation
-	getRowCountFunc  GetRowCountFunc   // User-provided function to get current row count
+	threshold       float64         // Ratio threshold for triggering ANALYZE (fixed at 0.10)
+	batchInterval   time.Duration   // How long to wait before executing batched ANALYZE
+	maxBatchSize    int             // Maximum tables to ANALYZE in one batch
+	analyzeFunc     AnalyzeFuncType // User-provided ANALYZE implementation
+	getRowCountFunc GetRowCountFunc // User-provided function to get current row count
 
 	// Batching state
-	mu             sync.Mutex
-	pendingTables  map[string]bool // Tables that need ANALYZE
-	batchTimer     *time.Timer     // Timer for batch processing
-	stopped        bool            // Flag to indicate if manager has been stopped
+	mu            sync.Mutex
+	pendingTables map[string]bool // Tables that need ANALYZE
+	batchTimer    *time.Timer     // Timer for batch processing
+	stopped       bool            // Flag to indicate if manager has been stopped
 
 	// Metrics (for debugging)
-	metricsLock    sync.RWMutex
-	triggerCount   int64
-	analyzeCount   int64
-	batchCount     int64
+	metricsLock  sync.RWMutex
+	triggerCount int64
+	analyzeCount int64
+	batchCount   int64
 }
 
 // AnalyzeFuncType is the signature for an ANALYZE implementation.
@@ -75,9 +75,9 @@ func NewAutoUpdateManager(
 ) *AutoUpdateManager {
 	return &AutoUpdateManager{
 		tracker:         tracker,
-		threshold:       0.10, // Fixed 10% threshold, not configurable
+		threshold:       0.10,                   // Fixed 10% threshold, not configurable
 		batchInterval:   100 * time.Millisecond, // 100ms batch window
-		maxBatchSize:    100, // Process up to 100 tables per batch
+		maxBatchSize:    100,                    // Process up to 100 tables per batch
 		analyzeFunc:     analyzeFunc,
 		getRowCountFunc: getRowCountFunc,
 		pendingTables:   make(map[string]bool),

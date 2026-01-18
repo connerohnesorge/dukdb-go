@@ -73,7 +73,15 @@ func GetTypeSizeFast(typeID LogicalTypeID) int {
 		return 8
 	case TypeHugeInt, TypeUHugeInt, TypeUUID, TypeInterval, TypeDecimal:
 		return 16
-	case TypeVarchar, TypeBlob, TypeBit, TypeStruct, TypeList, TypeMap, TypeArray, TypeUnion, TypeEnum:
+	case TypeVarchar,
+		TypeBlob,
+		TypeBit,
+		TypeStruct,
+		TypeList,
+		TypeMap,
+		TypeArray,
+		TypeUnion,
+		TypeEnum:
 		return 0 // Variable-size types
 	default:
 		return 8 // Default - most common for unknown types

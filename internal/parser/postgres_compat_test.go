@@ -927,7 +927,11 @@ func TestPostgresCompatComprehensive(t *testing.T) {
 		// DISTINCT ON variations
 		{"DISTINCT ON basic", "SELECT DISTINCT ON (a) * FROM t", false},
 		{"DISTINCT ON with alias", "SELECT DISTINCT ON (a) a AS col1, b FROM t", false},
-		{"DISTINCT ON with join", "SELECT DISTINCT ON (t1.id) * FROM t1 JOIN t2 ON t1.id = t2.id", false},
+		{
+			"DISTINCT ON with join",
+			"SELECT DISTINCT ON (t1.id) * FROM t1 JOIN t2 ON t1.id = t2.id",
+			false,
+		},
 
 		// LIMIT ALL variations
 		{"LIMIT ALL basic", "SELECT * FROM t LIMIT ALL", false},
@@ -948,18 +952,34 @@ func TestPostgresCompatComprehensive(t *testing.T) {
 		// GROUP BY ordinal variations
 		{"GROUP BY 1", "SELECT a FROM t GROUP BY 1", false},
 		{"GROUP BY 1, 2, 3", "SELECT a, b, c FROM t GROUP BY 1, 2, 3", false},
-		{"GROUP BY ordinal with HAVING", "SELECT a, COUNT(*) FROM t GROUP BY 1 HAVING COUNT(*) > 1", false},
+		{
+			"GROUP BY ordinal with HAVING",
+			"SELECT a, COUNT(*) FROM t GROUP BY 1 HAVING COUNT(*) > 1",
+			false,
+		},
 
 		// WITH RECURSIVE variations
 		{"WITH RECURSIVE basic", "WITH RECURSIVE r AS (SELECT 1) SELECT * FROM r", false},
 		{"WITH RECURSIVE with columns", "WITH RECURSIVE r(x) AS (SELECT 1) SELECT * FROM r", false},
-		{"WITH RECURSIVE with UNION ALL", "WITH RECURSIVE r(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM r WHERE x < 10) SELECT * FROM r", false},
+		{
+			"WITH RECURSIVE with UNION ALL",
+			"WITH RECURSIVE r(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM r WHERE x < 10) SELECT * FROM r",
+			false,
+		},
 
 		// Combined features
-		{"DISTINCT ON + ORDER BY + LIMIT ALL", "SELECT DISTINCT ON (a) * FROM t ORDER BY a LIMIT ALL", false},
+		{
+			"DISTINCT ON + ORDER BY + LIMIT ALL",
+			"SELECT DISTINCT ON (a) * FROM t ORDER BY a LIMIT ALL",
+			false,
+		},
 		{"cast + ILIKE", "SELECT * FROM t WHERE a::text ILIKE '%b%'", false},
 		{"GROUP BY ordinal + cast", "SELECT a::text, COUNT(*) FROM t GROUP BY 1", false},
-		{"WITH + DISTINCT ON", "WITH tmp AS (SELECT * FROM t) SELECT DISTINCT ON (a) * FROM tmp", false},
+		{
+			"WITH + DISTINCT ON",
+			"WITH tmp AS (SELECT * FROM t) SELECT DISTINCT ON (a) * FROM tmp",
+			false,
+		},
 	}
 
 	for _, tt := range tests {

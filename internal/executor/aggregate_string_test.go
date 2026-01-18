@@ -263,7 +263,11 @@ func TestComputeListDistinct(t *testing.T) {
 				return
 			}
 			if len(resultSlice) != len(tt.expected) {
-				t.Errorf("computeListDistinct() returned %d items, want %d", len(resultSlice), len(tt.expected))
+				t.Errorf(
+					"computeListDistinct() returned %d items, want %d",
+					len(resultSlice),
+					len(tt.expected),
+				)
 				return
 			}
 			// Check all expected items are present (order may vary due to map iteration)

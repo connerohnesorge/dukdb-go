@@ -1194,8 +1194,8 @@ func TestNextMultipleCalls(t *testing.T) {
 	it := art.ScanAll()
 
 	// Multiple calls to Next after exhaustion should all return false
-	it.Next()  // Returns the value
-	it.Next()  // Exhausts
+	it.Next() // Returns the value
+	it.Next() // Exhausts
 	_, _, ok := it.Next()
 	assert.False(t, ok)
 	_, _, ok = it.Next()
@@ -1733,7 +1733,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 	t.Run("inclusive upper bound at exact key", func(t *testing.T) {
 		// <= 0x30 should include key 0x30
 		upper := []byte{0x30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -1753,7 +1757,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 	t.Run("exclusive upper bound at exact key", func(t *testing.T) {
 		// < 0x30 should exclude key 0x30
 		upper := []byte{0x30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		var values []uint64
 		for {
@@ -1774,7 +1782,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 		// >= 0x20 AND <= 0x30
 		lower := []byte{0x20}
 		upper := []byte{0x30}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -1795,7 +1807,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 		// > 0x10 AND < 0x40
 		lower := []byte{0x10}
 		upper := []byte{0x40}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: false, UpperInclusive: false})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: false},
+		)
 
 		var values []uint64
 		for {
@@ -1816,7 +1832,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 		// > 0x10 AND <= 0x30
 		lower := []byte{0x10}
 		upper := []byte{0x30}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: false, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -1837,7 +1857,11 @@ func TestBoundsInclusiveExclusiveEdgeCases(t *testing.T) {
 		// >= 0x20 AND < 0x40
 		lower := []byte{0x20}
 		upper := []byte{0x40}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		var values []uint64
 		for {
@@ -1869,7 +1893,11 @@ func TestPointLookupBounds(t *testing.T) {
 	t.Run("point lookup with both inclusive - single result", func(t *testing.T) {
 		// WHERE x = 0x42 (both inclusive)
 		bound := []byte{0x42}
-		it := art.RangeScan(bound, bound, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			bound,
+			bound,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		key, value, ok := it.Next()
 		assert.True(t, ok)
@@ -1885,7 +1913,11 @@ func TestPointLookupBounds(t *testing.T) {
 	t.Run("point lookup with lower exclusive - empty result", func(t *testing.T) {
 		// x > 0x42 AND x <= 0x42 - impossible, empty range
 		bound := []byte{0x42}
-		it := art.RangeScan(bound, bound, RangeScanOptions{LowerInclusive: false, UpperInclusive: true})
+		it := art.RangeScan(
+			bound,
+			bound,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: true},
+		)
 
 		// RangeScan should detect this and return exhausted iterator
 		assert.True(t, it.IsExhausted())
@@ -1898,7 +1930,11 @@ func TestPointLookupBounds(t *testing.T) {
 	t.Run("point lookup with upper exclusive - empty result", func(t *testing.T) {
 		// x >= 0x42 AND x < 0x42 - impossible, empty range
 		bound := []byte{0x42}
-		it := art.RangeScan(bound, bound, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			bound,
+			bound,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		// RangeScan should detect this and return exhausted iterator
 		assert.True(t, it.IsExhausted())
@@ -1911,7 +1947,11 @@ func TestPointLookupBounds(t *testing.T) {
 	t.Run("point lookup with both exclusive - empty result", func(t *testing.T) {
 		// x > 0x42 AND x < 0x42 - impossible, empty range
 		bound := []byte{0x42}
-		it := art.RangeScan(bound, bound, RangeScanOptions{LowerInclusive: false, UpperInclusive: false})
+		it := art.RangeScan(
+			bound,
+			bound,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: false},
+		)
 
 		// RangeScan should detect this and return exhausted iterator
 		assert.True(t, it.IsExhausted())
@@ -1924,7 +1964,11 @@ func TestPointLookupBounds(t *testing.T) {
 	t.Run("point lookup for non-existent key - no result", func(t *testing.T) {
 		// WHERE x = 0x50 (key doesn't exist)
 		bound := []byte{0x50}
-		it := art.RangeScan(bound, bound, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			bound,
+			bound,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		// Iterator not exhausted (range is valid), but no key found
 		_, _, ok := it.Next()
@@ -1959,7 +2003,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		// WHERE x BETWEEN 10 AND 20 means >= 10 AND <= 20
 		lower := []byte{10}
 		upper := []byte{20}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -1982,7 +2030,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		// Keys in range: 10
 		lower := []byte{7}
 		upper := []byte{12}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -2004,7 +2056,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		// WHERE x BETWEEN 5 AND 25 - includes all keys
 		lower := []byte{5}
 		upper := []byte{25}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -2026,7 +2082,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		// WHERE x BETWEEN 0 AND 3 - no keys exist in this range
 		lower := []byte{0}
 		upper := []byte{3}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -2048,7 +2108,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		// WHERE x BETWEEN 30 AND 40 - beyond all keys
 		lower := []byte{30}
 		upper := []byte{40}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		var values []uint64
 		for {
@@ -2073,7 +2137,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		upper := []byte{20}
 
 		// Scan 1: < 10
-		it1 := art.RangeScan(nil, lower, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it1 := art.RangeScan(
+			nil,
+			lower,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 		var values1 []uint64
 		for {
 			_, value, ok := it1.Next()
@@ -2087,7 +2155,11 @@ func TestBETWEENPredicates(t *testing.T) {
 		it1.Close()
 
 		// Scan 2: > 20
-		it2 := art.RangeScan(upper, nil, RangeScanOptions{LowerInclusive: false, UpperInclusive: true})
+		it2 := art.RangeScan(
+			upper,
+			nil,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: true},
+		)
 		var values2 []uint64
 		for {
 			_, value, ok := it2.Next()
@@ -2151,7 +2223,11 @@ func TestBoundaryConditionsAtKeyBoundaries(t *testing.T) {
 	t.Run("exclusive upper just above key", func(t *testing.T) {
 		// < 0x81 should include 0x80
 		upper := []byte{0x81}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		_, value, ok := it.Next()
 		assert.True(t, ok)
@@ -2162,7 +2238,11 @@ func TestBoundaryConditionsAtKeyBoundaries(t *testing.T) {
 	t.Run("inclusive upper at key", func(t *testing.T) {
 		// <= 0x80 should include 0x80
 		upper := []byte{0x80}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		_, value, ok := it.Next()
 		assert.True(t, ok)
@@ -2173,7 +2253,11 @@ func TestBoundaryConditionsAtKeyBoundaries(t *testing.T) {
 	t.Run("exclusive upper at key", func(t *testing.T) {
 		// < 0x80 should NOT include 0x80
 		upper := []byte{0x80}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		_, _, ok := it.Next()
 		assert.False(t, ok)
@@ -2235,7 +2319,11 @@ func TestRangePredicateOperators(t *testing.T) {
 	t.Run("WHERE x < 30", func(t *testing.T) {
 		// < 30 means upperInclusive=false, upper=30, no lower
 		upper := []byte{30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 		values := collectValues(it)
 		assert.Equal(t, []uint64{10, 20}, values)
 	})
@@ -2243,7 +2331,11 @@ func TestRangePredicateOperators(t *testing.T) {
 	t.Run("WHERE x <= 30", func(t *testing.T) {
 		// <= 30 means upperInclusive=true, upper=30, no lower
 		upper := []byte{30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 		values := collectValues(it)
 		assert.Equal(t, []uint64{10, 20, 30}, values)
 	})
@@ -2252,7 +2344,11 @@ func TestRangePredicateOperators(t *testing.T) {
 		// Combined: lowerInclusive=false, upperInclusive=false
 		lower := []byte{10}
 		upper := []byte{40}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: false, UpperInclusive: false})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: false},
+		)
 		values := collectValues(it)
 		assert.Equal(t, []uint64{20, 30}, values)
 	})
@@ -2261,7 +2357,11 @@ func TestRangePredicateOperators(t *testing.T) {
 		// Combined: both inclusive (like BETWEEN)
 		lower := []byte{10}
 		upper := []byte{40}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 		values := collectValues(it)
 		assert.Equal(t, []uint64{10, 20, 30, 40}, values)
 	})
@@ -2270,7 +2370,11 @@ func TestRangePredicateOperators(t *testing.T) {
 		// Bounds between keys: > 15 and < 35 should get 20, 30
 		lower := []byte{15}
 		upper := []byte{35}
-		it := art.RangeScan(lower, upper, RangeScanOptions{LowerInclusive: false, UpperInclusive: false})
+		it := art.RangeScan(
+			lower,
+			upper,
+			RangeScanOptions{LowerInclusive: false, UpperInclusive: false},
+		)
 		values := collectValues(it)
 		assert.Equal(t, []uint64{20, 30}, values)
 	})
@@ -2529,13 +2633,19 @@ func TestCompositeRangeBounds(t *testing.T) {
 		require.NoError(t, err)
 
 		// Lower should be encode(5) + encode(10)
-		expectedLower, _ := EncodeCompositeKey([]any{int32(5), int32(10)}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+		expectedLower, _ := EncodeCompositeKey(
+			[]any{int32(5), int32(10)},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER},
+		)
 		assert.Equal(t, expectedLower, lower)
 
 		// Upper should be encode(5) + encode(20)
 		// Note: CompositeRangeBounds encodes rangeLower (10) and rangeUpper (20) directly,
 		// so upper = prefix + encode(20)
-		expectedUpper, _ := EncodeCompositeKey([]any{int32(5), int32(20)}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+		expectedUpper, _ := EncodeCompositeKey(
+			[]any{int32(5), int32(20)},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER},
+		)
 		// The actual value will be the range upper (20) appended to prefix
 		assert.Equal(t, expectedUpper, upper)
 	})
@@ -2578,7 +2688,10 @@ func TestCompositeRangeBounds(t *testing.T) {
 		assert.Equal(t, expectedLower, lower)
 
 		// Upper should be encode(5) + encode(20)
-		expectedUpper, _ := EncodeCompositeKey([]any{int32(5), int32(20)}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+		expectedUpper, _ := EncodeCompositeKey(
+			[]any{int32(5), int32(20)},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER},
+		)
 		assert.Equal(t, expectedUpper, upper)
 	})
 
@@ -2595,7 +2708,10 @@ func TestCompositeRangeBounds(t *testing.T) {
 		require.NoError(t, err)
 
 		// Lower should be encode(5) + encode(10)
-		expectedLower, _ := EncodeCompositeKey([]any{int32(5), int32(10)}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER})
+		expectedLower, _ := EncodeCompositeKey(
+			[]any{int32(5), int32(10)},
+			[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER},
+		)
 		assert.Equal(t, expectedLower, lower)
 
 		// Upper should be prefix upper bound of encode(5)
@@ -2667,7 +2783,11 @@ func TestCompositeKeyRangeScan(t *testing.T) {
 		key1_30, _ := EncodeCompositeKey([]any{int32(1), int32(30)}, types)
 
 		// key1_10 (1, 10) should be < lower (1, 15)
-		assert.True(t, bytes.Compare(key1_10, lower) < 0, "key(1,10) should be before range [15,25]")
+		assert.True(
+			t,
+			bytes.Compare(key1_10, lower) < 0,
+			"key(1,10) should be before range [15,25]",
+		)
 
 		// key1_20 (1, 20) should be in range
 		assert.True(t, bytes.Compare(key1_20, lower) >= 0, "key(1,20) should be >= lower")
@@ -2722,7 +2842,11 @@ func TestCompositeKeyIteratorIntegration(t *testing.T) {
 	})
 
 	t.Run("upper bound at composite key inclusive finds it", func(t *testing.T) {
-		it := art.RangeScan(nil, compositeKey, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			nil,
+			compositeKey,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 		key, value, ok := it.Next()
 		assert.True(t, ok)
 		assert.Equal(t, compositeKey, key)
@@ -2731,7 +2855,11 @@ func TestCompositeKeyIteratorIntegration(t *testing.T) {
 	})
 
 	t.Run("upper bound at composite key exclusive skips it", func(t *testing.T) {
-		it := art.RangeScan(nil, compositeKey, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			compositeKey,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 		_, _, ok := it.Next()
 		assert.False(t, ok)
 		it.Close()
@@ -2744,7 +2872,11 @@ func TestCompositeKeyIteratorIntegration(t *testing.T) {
 		upper := ComputePrefixUpperBound(prefix)
 
 		// The composite key (5, 100) should be in range [prefix, upper)
-		it := art.RangeScan(prefix, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			prefix,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 		key, value, ok := it.Next()
 		assert.True(t, ok, "Should find key (5, 100) in prefix range for a=5")
 		assert.Equal(t, compositeKey, key)
@@ -2759,7 +2891,11 @@ func TestCompositeKeyIteratorIntegration(t *testing.T) {
 		upper := ComputePrefixUpperBound(prefix)
 
 		// The composite key (5, 100) should NOT be in range for a=6
-		it := art.RangeScan(prefix, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			prefix,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 		_, _, ok := it.Next()
 		assert.False(t, ok, "Should not find key (5, 100) in prefix range for a=6")
 		it.Close()
@@ -2780,19 +2916,22 @@ func TestCompositeKeyIteratorIntegration(t *testing.T) {
 func TestMultipleCompositeKeysRangeScan(t *testing.T) {
 	types := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER}
 
-	t.Run("composite key encoding produces correct sort order for multi-key scenarios", func(t *testing.T) {
-		// Verify that encoded composite keys maintain proper lexicographic order
-		// This is critical for range scans to work correctly
-		key1_10, _ := EncodeCompositeKey([]any{int32(1), int32(10)}, types)
-		key1_20, _ := EncodeCompositeKey([]any{int32(1), int32(20)}, types)
-		key2_10, _ := EncodeCompositeKey([]any{int32(2), int32(10)}, types)
-		key2_20, _ := EncodeCompositeKey([]any{int32(2), int32(20)}, types)
+	t.Run(
+		"composite key encoding produces correct sort order for multi-key scenarios",
+		func(t *testing.T) {
+			// Verify that encoded composite keys maintain proper lexicographic order
+			// This is critical for range scans to work correctly
+			key1_10, _ := EncodeCompositeKey([]any{int32(1), int32(10)}, types)
+			key1_20, _ := EncodeCompositeKey([]any{int32(1), int32(20)}, types)
+			key2_10, _ := EncodeCompositeKey([]any{int32(2), int32(10)}, types)
+			key2_20, _ := EncodeCompositeKey([]any{int32(2), int32(20)}, types)
 
-		// Verify sort order: (1,10) < (1,20) < (2,10) < (2,20)
-		assert.True(t, bytes.Compare(key1_10, key1_20) < 0, "key(1,10) should be < key(1,20)")
-		assert.True(t, bytes.Compare(key1_20, key2_10) < 0, "key(1,20) should be < key(2,10)")
-		assert.True(t, bytes.Compare(key2_10, key2_20) < 0, "key(2,10) should be < key(2,20)")
-	})
+			// Verify sort order: (1,10) < (1,20) < (2,10) < (2,20)
+			assert.True(t, bytes.Compare(key1_10, key1_20) < 0, "key(1,10) should be < key(1,20)")
+			assert.True(t, bytes.Compare(key1_20, key2_10) < 0, "key(1,20) should be < key(2,10)")
+			assert.True(t, bytes.Compare(key2_10, key2_20) < 0, "key(2,10) should be < key(2,20)")
+		},
+	)
 
 	t.Run("prefix bounds correctly isolate first column", func(t *testing.T) {
 		prefixTypes := []dukdb.Type{dukdb.TYPE_INTEGER}
@@ -3509,7 +3648,11 @@ func TestIteratorPrefixComparison(t *testing.T) {
 
 	t.Run("upper bound at exact prefix - exclusive should not find", func(t *testing.T) {
 		upper := []byte{0x10, 0x20, 0x30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: false})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: false},
+		)
 
 		_, _, ok := it.Next()
 		assert.False(t, ok)
@@ -3518,7 +3661,11 @@ func TestIteratorPrefixComparison(t *testing.T) {
 
 	t.Run("upper bound at exact prefix - inclusive should find", func(t *testing.T) {
 		upper := []byte{0x10, 0x20, 0x30}
-		it := art.RangeScan(nil, upper, RangeScanOptions{LowerInclusive: true, UpperInclusive: true})
+		it := art.RangeScan(
+			nil,
+			upper,
+			RangeScanOptions{LowerInclusive: true, UpperInclusive: true},
+		)
 
 		_, value, ok := it.Next()
 		assert.True(t, ok)

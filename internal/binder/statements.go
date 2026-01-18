@@ -10,16 +10,16 @@ import (
 
 // BoundSelectStmt represents a bound SELECT statement.
 type BoundSelectStmt struct {
-	CTEs       []*BoundCTE         // Common Table Expressions (WITH clause)
+	CTEs       []*BoundCTE // Common Table Expressions (WITH clause)
 	Distinct   bool
-	DistinctOn []BoundExpr         // DISTINCT ON expressions (select first row per group)
+	DistinctOn []BoundExpr // DISTINCT ON expressions (select first row per group)
 	Columns    []*BoundSelectColumn
 	From       []*BoundTableRef
 	Joins      []*BoundJoin
 	Where      BoundExpr
 	GroupBy    []BoundExpr
 	Having     BoundExpr
-	Qualify    BoundExpr           // QUALIFY clause (filter after window functions)
+	Qualify    BoundExpr // QUALIFY clause (filter after window functions)
 	OrderBy    []*BoundOrderBy
 	Limit      BoundExpr
 	Offset     BoundExpr
@@ -279,11 +279,11 @@ type BoundAlterTableStmt struct {
 	Table        string
 	TableDef     *catalog.TableDef
 	Operation    parser.AlterTableOp
-	IfExists     bool             // IF EXISTS modifier
-	NewTableName string           // RENAME TO
-	OldColumn    string           // RENAME COLUMN
-	NewColumn    string           // RENAME COLUMN
-	DropColumn   string           // DROP COLUMN
+	IfExists     bool               // IF EXISTS modifier
+	NewTableName string             // RENAME TO
+	OldColumn    string             // RENAME COLUMN
+	NewColumn    string             // RENAME COLUMN
+	DropColumn   string             // DROP COLUMN
 	AddColumn    *catalog.ColumnDef // ADD COLUMN
 }
 
@@ -297,10 +297,10 @@ func (*BoundAlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_
 type BoundMergeActionType int
 
 const (
-	BoundMergeActionUpdate   BoundMergeActionType = iota // UPDATE existing row
-	BoundMergeActionDelete                               // DELETE matched row
-	BoundMergeActionInsert                               // INSERT new row
-	BoundMergeActionDoNothing                            // DO NOTHING
+	BoundMergeActionUpdate    BoundMergeActionType = iota // UPDATE existing row
+	BoundMergeActionDelete                                // DELETE matched row
+	BoundMergeActionInsert                                // INSERT new row
+	BoundMergeActionDoNothing                             // DO NOTHING
 )
 
 // BoundMergeAction represents a bound action in a MERGE clause.

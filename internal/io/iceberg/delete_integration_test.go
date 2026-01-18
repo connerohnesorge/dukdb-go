@@ -450,7 +450,12 @@ func TestIntegrationDeleteApplierCreation(t *testing.T) {
 
 	// Equality delete file should return EqualityDeleteApplier
 	eqDeletes := []*DataFile{
-		{Path: "delete.parquet", Format: FileFormatParquet, ContentType: 2, EqualityFieldIDs: []int{1}},
+		{
+			Path:             "delete.parquet",
+			Format:           FileFormatParquet,
+			ContentType:      2,
+			EqualityFieldIDs: []int{1},
+		},
 	}
 	applier = CreateDeleteApplier(ctx, eqDeletes, nil, "/test", []string{"id"})
 	_, isEq := applier.(*EqualityDeleteApplier)
@@ -459,7 +464,12 @@ func TestIntegrationDeleteApplierCreation(t *testing.T) {
 	// Mixed delete files should return CompositeDeleteApplier
 	mixedDeletes := []*DataFile{
 		{Path: "pos_delete.parquet", Format: FileFormatParquet, ContentType: 1},
-		{Path: "eq_delete.parquet", Format: FileFormatParquet, ContentType: 2, EqualityFieldIDs: []int{1}},
+		{
+			Path:             "eq_delete.parquet",
+			Format:           FileFormatParquet,
+			ContentType:      2,
+			EqualityFieldIDs: []int{1},
+		},
 	}
 	applier = CreateDeleteApplier(ctx, mixedDeletes, nil, "/test", []string{"id"})
 	_, isComposite := applier.(*CompositeDeleteApplier)

@@ -5,14 +5,14 @@ package catalog
 // Note: DukDB does not use the PostgreSQL extension system, but provides this
 // view for compatibility with PostgreSQL clients that query pg_extension.
 var pgExtensionColumns = []string{
-	"oid",             // Row identifier
-	"extname",         // Extension name
-	"extowner",        // Owner of the extension
-	"extnamespace",    // Schema containing the extension's exported objects
-	"extrelocatable",  // True if extension can be relocated to another schema
-	"extversion",      // Version string
-	"extconfig",       // Array of regclass OIDs for extension's configuration table(s)
-	"extcondition",    // Array of WHERE-clause filter conditions for config tables
+	"oid",            // Row identifier
+	"extname",        // Extension name
+	"extowner",       // Owner of the extension
+	"extnamespace",   // Schema containing the extension's exported objects
+	"extrelocatable", // True if extension can be relocated to another schema
+	"extversion",     // Version string
+	"extconfig",      // Array of regclass OIDs for extension's configuration table(s)
+	"extcondition",   // Array of WHERE-clause filter conditions for config tables
 }
 
 // builtinExtensions contains extensions that DukDB reports for compatibility.

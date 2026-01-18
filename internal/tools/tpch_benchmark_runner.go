@@ -1,6 +1,6 @@
 // Package tools provides utility tools for testing and development.
 //
-// TPC-H Benchmark Runner
+// # TPC-H Benchmark Runner
 //
 // Task 9.16: Runs TPC-H benchmark queries and compares performance metrics
 // between dukdb-go and baseline expectations.
@@ -16,47 +16,47 @@ import (
 
 // TPCHQueryResult holds the result of running a single TPC-H query
 type TPCHQueryResult struct {
-	QueryNumber        int
-	QueryName          string
-	ExecutionTimeMs    int64
-	RowsReturned       int64
-	EstimatedTimeMs    int64
-	BaselineTimeMs     int64
-	PerformanceRatio   float64 // Actual / Baseline
-	Status             string  // "PASS", "WARNING", "FAIL"
+	QueryNumber      int
+	QueryName        string
+	ExecutionTimeMs  int64
+	RowsReturned     int64
+	EstimatedTimeMs  int64
+	BaselineTimeMs   int64
+	PerformanceRatio float64 // Actual / Baseline
+	Status           string  // "PASS", "WARNING", "FAIL"
 }
 
 // TPCHBenchmarkReport contains aggregated results from TPC-H benchmarking
 type TPCHBenchmarkReport struct {
-	ScaleFactor              float64
-	TotalQueriesRun          int
-	QueriesPassed            int
-	QueriesWarning           int
-	QueriesFailed            int
-	TotalExecutionTimeMs     int64
-	AverageExecutionTimeMs   int64
-	MedianExecutionTimeMs    int64
-	MaxExecutionTimeMs       int64
-	MinExecutionTimeMs       int64
-	AveragePerformanceRatio  float64
-	WorstPerformingQueries   []TPCHQueryResult
-	BestPerformingQueries    []TPCHQueryResult
-	Summary                  string
+	ScaleFactor             float64
+	TotalQueriesRun         int
+	QueriesPassed           int
+	QueriesWarning          int
+	QueriesFailed           int
+	TotalExecutionTimeMs    int64
+	AverageExecutionTimeMs  int64
+	MedianExecutionTimeMs   int64
+	MaxExecutionTimeMs      int64
+	MinExecutionTimeMs      int64
+	AveragePerformanceRatio float64
+	WorstPerformingQueries  []TPCHQueryResult
+	BestPerformingQueries   []TPCHQueryResult
+	Summary                 string
 }
 
 // TPCHBenchmarkRunner runs TPC-H benchmark queries
 type TPCHBenchmarkRunner struct {
-	results                []TPCHQueryResult
-	performanceThreshold   float64 // queries > this ratio are failures
-	warningThreshold       float64 // queries > this ratio are warnings
+	results              []TPCHQueryResult
+	performanceThreshold float64 // queries > this ratio are failures
+	warningThreshold     float64 // queries > this ratio are warnings
 }
 
 // NewTPCHBenchmarkRunner creates a new TPC-H benchmark runner
 func NewTPCHBenchmarkRunner() *TPCHBenchmarkRunner {
 	return &TPCHBenchmarkRunner{
 		results:              []TPCHQueryResult{},
-		performanceThreshold: 2.0,  // Fail if > 2x baseline
-		warningThreshold:     1.2,  // Warn if > 1.2x baseline
+		performanceThreshold: 2.0, // Fail if > 2x baseline
+		warningThreshold:     1.2, // Warn if > 1.2x baseline
 	}
 }
 
@@ -82,7 +82,7 @@ func (tr *TPCHBenchmarkRunner) AddResult(result TPCHQueryResult) {
 // GenerateReport generates a comprehensive benchmark report
 func (tr *TPCHBenchmarkRunner) GenerateReport(scaleFactor float64) *TPCHBenchmarkReport {
 	report := &TPCHBenchmarkReport{
-		ScaleFactor:    scaleFactor,
+		ScaleFactor:     scaleFactor,
 		TotalQueriesRun: len(tr.results),
 	}
 
@@ -249,13 +249,21 @@ func (tr *TPCHBenchmarkRunner) generateSummary(report *TPCHBenchmarkReport) stri
 	sb.WriteString(fmt.Sprintf("  Min: %dms\n", report.MinExecutionTimeMs))
 	sb.WriteString(fmt.Sprintf("  Max: %dms\n\n", report.MaxExecutionTimeMs))
 
-	sb.WriteString(fmt.Sprintf("Performance Ratio (vs Baseline): %.2fx\n", report.AveragePerformanceRatio))
+	sb.WriteString(
+		fmt.Sprintf("Performance Ratio (vs Baseline): %.2fx\n", report.AveragePerformanceRatio),
+	)
 
 	if len(report.WorstPerformingQueries) > 0 {
 		sb.WriteString("\nWorst Performing Queries:\n")
 		for i, result := range report.WorstPerformingQueries {
-			sb.WriteString(fmt.Sprintf("  %d. Q%d (%s): %.2fx baseline (%dms)\n",
-				i+1, result.QueryNumber, result.Status, result.PerformanceRatio, result.ExecutionTimeMs))
+			sb.WriteString(fmt.Sprintf(
+				"  %d. Q%d (%s): %.2fx baseline (%dms)\n",
+				i+1,
+				result.QueryNumber,
+				result.Status,
+				result.PerformanceRatio,
+				result.ExecutionTimeMs,
+			))
 		}
 	}
 

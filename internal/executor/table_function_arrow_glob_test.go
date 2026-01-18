@@ -131,7 +131,9 @@ func TestArrowFilenameColumn(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT id, value, filename FROM read_arrow('` + escapeForSQL(pattern) + `', filename=true) ORDER BY id`
+	sql := `SELECT id, value, filename FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', filename=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -164,7 +166,9 @@ func TestArrowFileRowNumber(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT id, file_row_number FROM read_arrow('` + escapeForSQL(pattern) + `', file_row_number=true) ORDER BY id`
+	sql := `SELECT id, file_row_number FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', file_row_number=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -199,7 +203,9 @@ func TestArrowFileIndex(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT id, file_index FROM read_arrow('` + escapeForSQL(pattern) + `', file_index=true) ORDER BY file_index`
+	sql := `SELECT id, file_index FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -229,7 +235,9 @@ func TestArrowFileGlobBehavior(t *testing.T) {
 
 	t.Run("allow_empty", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "nonexistent*.arrow")
-		sql := `SELECT * FROM read_arrow('` + escapeForSQL(pattern) + `', file_glob_behavior='ALLOW_EMPTY')`
+		sql := `SELECT * FROM read_arrow('` + escapeForSQL(
+			pattern,
+		) + `', file_glob_behavior='ALLOW_EMPTY')`
 
 		result := execQuery(t, cat, exec, sql)
 		assert.Len(t, result.Rows, 0)
@@ -244,7 +252,9 @@ func TestArrowFileGlobBehavior(t *testing.T) {
 		})
 
 		path := filepath.Join(tmpDir, "data.arrow")
-		sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(path) + `', file_glob_behavior='FALLBACK_GLOB')`
+		sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(
+			path,
+		) + `', file_glob_behavior='FALLBACK_GLOB')`
 
 		result := execQuery(t, cat, exec, sql)
 		cnt := testToInt64(result.Rows[0]["cnt"])
@@ -272,7 +282,9 @@ func TestArrowUnionByName(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(pattern) + `', union_by_name=true)`
+	sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', union_by_name=true)`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -348,7 +360,9 @@ func TestArrowAllMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_arrow('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -398,7 +412,9 @@ func TestArrowFilesToSniff(t *testing.T) {
 	pattern := filepath.Join(tmpDir, "*.arrow")
 
 	// Test that files_to_sniff option is recognized and files are read
-	sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(pattern) + `', files_to_sniff=1)`
+	sql := `SELECT COUNT(*) as cnt FROM read_arrow('` + escapeForSQL(
+		pattern,
+	) + `', files_to_sniff=1)`
 	result := execQuery(t, cat, exec, sql)
 	cnt := testToInt64(result.Rows[0]["cnt"])
 	assert.Equal(t, int64(3), cnt)
@@ -480,7 +496,9 @@ func TestArrowAutoMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.arrow")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_arrow_auto('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_arrow_auto('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 

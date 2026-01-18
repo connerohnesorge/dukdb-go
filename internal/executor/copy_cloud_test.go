@@ -271,7 +271,13 @@ func TestCreateFileReaderFromHTTP(t *testing.T) {
 	ctx := context.Background()
 
 	// Create CSV reader from HTTP URL
-	reader, err := createFileReaderFromFS(ctx, provider, server.URL+"/data.csv", fileio.FormatCSV, nil)
+	reader, err := createFileReaderFromFS(
+		ctx,
+		provider,
+		server.URL+"/data.csv",
+		fileio.FormatCSV,
+		nil,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, reader)
 	defer func() { _ = reader.Close() }()
@@ -301,7 +307,13 @@ func TestCreateFileReaderFromHTTPJSON(t *testing.T) {
 	ctx := context.Background()
 
 	// Create JSON reader from HTTP URL
-	reader, err := createFileReaderFromFS(ctx, provider, server.URL+"/data.json", fileio.FormatJSON, nil)
+	reader, err := createFileReaderFromFS(
+		ctx,
+		provider,
+		server.URL+"/data.json",
+		fileio.FormatJSON,
+		nil,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, reader)
 	defer func() { _ = reader.Close() }()
@@ -328,7 +340,13 @@ func TestCreateFileReaderFromHTTPNDJSON(t *testing.T) {
 	ctx := context.Background()
 
 	// Create NDJSON reader from HTTP URL
-	reader, err := createFileReaderFromFS(ctx, provider, server.URL+"/data.ndjson", fileio.FormatNDJSON, nil)
+	reader, err := createFileReaderFromFS(
+		ctx,
+		provider,
+		server.URL+"/data.ndjson",
+		fileio.FormatNDJSON,
+		nil,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, reader)
 	defer func() { _ = reader.Close() }()
@@ -353,10 +371,10 @@ func TestHTTPFileSystemReadOnly(t *testing.T) {
 // TestCloudURLParsing tests that cloud URLs are correctly identified.
 func TestCloudURLParsing(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
-		isCloud  bool
-		isLocal  bool
+		name    string
+		url     string
+		isCloud bool
+		isLocal bool
 	}{
 		{
 			name:    "S3 URL",
@@ -428,7 +446,13 @@ func TestFormatUnknownError(t *testing.T) {
 	defer server.Close()
 
 	// Try to create reader with unknown format
-	_, err := createFileReaderFromFS(ctx, provider, server.URL+"/data.xyz", fileio.FormatUnknown, nil)
+	_, err := createFileReaderFromFS(
+		ctx,
+		provider,
+		server.URL+"/data.xyz",
+		fileio.FormatUnknown,
+		nil,
+	)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown format")
 }
@@ -442,7 +466,13 @@ func TestCreateWriterFormatUnknownError(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Try to create writer with unknown format
-	_, err := createFileWriterFromFS(ctx, provider, tempDir+"/output.xyz", fileio.FormatUnknown, nil)
+	_, err := createFileWriterFromFS(
+		ctx,
+		provider,
+		tempDir+"/output.xyz",
+		fileio.FormatUnknown,
+		nil,
+	)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown format")
 }

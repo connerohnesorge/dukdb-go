@@ -119,7 +119,11 @@ func TestWALRecoveryCreateView(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create view
-		_, err = conn.Execute(ctx, "CREATE VIEW active_users AS SELECT id FROM users WHERE active = true", nil)
+		_, err = conn.Execute(
+			ctx,
+			"CREATE VIEW active_users AS SELECT id FROM users WHERE active = true",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Insert data
@@ -534,7 +538,11 @@ func TestWALRecoveryComplexDDLWorkflow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create table
-		_, err = conn.Execute(ctx, "CREATE TABLE app.users (id INTEGER, email VARCHAR, active BOOLEAN)", nil)
+		_, err = conn.Execute(
+			ctx,
+			"CREATE TABLE app.users (id INTEGER, email VARCHAR, active BOOLEAN)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Create index
@@ -542,14 +550,26 @@ func TestWALRecoveryComplexDDLWorkflow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create view
-		_, err = conn.Execute(ctx, "CREATE VIEW app.active_users AS SELECT id, email FROM app.users WHERE active = true", nil)
+		_, err = conn.Execute(
+			ctx,
+			"CREATE VIEW app.active_users AS SELECT id, email FROM app.users WHERE active = true",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Insert data using sequence
-		_, err = conn.Execute(ctx, "INSERT INTO app.users VALUES (nextval('app.user_id_seq'), 'alice@example.com', true)", nil)
+		_, err = conn.Execute(
+			ctx,
+			"INSERT INTO app.users VALUES (nextval('app.user_id_seq'), 'alice@example.com', true)",
+			nil,
+		)
 		require.NoError(t, err)
 
-		_, err = conn.Execute(ctx, "INSERT INTO app.users VALUES (nextval('app.user_id_seq'), 'bob@example.com', false)", nil)
+		_, err = conn.Execute(
+			ctx,
+			"INSERT INTO app.users VALUES (nextval('app.user_id_seq'), 'bob@example.com', false)",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Close

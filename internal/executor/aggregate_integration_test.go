@@ -501,7 +501,12 @@ func TestAggregateIntegration_FilterClause_CountWithFilter(t *testing.T) {
 
 	// All rows should have the same filtered_count = 3 (amounts > 100: 200, 150, 120)
 	for _, row := range result.Rows {
-		t.Logf("Row: id=%v, amount=%v, filtered_count=%v", row["id"], row["amount"], row["filtered_count"])
+		t.Logf(
+			"Row: id=%v, amount=%v, filtered_count=%v",
+			row["id"],
+			row["amount"],
+			row["filtered_count"],
+		)
 	}
 }
 
@@ -582,8 +587,14 @@ func TestAggregateIntegration_FilterClause_MultipleFilters(t *testing.T) {
 	assert.Len(t, result.Rows, 9)
 
 	for _, row := range result.Rows {
-		t.Logf("Row: id=%v, category=%v, amount=%v, high_amount_count=%v, electronics_sum=%v",
-			row["id"], row["category"], row["amount"], row["high_amount_count"], row["electronics_sum"])
+		t.Logf(
+			"Row: id=%v, category=%v, amount=%v, high_amount_count=%v, electronics_sum=%v",
+			row["id"],
+			row["category"],
+			row["amount"],
+			row["high_amount_count"],
+			row["electronics_sum"],
+		)
 	}
 }
 
@@ -777,7 +788,12 @@ func TestAggregateIntegration_Window_SumOverPartition(t *testing.T) {
 
 	// Verify running totals by category
 	for _, row := range result.Rows {
-		t.Logf("Row: category=%v, amount=%v, running_sum=%v", row["category"], row["amount"], row["SUM(amount)"])
+		t.Logf(
+			"Row: category=%v, amount=%v, running_sum=%v",
+			row["category"],
+			row["amount"],
+			row["SUM(amount)"],
+		)
 	}
 }
 
@@ -856,8 +872,20 @@ func TestAggregateIntegration_Window_MinMaxOverPartition(t *testing.T) {
 
 		if existing, exists := categoryMinMax[cat]; exists {
 			// All rows in same category should have same min/max
-			assert.Equal(t, existing.min, minVal, "MIN should be consistent within category %s", cat)
-			assert.Equal(t, existing.max, maxVal, "MAX should be consistent within category %s", cat)
+			assert.Equal(
+				t,
+				existing.min,
+				minVal,
+				"MIN should be consistent within category %s",
+				cat,
+			)
+			assert.Equal(
+				t,
+				existing.max,
+				maxVal,
+				"MAX should be consistent within category %s",
+				cat,
+			)
 		} else {
 			categoryMinMax[cat] = struct{ min, max any }{minVal, maxVal}
 		}
@@ -882,7 +910,12 @@ func TestAggregateIntegration_Window_SumWithFrame(t *testing.T) {
 
 	// Each row should have sum of current row + 1 preceding + 1 following
 	for _, row := range result.Rows {
-		t.Logf("Row: id=%v, amount=%v, sliding_sum=%v", row["id"], row["amount"], row["SUM(amount)"])
+		t.Logf(
+			"Row: id=%v, amount=%v, sliding_sum=%v",
+			row["id"],
+			row["amount"],
+			row["SUM(amount)"],
+		)
 	}
 }
 
@@ -952,7 +985,12 @@ func TestAggregateIntegration_Window_CountWithWhere(t *testing.T) {
 		"Should have fewer rows after filtering")
 
 	for _, row := range result.Rows {
-		t.Logf("Row: category=%v, amount=%v, count=%v", row["category"], row["amount"], row["COUNT(*)"])
+		t.Logf(
+			"Row: category=%v, amount=%v, count=%v",
+			row["category"],
+			row["amount"],
+			row["COUNT(*)"],
+		)
 	}
 }
 
@@ -1017,7 +1055,12 @@ func TestAggregateIntegration_Window_RangeBetween(t *testing.T) {
 
 	// Each row should have cumulative sum up to and including current row
 	for _, row := range result.Rows {
-		t.Logf("Row: id=%v, amount=%v, cumulative_sum=%v", row["id"], row["amount"], row["SUM(amount)"])
+		t.Logf(
+			"Row: id=%v, amount=%v, cumulative_sum=%v",
+			row["id"],
+			row["amount"],
+			row["SUM(amount)"],
+		)
 	}
 }
 

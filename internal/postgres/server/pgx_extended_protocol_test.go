@@ -60,7 +60,8 @@ func TestExtendedProtocolBasicParameterizedQueries(t *testing.T) {
 		var intVal int
 		var textVal string
 		var boolVal bool
-		err := conn.QueryRow(ctx, "SELECT $1::int, $2::text, $3::boolean", 123, "test", true).Scan(&intVal, &textVal, &boolVal)
+		err := conn.QueryRow(ctx, "SELECT $1::int, $2::text, $3::boolean", 123, "test", true).
+			Scan(&intVal, &textVal, &boolVal)
 		require.NoError(t, err)
 		assert.Equal(t, 123, intVal)
 		assert.Equal(t, "test", textVal)
@@ -111,19 +112,37 @@ func TestExtendedProtocolTableOperations(t *testing.T) {
 	}()
 
 	t.Run("parameterized INSERT", func(t *testing.T) {
-		tag, err := conn.Exec(ctx, "INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
-			1, "Alice", 99.5, true)
+		tag, err := conn.Exec(
+			ctx,
+			"INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
+			1,
+			"Alice",
+			99.5,
+			true,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), tag.RowsAffected())
 
 		// Insert multiple rows with different parameters
-		tag, err = conn.Exec(ctx, "INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
-			2, "Bob", 150.25, false)
+		tag, err = conn.Exec(
+			ctx,
+			"INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
+			2,
+			"Bob",
+			150.25,
+			false,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), tag.RowsAffected())
 
-		tag, err = conn.Exec(ctx, "INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
-			3, "Charlie", 75.0, true)
+		tag, err = conn.Exec(
+			ctx,
+			"INSERT INTO ext_test (id, name, value, active) VALUES ($1, $2, $3, $4)",
+			3,
+			"Charlie",
+			75.0,
+			true,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), tag.RowsAffected())
 	})
@@ -131,15 +150,20 @@ func TestExtendedProtocolTableOperations(t *testing.T) {
 	t.Run("parameterized SELECT with WHERE", func(t *testing.T) {
 		var name string
 		var value float64
-		err := conn.QueryRow(ctx, "SELECT name, value FROM ext_test WHERE id = $1", 2).Scan(&name, &value)
+		err := conn.QueryRow(ctx, "SELECT name, value FROM ext_test WHERE id = $1", 2).
+			Scan(&name, &value)
 		require.NoError(t, err)
 		assert.Equal(t, "Bob", name)
 		assert.InDelta(t, 150.25, value, 0.01)
 	})
 
 	t.Run("parameterized SELECT with multiple conditions", func(t *testing.T) {
-		rows, err := conn.Query(ctx, "SELECT name FROM ext_test WHERE active = $1 AND value > $2 ORDER BY name",
-			true, 50.0)
+		rows, err := conn.Query(
+			ctx,
+			"SELECT name FROM ext_test WHERE active = $1 AND value > $2 ORDER BY name",
+			true,
+			50.0,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -240,7 +264,11 @@ func TestExtendedProtocolPreparedStatements(t *testing.T) {
 		// Skip test - uses DEALLOCATE which is not fully supported
 		t.Skip("skipping - DEALLOCATE statement not fully supported")
 
-		sd, err := conn.Prepare(ctx, "select_range", "SELECT id, value FROM prep_test WHERE id >= $1 AND id <= $2 ORDER BY id")
+		sd, err := conn.Prepare(
+			ctx,
+			"select_range",
+			"SELECT id, value FROM prep_test WHERE id >= $1 AND id <= $2 ORDER BY id",
+		)
 		require.NoError(t, err)
 		assert.NotNil(t, sd)
 
@@ -309,7 +337,8 @@ func TestExtendedProtocolDataTypes(t *testing.T) {
 
 	t.Run("double precision parameter", func(t *testing.T) {
 		var result float64
-		err := conn.QueryRow(ctx, "SELECT $1::double precision", float64(3.141592653589793)).Scan(&result)
+		err := conn.QueryRow(ctx, "SELECT $1::double precision", float64(3.141592653589793)).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.InDelta(t, 3.141592653589793, result, 0.000000001)
 	})
@@ -619,7 +648,12 @@ func TestExtendedProtocolPortals(t *testing.T) {
 	})
 
 	t.Run("cursor with OFFSET via parameter", func(t *testing.T) {
-		rows, err := conn.Query(ctx, "SELECT id FROM portal_test ORDER BY id LIMIT $1 OFFSET $2", 3, 5)
+		rows, err := conn.Query(
+			ctx,
+			"SELECT id FROM portal_test ORDER BY id LIMIT $1 OFFSET $2",
+			3,
+			5,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -673,7 +707,8 @@ func TestExtendedProtocolEdgeCases(t *testing.T) {
 
 	t.Run("special characters in string", func(t *testing.T) {
 		var result string
-		err := conn.QueryRow(ctx, "SELECT $1::text", "test'with\"quotes\\and\nnewlines").Scan(&result)
+		err := conn.QueryRow(ctx, "SELECT $1::text", "test'with\"quotes\\and\nnewlines").
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "test'with\"quotes\\and\nnewlines", result)
 	})
@@ -689,7 +724,8 @@ func TestExtendedProtocolEdgeCases(t *testing.T) {
 		var intResult int
 		var floatResult float64
 		var boolResult bool
-		err := conn.QueryRow(ctx, "SELECT $1::int, $2::float8, $3::boolean", 0, 0.0, false).Scan(&intResult, &floatResult, &boolResult)
+		err := conn.QueryRow(ctx, "SELECT $1::int, $2::float8, $3::boolean", 0, 0.0, false).
+			Scan(&intResult, &floatResult, &boolResult)
 		require.NoError(t, err)
 		assert.Equal(t, 0, intResult)
 		assert.Equal(t, 0.0, floatResult)
@@ -699,9 +735,20 @@ func TestExtendedProtocolEdgeCases(t *testing.T) {
 	t.Run("many parameters", func(t *testing.T) {
 		// Test with 10 parameters
 		var sum int
-		err := conn.QueryRow(ctx,
+		err := conn.QueryRow(
+			ctx,
 			"SELECT $1::int + $2::int + $3::int + $4::int + $5::int + $6::int + $7::int + $8::int + $9::int + $10::int",
-			1, 2, 3, 4, 5, 6, 7, 8, 9, 10).Scan(&sum)
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+		).Scan(&sum)
 		require.NoError(t, err)
 		assert.Equal(t, 55, sum)
 	})
@@ -724,7 +771,9 @@ func TestExtendedProtocolQueryModes(t *testing.T) {
 		// pgx requires standard_conforming_strings=on for simple protocol, which our
 		// server doesn't currently advertise in startup parameters.
 		// This is outside the scope of extended query protocol testing (Task 10.5).
-		t.Skip("skipping - simple protocol requires standard_conforming_strings=on server parameter")
+		t.Skip(
+			"skipping - simple protocol requires standard_conforming_strings=on server parameter",
+		)
 
 		config, err := pgx.ParseConfig(ts.connStr)
 		require.NoError(t, err)

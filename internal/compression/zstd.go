@@ -17,11 +17,11 @@ import (
 //
 // This implementation uses encoder/decoder pooling for efficiency.
 type ZstdCodec struct {
-	level        zstd.EncoderLevel
-	encoderPool  sync.Pool
-	decoderPool  sync.Pool
-	encoderOnce  sync.Once
-	decoderOnce  sync.Once
+	level       zstd.EncoderLevel
+	encoderPool sync.Pool
+	decoderPool sync.Pool
+	encoderOnce sync.Once
+	decoderOnce sync.Once
 }
 
 // NewZstdCodec creates a new Zstandard codec with the specified compression level.
@@ -153,7 +153,11 @@ func (c *ZstdCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 
 	// Validate decompressed size matches expected size
 	if len(result) != destSize {
-		return nil, fmt.Errorf("decompressed size mismatch: got %d, expected %d", len(result), destSize)
+		return nil, fmt.Errorf(
+			"decompressed size mismatch: got %d, expected %d",
+			len(result),
+			destSize,
+		)
 	}
 
 	return result, nil

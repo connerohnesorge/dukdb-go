@@ -338,7 +338,11 @@ func DeserializeCatalogEntry(r *BinaryReader) (CatalogEntry, error) {
 		CatalogTableMacroEntry, CatalogDeletedEntry, CatalogRenamedEntry,
 		CatalogSecretEntry, CatalogSecretTypeEntry, CatalogSecretFunctionEntry,
 		CatalogDependencyEntry:
-		return nil, fmt.Errorf("unsupported catalog entry type: %d (%s)", catalogType, catalogType.String())
+		return nil, fmt.Errorf(
+			"unsupported catalog entry type: %d (%s)",
+			catalogType,
+			catalogType.String(),
+		)
 	}
 
 	return entry, nil

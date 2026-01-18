@@ -214,7 +214,9 @@ func (op *PhysicalLateralJoinOperator) GetTypes() []dukdb.TypeInfo {
 
 // executeRightWithCorrelation executes the right side of the lateral join
 // with the current left row's values available for correlation.
-func (op *PhysicalLateralJoinOperator) executeRightWithCorrelation(leftRow map[string]any) (*ExecutionResult, error) {
+func (op *PhysicalLateralJoinOperator) executeRightWithCorrelation(
+	leftRow map[string]any,
+) (*ExecutionResult, error) {
 	// Execute the right plan - the expressions in the right plan can reference
 	// columns from the left row. The executor's evaluateExpr will look up
 	// column values from the row context.

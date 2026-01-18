@@ -749,7 +749,15 @@ func TestAzureURLSchemeCheckers(t *testing.T) {
 		isHTTP  bool
 	}{
 		{"az://container/blob", true, false, false, true, false, false},
-		{"azure://account.blob.core.windows.net/container/blob", true, false, false, true, false, false},
+		{
+			"azure://account.blob.core.windows.net/container/blob",
+			true,
+			false,
+			false,
+			true,
+			false,
+			false,
+		},
 		{"s3://bucket/key", false, true, false, true, false, false},
 		{"gs://bucket/object", false, false, true, true, false, false},
 		{"https://example.com/file", false, false, false, true, false, true},
@@ -1016,7 +1024,13 @@ func TestAzureURLDuckDBCompatibility(t *testing.T) {
 			parsed, err := Parse(tt.url)
 			require.NoError(t, err, "Failed to parse: %s (%s)", tt.url, tt.description)
 
-			assert.Equal(t, tt.container, parsed.Container(), "Container mismatch for: %s", tt.description)
+			assert.Equal(
+				t,
+				tt.container,
+				parsed.Container(),
+				"Container mismatch for: %s",
+				tt.description,
+			)
 			assert.Equal(t, tt.blob, parsed.Key(), "Blob mismatch for: %s", tt.description)
 			assert.True(t, parsed.IsAzure(), "Should be recognized as Azure: %s", tt.description)
 		})
@@ -1181,7 +1195,12 @@ func TestAzureURLComparisonWithS3(t *testing.T) {
 			require.NoError(t, err)
 
 			// Container/Bucket and key extraction should be identical
-			assert.Equal(t, azParsed.Container(), s3Parsed.Bucket(), "Container/Bucket extraction should match")
+			assert.Equal(
+				t,
+				azParsed.Container(),
+				s3Parsed.Bucket(),
+				"Container/Bucket extraction should match",
+			)
 			assert.Equal(t, azParsed.Key(), s3Parsed.Key(), "Key extraction should match")
 
 			// But scheme checkers should differ
@@ -1217,7 +1236,12 @@ func TestAzureURLComparisonWithGCS(t *testing.T) {
 			require.NoError(t, err)
 
 			// Container/Bucket and key extraction should be identical
-			assert.Equal(t, azParsed.Container(), gsParsed.Bucket(), "Container/Bucket extraction should match")
+			assert.Equal(
+				t,
+				azParsed.Container(),
+				gsParsed.Bucket(),
+				"Container/Bucket extraction should match",
+			)
 			assert.Equal(t, azParsed.Key(), gsParsed.Key(), "Key extraction should match")
 
 			// But scheme checkers should differ

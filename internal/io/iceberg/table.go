@@ -118,7 +118,11 @@ func OpenTable(ctx context.Context, location string, opts *TableOptions) (*Table
 }
 
 // OpenTableFromMetadata opens an Iceberg table from a specific metadata file.
-func OpenTableFromMetadata(ctx context.Context, metadataPath string, opts *TableOptions) (*Table, error) {
+func OpenTableFromMetadata(
+	ctx context.Context,
+	metadataPath string,
+	opts *TableOptions,
+) (*Table, error) {
 	if opts == nil {
 		opts = DefaultTableOptions()
 	}

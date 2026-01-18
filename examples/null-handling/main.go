@@ -41,74 +41,74 @@ func main() {
 	// Example 1: Insert data with NULL values
 	fmt.Println("\n=== Example 1: Inserting NULL values ===")
 	products := []struct {
-		id              int
-		name            string
-		description     *string
-		price           *float64
-		category        *string
-		stockQuantity   *int
-		manufacturer    *string
-		releaseDate     *string
+		id               int
+		name             string
+		description      *string
+		price            *float64
+		category         *string
+		stockQuantity    *int
+		manufacturer     *string
+		releaseDate      *string
 		discontinuedDate *string
-		isFeatured      *bool
-		rating          *float64
-		warrantyMonths  *int
+		isFeatured       *bool
+		rating           *float64
+		warrantyMonths   *int
 	}{
 		{
-			id:           1,
-			name:         "Laptop Pro",
-			description:  stringPtr("High-performance laptop"),
-			price:        float64Ptr(1299.99),
-			category:     stringPtr("Electronics"),
-			stockQuantity: intPtr(25),
-			manufacturer: stringPtr("TechCorp"),
-			releaseDate:  stringPtr("2024-01-15"),
+			id:               1,
+			name:             "Laptop Pro",
+			description:      stringPtr("High-performance laptop"),
+			price:            float64Ptr(1299.99),
+			category:         stringPtr("Electronics"),
+			stockQuantity:    intPtr(25),
+			manufacturer:     stringPtr("TechCorp"),
+			releaseDate:      stringPtr("2024-01-15"),
 			discontinuedDate: nil,
-			isFeatured:   boolPtr(true),
-			rating:       float64Ptr(4.5),
-			warrantyMonths: intPtr(24),
+			isFeatured:       boolPtr(true),
+			rating:           float64Ptr(4.5),
+			warrantyMonths:   intPtr(24),
 		},
 		{
-			id:           2,
-			name:         "Basic Mouse",
-			description:  nil, // NULL description
-			price:        float64Ptr(19.99),
-			category:     stringPtr("Accessories"),
-			stockQuantity: intPtr(100),
-			manufacturer: nil, // NULL manufacturer
-			releaseDate:  stringPtr("2023-06-01"),
+			id:               2,
+			name:             "Basic Mouse",
+			description:      nil, // NULL description
+			price:            float64Ptr(19.99),
+			category:         stringPtr("Accessories"),
+			stockQuantity:    intPtr(100),
+			manufacturer:     nil, // NULL manufacturer
+			releaseDate:      stringPtr("2023-06-01"),
 			discontinuedDate: nil,
-			isFeatured:   boolPtr(false),
-			rating:       nil, // NULL rating
-			warrantyMonths: nil, // NULL warranty
+			isFeatured:       boolPtr(false),
+			rating:           nil, // NULL rating
+			warrantyMonths:   nil, // NULL warranty
 		},
 		{
-			id:           3,
-			name:         "Vintage Keyboard",
-			description:  stringPtr("Classic mechanical keyboard"),
-			price:        nil, // NULL price (discontinued)
-			category:     stringPtr("Accessories"),
-			stockQuantity: intPtr(0),
-			manufacturer: stringPtr("RetroTech"),
-			releaseDate:  stringPtr("2020-03-10"),
+			id:               3,
+			name:             "Vintage Keyboard",
+			description:      stringPtr("Classic mechanical keyboard"),
+			price:            nil, // NULL price (discontinued)
+			category:         stringPtr("Accessories"),
+			stockQuantity:    intPtr(0),
+			manufacturer:     stringPtr("RetroTech"),
+			releaseDate:      stringPtr("2020-03-10"),
 			discontinuedDate: stringPtr("2022-12-31"),
-			isFeatured:   boolPtr(false),
-			rating:       float64Ptr(4.8),
-			warrantyMonths: intPtr(12),
+			isFeatured:       boolPtr(false),
+			rating:           float64Ptr(4.8),
+			warrantyMonths:   intPtr(12),
 		},
 		{
-			id:           4,
-			name:         "Wireless Headphones",
-			description:  stringPtr("Premium noise-cancelling headphones"),
-			price:        float64Ptr(299.99),
-			category:     nil, // NULL category
-			stockQuantity: nil, // NULL stock quantity
-			manufacturer: stringPtr("AudioTech"),
-			releaseDate:  nil, // NULL release date
+			id:               4,
+			name:             "Wireless Headphones",
+			description:      stringPtr("Premium noise-cancelling headphones"),
+			price:            float64Ptr(299.99),
+			category:         nil, // NULL category
+			stockQuantity:    nil, // NULL stock quantity
+			manufacturer:     stringPtr("AudioTech"),
+			releaseDate:      nil, // NULL release date
 			discontinuedDate: nil,
-			isFeatured:   nil, // NULL featured flag
-			rating:       float64Ptr(4.7),
-			warrantyMonths: intPtr(18),
+			isFeatured:       nil, // NULL featured flag
+			rating:           float64Ptr(4.7),
+			warrantyMonths:   intPtr(18),
 		},
 	}
 
@@ -129,17 +129,19 @@ func main() {
 
 	// Example 2: Query and handle NULL values with sql.Null types
 	fmt.Println("\n=== Example 2: Querying NULL values with sql.Null types ===")
-	rows, err := db.Query("SELECT id, name, price, category, stock_quantity FROM products ORDER BY id")
+	rows, err := db.Query(
+		"SELECT id, name, price, category, stock_quantity FROM products ORDER BY id",
+	)
 	if err != nil {
 		log.Fatal("Failed to query products:", err)
 	}
 	defer rows.Close()
 
 	type Product struct {
-		ID          int
-		Name        string
-		Price       sql.NullFloat64
-		Category    sql.NullString
+		ID            int
+		Name          string
+		Price         sql.NullFloat64
+		Category      sql.NullString
 		StockQuantity sql.NullInt64
 	}
 
@@ -191,7 +193,9 @@ func main() {
 
 	// Example 4: Filter for non-NULL values using IS NOT NULL
 	fmt.Println("\n=== Example 4: Finding non-NULL values with IS NOT NULL ===")
-	rows, err = db.Query("SELECT id, name, rating FROM products WHERE rating IS NOT NULL ORDER BY rating DESC")
+	rows, err = db.Query(
+		"SELECT id, name, rating FROM products WHERE rating IS NOT NULL ORDER BY rating DESC",
+	)
 	if err != nil {
 		log.Fatal("Failed to query non-NULL ratings:", err)
 	}
@@ -324,7 +328,8 @@ func main() {
 
 	// Products without prices
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM products WHERE price IS NULL AND discontinued_date IS NULL").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM products WHERE price IS NULL AND discontinued_date IS NULL").
+		Scan(&count)
 	if err == nil {
 		fmt.Printf("- %d products without prices (not discontinued)\n", count)
 	}

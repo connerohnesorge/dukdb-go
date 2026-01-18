@@ -27,7 +27,12 @@ func setupBitwiseTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeBitwiseQuery executes a SQL query and returns the result
-func executeBitwiseQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeBitwiseQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -258,8 +263,8 @@ func TestBitwiseOperatorsComplex(t *testing.T) {
 				b = v
 			}
 		}
-		assert.Equal(t, int64(6), a)  // 5 ^ 3
-		assert.Equal(t, int64(5), b)  // (5 ^ 3) ^ 3 = 5
+		assert.Equal(t, int64(6), a) // 5 ^ 3
+		assert.Equal(t, int64(5), b) // (5 ^ 3) ^ 3 = 5
 	})
 
 	t.Run("Mask extraction", func(t *testing.T) {

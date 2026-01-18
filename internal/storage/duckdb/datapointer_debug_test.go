@@ -117,7 +117,12 @@ func TestDebugDataPointerDeserialization(t *testing.T) {
 		offset += 4
 
 		compression := dataAtOffset[offset]
-		t.Logf("Compression: %d (%s) (offset %d)", compression, CompressionType(compression).String(), offset)
+		t.Logf(
+			"Compression: %d (%s) (offset %d)",
+			compression,
+			CompressionType(compression).String(),
+			offset,
+		)
 		offset += 1
 
 		// Now comes BaseStatistics
@@ -158,7 +163,11 @@ func TestDebugDataPointerDeserialization(t *testing.T) {
 
 			// Now comes ColumnSegmentState
 			if len(dataAtOffset) > offset {
-				t.Logf("\nSegmentState starting at offset %d (%d bytes remaining)", offset, len(dataAtOffset)-offset)
+				t.Logf(
+					"\nSegmentState starting at offset %d (%d bytes remaining)",
+					offset,
+					len(dataAtOffset)-offset,
+				)
 				hasValidityMask := dataAtOffset[offset] != 0
 				t.Logf("HasValidityMask: %v (offset %d)", hasValidityMask, offset)
 				offset += 1

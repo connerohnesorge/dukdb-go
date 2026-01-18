@@ -77,8 +77,20 @@ func TestParameterBinder_BindTextParameters(t *testing.T) {
 		{"oid max", OidOid, "4294967295", uint32(4294967295), false},
 
 		// UUID type
-		{"uuid valid", OidUUID, "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440000", false},
-		{"uuid without dashes", OidUUID, "550e8400e29b41d4a716446655440000", "550e8400-e29b-41d4-a716-446655440000", false},
+		{
+			"uuid valid",
+			OidUUID,
+			"550e8400-e29b-41d4-a716-446655440000",
+			"550e8400-e29b-41d4-a716-446655440000",
+			false,
+		},
+		{
+			"uuid without dashes",
+			OidUUID,
+			"550e8400e29b41d4a716446655440000",
+			"550e8400-e29b-41d4-a716-446655440000",
+			false,
+		},
 		{"uuid invalid length", OidUUID, "550e8400", "", true},
 
 		// JSON types
@@ -314,8 +326,20 @@ func TestParameterBinder_BindBinaryParameters(t *testing.T) {
 		{"int4 negative", OidInt4, encodeInt32(-123456789), int32(-123456789), false},
 		{"int4 invalid length", OidInt4, []byte{1, 2}, int32(0), true},
 
-		{"int8 positive", OidInt8, encodeInt64(9223372036854775807), int64(9223372036854775807), false},
-		{"int8 negative", OidInt8, encodeInt64(-9223372036854775808), int64(-9223372036854775808), false},
+		{
+			"int8 positive",
+			OidInt8,
+			encodeInt64(9223372036854775807),
+			int64(9223372036854775807),
+			false,
+		},
+		{
+			"int8 negative",
+			OidInt8,
+			encodeInt64(-9223372036854775808),
+			int64(-9223372036854775808),
+			false,
+		},
 		{"int8 invalid length", OidInt8, []byte{1, 2, 3, 4}, int64(0), true},
 
 		// Floats
@@ -323,8 +347,20 @@ func TestParameterBinder_BindBinaryParameters(t *testing.T) {
 		{"float4 negative", OidFloat4, encodeFloat32(-3.14159), float32(-3.14159), false},
 		{"float4 invalid length", OidFloat4, []byte{1, 2}, float32(0), true},
 
-		{"float8 positive", OidFloat8, encodeFloat64(3.141592653589793), float64(3.141592653589793), false},
-		{"float8 negative", OidFloat8, encodeFloat64(-3.141592653589793), float64(-3.141592653589793), false},
+		{
+			"float8 positive",
+			OidFloat8,
+			encodeFloat64(3.141592653589793),
+			float64(3.141592653589793),
+			false,
+		},
+		{
+			"float8 negative",
+			OidFloat8,
+			encodeFloat64(-3.141592653589793),
+			float64(-3.141592653589793),
+			false,
+		},
 		{"float8 invalid length", OidFloat8, []byte{1, 2, 3, 4}, float64(0), true},
 
 		// Strings
@@ -339,7 +375,30 @@ func TestParameterBinder_BindBinaryParameters(t *testing.T) {
 		{"oid invalid length", OidOid, []byte{1, 2}, uint32(0), true},
 
 		// UUID (16 bytes binary)
-		{"uuid valid", OidUUID, []byte{0x55, 0x0e, 0x84, 0x00, 0xe2, 0x9b, 0x41, 0xd4, 0xa7, 0x16, 0x44, 0x66, 0x55, 0x44, 0x00, 0x00}, "550e8400-e29b-41d4-a716-446655440000", false},
+		{
+			"uuid valid",
+			OidUUID,
+			[]byte{
+				0x55,
+				0x0e,
+				0x84,
+				0x00,
+				0xe2,
+				0x9b,
+				0x41,
+				0xd4,
+				0xa7,
+				0x16,
+				0x44,
+				0x66,
+				0x55,
+				0x44,
+				0x00,
+				0x00,
+			},
+			"550e8400-e29b-41d4-a716-446655440000",
+			false,
+		},
 		{"uuid invalid length", OidUUID, []byte{0x55, 0x0e, 0x84, 0x00}, "", true},
 	}
 
@@ -504,7 +563,7 @@ func TestParameterBinder_BindBinaryInterval(t *testing.T) {
 		data := make([]byte, 16)
 		// 4 hours 5 minutes 6 seconds = 14706000000 microseconds
 		binary.BigEndian.PutUint64(data[0:8], 14706000000)
-		binary.BigEndian.PutUint32(data[8:12], 3)  // days
+		binary.BigEndian.PutUint32(data[8:12], 3)   // days
 		binary.BigEndian.PutUint32(data[12:16], 14) // 1 year 2 months
 
 		binder := NewParameterBinder([]uint32{OidInterval})
@@ -569,10 +628,10 @@ func TestParameterBinder_BindBinaryNumeric(t *testing.T) {
 	t.Run("numeric simple integer", func(t *testing.T) {
 		// 1234: ndigits=1, weight=0, sign=0, dscale=0, digit=1234
 		data := make([]byte, 10)
-		binary.BigEndian.PutUint16(data[0:2], 1)    // ndigits
-		binary.BigEndian.PutUint16(data[2:4], 0)    // weight
-		binary.BigEndian.PutUint16(data[4:6], 0)    // sign (positive)
-		binary.BigEndian.PutUint16(data[6:8], 0)    // dscale
+		binary.BigEndian.PutUint16(data[0:2], 1)     // ndigits
+		binary.BigEndian.PutUint16(data[2:4], 0)     // weight
+		binary.BigEndian.PutUint16(data[4:6], 0)     // sign (positive)
+		binary.BigEndian.PutUint16(data[6:8], 0)     // dscale
 		binary.BigEndian.PutUint16(data[8:10], 1234) // digit
 
 		binder := NewParameterBinder([]uint32{OidNumeric})
@@ -589,7 +648,7 @@ func TestParameterBinder_BindBinaryNumeric(t *testing.T) {
 		binary.BigEndian.PutUint16(data[2:4], 0)      // weight
 		binary.BigEndian.PutUint16(data[4:6], 0x4000) // sign (negative)
 		binary.BigEndian.PutUint16(data[6:8], 0)      // dscale
-		binary.BigEndian.PutUint16(data[8:10], 1234)   // digit
+		binary.BigEndian.PutUint16(data[8:10], 1234)  // digit
 
 		binder := NewParameterBinder([]uint32{OidNumeric})
 		result, err := binder.bindBinaryParameter(OidNumeric, data)
@@ -616,10 +675,10 @@ func TestParameterBinder_BindBinaryNumeric(t *testing.T) {
 	t.Run("numeric large integer", func(t *testing.T) {
 		// 12345678: ndigits=2, weight=1, sign=0, dscale=0, digits=[1234, 5678]
 		data := make([]byte, 12)
-		binary.BigEndian.PutUint16(data[0:2], 2)     // ndigits
-		binary.BigEndian.PutUint16(data[2:4], 1)     // weight (first digit is 10000^1)
-		binary.BigEndian.PutUint16(data[4:6], 0)     // sign (positive)
-		binary.BigEndian.PutUint16(data[6:8], 0)     // dscale
+		binary.BigEndian.PutUint16(data[0:2], 2)      // ndigits
+		binary.BigEndian.PutUint16(data[2:4], 1)      // weight (first digit is 10000^1)
+		binary.BigEndian.PutUint16(data[4:6], 0)      // sign (positive)
+		binary.BigEndian.PutUint16(data[6:8], 0)      // dscale
 		binary.BigEndian.PutUint16(data[8:10], 1234)  // first digit
 		binary.BigEndian.PutUint16(data[10:12], 5678) // second digit
 
@@ -633,10 +692,10 @@ func TestParameterBinder_BindBinaryNumeric(t *testing.T) {
 	t.Run("numeric with decimal places", func(t *testing.T) {
 		// 123.45: ndigits=2, weight=0, sign=0, dscale=2, digits=[123, 4500]
 		data := make([]byte, 12)
-		binary.BigEndian.PutUint16(data[0:2], 2)     // ndigits
-		binary.BigEndian.PutUint16(data[2:4], 0)     // weight
-		binary.BigEndian.PutUint16(data[4:6], 0)     // sign
-		binary.BigEndian.PutUint16(data[6:8], 2)     // dscale
+		binary.BigEndian.PutUint16(data[0:2], 2)      // ndigits
+		binary.BigEndian.PutUint16(data[2:4], 0)      // weight
+		binary.BigEndian.PutUint16(data[4:6], 0)      // sign
+		binary.BigEndian.PutUint16(data[6:8], 2)      // dscale
 		binary.BigEndian.PutUint16(data[8:10], 123)   // first digit
 		binary.BigEndian.PutUint16(data[10:12], 4500) // second digit
 

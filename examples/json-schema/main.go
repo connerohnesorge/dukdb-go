@@ -145,7 +145,16 @@ func main() {
 		var stock int
 		var warrantyMonths sql.NullInt64
 
-		err := rows.Scan(&active, &assemblyRequired, &category, &name, &price, &productID, &stock, &warrantyMonths)
+		err := rows.Scan(
+			&active,
+			&assemblyRequired,
+			&category,
+			&name,
+			&price,
+			&productID,
+			&stock,
+			&warrantyMonths,
+		)
 		if err != nil {
 			log.Fatalf("Failed to scan row: %v", err)
 		}

@@ -1,6 +1,6 @@
 // Package optimizer provides cost-based query optimization for dukdb-go.
 //
-// Benchmark Tests
+// # Benchmark Tests
 //
 // This file contains benchmarks to verify optimizer overhead is acceptable.
 // Task 9.3 requires that optimizer overhead is < 5% (< 5ms) for simple queries.
@@ -62,7 +62,12 @@ func TestSimpleQueryOptimizationOverhead(t *testing.T) {
 
 	// Average time should be well under 5ms for simple queries
 	// We expect sub-millisecond performance for simple scans
-	t.Logf("Simple scan optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
+	t.Logf(
+		"Simple scan optimization: avg=%v (total %v for %d iterations)",
+		avgTime,
+		elapsed,
+		iterations,
+	)
 	assert.Less(t, avgTime, 5*time.Millisecond, "Simple query optimization should be < 5ms")
 
 	// Actually for a single table scan, we expect sub-100 microsecond performance
@@ -115,7 +120,12 @@ func TestSimpleFilterQueryOverhead(t *testing.T) {
 	elapsed := time.Since(start)
 	avgTime := elapsed / iterations
 
-	t.Logf("Filter query optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
+	t.Logf(
+		"Filter query optimization: avg=%v (total %v for %d iterations)",
+		avgTime,
+		elapsed,
+		iterations,
+	)
 	assert.Less(t, avgTime, 5*time.Millisecond, "Simple filter query optimization should be < 5ms")
 }
 
@@ -148,7 +158,12 @@ func TestSimpleProjectionQueryOverhead(t *testing.T) {
 	elapsed := time.Since(start)
 	avgTime := elapsed / iterations
 
-	t.Logf("Projection optimization: avg=%v (total %v for %d iterations)", avgTime, elapsed, iterations)
+	t.Logf(
+		"Projection optimization: avg=%v (total %v for %d iterations)",
+		avgTime,
+		elapsed,
+		iterations,
+	)
 	assert.Less(t, avgTime, 5*time.Millisecond, "Simple projection optimization should be < 5ms")
 }
 

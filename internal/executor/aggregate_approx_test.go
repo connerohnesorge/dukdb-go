@@ -8,10 +8,10 @@ import (
 // TestHyperLogLog tests the HyperLogLog cardinality estimation.
 func TestHyperLogLog(t *testing.T) {
 	tests := []struct {
-		name          string
-		values        []any
-		expectedMin   float64
-		expectedMax   float64
+		name        string
+		values      []any
+		expectedMin float64
+		expectedMax float64
 	}{
 		{
 			name:        "empty input",
@@ -52,7 +52,7 @@ func TestHyperLogLog(t *testing.T) {
 		{
 			name:        "mixed types",
 			values:      []any{"a", 1, 2.5, "b", true, nil, "c"},
-			expectedMin: 5,  // nil is skipped
+			expectedMin: 5, // nil is skipped
 			expectedMax: 8,
 		},
 	}
@@ -76,58 +76,58 @@ func TestHyperLogLog(t *testing.T) {
 // TestTDigest tests the T-Digest quantile estimation.
 func TestTDigest(t *testing.T) {
 	tests := []struct {
-		name      string
-		values    []float64
-		quantile  float64
+		name        string
+		values      []float64
+		quantile    float64
 		expectedMin float64
 		expectedMax float64
 	}{
 		{
-			name:      "single value median",
-			values:    []float64{5.0},
-			quantile:  0.5,
+			name:        "single value median",
+			values:      []float64{5.0},
+			quantile:    0.5,
 			expectedMin: 5.0,
 			expectedMax: 5.0,
 		},
 		{
-			name:      "two values median",
-			values:    []float64{1.0, 9.0},
-			quantile:  0.5,
+			name:        "two values median",
+			values:      []float64{1.0, 9.0},
+			quantile:    0.5,
 			expectedMin: 4.0,
 			expectedMax: 6.0,
 		},
 		{
-			name:      "uniform 1-10 median",
-			values:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			quantile:  0.5,
+			name:        "uniform 1-10 median",
+			values:      []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			quantile:    0.5,
 			expectedMin: 5.0,
 			expectedMax: 6.0,
 		},
 		{
-			name:      "uniform 1-10 p25",
-			values:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			quantile:  0.25,
+			name:        "uniform 1-10 p25",
+			values:      []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			quantile:    0.25,
 			expectedMin: 2.5,
 			expectedMax: 3.5,
 		},
 		{
-			name:      "uniform 1-10 p75",
-			values:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			quantile:  0.75,
+			name:        "uniform 1-10 p75",
+			values:      []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			quantile:    0.75,
 			expectedMin: 7.5,
 			expectedMax: 8.5,
 		},
 		{
-			name:      "uniform 1-10 p0",
-			values:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			quantile:  0.0,
+			name:        "uniform 1-10 p0",
+			values:      []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			quantile:    0.0,
 			expectedMin: 1.0,
 			expectedMax: 1.5,
 		},
 		{
-			name:      "uniform 1-10 p100",
-			values:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			quantile:  1.0,
+			name:        "uniform 1-10 p100",
+			values:      []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			quantile:    1.0,
 			expectedMin: 9.5,
 			expectedMax: 10.0,
 		},
@@ -417,12 +417,17 @@ func TestHyperLogLogPrecision(t *testing.T) {
 			case 12:
 				tolerance = 100 // ~10% error
 			case 16:
-				tolerance = 50  // ~5% error
+				tolerance = 50 // ~5% error
 			}
 
 			diff := math.Abs(estimate - 1000)
 			if diff > tolerance {
-				t.Errorf("precision %d: estimate = %v, expected 1000 +/- %v", p, estimate, tolerance)
+				t.Errorf(
+					"precision %d: estimate = %v, expected 1000 +/- %v",
+					p,
+					estimate,
+					tolerance,
+				)
 			}
 		})
 	}
@@ -433,9 +438,9 @@ func TestHyperLogLogPrecision(t *testing.T) {
 // We test that the error is within 5% for reasonable confidence.
 func TestHyperLogLogAccuracyAtScale(t *testing.T) {
 	tests := []struct {
-		name         string
-		uniqueCount  int
-		maxErrorPct  float64 // Maximum allowed error percentage
+		name        string
+		uniqueCount int
+		maxErrorPct float64 // Maximum allowed error percentage
 	}{
 		{
 			name:        "1K unique values",
@@ -486,9 +491,9 @@ func TestHyperLogLogAccuracyAtScale(t *testing.T) {
 // TestHyperLogLogAccuracyWithStrings tests HLL accuracy with string values at scale.
 func TestHyperLogLogAccuracyWithStrings(t *testing.T) {
 	tests := []struct {
-		name         string
-		uniqueCount  int
-		maxErrorPct  float64
+		name        string
+		uniqueCount int
+		maxErrorPct float64
 	}{
 		{
 			name:        "10K unique strings",

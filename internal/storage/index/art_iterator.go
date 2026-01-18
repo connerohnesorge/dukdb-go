@@ -837,6 +837,7 @@ func (*ARTIterator) findFirstChild(node *ARTNode) (int, *ARTNode) {
 // The interpretation of childIdx depends on node type:
 //   - Node4/Node16: index into keys array -> keys[childIdx]
 //   - Node48/Node256: childIdx IS the key byte
+//
 // Note: NodeTypeLeaf is intentionally not handled - leaves have no children.
 //
 //nolint:exhaustive // leaf case not applicable

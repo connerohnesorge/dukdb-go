@@ -353,7 +353,12 @@ func TestDuplicateQueueingPrevention(t *testing.T) {
 	finalCount := analyzeCount
 	analyzeMutex.Unlock()
 
-	assert.Equal(t, 1, finalCount, "Table should be ANALYZE'd only once despite multiple trigger calls")
+	assert.Equal(
+		t,
+		1,
+		finalCount,
+		"Table should be ANALYZE'd only once despite multiple trigger calls",
+	)
 
 	aum.Stop()
 }
@@ -385,7 +390,12 @@ func TestMetricsTracking(t *testing.T) {
 
 	metrics := aum.GetMetrics()
 	assert.Equal(t, int64(3), metrics["triggers"], "Should have 3 triggers")
-	assert.Equal(t, int64(3), metrics["analyzes"], "Should have 3 ANALYZE operations (one per trigger)")
+	assert.Equal(
+		t,
+		int64(3),
+		metrics["analyzes"],
+		"Should have 3 ANALYZE operations (one per trigger)",
+	)
 	assert.True(t, metrics["batches"] >= 1, "Should have at least 1 batch")
 
 	aum.Stop()

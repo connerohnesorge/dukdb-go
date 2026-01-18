@@ -67,7 +67,8 @@ func TestSTDistanceSphere(t *testing.T) {
 	// London: -0.1278 lon, 51.5074 lat
 	// Expected distance: approximately 5570 km
 	var result float64
-	err = db.QueryRow("SELECT ST_Distance_Sphere(ST_Point(-73.9857, 40.7484), ST_Point(-0.1278, 51.5074))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Distance_Sphere(ST_Point(-73.9857, 40.7484), ST_Point(-0.1278, 51.5074))").
+		Scan(&result)
 	require.NoError(t, err)
 
 	expectedKm := 5570.0
@@ -130,12 +131,14 @@ func TestSTWithin(t *testing.T) {
 
 	// Point within polygon
 	var result bool
-	err = db.QueryRow("SELECT ST_Within(ST_Point(5, 5), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Within(ST_Point(5, 5), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "point should be within polygon")
 
 	// Point outside polygon
-	err = db.QueryRow("SELECT ST_Within(ST_Point(15, 15), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Within(ST_Point(15, 15), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "point should not be within polygon")
 }
@@ -194,12 +197,14 @@ func TestSTDisjoint(t *testing.T) {
 
 	// Disjoint polygons
 	var result bool
-	err = db.QueryRow("SELECT ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "disjoint polygons should return true")
 
 	// Overlapping polygons
-	err = db.QueryRow("SELECT ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "overlapping polygons should not be disjoint")
 }
@@ -221,7 +226,8 @@ func TestSTEquals(t *testing.T) {
 	assert.False(t, result, "different points should return false")
 
 	// Equal lines
-	err = db.QueryRow("SELECT ST_Equals(ST_GeomFromText('LINESTRING(0 0, 10 10)'), ST_GeomFromText('LINESTRING(0 0, 10 10)'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Equals(ST_GeomFromText('LINESTRING(0 0, 10 10)'), ST_GeomFromText('LINESTRING(0 0, 10 10)'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "equal lines should return true")
 }
@@ -233,7 +239,8 @@ func TestSTEnvelope(t *testing.T) {
 
 	// Get envelope of a linestring and verify it's a polygon
 	var wkt string
-	err = db.QueryRow("SELECT ST_AsText(ST_Envelope(ST_GeomFromText('LINESTRING(0 0, 5 10, 10 0)')))").Scan(&wkt)
+	err = db.QueryRow("SELECT ST_AsText(ST_Envelope(ST_GeomFromText('LINESTRING(0 0, 5 10, 10 0)')))").
+		Scan(&wkt)
 	require.NoError(t, err)
 	t.Logf("Envelope WKT: %s", wkt)
 	// Should be a polygon representing the bounding box
@@ -252,17 +259,20 @@ func TestSTTouches(t *testing.T) {
 
 	// Lines sharing endpoint
 	var result bool
-	err = db.QueryRow("SELECT ST_Touches(ST_GeomFromText('LINESTRING(0 0, 5 5)'), ST_GeomFromText('LINESTRING(5 5, 10 0)'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Touches(ST_GeomFromText('LINESTRING(0 0, 5 5)'), ST_GeomFromText('LINESTRING(5 5, 10 0)'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "lines sharing endpoint should touch")
 
 	// Point on polygon boundary
-	err = db.QueryRow("SELECT ST_Touches(ST_Point(5, 0), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Touches(ST_Point(5, 0), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "point on polygon boundary should touch")
 
 	// Point inside polygon
-	err = db.QueryRow("SELECT ST_Touches(ST_Point(5, 5), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Touches(ST_Point(5, 5), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "point inside polygon should not touch")
 }
@@ -274,12 +284,14 @@ func TestSTCrosses(t *testing.T) {
 
 	// Crossing lines
 	var result bool
-	err = db.QueryRow("SELECT ST_Crosses(ST_GeomFromText('LINESTRING(0 0, 10 10)'), ST_GeomFromText('LINESTRING(0 10, 10 0)'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Crosses(ST_GeomFromText('LINESTRING(0 0, 10 10)'), ST_GeomFromText('LINESTRING(0 10, 10 0)'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "crossing lines should return true")
 
 	// Parallel lines
-	err = db.QueryRow("SELECT ST_Crosses(ST_GeomFromText('LINESTRING(0 0, 10 0)'), ST_GeomFromText('LINESTRING(0 5, 10 5)'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Crosses(ST_GeomFromText('LINESTRING(0 0, 10 0)'), ST_GeomFromText('LINESTRING(0 5, 10 5)'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "parallel lines should not cross")
 
@@ -294,17 +306,20 @@ func TestSTOverlaps(t *testing.T) {
 
 	// Overlapping polygons
 	var result bool
-	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.True(t, result, "overlapping polygons should return true")
 
 	// One contains the other (not overlapping in strict sense)
-	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 8, 8 8, 8 2, 2 2))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 8, 8 8, 8 2, 2 2))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "containment is not overlap")
 
 	// Disjoint polygons
-	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.False(t, result, "disjoint polygons do not overlap")
 }
@@ -328,13 +343,15 @@ func TestNullHandling(t *testing.T) {
 
 	// ST_Distance with NULL should return NULL
 	var dist sql.NullFloat64
-	err = db.QueryRow("SELECT ST_Distance(geom, ST_Point(0, 0)) FROM test_geom WHERE id = 1").Scan(&dist)
+	err = db.QueryRow("SELECT ST_Distance(geom, ST_Point(0, 0)) FROM test_geom WHERE id = 1").
+		Scan(&dist)
 	require.NoError(t, err)
 	assert.False(t, dist.Valid, "distance with NULL should be NULL")
 
 	// ST_Contains with NULL should return NULL
 	var contains sql.NullBool
-	err = db.QueryRow("SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), geom) FROM test_geom WHERE id = 1").Scan(&contains)
+	err = db.QueryRow("SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), geom) FROM test_geom WHERE id = 1").
+		Scan(&contains)
 	require.NoError(t, err)
 	assert.False(t, contains.Valid, "contains with NULL should be NULL")
 }
@@ -434,7 +451,8 @@ func TestDistanceWithPrecision(t *testing.T) {
 
 	// Test with high precision coordinates
 	var dist float64
-	err = db.QueryRow("SELECT ST_Distance(ST_Point(1.23456789, 2.34567890), ST_Point(1.23456789, 3.34567890))").Scan(&dist)
+	err = db.QueryRow("SELECT ST_Distance(ST_Point(1.23456789, 2.34567890), ST_Point(1.23456789, 3.34567890))").
+		Scan(&dist)
 	require.NoError(t, err)
 	assert.InDelta(t, 1.0, dist, 0.0001)
 }
@@ -485,15 +503,15 @@ func TestHaversineAccuracy(t *testing.T) {
 		tolerance  float64 // km
 	}{
 		{
-			name:       "Same location",
-			lon1:       0, lat1: 0,
+			name: "Same location",
+			lon1: 0, lat1: 0,
 			lon2: 0, lat2: 0,
 			expectedKm: 0,
 			tolerance:  0.001,
 		},
 		{
-			name:       "Antipodal points",
-			lon1:       0, lat1: 0,
+			name: "Antipodal points",
+			lon1: 0, lat1: 0,
 			lon2: 180, lat2: 0,
 			expectedKm: 20015, // Half Earth circumference
 			tolerance:  100,

@@ -268,8 +268,8 @@ func TestRemoveCompressionExtension(t *testing.T) {
 		{"data.csv.lz4", "data.csv"},
 		{"data.csv.br", "data.csv"},
 		{"data.csv.brotli", "data.csv"},
-		{"data.csv.GZ", "data.csv"},   // Case insensitive check in suffix
-		{"data.csv", "data.csv"},      // No compression extension
+		{"data.csv.GZ", "data.csv"}, // Case insensitive check in suffix
+		{"data.csv", "data.csv"},    // No compression extension
 		{"data.parquet", "data.parquet"},
 		{"data", "data"},
 	}

@@ -1,0 +1,106 @@
+services:
+  # MinIO for S3-compatible storage testing
+  minio:
+    image: minio/minio:latest
+    container_name: iceberg-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - minio-data:/data
+
+  # MinIO client to create buckets
+  minio-setup:
+    image: minio/mc:latest
+    container_name: iceberg-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/iceberg-test || true;
+      /usr/bin/mc mb myminio/iceberg-deletes || true;
+      /usr/bin/mc mb myminio/iceberg-partitioned || true;
+      exit 0;
+      "
+
+  # Fake GCS server for GCS testing
+  fake-gcs:
+    image: fsouza/fake-gcs-server:latest
+    container_name: iceberg-fake-gcs
+    ports:
+      - "4443:4443"
+    command: ["-scheme", "http", "-port", "4443", "-external-url", "http://localhost:4443"]
+    volumes:
+      - gcs-data:/data
+
+  # Apache Spark for Spark-generated Iceberg tables
+  spark:
+    image: apache/spark:3.5.0-scala2.12-java11-python3-ubuntu
+    container_name: iceberg-spark
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+      - "4040:4040"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+    volumes:
+      - ./spark-scripts:/opt/spark-scripts
+      - spark-warehouse:/opt/spark-warehouse
+    command: >
+      /bin/bash -c "
+      /opt/spark/sbin/start-master.sh &&
+      /opt/spark/sbin/start-worker.sh spark://spark:7077 &&
+      tail -f /opt/spark/logs/*
+      "
+
+  # Apache Flink for Flink-generated Iceberg tables
+  flink-jobmanager:
+    image: flink:1.18.0-scala_2.12-java11
+    container_name: iceberg-flink-jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+    volumes:
+      - ./flink-scripts:/opt/flink-scripts
+      - flink-warehouse:/opt/flink-warehouse
+    command: jobmanager
+
+  flink-taskmanager:
+    image: flink:1.18.0-scala_2.12-java11
+    container_name: iceberg-flink-taskmanager
+    depends_on:
+      - flink-jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+    volumes:
+      - ./flink-scripts:/opt/flink-scripts
+      - flink-warehouse:/opt/flink-warehouse
+    command: taskmanager
+
+volumes:
+  minio-data:
+  gcs-data:
+  spark-warehouse:
+  flink-warehouse:

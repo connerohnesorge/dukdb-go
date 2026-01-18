@@ -11,7 +11,8 @@ import (
 // RLE is efficient for data with many repeated values (dates, timestamps, etc.).
 //
 // Format: For each run of identical values:
-//   [run_length:varint][value:bytes]
+//
+//	[run_length:varint][value:bytes]
 //
 // The run_length is encoded as a varint (variable-length integer).
 // The value is stored as raw bytes of the specified valueSize.
@@ -38,7 +39,11 @@ func (c *RLECodec) Compress(data []byte) ([]byte, error) {
 	}
 
 	if len(data)%c.valueSize != 0 {
-		return nil, fmt.Errorf("data length %d is not a multiple of value size %d", len(data), c.valueSize)
+		return nil, fmt.Errorf(
+			"data length %d is not a multiple of value size %d",
+			len(data),
+			c.valueSize,
+		)
 	}
 
 	buf := new(bytes.Buffer)
@@ -83,7 +88,11 @@ func (c *RLECodec) Decompress(data []byte, destSize int) ([]byte, error) {
 	}
 
 	if destSize%c.valueSize != 0 {
-		return nil, fmt.Errorf("destination size %d is not a multiple of value size %d", destSize, c.valueSize)
+		return nil, fmt.Errorf(
+			"destination size %d is not a multiple of value size %d",
+			destSize,
+			c.valueSize,
+		)
 	}
 
 	result := make([]byte, destSize)
@@ -125,7 +134,11 @@ func (c *RLECodec) Decompress(data []byte, destSize int) ([]byte, error) {
 	}
 
 	if offset != destSize {
-		return nil, fmt.Errorf("decompressed size %d does not match expected size %d", offset, destSize)
+		return nil, fmt.Errorf(
+			"decompressed size %d does not match expected size %d",
+			offset,
+			destSize,
+		)
 	}
 
 	return result, nil

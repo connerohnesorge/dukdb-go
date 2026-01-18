@@ -32,13 +32,13 @@ func main() {
 
 	// Insert sample products
 	products := []struct {
-		id         int
-		name       string
-		category   string
-		price      float64
-		stock      int
-		available  bool
-		createdAt  string
+		id        int
+		name      string
+		category  string
+		price     float64
+		stock     int
+		available bool
+		createdAt string
 	}{
 		{1, "Laptop", "Electronics", 999.99, 10, true, "2024-01-15"},
 		{2, "Smartphone", "Electronics", 699.99, 25, true, "2024-01-20"},
@@ -53,8 +53,16 @@ func main() {
 	}
 
 	for _, p := range products {
-		_, err = db.Exec("INSERT INTO products (id, name, category, price, stock, available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			p.id, p.name, p.category, p.price, p.stock, p.available, p.createdAt)
+		_, err = db.Exec(
+			"INSERT INTO products (id, name, category, price, stock, available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			p.id,
+			p.name,
+			p.category,
+			p.price,
+			p.stock,
+			p.available,
+			p.createdAt,
+		)
 		if err != nil {
 			log.Printf("Failed to insert product %s: %v", p.name, err)
 		}
@@ -65,7 +73,10 @@ func main() {
 	// Example 1: Simple WHERE with equality
 	fmt.Println("\n=== Example 1: Simple WHERE with equality ===")
 	fmt.Println("Find all Electronics products:")
-	rows, err := db.Query("SELECT name, price FROM products WHERE category = ? ORDER BY name", "Electronics")
+	rows, err := db.Query(
+		"SELECT name, price FROM products WHERE category = ? ORDER BY name",
+		"Electronics",
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -97,7 +108,9 @@ func main() {
 	// Example 3: WHERE with range (BETWEEN)
 	fmt.Println("\n=== Example 3: WHERE with range (BETWEEN) ===")
 	fmt.Println("Products with price between $200 and $500:")
-	rows, err = db.Query("SELECT name, price FROM products WHERE price BETWEEN 200 AND 500 ORDER BY price")
+	rows, err = db.Query(
+		"SELECT name, price FROM products WHERE price BETWEEN 200 AND 500 ORDER BY price",
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -113,8 +126,12 @@ func main() {
 	// Example 4: WHERE with multiple conditions (AND)
 	fmt.Println("\n=== Example 4: WHERE with multiple conditions (AND) ===")
 	fmt.Println("Available Electronics products under $300:")
-	rows, err = db.Query("SELECT name, price, stock FROM products WHERE category = ? AND available = ? AND price < ?",
-		"Electronics", true, 300)
+	rows, err = db.Query(
+		"SELECT name, price, stock FROM products WHERE category = ? AND available = ? AND price < ?",
+		"Electronics",
+		true,
+		300,
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -131,7 +148,9 @@ func main() {
 	// Example 5: WHERE with OR conditions
 	fmt.Println("\n=== Example 5: WHERE with OR conditions ===")
 	fmt.Println("Products that are either out of stock or unavailable:")
-	rows, err = db.Query("SELECT name, stock, available FROM products WHERE stock = 0 OR available = false ORDER BY name")
+	rows, err = db.Query(
+		"SELECT name, stock, available FROM products WHERE stock = 0 OR available = false ORDER BY name",
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -180,7 +199,10 @@ func main() {
 	// Example 8: WHERE with NOT conditions
 	fmt.Println("\n=== Example 8: WHERE with NOT conditions ===")
 	fmt.Println("Products that are NOT in Electronics category:")
-	rows, err = db.Query("SELECT name, category FROM products WHERE category != ? ORDER BY category, name", "Electronics")
+	rows, err = db.Query(
+		"SELECT name, category FROM products WHERE category != ? ORDER BY category, name",
+		"Electronics",
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -196,8 +218,15 @@ func main() {
 	fmt.Println("\n=== Example 9: WHERE with NULL handling ===")
 
 	// First, add a product with NULL category
-	_, err = db.Exec("INSERT INTO products (id, name, category, price, stock, available, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)",
-		11, "Mystery Item", 99.99, 5, true, "2024-03-20")
+	_, err = db.Exec(
+		"INSERT INTO products (id, name, category, price, stock, available, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)",
+		11,
+		"Mystery Item",
+		99.99,
+		5,
+		true,
+		"2024-03-20",
+	)
 	if err != nil {
 		log.Printf("Failed to insert mystery item: %v", err)
 	}
@@ -223,7 +252,10 @@ func main() {
 	// Example 10: WHERE with date comparisons
 	fmt.Println("\n=== Example 10: WHERE with date comparisons ===")
 	fmt.Println("Products created after February 1, 2024:")
-	rows, err = db.Query("SELECT name, created_at FROM products WHERE created_at > ? ORDER BY created_at", "2024-02-01")
+	rows, err = db.Query(
+		"SELECT name, created_at FROM products WHERE created_at > ? ORDER BY created_at",
+		"2024-02-01",
+	)
 	if err != nil {
 		log.Fatal("Query failed:", err)
 	}
@@ -246,7 +278,8 @@ func main() {
 		log.Fatal("Failed to get count:", err)
 	}
 
-	err = db.QueryRow("SELECT COUNT(*) FROM products WHERE available = true").Scan(&availableProducts)
+	err = db.QueryRow("SELECT COUNT(*) FROM products WHERE available = true").
+		Scan(&availableProducts)
 	if err != nil {
 		log.Fatal("Failed to get available count:", err)
 	}

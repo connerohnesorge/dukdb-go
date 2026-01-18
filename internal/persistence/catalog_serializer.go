@@ -8,21 +8,21 @@ import (
 
 // Property IDs for DuckDB's property-based serialization format
 const (
-	PropertyIDEnd         = 0
-	PropertyIDType        = 1
-	PropertyIDName        = 2
-	PropertyIDNullable    = 3
-	PropertyIDDefault     = 4
-	PropertyIDPrimaryKey  = 5
-	PropertyIDForeignKey  = 6
-	PropertyIDChildCount  = 100
-	PropertyIDChildType   = 101
-	PropertyIDChildName   = 102
-	PropertyIDMemberCount = 103
-	PropertyIDMemberType  = 104
-	PropertyIDMemberName  = 105
-	PropertyIDKeyType     = 106 // MAP key type
-	PropertyIDValueType   = 107 // MAP value type
+	PropertyIDEnd           = 0
+	PropertyIDType          = 1
+	PropertyIDName          = 2
+	PropertyIDNullable      = 3
+	PropertyIDDefault       = 4
+	PropertyIDPrimaryKey    = 5
+	PropertyIDForeignKey    = 6
+	PropertyIDChildCount    = 100
+	PropertyIDChildType     = 101
+	PropertyIDChildName     = 102
+	PropertyIDMemberCount   = 103
+	PropertyIDMemberType    = 104
+	PropertyIDMemberName    = 105
+	PropertyIDKeyType       = 106 // MAP key type
+	PropertyIDValueType     = 107 // MAP value type
 	PropertyIDSchemaCount   = 200
 	PropertyIDTableCount    = 201
 	PropertyIDColumnCount   = 202
@@ -354,9 +354,10 @@ func (pw *PropertyWriter) Len() int {
 // For types that need additional metadata, the type name is also written.
 //
 // Format:
-//   PropertyIDType (1) → type ID (varint)
-//   [PropertyIDName (2) → type name (string)]  // Optional
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → type ID (varint)
+//	[PropertyIDName (2) → type name (string)]  // Optional
+//	PropertyIDEnd (0)
 func SerializeTypeInfo(w *BinaryWriter, typeID int, typeName string) error {
 	// Write the type ID property
 	if err := w.WriteProperty(PropertyIDType, uint64(typeID)); err != nil {
@@ -388,10 +389,11 @@ func SerializeTypeInfo(w *BinaryWriter, typeID int, typeName string) error {
 //   - error: Any error encountered during deserialization
 //
 // Format:
-//   PropertyIDType (1) → type ID (varint)
-//   [PropertyIDName (2) → type name (string)]  // Optional
-//   [Other properties...]                       // Skipped
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → type ID (varint)
+//	[PropertyIDName (2) → type name (string)]  // Optional
+//	[Other properties...]                       // Skipped
+//	PropertyIDEnd (0)
 func DeserializeTypeInfo(r *BinaryReader) (typeID int, typeName string, err error) {
 	var hasTypeID bool
 
@@ -451,12 +453,13 @@ type StructField struct {
 // meaning that child types can themselves be complex types (e.g., a STRUCT containing a STRUCT).
 //
 // Format:
-//   PropertyIDType (1) → STRUCT type ID (26)
-//   PropertyIDChildCount (100) → number of fields (varint)
-//   For each field:
-//     PropertyIDChildName (102) → field name (string)
-//     PropertyIDChildType (101) → field type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → STRUCT type ID (26)
+//	PropertyIDChildCount (100) → number of fields (varint)
+//	For each field:
+//	  PropertyIDChildName (102) → field name (string)
+//	  PropertyIDChildType (101) → field type ID (varint)
+//	PropertyIDEnd (0)
 //
 // The order of child name and child type properties can vary - the implementation writes name first
 // for better readability, but the reader must handle both orderings.
@@ -505,12 +508,13 @@ func SerializeStructType(w *BinaryWriter, fields []StructField) error {
 //   - error: Any error encountered during deserialization
 //
 // Format:
-//   PropertyIDType (1) → STRUCT type ID (26)
-//   PropertyIDChildCount (100) → number of fields (varint)
-//   For each field:
-//     PropertyIDChildName (102) → field name (string)
-//     PropertyIDChildType (101) → field type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → STRUCT type ID (26)
+//	PropertyIDChildCount (100) → number of fields (varint)
+//	For each field:
+//	  PropertyIDChildName (102) → field name (string)
+//	  PropertyIDChildType (101) → field type ID (varint)
+//	PropertyIDEnd (0)
 func DeserializeStructType(r *BinaryReader) ([]StructField, error) {
 	var hasTypeID bool
 	var hasChildCount bool
@@ -541,7 +545,11 @@ func DeserializeStructType(r *BinaryReader) ([]StructField, error) {
 			}
 			const TypeIDStruct = 26
 			if typeIDVal != TypeIDStruct {
-				return nil, fmt.Errorf("expected STRUCT type ID (%d), got %d", TypeIDStruct, typeIDVal)
+				return nil, fmt.Errorf(
+					"expected STRUCT type ID (%d), got %d",
+					TypeIDStruct,
+					typeIDVal,
+				)
 			}
 			hasTypeID = true
 
@@ -620,18 +628,20 @@ func DeserializeStructType(r *BinaryReader) ([]StructField, error) {
 // For example, LIST(INTEGER) has child type INTEGER, LIST(VARCHAR) has child type VARCHAR.
 //
 // Format:
-//   PropertyIDType (1) → LIST type ID (25)
-//   PropertyIDChildType (101) → element type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → LIST type ID (25)
+//	PropertyIDChildType (101) → element type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Parameters:
 //   - w: BinaryWriter to write the serialized data
 //   - elementTypeID: The type ID of the list's element type
 //
 // Example:
-//   SerializeListType(w, 4) // LIST(INTEGER)
-//   SerializeListType(w, 18) // LIST(VARCHAR)
-//   SerializeListType(w, 25) // LIST(LIST(...)) - nested list
+//
+//	SerializeListType(w, 4) // LIST(INTEGER)
+//	SerializeListType(w, 18) // LIST(VARCHAR)
+//	SerializeListType(w, 25) // LIST(LIST(...)) - nested list
 func SerializeListType(w *BinaryWriter, elementTypeID int) error {
 	// Write the LIST type ID (25 is DuckDB's type ID for LIST)
 	const TypeIDList = 25
@@ -663,13 +673,15 @@ func SerializeListType(w *BinaryWriter, elementTypeID int) error {
 //   - error: Any error encountered during deserialization
 //
 // Format:
-//   PropertyIDType (1) → LIST type ID (25)
-//   PropertyIDChildType (101) → element type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → LIST type ID (25)
+//	PropertyIDChildType (101) → element type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Example:
-//   elementTypeID, err := DeserializeListType(r)
-//   // elementTypeID might be 4 for LIST(INTEGER), 18 for LIST(VARCHAR), etc.
+//
+//	elementTypeID, err := DeserializeListType(r)
+//	// elementTypeID might be 4 for LIST(INTEGER), 18 for LIST(VARCHAR), etc.
 func DeserializeListType(r *BinaryReader) (elementTypeID int, err error) {
 	var hasTypeID bool
 	var hasChildType bool
@@ -729,10 +741,11 @@ func DeserializeListType(r *BinaryReader) (elementTypeID int, err error) {
 // For example, MAP(VARCHAR, INTEGER) has key type VARCHAR and value type INTEGER.
 //
 // Format:
-//   PropertyIDType (1) → MAP type ID (27)
-//   PropertyIDKeyType (106) → key type ID (varint)
-//   PropertyIDValueType (107) → value type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → MAP type ID (27)
+//	PropertyIDKeyType (106) → key type ID (varint)
+//	PropertyIDValueType (107) → value type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Parameters:
 //   - w: BinaryWriter to write the serialized data
@@ -740,9 +753,10 @@ func DeserializeListType(r *BinaryReader) (elementTypeID int, err error) {
 //   - valueTypeID: The type ID of the map's value type
 //
 // Example:
-//   SerializeMapType(w, 18, 4) // MAP(VARCHAR, INTEGER)
-//   SerializeMapType(w, 4, 18) // MAP(INTEGER, VARCHAR)
-//   SerializeMapType(w, 18, 27) // MAP(VARCHAR, MAP(...)) - nested map
+//
+//	SerializeMapType(w, 18, 4) // MAP(VARCHAR, INTEGER)
+//	SerializeMapType(w, 4, 18) // MAP(INTEGER, VARCHAR)
+//	SerializeMapType(w, 18, 27) // MAP(VARCHAR, MAP(...)) - nested map
 func SerializeMapType(w *BinaryWriter, keyTypeID, valueTypeID int) error {
 	// Write the MAP type ID (27 is DuckDB's type ID for MAP)
 	const TypeIDMap = 27
@@ -780,14 +794,16 @@ func SerializeMapType(w *BinaryWriter, keyTypeID, valueTypeID int) error {
 //   - error: Any error encountered during deserialization
 //
 // Format:
-//   PropertyIDType (1) → MAP type ID (27)
-//   PropertyIDKeyType (106) → key type ID (varint)
-//   PropertyIDValueType (107) → value type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → MAP type ID (27)
+//	PropertyIDKeyType (106) → key type ID (varint)
+//	PropertyIDValueType (107) → value type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Example:
-//   keyTypeID, valueTypeID, err := DeserializeMapType(r)
-//   // keyTypeID might be 18 (VARCHAR), valueTypeID might be 4 (INTEGER) for MAP(VARCHAR, INTEGER)
+//
+//	keyTypeID, valueTypeID, err := DeserializeMapType(r)
+//	// keyTypeID might be 18 (VARCHAR), valueTypeID might be 4 (INTEGER) for MAP(VARCHAR, INTEGER)
 func DeserializeMapType(r *BinaryReader) (keyTypeID, valueTypeID int, err error) {
 	var hasTypeID bool
 	var hasKeyType bool
@@ -869,22 +885,24 @@ type UnionMember struct {
 // For example, UNION(num INTEGER, str VARCHAR) can hold either an integer OR a string.
 //
 // Format:
-//   PropertyIDType (1) → UNION type ID (28)
-//   PropertyIDMemberCount (103) → number of members (varint)
-//   For each member:
-//     PropertyIDMemberName (105) → member name (string)
-//     PropertyIDMemberType (104) → member type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → UNION type ID (28)
+//	PropertyIDMemberCount (103) → number of members (varint)
+//	For each member:
+//	  PropertyIDMemberName (105) → member name (string)
+//	  PropertyIDMemberType (104) → member type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Parameters:
 //   - w: BinaryWriter to write the serialized data
 //   - members: Slice of UnionMember containing member names and type IDs
 //
 // Example:
-//   SerializeUnionType(w, []UnionMember{
-//     {Name: "num", TypeID: 4},     // INTEGER
-//     {Name: "str", TypeID: 18},    // VARCHAR
-//   }) // UNION(num INTEGER, str VARCHAR)
+//
+//	SerializeUnionType(w, []UnionMember{
+//	  {Name: "num", TypeID: 4},     // INTEGER
+//	  {Name: "str", TypeID: 18},    // VARCHAR
+//	}) // UNION(num INTEGER, str VARCHAR)
 func SerializeUnionType(w *BinaryWriter, members []UnionMember) error {
 	// Write the UNION type ID (28 is DuckDB's type ID for UNION)
 	const TypeIDUnion = 28
@@ -930,17 +948,19 @@ func SerializeUnionType(w *BinaryWriter, members []UnionMember) error {
 //   - error: Any error encountered during deserialization
 //
 // Format:
-//   PropertyIDType (1) → UNION type ID (28)
-//   PropertyIDMemberCount (103) → number of members (varint)
-//   For each member:
-//     PropertyIDMemberName (105) → member name (string)
-//     PropertyIDMemberType (104) → member type ID (varint)
-//   PropertyIDEnd (0)
+//
+//	PropertyIDType (1) → UNION type ID (28)
+//	PropertyIDMemberCount (103) → number of members (varint)
+//	For each member:
+//	  PropertyIDMemberName (105) → member name (string)
+//	  PropertyIDMemberType (104) → member type ID (varint)
+//	PropertyIDEnd (0)
 //
 // Example:
-//   members, err := DeserializeUnionType(r)
-//   // members might be [{Name: "num", TypeID: 4}, {Name: "str", TypeID: 18}]
-//   // for UNION(num INTEGER, str VARCHAR)
+//
+//	members, err := DeserializeUnionType(r)
+//	// members might be [{Name: "num", TypeID: 4}, {Name: "str", TypeID: 18}]
+//	// for UNION(num INTEGER, str VARCHAR)
 func DeserializeUnionType(r *BinaryReader) ([]UnionMember, error) {
 	var hasTypeID bool
 	var hasMemberCount bool
@@ -971,7 +991,11 @@ func DeserializeUnionType(r *BinaryReader) ([]UnionMember, error) {
 			}
 			const TypeIDUnion = 28
 			if typeIDVal != TypeIDUnion {
-				return nil, fmt.Errorf("expected UNION type ID (%d), got %d", TypeIDUnion, typeIDVal)
+				return nil, fmt.Errorf(
+					"expected UNION type ID (%d), got %d",
+					TypeIDUnion,
+					typeIDVal,
+				)
 			}
 			hasTypeID = true
 

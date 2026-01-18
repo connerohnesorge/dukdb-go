@@ -177,7 +177,7 @@ func TestDuckDBStorageLoadSaveCatalog(t *testing.T) {
 
 		cat := catalog.NewCatalog()
 		columns := []*catalog.ColumnDef{
-			catalog.NewColumnDef("id", 13), // INTEGER
+			catalog.NewColumnDef("id", 13),   // INTEGER
 			catalog.NewColumnDef("name", 25), // VARCHAR
 		}
 		tableDef := catalog.NewTableDef("users", columns)

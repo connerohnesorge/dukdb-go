@@ -14,10 +14,10 @@ func TestMultiColumnStatsManager(t *testing.T) {
 		mgr := NewMultiColumnStatsManager("test_table")
 
 		stats := &MultiColumnStats{
-			Columns:       [2]string{"col1", "col2"},
-			JointNDV:      100,
-			Correlation:   0.85,
-			SampleSize:    1000,
+			Columns:           [2]string{"col1", "col2"},
+			JointNDV:          100,
+			Correlation:       0.85,
+			SampleSize:        1000,
 			RecommendedForUse: true,
 		}
 
@@ -34,10 +34,10 @@ func TestMultiColumnStatsManager(t *testing.T) {
 		mgr := NewMultiColumnStatsManager("test_table")
 
 		stats := &MultiColumnStats{
-			Columns:       [2]string{"zebra", "apple"},
-			JointNDV:      50,
-			Correlation:   0.5,
-			SampleSize:    500,
+			Columns:           [2]string{"zebra", "apple"},
+			JointNDV:          50,
+			Correlation:       0.5,
+			SampleSize:        500,
 			RecommendedForUse: false,
 		}
 
@@ -95,7 +95,11 @@ func TestMultiColumnStatsManager(t *testing.T) {
 			SampleSize:        1000,
 			RecommendedForUse: true,
 		}
-		assert.True(t, mgr.AddStats(stats4), "Should add strong-correlation pair, replacing weaker pair")
+		assert.True(
+			t,
+			mgr.AddStats(stats4),
+			"Should add strong-correlation pair, replacing weaker pair",
+		)
 		assert.Equal(t, 2, len(mgr.Stats))
 	})
 }
@@ -147,7 +151,12 @@ func TestCorrelationDetector(t *testing.T) {
 
 		correlation := detector.ComputeCorrelation("x", "y")
 		// Should be close to 0 (independent)
-		assert.Less(t, math.Abs(correlation), 0.5, "Should have low correlation for independent data")
+		assert.Less(
+			t,
+			math.Abs(correlation),
+			0.5,
+			"Should have low correlation for independent data",
+		)
 	})
 
 	t.Run("Missing column", func(t *testing.T) {
@@ -221,7 +230,12 @@ func TestJointNDVEstimator(t *testing.T) {
 
 		// Should estimate more than 50 (accounting for unseen combinations)
 		// but less than 10000 (not every row is unique)
-		assert.Greater(t, estimate, int64(50), "Should estimate more combinations than seen in sample")
+		assert.Greater(
+			t,
+			estimate,
+			int64(50),
+			"Should estimate more combinations than seen in sample",
+		)
 		assert.LessOrEqual(t, estimate, int64(10000), "Should not exceed total row count")
 	})
 
@@ -283,7 +297,11 @@ func TestColumnPairSelector(t *testing.T) {
 		// Expected: 50 * 5000 = 250,000
 		// Actual: 5,000 (city determines state, not independent)
 		should := selector.ShouldTrack(col1, col2, 0.5, 5000, 100000)
-		assert.True(t, should, "Should track pair with functional dependency (joint NDV << independent)")
+		assert.True(
+			t,
+			should,
+			"Should track pair with functional dependency (joint NDV << independent)",
+		)
 	})
 
 	t.Run("Low cardinality categorical pairing", func(t *testing.T) {
@@ -329,10 +347,10 @@ func TestColumnPairSelector(t *testing.T) {
 func TestCardinalityWithMultiColumnStats(t *testing.T) {
 	t.Run("With multi-column stats (more accurate)", func(t *testing.T) {
 		stats := &MultiColumnStats{
-			Columns:       [2]string{"city", "state"},
-			JointNDV:      5000,
-			Correlation:   0.8,
-			SampleSize:    50000,
+			Columns:           [2]string{"city", "state"},
+			JointNDV:          5000,
+			Correlation:       0.8,
+			SampleSize:        50000,
 			RecommendedForUse: true,
 		}
 
@@ -359,15 +377,21 @@ func TestCardinalityWithMultiColumnStats(t *testing.T) {
 
 		// Independence: selectivity = 0.02 * 0.01 = 0.0002
 		expectedRowCount := float64(totalRows) * selectivity
-		assert.InDelta(t, 20.0, expectedRowCount, 1.0, "Should estimate ~20 rows with independence (100000 * 0.02 * 0.01)")
+		assert.InDelta(
+			t,
+			20.0,
+			expectedRowCount,
+			1.0,
+			"Should estimate ~20 rows with independence (100000 * 0.02 * 0.01)",
+		)
 	})
 
 	t.Run("Avoid divide by zero", func(t *testing.T) {
 		stats := &MultiColumnStats{
-			Columns:       [2]string{"col1", "col2"},
-			JointNDV:      0,
-			Correlation:   0.0,
-			SampleSize:    0,
+			Columns:           [2]string{"col1", "col2"},
+			JointNDV:          0,
+			Correlation:       0.0,
+			SampleSize:        0,
 			RecommendedForUse: false,
 		}
 
@@ -382,24 +406,24 @@ func TestSelectTopColumnPairs(t *testing.T) {
 	t.Run("Select top pairs by importance", func(t *testing.T) {
 		candidates := []*MultiColumnStats{
 			{
-				Columns:       [2]string{"a", "b"},
-				JointNDV:      100,
-				Correlation:   0.5,
-				SampleSize:    100,
+				Columns:           [2]string{"a", "b"},
+				JointNDV:          100,
+				Correlation:       0.5,
+				SampleSize:        100,
 				RecommendedForUse: true,
 			},
 			{
-				Columns:       [2]string{"c", "d"},
-				JointNDV:      200,
-				Correlation:   0.9, // High correlation
-				SampleSize:    5000, // Large sample
+				Columns:           [2]string{"c", "d"},
+				JointNDV:          200,
+				Correlation:       0.9,  // High correlation
+				SampleSize:        5000, // Large sample
 				RecommendedForUse: true,
 			},
 			{
-				Columns:       [2]string{"e", "f"},
-				JointNDV:      300,
-				Correlation:   0.2,
-				SampleSize:    50,
+				Columns:           [2]string{"e", "f"},
+				JointNDV:          300,
+				Correlation:       0.2,
+				SampleSize:        50,
 				RecommendedForUse: false,
 			},
 		}
@@ -413,7 +437,12 @@ func TestSelectTopColumnPairs(t *testing.T) {
 
 		require.Equal(t, 2, len(selected), "Should select exactly 2 pairs")
 		assert.Equal(t, [2]string{"c", "d"}, selected[0].Columns, "Highest importance pair first")
-		assert.Equal(t, [2]string{"a", "b"}, selected[1].Columns, "Second highest importance pair second")
+		assert.Equal(
+			t,
+			[2]string{"a", "b"},
+			selected[1].Columns,
+			"Second highest importance pair second",
+		)
 	})
 
 	t.Run("Return all if fewer than max", func(t *testing.T) {

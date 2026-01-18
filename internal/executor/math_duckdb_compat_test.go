@@ -654,7 +654,12 @@ func TestDuckDBCompat_Factorial(t *testing.T) {
 		{"FACTORIAL(1) = 1", int64(1), 1, "SELECT FACTORIAL(1);"},
 		{"FACTORIAL(5) = 120", int64(5), 120, "SELECT FACTORIAL(5);"},
 		{"FACTORIAL(10) = 3628800", int64(10), 3628800, "SELECT FACTORIAL(10);"},
-		{"FACTORIAL(20) = 2432902008176640000", int64(20), 2432902008176640000, "SELECT FACTORIAL(20);"},
+		{
+			"FACTORIAL(20) = 2432902008176640000",
+			int64(20),
+			2432902008176640000,
+			"SELECT FACTORIAL(20);",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1565,7 +1570,13 @@ func TestDuckDBCompat_ExtremeValues(t *testing.T) {
 		// ln(1 + 1e-10) ~ 1e-10 - (1e-10)^2/2 + ... ~ 1e-10
 		// Due to floating-point representation issues, we use a relative tolerance
 		expected := math.Log(nearOne)
-		assert.InDelta(t, expected, lnResult, ieee754Tolerance, "LN(1+1e-10) should match Go's math.Log")
+		assert.InDelta(
+			t,
+			expected,
+			lnResult,
+			ieee754Tolerance,
+			"LN(1+1e-10) should match Go's math.Log",
+		)
 	})
 }
 

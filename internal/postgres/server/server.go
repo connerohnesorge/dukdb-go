@@ -210,7 +210,7 @@ func (s *Server) Start() error {
 
 	// Set global parameters
 	params := wire.Parameters{
-		wire.ParamServerVersion: s.config.ServerVersion,
+		wire.ParamServerVersion:  s.config.ServerVersion,
 		wire.ParamServerEncoding: "UTF8",
 		wire.ParamClientEncoding: "UTF8",
 		wire.ParamDatabase:       s.config.Database,
@@ -437,7 +437,10 @@ func (s *Server) ConnectionCount() int64 {
 }
 
 // validateCredentials validates the provided credentials during authentication.
-func (s *Server) validateCredentials(ctx context.Context, database, username, password string) (context.Context, bool, error) {
+func (s *Server) validateCredentials(
+	ctx context.Context,
+	database, username, password string,
+) (context.Context, bool, error) {
 	s.mu.RLock()
 	config := s.config
 	s.mu.RUnlock()

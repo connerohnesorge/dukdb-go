@@ -529,7 +529,12 @@ func TestMetadataReader_ExplicitVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write v2 metadata with a different property to distinguish
-	v2Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "avro"`, 1)
+	v2Metadata := strings.Replace(
+		v1Metadata,
+		`"write.format.default": "parquet"`,
+		`"write.format.default": "avro"`,
+		1,
+	)
 	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
 	require.NoError(t, err)
 
@@ -583,11 +588,21 @@ func TestMetadataReader_VersionGuessing(t *testing.T) {
 	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
 	require.NoError(t, err)
 
-	v2Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "orc"`, 1)
+	v2Metadata := strings.Replace(
+		v1Metadata,
+		`"write.format.default": "parquet"`,
+		`"write.format.default": "orc"`,
+		1,
+	)
 	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
 	require.NoError(t, err)
 
-	v3Metadata := strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "avro"`, 1)
+	v3Metadata := strings.Replace(
+		v1Metadata,
+		`"write.format.default": "parquet"`,
+		`"write.format.default": "avro"`,
+		1,
+	)
 	err = os.WriteFile(filepath.Join(metadataDir, "v3.metadata.json"), []byte(v3Metadata), 0o644)
 	require.NoError(t, err)
 
@@ -610,12 +625,22 @@ func TestMetadataReader_VersionHintTakesPrecedence(t *testing.T) {
 
 	// Write multiple metadata versions
 	v1Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
-	v1Metadata = strings.Replace(v1Metadata, `"write.format.default": "parquet"`, `"write.format.default": "v1format"`, 1)
+	v1Metadata = strings.Replace(
+		v1Metadata,
+		`"write.format.default": "parquet"`,
+		`"write.format.default": "v1format"`,
+		1,
+	)
 	err = os.WriteFile(filepath.Join(metadataDir, "v1.metadata.json"), []byte(v1Metadata), 0o644)
 	require.NoError(t, err)
 
 	v2Metadata := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
-	v2Metadata = strings.Replace(v2Metadata, `"write.format.default": "parquet"`, `"write.format.default": "v2format"`, 1)
+	v2Metadata = strings.Replace(
+		v2Metadata,
+		`"write.format.default": "parquet"`,
+		`"write.format.default": "v2format"`,
+		1,
+	)
 	err = os.WriteFile(filepath.Join(metadataDir, "v2.metadata.json"), []byte(v2Metadata), 0o644)
 	require.NoError(t, err)
 
@@ -695,7 +720,12 @@ func TestMetadataReader_CompressedMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create gzip compressed metadata
-	metadataJSON := strings.Replace(sampleMetadataV2JSON, "s3://bucket/warehouse/db/table", tmpDir, 1)
+	metadataJSON := strings.Replace(
+		sampleMetadataV2JSON,
+		"s3://bucket/warehouse/db/table",
+		tmpDir,
+		1,
+	)
 
 	// Write compressed file
 	compressedPath := filepath.Join(metadataDir, "v1.metadata.json.gz")

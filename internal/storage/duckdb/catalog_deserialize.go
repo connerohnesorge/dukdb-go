@@ -16,7 +16,12 @@ func skipPropertyValue(r *BinaryReader, propID uint32) error {
 		PropSeqName, PropTypeName, PropDepCatalog, PropDepSchema, PropDepName, PropTypeModCollation:
 		_ = r.ReadString()
 	// Boolean properties
-	case PropTemporary, PropInternal, PropColNullable, PropColHasDefault, PropColGenerated, PropSeqCycle:
+	case PropTemporary,
+		PropInternal,
+		PropColNullable,
+		PropColHasDefault,
+		PropColGenerated,
+		PropSeqCycle:
 		_ = r.ReadBool()
 	// Uint8 properties
 	case PropOnConflict, PropColType, PropColCompression, PropConstraintType, PropFKOnDelete,
@@ -49,7 +54,11 @@ func skipPropertyValue(r *BinaryReader, propID uint32) error {
 		skipUint64ArrayProperty(r)
 	case PropConstraintFK:
 		return skipForeignKeyProperty(r)
-	case PropColTypeMod, PropTypeModifier, PropTypeModChildType, PropTypeModKeyType, PropTypeModValueType:
+	case PropColTypeMod,
+		PropTypeModifier,
+		PropTypeModChildType,
+		PropTypeModKeyType,
+		PropTypeModValueType:
 		return skipTypeModifiersProperty(r)
 	case PropTypeModEnumValues:
 		skipStringArrayProperty(r)

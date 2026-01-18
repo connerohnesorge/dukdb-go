@@ -30,8 +30,8 @@ func TestIntegration_ExtractionFunctions_DateInput(t *testing.T) {
 		{"YEAR", evalYear, int32(2024)},
 		{"MONTH", evalMonth, int32(6)},
 		{"DAY", evalDay, int32(15)},
-		{"HOUR", evalHour, int32(0)},          // DATE has no time component
-		{"MINUTE", evalMinute, int32(0)},      // DATE has no time component
+		{"HOUR", evalHour, int32(0)},           // DATE has no time component
+		{"MINUTE", evalMinute, int32(0)},       // DATE has no time component
 		{"DAYOFWEEK", evalDayOfWeek, int32(6)}, // Saturday = 6
 		{"DAYOFYEAR", evalDayOfYear, int32(167)},
 		{"QUARTER", evalQuarter, int32(2)}, // June is Q2
@@ -704,18 +704,28 @@ func TestIntegration_Strftime_AllSpecifiers(t *testing.T) {
 
 func TestIntegration_Strptime_VariousFormats(t *testing.T) {
 	testCases := []struct {
-		name     string
-		input    string
-		format   string
-		year     int
-		month    time.Month
-		day      int
-		hour     int
-		minute   int
-		second   int
+		name   string
+		input  string
+		format string
+		year   int
+		month  time.Month
+		day    int
+		hour   int
+		minute int
+		second int
 	}{
 		{"ISO date", "2024-06-15", "%Y-%m-%d", 2024, time.June, 15, 0, 0, 0},
-		{"ISO datetime", "2024-06-15 14:30:45", "%Y-%m-%d %H:%M:%S", 2024, time.June, 15, 14, 30, 45},
+		{
+			"ISO datetime",
+			"2024-06-15 14:30:45",
+			"%Y-%m-%d %H:%M:%S",
+			2024,
+			time.June,
+			15,
+			14,
+			30,
+			45,
+		},
 		{"US date format", "06/15/2024", "%m/%d/%Y", 2024, time.June, 15, 0, 0, 0},
 		{"European date format", "15.06.2024", "%d.%m.%Y", 2024, time.June, 15, 0, 0, 0},
 		{"12-hour time", "02:30 PM", "%I:%M %p", 1970, time.January, 1, 14, 30, 0},
@@ -844,7 +854,9 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("MAKE_TIMESTAMP invalid components", func(t *testing.T) {
-		_, err := evalMakeTimestamp([]any{int32(2024), int32(6), int32(15), int32(25), int32(0), float64(0)})
+		_, err := evalMakeTimestamp(
+			[]any{int32(2024), int32(6), int32(15), int32(25), int32(0), float64(0)},
+		)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "out of range")
 	})
@@ -887,7 +899,7 @@ func TestIntegration_SpecScenarios_Extraction(t *testing.T) {
 		{"hour", 14},
 		{"minute", 30},
 		{"quarter", 2},
-		{"dow", 6},     // Saturday
+		{"dow", 6}, // Saturday
 		{"doy", 167},
 		{"week", 24},
 	}
@@ -1110,7 +1122,13 @@ func TestIntegration_IntervalExtraction(t *testing.T) {
 		result, err := evalTotalDays([]any{interval})
 		require.NoError(t, err)
 		// 15 months * 30.4375 + 15 days + fraction of day
-		expected := float64(15)*30.4375 + float64(15) + float64(interval.Micros)/(24*60*60*1_000_000)
+		expected := float64(
+			15,
+		)*30.4375 + float64(
+			15,
+		) + float64(
+			interval.Micros,
+		)/(24*60*60*1_000_000)
 		assert.InDelta(t, expected, result.(float64), 0.01)
 	})
 

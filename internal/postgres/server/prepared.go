@@ -16,10 +16,10 @@ import (
 // PreparedStatement represents a prepared statement stored in the session.
 // It wraps the underlying backend statement with additional PostgreSQL metadata.
 type PreparedStatement struct {
-	Name       string          // Statement name (empty for unnamed)
-	Query      string          // Original SQL query
-	ParamTypes []uint32        // Parameter OIDs (PostgreSQL type identifiers)
-	Columns    wire.Columns    // Result columns
+	Name       string            // Statement name (empty for unnamed)
+	Query      string            // Original SQL query
+	ParamTypes []uint32          // Parameter OIDs (PostgreSQL type identifiers)
+	Columns    wire.Columns      // Result columns
 	Stmt       dukdb.BackendStmt // Underlying prepared statement
 }
 
@@ -399,7 +399,9 @@ type ParsedPrepareStatement struct {
 func ParsePrepareStatement(sql string) (*ParsedPrepareStatement, error) {
 	// Match: PREPARE name [(types)] AS query
 	// The types part is optional
-	pattern := regexp.MustCompile(`(?i)^\s*PREPARE\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\(([^)]*)\))?\s+AS\s+(.+)$`)
+	pattern := regexp.MustCompile(
+		`(?i)^\s*PREPARE\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\(([^)]*)\))?\s+AS\s+(.+)$`,
+	)
 	matches := pattern.FindStringSubmatch(sql)
 	if matches == nil {
 		return nil, errors.New("invalid PREPARE statement syntax")
@@ -746,7 +748,11 @@ func OidToTypeName(oid uint32) string {
 }
 
 // CreatePreparedStatement creates a PreparedStatement from a query.
-func (h *Handler) CreatePreparedStatement(ctx context.Context, name, query string, paramTypeNames []string) (*PreparedStatement, error) {
+func (h *Handler) CreatePreparedStatement(
+	ctx context.Context,
+	name, query string,
+	paramTypeNames []string,
+) (*PreparedStatement, error) {
 	if h.server == nil || h.server.conn == nil {
 		return nil, ErrNoConnection
 	}
@@ -795,7 +801,12 @@ func (h *Handler) CreatePreparedStatement(ctx context.Context, name, query strin
 }
 
 // ExecutePreparedStatement executes a prepared statement with the given parameters.
-func (h *Handler) ExecutePreparedStatement(ctx context.Context, ps *PreparedStatement, params []string, writer wire.DataWriter) error {
+func (h *Handler) ExecutePreparedStatement(
+	ctx context.Context,
+	ps *PreparedStatement,
+	params []string,
+	writer wire.DataWriter,
+) error {
 	if ps.Stmt == nil {
 		return errors.New("prepared statement has no underlying statement")
 	}

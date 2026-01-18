@@ -25,25 +25,27 @@ type CardinalityObservation struct {
 // The cardinality learning system uses a conservative approach to prevent outliers
 // from corrupting estimates:
 //
-// 1. Track observations: For each unique operator signature, store estimated vs
-//    actual cardinality from executed queries.
+//  1. Track observations: For each unique operator signature, store estimated vs
+//     actual cardinality from executed queries.
 //
-// 2. N-observation threshold: Only apply corrections after collecting 100+
-//    observations for an operator. This threshold prevents one-off outlier queries
-//    from affecting all subsequent plans.
+//  2. N-observation threshold: Only apply corrections after collecting 100+
+//     observations for an operator. This threshold prevents one-off outlier queries
+//     from affecting all subsequent plans.
 //
-// 3. Moving average correction: For each observation, compute correction ratio =
-//    actual / estimated. Use exponential moving average (EMA) to update:
-//    newCorrection = 0.9 * oldCorrection + 0.1 * newRatio
-//    This dampens outlier effects.
+//  3. Moving average correction: For each observation, compute correction ratio =
+//     actual / estimated. Use exponential moving average (EMA) to update:
+//     newCorrection = 0.9 * oldCorrection + 0.1 * newRatio
+//     This dampens outlier effects.
 //
 // 4. Bounded corrections: Apply min/max bounds to prevent extreme values:
-//    - Minimum: 0.5x (max 2x speedup)
-//    - Maximum: 2.0x (max 2x slowdown)
-//    This prevents the learning from creating terrible plans.
 //
-// 5. Bounded memory: Store at most MaxHistorySize observations total.
-//    When limit reached, evict least-recently-updated entries (LRU).
+//   - Minimum: 0.5x (max 2x speedup)
+//
+//   - Maximum: 2.0x (max 2x slowdown)
+//     This prevents the learning from creating terrible plans.
+//
+//     5. Bounded memory: Store at most MaxHistorySize observations total.
+//     When limit reached, evict least-recently-updated entries (LRU).
 //
 // Reference: Adaptive query optimization literature, particularly:
 // - Stillger et al. "LEO - DB2's Learning Optimizer" (IBM Research)
@@ -53,20 +55,20 @@ type CardinalityObservation struct {
 // statistics but never learns from runtime feedback. dukdb-go extends this with
 // conservative runtime learning to improve plan quality over time.
 type CardinalityLearner struct {
-	mu                sync.RWMutex
-	observations      map[string]*CardinalityObservation
-	maxHistorySize    int
+	mu                   sync.RWMutex
+	observations         map[string]*CardinalityObservation
+	maxHistorySize       int
 	observationThreshold int64
 }
 
 // NewCardinalityLearner creates a new cardinality learner with default settings.
 //
 // Parameters:
-// - maxHistorySize: Maximum number of operator signatures to track (default 1000).
-//   When exceeded, LRU entries are evicted. Limits memory usage in long-running
-//   sessions with many unique operator types.
-// - observationThreshold: Minimum observations required before applying corrections
-//   (default 100). Conservative threshold prevents early overfitting.
+//   - maxHistorySize: Maximum number of operator signatures to track (default 1000).
+//     When exceeded, LRU entries are evicted. Limits memory usage in long-running
+//     sessions with many unique operator types.
+//   - observationThreshold: Minimum observations required before applying corrections
+//     (default 100). Conservative threshold prevents early overfitting.
 func NewCardinalityLearner(maxHistorySize int, observationThreshold int64) *CardinalityLearner {
 	if maxHistorySize <= 0 {
 		maxHistorySize = 1000
@@ -84,17 +86,20 @@ func NewCardinalityLearner(maxHistorySize int, observationThreshold int64) *Card
 // RecordObservation records an actual vs estimated cardinality observation.
 //
 // Algorithm:
-// 1. Normalize operatorSignature for consistency
-// 2. If first observation for this signature, initialize observation
-// 3. Compute correction ratio = actual / estimated (with guards for zero)
-// 4. Update correction factor using exponential moving average:
-//    newCorrection = 0.9 * oldCorrection + 0.1 * ratio
-// 5. Increment observation count
-// 6. If observations map exceeds maxHistorySize, evict LRU entry
+//  1. Normalize operatorSignature for consistency
+//  2. If first observation for this signature, initialize observation
+//  3. Compute correction ratio = actual / estimated (with guards for zero)
+//  4. Update correction factor using exponential moving average:
+//     newCorrection = 0.9 * oldCorrection + 0.1 * ratio
+//  5. Increment observation count
+//  6. If observations map exceeds maxHistorySize, evict LRU entry
 //
 // Time Complexity: O(log n) due to potential LRU eviction search
 // Space: O(1) - updates existing entry or evicts one entry
-func (cl *CardinalityLearner) RecordObservation(operatorSig string, estimatedCardinality, actualCardinality int64) {
+func (cl *CardinalityLearner) RecordObservation(
+	operatorSig string,
+	estimatedCardinality, actualCardinality int64,
+) {
 	if operatorSig == "" {
 		return // Ignore empty signatures
 	}
@@ -206,11 +211,11 @@ func (cl *CardinalityLearner) GetStatistics() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"tracked_signatures":   len(cl.observations),
-		"active_corrections":   activeCorrections,
-		"total_observations":   totalObservations,
-		"threshold":            cl.observationThreshold,
-		"max_history_size":     cl.maxHistorySize,
+		"tracked_signatures": len(cl.observations),
+		"active_corrections": activeCorrections,
+		"total_observations": totalObservations,
+		"threshold":          cl.observationThreshold,
+		"max_history_size":   cl.maxHistorySize,
 	}
 }
 
@@ -300,13 +305,18 @@ func GenerateOperatorSignature(operatorType string, params map[string]string) st
 // cardinality estimate using statistics, apply the learned correction factor.
 //
 // Example:
-//   baseEstimate := 1000 (from statistics)
-//   correction := learner.GetLearningCorrection(sig)  // returns 1.5 after threshold
-//   corrected := learner.CorrectedCardinality(baseEstimate, sig)  // returns 1500
+//
+//	baseEstimate := 1000 (from statistics)
+//	correction := learner.GetLearningCorrection(sig)  // returns 1.5 after threshold
+//	corrected := learner.CorrectedCardinality(baseEstimate, sig)  // returns 1500
 //
 // The corrected cardinality feeds into downstream cost calculations:
-//   cost = baseOpCost * correctedCardinality
-func (cl *CardinalityLearner) CorrectedCardinality(estimatedCardinality float64, operatorSig string) float64 {
+//
+//	cost = baseOpCost * correctedCardinality
+func (cl *CardinalityLearner) CorrectedCardinality(
+	estimatedCardinality float64,
+	operatorSig string,
+) float64 {
 	correction := cl.GetLearningCorrection(operatorSig)
 	corrected := estimatedCardinality * correction
 

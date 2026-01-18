@@ -174,7 +174,10 @@ func (c *Config) Validate() error {
 
 		// Otherwise, we need username for simple auth
 		if c.Username == "" {
-			return &ConfigError{Field: "Username", Message: "required when authentication is enabled without UserProvider or Authenticator"}
+			return &ConfigError{
+				Field:   "Username",
+				Message: "required when authentication is enabled without UserProvider or Authenticator",
+			}
 		}
 	}
 	return nil

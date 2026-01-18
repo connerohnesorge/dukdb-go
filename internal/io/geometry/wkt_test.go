@@ -86,7 +86,12 @@ func TestParseWKT_Polygon(t *testing.T) {
 		wantErr  bool
 	}{
 		{"simple polygon", "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", GeometryPolygon, false},
-		{"polygon with hole", "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0), (2 2, 2 8, 8 8, 8 2, 2 2))", GeometryPolygon, false},
+		{
+			"polygon with hole",
+			"POLYGON((0 0, 0 10, 10 10, 10 0, 0 0), (2 2, 2 8, 8 8, 8 2, 2 2))",
+			GeometryPolygon,
+			false,
+		},
 		{"polygon lowercase", "polygon((0 0, 0 1, 1 1, 1 0, 0 0))", GeometryPolygon, false},
 	}
 
@@ -137,8 +142,18 @@ func TestParseWKT_MultiLineString(t *testing.T) {
 		wantType GeometryType
 		wantErr  bool
 	}{
-		{"basic multilinestring", "MULTILINESTRING((0 0, 1 1), (2 2, 3 3))", GeometryMultiLineString, false},
-		{"multilinestring with more points", "MULTILINESTRING((0 0, 1 1, 2 2), (3 3, 4 4))", GeometryMultiLineString, false},
+		{
+			"basic multilinestring",
+			"MULTILINESTRING((0 0, 1 1), (2 2, 3 3))",
+			GeometryMultiLineString,
+			false,
+		},
+		{
+			"multilinestring with more points",
+			"MULTILINESTRING((0 0, 1 1, 2 2), (3 3, 4 4))",
+			GeometryMultiLineString,
+			false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -162,7 +177,12 @@ func TestParseWKT_MultiPolygon(t *testing.T) {
 		wantType GeometryType
 		wantErr  bool
 	}{
-		{"basic multipolygon", "MULTIPOLYGON(((0 0, 0 1, 1 1, 1 0, 0 0)), ((2 2, 2 3, 3 3, 3 2, 2 2)))", GeometryMultiPolygon, false},
+		{
+			"basic multipolygon",
+			"MULTIPOLYGON(((0 0, 0 1, 1 1, 1 0, 0 0)), ((2 2, 2 3, 3 3, 3 2, 2 2)))",
+			GeometryMultiPolygon,
+			false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -186,8 +206,18 @@ func TestParseWKT_GeometryCollection(t *testing.T) {
 		wantType GeometryType
 		wantErr  bool
 	}{
-		{"point and line", "GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1))", GeometryCollection, false},
-		{"mixed types", "GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1), POLYGON((0 0, 0 1, 1 1, 1 0, 0 0)))", GeometryCollection, false},
+		{
+			"point and line",
+			"GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1))",
+			GeometryCollection,
+			false,
+		},
+		{
+			"mixed types",
+			"GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1), POLYGON((0 0, 0 1, 1 1, 1 0, 0 0)))",
+			GeometryCollection,
+			false,
+		},
 		{"empty collection", "GEOMETRYCOLLECTION()", GeometryCollection, false},
 	}
 

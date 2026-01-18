@@ -32,7 +32,13 @@ func NewHTTPFileInfo(url string, size int64, modTime time.Time) *HTTPFileInfo {
 }
 
 // NewHTTPFileInfoFull creates a new HTTPFileInfo with all parameters.
-func NewHTTPFileInfoFull(url string, size int64, modTime time.Time, contentType, etag string, acceptRanges bool) *HTTPFileInfo {
+func NewHTTPFileInfoFull(
+	url string,
+	size int64,
+	modTime time.Time,
+	contentType, etag string,
+	acceptRanges bool,
+) *HTTPFileInfo {
 	return &HTTPFileInfo{
 		url:          url,
 		size:         size,

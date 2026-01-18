@@ -80,8 +80,8 @@ type UUID [16]byte
 
 // TimeTZ represents a time with timezone offset.
 type TimeTZ struct {
-	Micros int64  // Microseconds since midnight
-	Offset int32  // Timezone offset in seconds (positive = east of UTC)
+	Micros int64 // Microseconds since midnight
+	Offset int32 // Timezone offset in seconds (positive = east of UTC)
 }
 
 // DecodeValue converts raw bytes to a Go value based on logical type.
@@ -1797,8 +1797,8 @@ func encodeArray(v any, mods *TypeModifiers) ([]byte, error) {
 
 // EnumValue represents a decoded ENUM value.
 type EnumValue struct {
-	Index uint32   // Index into the enum values
-	Value string   // The string value (if known)
+	Index uint32 // Index into the enum values
+	Value string // The string value (if known)
 }
 
 func decodeEnum(data []byte, mods *TypeModifiers) (EnumValue, error) {
@@ -1937,7 +1937,9 @@ func bigIntToHugeInt(b *big.Int) HugeInt {
 	if b.Sign() < 0 {
 		// Two's complement for 128-bit
 		complement := new(big.Int).Add(b, new(big.Int).Lsh(big.NewInt(1), 128))
-		lower := new(big.Int).And(complement, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
+		lower := new(
+			big.Int,
+		).And(complement, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
 		upper := new(big.Int).Rsh(complement, 64)
 		return HugeInt{
 			Lower: lower.Uint64(),
@@ -1945,7 +1947,9 @@ func bigIntToHugeInt(b *big.Int) HugeInt {
 		}
 	}
 
-	lower := new(big.Int).And(b, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
+	lower := new(
+		big.Int,
+	).And(b, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
 	upper := new(big.Int).Rsh(b, 64)
 	return HugeInt{
 		Lower: lower.Uint64(),
@@ -1955,7 +1959,9 @@ func bigIntToHugeInt(b *big.Int) HugeInt {
 
 // bigIntToUHugeInt converts a *big.Int to a UHugeInt.
 func bigIntToUHugeInt(b *big.Int) UHugeInt {
-	lower := new(big.Int).And(b, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
+	lower := new(
+		big.Int,
+	).And(b, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1)))
 	upper := new(big.Int).Rsh(b, 64)
 	return UHugeInt{
 		Lower: lower.Uint64(),
@@ -1985,7 +1991,9 @@ func (d Decimal) ToFloat64() float64 {
 		return 0
 	}
 	f := new(big.Float).SetInt(d.Value)
-	divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d.Scale)), nil))
+	divisor := new(
+		big.Float,
+	).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d.Scale)), nil))
 	f.Quo(f, divisor)
 	result, _ := f.Float64()
 	return result

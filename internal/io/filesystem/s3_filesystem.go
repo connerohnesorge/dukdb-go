@@ -500,7 +500,10 @@ func (fs *S3FileSystem) CreateContext(ctx context.Context, path string) (File, e
 
 // CreateMultipartWriter creates a streaming multipart writer for large uploads.
 // This is more efficient than buffering the entire file in memory.
-func (fs *S3FileSystem) CreateMultipartWriter(ctx context.Context, path string) (*MultipartWriter, error) {
+func (fs *S3FileSystem) CreateMultipartWriter(
+	ctx context.Context,
+	path string,
+) (*MultipartWriter, error) {
 	bucket, key, err := parseS3Path(path)
 	if err != nil {
 		return nil, err
@@ -510,7 +513,10 @@ func (fs *S3FileSystem) CreateMultipartWriter(ctx context.Context, path string) 
 }
 
 // CreateConcurrentReader creates a concurrent reader for efficient large file reads.
-func (fs *S3FileSystem) CreateConcurrentReader(ctx context.Context, path string) (*ConcurrentReader, error) {
+func (fs *S3FileSystem) CreateConcurrentReader(
+	ctx context.Context,
+	path string,
+) (*ConcurrentReader, error) {
 	bucket, key, err := parseS3Path(path)
 	if err != nil {
 		return nil, err

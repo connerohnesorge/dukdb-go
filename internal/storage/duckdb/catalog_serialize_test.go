@@ -10,8 +10,8 @@ import (
 
 // Test constants for common string values.
 const (
-	testCatalogMain   = "main"
-	testSchemaPublic  = "public"
+	testCatalogMain  = "main"
+	testSchemaPublic = "public"
 )
 
 func TestCreateInfoSerialize(t *testing.T) {
@@ -537,8 +537,8 @@ func TestNestedTypeModifiersSerialize(t *testing.T) {
 	tm := TypeModifiers{
 		ChildTypeID: TypeMap,
 		ChildType: &TypeModifiers{
-			KeyTypeID: TypeVarchar,
-			KeyType:   &TypeModifiers{},
+			KeyTypeID:   TypeVarchar,
+			KeyType:     &TypeModifiers{},
 			ValueTypeID: TypeStruct,
 			ValueType: &TypeModifiers{
 				StructFields: []StructField{
@@ -565,7 +565,13 @@ func TestTableWithAllConstraintTypes(t *testing.T) {
 	table.AddColumn(ColumnDefinition{Name: "id", Type: TypeInteger})
 	table.AddColumn(ColumnDefinition{Name: "user_id", Type: TypeInteger})
 	table.AddColumn(ColumnDefinition{Name: "email", Type: TypeVarchar})
-	table.AddColumn(ColumnDefinition{Name: "amount", Type: TypeDecimal, TypeModifiers: TypeModifiers{Width: 18, Scale: 2}})
+	table.AddColumn(
+		ColumnDefinition{
+			Name:          "amount",
+			Type:          TypeDecimal,
+			TypeModifiers: TypeModifiers{Width: 18, Scale: 2},
+		},
+	)
 
 	// Add all constraint types
 	table.AddConstraint(Constraint{
@@ -610,7 +616,12 @@ func TestTableWithAllConstraintTypes(t *testing.T) {
 	err := table.Serialize(w)
 	require.NoError(t, err)
 
-	assert.Greater(t, buf.Len(), 100, "Table with many constraints should have large serialized size")
+	assert.Greater(
+		t,
+		buf.Len(),
+		100,
+		"Table with many constraints should have large serialized size",
+	)
 }
 
 func TestEmptyCollections(t *testing.T) {

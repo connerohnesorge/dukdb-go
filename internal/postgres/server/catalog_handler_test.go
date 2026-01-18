@@ -314,19 +314,27 @@ func (m *mockCatalogAdapter) ListTablesInSchema(schemaName string) []*internalca
 	return m.catalog.ListTablesInSchema(schemaName)
 }
 
-func (m *mockCatalogAdapter) GetTableInSchema(schemaName, tableName string) (*internalcatalog.TableDef, bool) {
+func (m *mockCatalogAdapter) GetTableInSchema(
+	schemaName, tableName string,
+) (*internalcatalog.TableDef, bool) {
 	return m.catalog.GetTableInSchema(schemaName, tableName)
 }
 
-func (m *mockCatalogAdapter) GetViewInSchema(schemaName, viewName string) (*internalcatalog.ViewDef, bool) {
+func (m *mockCatalogAdapter) GetViewInSchema(
+	schemaName, viewName string,
+) (*internalcatalog.ViewDef, bool) {
 	return m.catalog.GetViewInSchema(schemaName, viewName)
 }
 
-func (m *mockCatalogAdapter) GetIndexesForTable(schemaName, tableName string) []*internalcatalog.IndexDef {
+func (m *mockCatalogAdapter) GetIndexesForTable(
+	schemaName, tableName string,
+) []*internalcatalog.IndexDef {
 	return m.catalog.GetIndexesForTable(schemaName, tableName)
 }
 
-func (m *mockCatalogAdapter) GetSequenceInSchema(schemaName, sequenceName string) (*internalcatalog.SequenceDef, bool) {
+func (m *mockCatalogAdapter) GetSequenceInSchema(
+	schemaName, sequenceName string,
+) (*internalcatalog.SequenceDef, bool) {
 	return m.catalog.GetSequenceInSchema(schemaName, sequenceName)
 }
 
@@ -367,7 +375,9 @@ func TestCatalogHandler(t *testing.T) {
 	})
 
 	t.Run("query information_schema.columns", func(t *testing.T) {
-		result := handler.infoSchema.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users'")
+		result := handler.infoSchema.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users'",
+		)
 		require.NotNil(t, result)
 		assert.Len(t, result.Rows, 3) // id, name, email
 	})

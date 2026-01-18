@@ -416,7 +416,12 @@ func Touches(g1, g2 *Geometry) (bool, error) {
 			// Verify interiors don't intersect
 			for i := 0; i < len(coords1)-1; i++ {
 				for j := 0; j < len(coords2)-1; j++ {
-					if segmentsIntersectInterior(coords1[i], coords1[i+1], coords2[j], coords2[j+1]) {
+					if segmentsIntersectInterior(
+						coords1[i],
+						coords1[i+1],
+						coords2[j],
+						coords2[j+1],
+					) {
 						return false, nil
 					}
 				}
@@ -1646,7 +1651,11 @@ func MakePolygon(ring *Geometry) (*Geometry, error) {
 	first := coords[0]
 	last := coords[len(coords)-1]
 	if first[0] != last[0] || first[1] != last[1] {
-		return nil, fmt.Errorf("linestring is not closed (first point %v != last point %v)", first, last)
+		return nil, fmt.Errorf(
+			"linestring is not closed (first point %v != last point %v)",
+			first,
+			last,
+		)
 	}
 
 	// Create polygon from the ring
@@ -1788,7 +1797,12 @@ func offsetCurve(coords [][2]float64, distance float64) [][2]float64 {
 }
 
 // createEndCap creates a semicircular end cap for a buffered linestring.
-func createEndCap(endPoint, prevPoint [2]float64, distance float64, quadSegs int, isStart bool) [][2]float64 {
+func createEndCap(
+	endPoint, prevPoint [2]float64,
+	distance float64,
+	quadSegs int,
+	isStart bool,
+) [][2]float64 {
 	dx := endPoint[0] - prevPoint[0]
 	dy := endPoint[1] - prevPoint[1]
 	length := math.Sqrt(dx*dx + dy*dy)

@@ -53,7 +53,7 @@ type CatalogProvider interface {
 // It implements the logic to query metadata from the catalog and return
 // results formatted according to PostgreSQL's information_schema specification.
 type InformationSchema struct {
-	catalog     CatalogProvider
+	catalog      CatalogProvider
 	databaseName string
 }
 
@@ -61,7 +61,7 @@ type InformationSchema struct {
 // The databaseName is used for the table_catalog column in all views.
 func NewInformationSchema(catalog CatalogProvider, databaseName string) *InformationSchema {
 	return &InformationSchema{
-		catalog:     catalog,
+		catalog:      catalog,
 		databaseName: databaseName,
 	}
 }

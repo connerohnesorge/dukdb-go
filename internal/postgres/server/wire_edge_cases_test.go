@@ -168,7 +168,10 @@ func TestSpecialCharacters(t *testing.T) {
 
 	t.Run("strings with single quotes", func(t *testing.T) {
 		// Insert string with escaped single quote
-		_, err := conn.Exec(ctx, "INSERT INTO special_chars_test (id, data) VALUES (1, 'it''s a test')")
+		_, err := conn.Exec(
+			ctx,
+			"INSERT INTO special_chars_test (id, data) VALUES (1, 'it''s a test')",
+		)
 		require.NoError(t, err)
 
 		var result string
@@ -178,7 +181,10 @@ func TestSpecialCharacters(t *testing.T) {
 	})
 
 	t.Run("strings with double quotes", func(t *testing.T) {
-		_, err := conn.Exec(ctx, `INSERT INTO special_chars_test (id, data) VALUES (2, 'She said "Hello"')`)
+		_, err := conn.Exec(
+			ctx,
+			`INSERT INTO special_chars_test (id, data) VALUES (2, 'She said "Hello"')`,
+		)
 		require.NoError(t, err)
 
 		var result string
@@ -188,7 +194,10 @@ func TestSpecialCharacters(t *testing.T) {
 	})
 
 	t.Run("strings with backslashes", func(t *testing.T) {
-		_, err := conn.Exec(ctx, `INSERT INTO special_chars_test (id, data) VALUES (3, 'path\\to\\file')`)
+		_, err := conn.Exec(
+			ctx,
+			`INSERT INTO special_chars_test (id, data) VALUES (3, 'path\\to\\file')`,
+		)
 		require.NoError(t, err)
 
 		var result string
@@ -215,12 +224,17 @@ func TestSpecialCharacters(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.desc, func(t *testing.T) {
-				query := fmt.Sprintf("INSERT INTO special_chars_test (id, data) VALUES (%d, '%s')", tc.id, tc.data)
+				query := fmt.Sprintf(
+					"INSERT INTO special_chars_test (id, data) VALUES (%d, '%s')",
+					tc.id,
+					tc.data,
+				)
 				_, err := conn.Exec(ctx, query)
 				require.NoError(t, err)
 
 				var result string
-				err = conn.QueryRow(ctx, fmt.Sprintf("SELECT data FROM special_chars_test WHERE id = %d", tc.id)).Scan(&result)
+				err = conn.QueryRow(ctx, fmt.Sprintf("SELECT data FROM special_chars_test WHERE id = %d", tc.id)).
+					Scan(&result)
 				require.NoError(t, err)
 				assert.Equal(t, tc.data, result)
 			})
@@ -229,7 +243,10 @@ func TestSpecialCharacters(t *testing.T) {
 
 	t.Run("very long strings", func(t *testing.T) {
 		longString := strings.Repeat("x", 10000)
-		_, err := conn.Exec(ctx, fmt.Sprintf("INSERT INTO special_chars_test (id, data) VALUES (100, '%s')", longString))
+		_, err := conn.Exec(
+			ctx,
+			fmt.Sprintf("INSERT INTO special_chars_test (id, data) VALUES (100, '%s')", longString),
+		)
 		require.NoError(t, err)
 
 		var result string
@@ -250,7 +267,10 @@ func TestSpecialCharacters(t *testing.T) {
 
 	t.Run("whitespace characters", func(t *testing.T) {
 		// Tab, newline, carriage return
-		_, err := conn.Exec(ctx, "INSERT INTO special_chars_test (id, data) VALUES (102, 'line1\nline2\ttab')")
+		_, err := conn.Exec(
+			ctx,
+			"INSERT INTO special_chars_test (id, data) VALUES (102, 'line1\nline2\ttab')",
+		)
 		require.NoError(t, err)
 
 		var result string
@@ -331,7 +351,10 @@ func TestLargeResultSet(t *testing.T) {
 		// Skip: OFFSET clause not fully supported by the engine yet
 		t.Skip("OFFSET clause not fully supported by engine")
 
-		rows, err := conn.Query(ctx, "SELECT id FROM large_result_test ORDER BY id OFFSET 900 LIMIT 50")
+		rows, err := conn.Query(
+			ctx,
+			"SELECT id FROM large_result_test ORDER BY id OFFSET 900 LIMIT 50",
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -548,7 +571,12 @@ func TestConcurrentQueries(t *testing.T) {
 		}
 
 		// Allow some tolerance for concurrent operations
-		assert.Less(t, errCount, numGoroutines*queriesPerGoroutine/2, "too many errors during concurrent queries")
+		assert.Less(
+			t,
+			errCount,
+			numGoroutines*queriesPerGoroutine/2,
+			"too many errors during concurrent queries",
+		)
 	})
 }
 
@@ -696,7 +724,8 @@ func TestTypeEdgeCases(t *testing.T) {
 
 		// Boolean expressions
 		var andResult, orResult, notResult bool
-		err = conn.QueryRow(ctx, "SELECT true AND false, true OR false, NOT true").Scan(&andResult, &orResult, &notResult)
+		err = conn.QueryRow(ctx, "SELECT true AND false, true OR false, NOT true").
+			Scan(&andResult, &orResult, &notResult)
 		require.NoError(t, err)
 		assert.False(t, andResult)
 		assert.True(t, orResult)
@@ -716,11 +745,15 @@ func TestTypeEdgeCases(t *testing.T) {
 			_, _ = conn.Exec(ctx, "DROP TABLE null_empty_test")
 		}()
 
-		_, err = conn.Exec(ctx, "INSERT INTO null_empty_test (id, empty_str, null_str) VALUES (1, '', NULL)")
+		_, err = conn.Exec(
+			ctx,
+			"INSERT INTO null_empty_test (id, empty_str, null_str) VALUES (1, '', NULL)",
+		)
 		require.NoError(t, err)
 
 		var emptyStr, nullStr *string
-		err = conn.QueryRow(ctx, "SELECT empty_str, null_str FROM null_empty_test WHERE id = 1").Scan(&emptyStr, &nullStr)
+		err = conn.QueryRow(ctx, "SELECT empty_str, null_str FROM null_empty_test WHERE id = 1").
+			Scan(&emptyStr, &nullStr)
 		require.NoError(t, err)
 
 		require.NotNil(t, emptyStr, "empty string should not be nil")

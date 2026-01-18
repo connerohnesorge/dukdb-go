@@ -13,7 +13,8 @@
 //  4. A C compiler toolchain to be available
 //
 // To run these tests:
-//   CGO_ENABLED=1 go test -tags "cgo duckdb_compat" ./internal/compat/...
+//
+//	CGO_ENABLED=1 go test -tags "cgo duckdb_compat" ./internal/compat/...
 //
 // NOTE: These tests are excluded from normal builds because the official
 // go-duckdb driver requires CGO which is not available in all environments.

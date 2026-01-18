@@ -13,9 +13,9 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	fileio "github.com/dukdb/dukdb-go/internal/io"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
 	"github.com/dukdb/dukdb-go/internal/io/filesystem"
-	fileio "github.com/dukdb/dukdb-go/internal/io"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
@@ -257,7 +257,8 @@ func (e *Executor) executeReadCSV(
 	}
 
 	// Single file path - use optimized single file reader
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isHivePartitioningEnabled(multiOpts) {
 		return e.executeReadCSVSingleFile(ctx, paths[0], opts, plan)
 	}
 
@@ -266,7 +267,11 @@ func (e *Executor) executeReadCSV(
 }
 
 // resolveFilePaths resolves a path or glob pattern to a list of file paths.
-func (e *Executor) resolveFilePaths(ctx context.Context, pathOrPattern string, multiOpts *CSVMultiFileOptions) ([]string, error) {
+func (e *Executor) resolveFilePaths(
+	ctx context.Context,
+	pathOrPattern string,
+	multiOpts *CSVMultiFileOptions,
+) ([]string, error) {
 	// Check if it's a glob pattern
 	if fileio.IsGlobPattern(pathOrPattern) {
 		return e.expandGlobPattern(ctx, pathOrPattern, multiOpts)
@@ -300,7 +305,11 @@ func (e *Executor) resolveFilePaths(ctx context.Context, pathOrPattern string, m
 }
 
 // expandGlobPattern expands a glob pattern to a list of file paths.
-func (e *Executor) expandGlobPattern(ctx context.Context, pattern string, multiOpts *CSVMultiFileOptions) ([]string, error) {
+func (e *Executor) expandGlobPattern(
+	ctx context.Context,
+	pattern string,
+	multiOpts *CSVMultiFileOptions,
+) ([]string, error) {
 	var fs filesystem.FileSystem
 	if filesystem.IsCloudURL(pattern) {
 		provider := NewFileSystemProvider(e.getSecretManager())
@@ -654,7 +663,11 @@ func (e *Executor) executeReadCSVMultiFile(
 }
 
 // sniffCSVSchema reads the schema from a CSV file without reading all data.
-func (e *Executor) sniffCSVSchema(ctx context.Context, path string, opts *csv.ReaderOptions) (fileio.FileSchema, error) {
+func (e *Executor) sniffCSVSchema(
+	ctx context.Context,
+	path string,
+	opts *csv.ReaderOptions,
+) (fileio.FileSchema, error) {
 	var reader *csv.Reader
 	var closer io.Closer
 
@@ -717,7 +730,11 @@ func (e *Executor) sniffCSVSchema(ctx context.Context, path string, opts *csv.Re
 }
 
 // readCSVFileChunks reads all chunks from a CSV file.
-func (e *Executor) readCSVFileChunks(ctx context.Context, path string, opts *csv.ReaderOptions) ([]*storage.DataChunk, error) {
+func (e *Executor) readCSVFileChunks(
+	ctx context.Context,
+	path string,
+	opts *csv.ReaderOptions,
+) ([]*storage.DataChunk, error) {
 	var reader *csv.Reader
 	var closer io.Closer
 
@@ -1007,7 +1024,8 @@ func (e *Executor) executeReadCSVAuto(
 	}
 
 	// Check if we need multi-file handling
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isHivePartitioningEnabled(multiOpts) {
 		return e.executeReadCSVSingleFile(ctx, paths[0], opts, plan)
 	}
 

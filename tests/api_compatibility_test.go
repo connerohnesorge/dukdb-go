@@ -163,7 +163,8 @@ func TestGeometryColumnScanning(t *testing.T) {
 
 	t.Run("Scan geometry type with ST_GeometryType", func(t *testing.T) {
 		var geomType string
-		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).Scan(&geomType)
+		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).
+			Scan(&geomType)
 		require.NoError(t, err)
 		assert.Equal(t, "POLYGON", geomType)
 	})
@@ -438,7 +439,9 @@ func TestExtendedTypesInQueries(t *testing.T) {
 		require.NoError(t, err)
 
 		// Query using JSON operator in WHERE clause
-		rows, err := db.Query(`SELECT id, data->>'name' FROM json_where_test WHERE data->'name' = '"Alice"'`)
+		rows, err := db.Query(
+			`SELECT id, data->>'name' FROM json_where_test WHERE data->'name' = '"Alice"'`,
+		)
 		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, rows.Close())
@@ -534,7 +537,8 @@ func TestExtendedTypesInQueries(t *testing.T) {
 
 		// Test json_extract function
 		var result string
-		err = db.QueryRow(`SELECT json_extract(data, 'count') FROM json_extract_test WHERE id = 1`).Scan(&result)
+		err = db.QueryRow(`SELECT json_extract(data, 'count') FROM json_extract_test WHERE id = 1`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "2", result)
 	})

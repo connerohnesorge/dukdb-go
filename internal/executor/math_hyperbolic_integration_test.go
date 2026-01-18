@@ -388,7 +388,12 @@ func TestIntegration_HyperbolicFunctions_Combined(t *testing.T) {
 
 	t.Run("Hyperbolic identity: cosh^2 - sinh^2 = 1", func(t *testing.T) {
 		// cosh^2(x) - sinh^2(x) = 1 for any x
-		result, err := executeMathQuery(t, exec, cat, "SELECT POW(COSH(1.5), 2) - POW(SINH(1.5), 2)")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT POW(COSH(1.5), 2) - POW(SINH(1.5), 2)",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 
@@ -512,7 +517,12 @@ func TestIntegration_HyperbolicFunctions_WithTable(t *testing.T) {
 
 	t.Run("Hyperbolic functions in WHERE clause", func(t *testing.T) {
 		// Select values where SINH(val) > 0
-		result, err := executeMathQuery(t, exec, cat, "SELECT val FROM hyperbolic_test WHERE SINH(val) > 0")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT val FROM hyperbolic_test WHERE SINH(val) > 0",
+		)
 		require.NoError(t, err)
 		// Should match 0.5, 1.0, 2.0 (where val > 0)
 		require.Len(t, result.Rows, 3)
@@ -520,7 +530,12 @@ func TestIntegration_HyperbolicFunctions_WithTable(t *testing.T) {
 
 	t.Run("Combined hyperbolic functions with columns", func(t *testing.T) {
 		// Calculate cosh^2(val) - sinh^2(val) for each value (should always be 1)
-		result, err := executeMathQuery(t, exec, cat, "SELECT POW(COSH(val), 2) - POW(SINH(val), 2) FROM hyperbolic_test")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT POW(COSH(val), 2) - POW(SINH(val), 2) FROM hyperbolic_test",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 5)
 

@@ -58,7 +58,12 @@ func TestCollectNonNullPairs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			yFloats, xFloats := collectNonNullPairs(tt.yValues, tt.xValues)
 			if len(yFloats) != tt.wantLen || len(xFloats) != tt.wantLen {
-				t.Errorf("collectNonNullPairs() got len = (%d, %d), want %d", len(yFloats), len(xFloats), tt.wantLen)
+				t.Errorf(
+					"collectNonNullPairs() got len = (%d, %d), want %d",
+					len(yFloats),
+					len(xFloats),
+					tt.wantLen,
+				)
 			}
 		})
 	}

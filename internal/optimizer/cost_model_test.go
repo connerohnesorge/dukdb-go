@@ -599,7 +599,12 @@ func TestEstimateIndexScanCost(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cost := model.EstimateIndexScanCost(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+			cost := model.EstimateIndexScanCost(
+				tc.selectivity,
+				tc.tableRows,
+				tc.tablePages,
+				tc.isIndexOnly,
+			)
 
 			assert.InDelta(t, tc.wantStartup, cost.StartupCost, 0.001, "startup cost mismatch")
 			assert.GreaterOrEqual(t, cost.TotalCost, tc.wantTotalMin, "total cost below minimum")
@@ -757,7 +762,12 @@ func TestShouldUseIndexScan(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := model.ShouldUseIndexScan(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+			result := model.ShouldUseIndexScan(
+				tc.selectivity,
+				tc.tableRows,
+				tc.tablePages,
+				tc.isIndexOnly,
+			)
 			assert.Equal(t, tc.wantIndex, result)
 		})
 	}
@@ -900,7 +910,12 @@ func TestEstimateIndexRangeScanCost(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cost := model.EstimateIndexRangeScanCost(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+			cost := model.EstimateIndexRangeScanCost(
+				tc.selectivity,
+				tc.tableRows,
+				tc.tablePages,
+				tc.isIndexOnly,
+			)
 
 			assert.InDelta(t, tc.wantStartup, cost.StartupCost, 0.001, "startup cost mismatch")
 			assert.GreaterOrEqual(t, cost.TotalCost, tc.wantTotalMin, "total cost below minimum")
@@ -1065,7 +1080,12 @@ func TestShouldUseIndexRangeScan(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := model.ShouldUseIndexRangeScan(tc.selectivity, tc.tableRows, tc.tablePages, tc.isIndexOnly)
+			result := model.ShouldUseIndexRangeScan(
+				tc.selectivity,
+				tc.tableRows,
+				tc.tablePages,
+				tc.isIndexOnly,
+			)
 			assert.Equal(t, tc.wantIndex, result)
 		})
 	}

@@ -5,16 +5,17 @@ package duckdb
 // This produces DuckDB-compatible binary format for schema entries.
 //
 // Format (matches DuckDB's CreateInfo::Serialize):
-//   Property 100: type (CatalogType enum as varint, NOT a string!)
-//   Property 101: catalog name (string)
-//   Property 102: schema name (string)
-//   Property 103: temporary (bool)
-//   Property 104: internal (bool)
-//   Property 105: on_conflict (OnCreateConflict enum)
-//   Property 106: sql (string, optional)
-//   Property 107: comment (Value, optional)
-//   Property 108: tags (map<string,string>, optional)
-//   MESSAGE_TERMINATOR (0xFFFF)
+//
+//	Property 100: type (CatalogType enum as varint, NOT a string!)
+//	Property 101: catalog name (string)
+//	Property 102: schema name (string)
+//	Property 103: temporary (bool)
+//	Property 104: internal (bool)
+//	Property 105: on_conflict (OnCreateConflict enum)
+//	Property 106: sql (string, optional)
+//	Property 107: comment (Value, optional)
+//	Property 108: tags (map<string,string>, optional)
+//	MESSAGE_TERMINATOR (0xFFFF)
 func SerializeCreateSchemaInfo(s *BinarySerializer, schema *SchemaCatalogEntry) {
 	// Property 100: type (CatalogType enum, NOT a string!)
 	s.WriteProperty(PropCreateType, "type", uint8(CatalogSchemaEntry))
@@ -72,12 +73,13 @@ func SerializeCreateSchemaInfo(s *BinarySerializer, schema *SchemaCatalogEntry) 
 // entryName is the name of the catalog entry (e.g., schema name, table name).
 //
 // Format:
-//   Property 100: type (entry type string)
-//   Property 101: catalog name (string)
-//   Property 102: schema name (string)
-//   Property 103: on_conflict (OnCreateConflict enum as uint8)
-//   Property 104: comment (string, optional - skip if empty)
-//   Property 105: tags (map<string,string>, optional - skip if empty)
+//
+//	Property 100: type (entry type string)
+//	Property 101: catalog name (string)
+//	Property 102: schema name (string)
+//	Property 103: on_conflict (OnCreateConflict enum as uint8)
+//	Property 104: comment (string, optional - skip if empty)
+//	Property 105: tags (map<string,string>, optional - skip if empty)
 func SerializeCreateInfoBase(s *BinarySerializer, info *CreateInfo, entryType, entryName string) {
 	// Property 100: type
 	s.WriteProperty(PropCreateType, "type", entryType)
@@ -116,8 +118,9 @@ func SerializeCreateInfoBase(s *BinarySerializer, info *CreateInfo, entryType, e
 // This produces DuckDB-compatible binary format for column types.
 //
 // Format:
-//   Property 100: type_id (LogicalTypeId enum as uint8)
-//   Property 101: type_info (ExtraTypeInfo, optional, nullable pointer)
+//
+//	Property 100: type_id (LogicalTypeId enum as uint8)
+//	Property 101: type_info (ExtraTypeInfo, optional, nullable pointer)
 //
 // Note: physical_type is NOT serialized - it's derived from type_id at runtime.
 // IMPORTANT: LogicalType does NOT have its own terminator when serialized as a nested
@@ -128,11 +131,11 @@ func SerializeLogicalType(s *BinarySerializer, typeID LogicalTypeID, modifiers *
 
 	// Property 101: type_info - optional, for types that need extra info
 	// Only write if we have meaningful type info to serialize
-	needsTypeInfo := modifiers != nil && (
-		(typeID == TypeDecimal && (modifiers.Width != 0 || modifiers.Scale != 0)) ||
-		((typeID == TypeVarchar || typeID == TypeChar) && modifiers.Collation != "") ||
-		(typeID == TypeList && modifiers.ChildType != nil) ||
-		(typeID == TypeStruct && len(modifiers.StructFields) > 0))
+	needsTypeInfo := modifiers != nil &&
+		((typeID == TypeDecimal && (modifiers.Width != 0 || modifiers.Scale != 0)) ||
+			((typeID == TypeVarchar || typeID == TypeChar) && modifiers.Collation != "") ||
+			(typeID == TypeList && modifiers.ChildType != nil) ||
+			(typeID == TypeStruct && len(modifiers.StructFields) > 0))
 
 	if needsTypeInfo {
 		s.OnPropertyBegin(PropLogicalTypeInfo, "type_info")
@@ -186,14 +189,15 @@ func SerializeLogicalType(s *BinarySerializer, typeID LogicalTypeID, modifiers *
 // This produces DuckDB-compatible binary format for column definitions.
 //
 // Format:
-//   Property 100: name (string)
-//   Property 101: type (LogicalType - nested object)
-//   Property 102: expression (optional, for generated columns)
-//   Property 103: category (ColumnCategory enum)
-//   Property 104: compression_type (optional)
-//   Property 105: comment (string, optional)
-//   Property 106: tags (map<string,string>, optional)
-//   MESSAGE_TERMINATOR (0xFFFF)
+//
+//	Property 100: name (string)
+//	Property 101: type (LogicalType - nested object)
+//	Property 102: expression (optional, for generated columns)
+//	Property 103: category (ColumnCategory enum)
+//	Property 104: compression_type (optional)
+//	Property 105: comment (string, optional)
+//	Property 106: tags (map<string,string>, optional)
+//	MESSAGE_TERMINATOR (0xFFFF)
 func SerializeColumnDefinition(s *BinarySerializer, col *ColumnDefinition) {
 	// Property 100: column name
 	s.WriteProperty(PropColumnDefName, "name", col.Name)
@@ -234,20 +238,21 @@ func SerializeColumnDefinition(s *BinarySerializer, col *ColumnDefinition) {
 // This produces DuckDB-compatible binary format for table entries.
 //
 // Format (matches DuckDB's CreateInfo::Serialize + CreateTableInfo::Serialize):
-//   Property 100: type (CatalogType enum = 1 for TABLE_ENTRY)
-//   Property 101: catalog name (string)
-//   Property 102: schema name (string)
-//   Property 103: temporary (bool)
-//   Property 104: internal (bool)
-//   Property 105: on_conflict (OnCreateConflict enum)
-//   Property 106: sql (string, optional)
-//   Property 107: comment (Value, optional)
-//   Property 108: tags (map, optional)
-//   Property 200: table name (string)
-//   Property 201: columns (ColumnList object)
-//   Property 202: constraints (list<Constraint>)
-//   Property 203: query (optional, for CREATE TABLE AS)
-//   MESSAGE_TERMINATOR (0xFFFF)
+//
+//	Property 100: type (CatalogType enum = 1 for TABLE_ENTRY)
+//	Property 101: catalog name (string)
+//	Property 102: schema name (string)
+//	Property 103: temporary (bool)
+//	Property 104: internal (bool)
+//	Property 105: on_conflict (OnCreateConflict enum)
+//	Property 106: sql (string, optional)
+//	Property 107: comment (Value, optional)
+//	Property 108: tags (map, optional)
+//	Property 200: table name (string)
+//	Property 201: columns (ColumnList object)
+//	Property 202: constraints (list<Constraint>)
+//	Property 203: query (optional, for CREATE TABLE AS)
+//	MESSAGE_TERMINATOR (0xFFFF)
 func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 	// Property 100: type (CatalogType enum, NOT a string!)
 	s.WriteProperty(PropCreateType, "type", uint8(CatalogTableEntry))
@@ -346,12 +351,13 @@ func SerializeCreateTableInfo(s *BinarySerializer, table *TableCatalogEntry) {
 // This produces DuckDB-compatible binary format for table constraints.
 //
 // Format:
-//   Property 100: type (ConstraintType enum)
-//   Property 101: name (string, optional)
-//   Property 102: column indices (list<uint64>)
-//   Property 103: expression (string, for CHECK constraints, optional)
-//   Property 104: foreign key info (for FK constraints, optional)
-//   MESSAGE_TERMINATOR (0xFFFF)
+//
+//	Property 100: type (ConstraintType enum)
+//	Property 101: name (string, optional)
+//	Property 102: column indices (list<uint64>)
+//	Property 103: expression (string, for CHECK constraints, optional)
+//	Property 104: foreign key info (for FK constraints, optional)
+//	MESSAGE_TERMINATOR (0xFFFF)
 func SerializeConstraint(s *BinarySerializer, c *Constraint) {
 	// Property 100: type
 	s.WriteProperty(100, "type", uint8(c.Type))
@@ -405,13 +411,14 @@ func SerializeConstraint(s *BinarySerializer, c *Constraint) {
 // This produces DuckDB-compatible binary format for view entries.
 //
 // Format:
-//   Property 100: type = "view"
-//   Property 101: catalog name (string)
-//   Property 102: schema name (string)
-//   Property 103: on_conflict (OnCreateConflict enum)
-//   Property 104: view name (string)
-//   Property 200: query (string)
-//   MESSAGE_TERMINATOR (0xFFFF)
+//
+//	Property 100: type = "view"
+//	Property 101: catalog name (string)
+//	Property 102: schema name (string)
+//	Property 103: on_conflict (OnCreateConflict enum)
+//	Property 104: view name (string)
+//	Property 200: query (string)
+//	MESSAGE_TERMINATOR (0xFFFF)
 func SerializeCreateViewInfo(s *BinarySerializer, view *ViewCatalogEntry) {
 	// Property 100: type = "view"
 	s.WriteProperty(PropCreateType, "type", "view")
@@ -486,12 +493,13 @@ type TableStorageInfo struct {
 // and property 100 (entry data).
 //
 // Format (matches DuckDB's CheckpointWriter::WriteEntry + Write*):
-//   Property 99: catalog_type (CatalogType enum as uint8)
-//   Property 100: [nullable bool] + entry-specific data (CreateInfo fields + terminator)
-//   For TABLE entries only:
-//     Property 101: table_pointer (MetaBlockPointer object)
-//     Property 102: total_rows (uint64)
-//     Property 103: index_pointers (empty list for forward compatibility)
+//
+//	Property 99: catalog_type (CatalogType enum as uint8)
+//	Property 100: [nullable bool] + entry-specific data (CreateInfo fields + terminator)
+//	For TABLE entries only:
+//	  Property 101: table_pointer (MetaBlockPointer object)
+//	  Property 102: total_rows (uint64)
+//	  Property 103: index_pointers (empty list for forward compatibility)
 //
 // The entry data (property 100) contains the CreateInfo serialization specific to each
 // catalog entry type (schema, table, view, index, sequence, type).
@@ -503,7 +511,11 @@ type TableStorageInfo struct {
 // - Table 1: BlockIndex=4 (sub-blocks 4-6 for 3-column table)
 //
 // For other entry types, tableStorageInfo can be nil.
-func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry, tableStorageInfo *TableStorageInfo) {
+func SerializeCatalogEntryBinary(
+	s *BinarySerializer,
+	entry CatalogEntry,
+	tableStorageInfo *TableStorageInfo,
+) {
 	// Property 99: catalog_type
 	s.WriteProperty(PropCatalogType, "catalog_type", uint8(entry.Type()))
 
@@ -561,19 +573,24 @@ func SerializeCatalogEntryBinary(s *BinarySerializer, entry CatalogEntry, tableS
 // These fields are written after CreateTableInfo by DuckDB's TableDataWriter::FinalizeTable.
 //
 // Format:
-//   Property 101: table_pointer (MetaBlockPointer object)
-//     - Property 100: block_pointer (uint64, default: 0, but INVALID_INDEX is not default!)
-//     - Property 101: offset (uint32, default: 0)
-//     - MESSAGE_TERMINATOR (0xFFFF)
-//   Property 102: total_rows (uint64)
-//   Property 103: index_pointers (empty list of BlockPointer for forward compatibility)
+//
+//	Property 101: table_pointer (MetaBlockPointer object)
+//	  - Property 100: block_pointer (uint64, default: 0, but INVALID_INDEX is not default!)
+//	  - Property 101: offset (uint32, default: 0)
+//	  - MESSAGE_TERMINATOR (0xFFFF)
+//	Property 102: total_rows (uint64)
+//	Property 103: index_pointers (empty list of BlockPointer for forward compatibility)
 //
 // Parameters:
 //   - tablePointer: The MetaBlockPointer to the table storage metadata block.
 //     For empty tables (no row groups), use InvalidBlockID.
 //   - totalRows: The total number of rows in the table (sum of all row group tuple counts).
 //     For empty tables, use 0.
-func serializeTableDataPointer(s *BinarySerializer, tablePointer MetaBlockPointer, totalRows uint64) {
+func serializeTableDataPointer(
+	s *BinarySerializer,
+	tablePointer MetaBlockPointer,
+	totalRows uint64,
+) {
 	// Property 101: table_pointer (MetaBlockPointer)
 	// Native DuckDB uses 0x100000000000000 (2^56) as the block_pointer for empty tables.
 	// This encodes to block_id=0, block_index=1, pointing to table storage in sub-block 1.

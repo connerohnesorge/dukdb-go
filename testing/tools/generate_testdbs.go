@@ -14,17 +14,25 @@ import (
 
 // DatabaseConfig defines the configuration for test database generation
 type DatabaseConfig struct {
-	Name          string
-	Size          string // "small", "medium", "large"
-	Distribution  string // "uniform", "skewed", "clustered"
-	RowCount      int64
-	ColumnCount   int
-	Description   string
+	Name         string
+	Size         string // "small", "medium", "large"
+	Distribution string // "uniform", "skewed", "clustered"
+	RowCount     int64
+	ColumnCount  int
+	Description  string
 }
 
 func main() {
-	outDir := flag.String("output", "./testing/testdata/databases", "Output directory for test databases")
-	dbFile := flag.String("sql", "./testing/tools/generate_test_databases.sql", "SQL generation script")
+	outDir := flag.String(
+		"output",
+		"./testing/testdata/databases",
+		"Output directory for test databases",
+	)
+	dbFile := flag.String(
+		"sql",
+		"./testing/tools/generate_test_databases.sql",
+		"SQL generation script",
+	)
 	generateSchema := flag.Bool("schema", false, "Only generate schema, don't populate data")
 
 	flag.Parse()
@@ -48,39 +56,39 @@ func main() {
 	// Generate individual specialized databases
 	databases := []DatabaseConfig{
 		{
-			Name:        "small_uniform.db",
-			Size:        "small",
+			Name:         "small_uniform.db",
+			Size:         "small",
 			Distribution: "uniform",
-			RowCount:   1000,
-			Description: "Small table with uniform distribution",
+			RowCount:     1000,
+			Description:  "Small table with uniform distribution",
 		},
 		{
-			Name:        "small_skewed.db",
-			Size:        "small",
+			Name:         "small_skewed.db",
+			Size:         "small",
 			Distribution: "skewed",
-			RowCount:   1000,
-			Description: "Small table with skewed (Pareto 80/20) distribution",
+			RowCount:     1000,
+			Description:  "Small table with skewed (Pareto 80/20) distribution",
 		},
 		{
-			Name:        "medium_uniform.db",
-			Size:        "medium",
+			Name:         "medium_uniform.db",
+			Size:         "medium",
 			Distribution: "uniform",
-			RowCount:   100000,
-			Description: "Medium table with uniform distribution",
+			RowCount:     100000,
+			Description:  "Medium table with uniform distribution",
 		},
 		{
-			Name:        "medium_skewed.db",
-			Size:        "medium",
+			Name:         "medium_skewed.db",
+			Size:         "medium",
 			Distribution: "skewed",
-			RowCount:   100000,
-			Description: "Medium table with skewed distribution",
+			RowCount:     100000,
+			Description:  "Medium table with skewed distribution",
 		},
 		{
-			Name:        "large_uniform.db",
-			Size:        "large",
+			Name:         "large_uniform.db",
+			Size:         "large",
 			Distribution: "uniform",
-			RowCount:   1000000,
-			Description: "Large table (1M rows) with uniform distribution",
+			RowCount:     1000000,
+			Description:  "Large table (1M rows) with uniform distribution",
 		},
 	}
 
@@ -175,7 +183,8 @@ func printSummary(outDir string) {
 
 	totalSize := int64(0)
 	for _, file := range files {
-		if !file.IsDir() && (filepath.Ext(file.Name()) == ".db" || filepath.Ext(file.Name()) == ".duckdb") {
+		if !file.IsDir() &&
+			(filepath.Ext(file.Name()) == ".db" || filepath.Ext(file.Name()) == ".duckdb") {
 			size := file.Size()
 			totalSize += size
 			fmt.Printf("  %s: %.2f MB\n", file.Name(), float64(size)/1024/1024)

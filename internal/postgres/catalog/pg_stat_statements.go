@@ -5,39 +5,39 @@ package catalog
 // pg_stat_statements columns - PostgreSQL statement statistics.
 // Reference: https://www.postgresql.org/docs/current/pgstatstatements.html
 var pgStatStatementsColumns = []string{
-	"userid",               // OID of the user who executed the statement
-	"dbid",                 // OID of the database in which the statement was executed
-	"toplevel",             // True if the query was executed as a top-level statement
-	"queryid",              // Hash code to identify identical statements
-	"query",                // Text of a representative statement
-	"plans",                // Number of times the statement was planned
-	"total_plan_time",      // Total time spent planning the statement (milliseconds)
-	"min_plan_time",        // Minimum time spent planning the statement
-	"max_plan_time",        // Maximum time spent planning the statement
-	"mean_plan_time",       // Mean time spent planning the statement
-	"stddev_plan_time",     // Population standard deviation of planning time
-	"calls",                // Number of times the statement was executed
-	"total_exec_time",      // Total time spent executing the statement (milliseconds)
-	"min_exec_time",        // Minimum time spent executing the statement
-	"max_exec_time",        // Maximum time spent executing the statement
-	"mean_exec_time",       // Mean time spent executing the statement
-	"stddev_exec_time",     // Population standard deviation of execution time
-	"rows",                 // Total number of rows retrieved or affected
-	"shared_blks_hit",      // Total number of shared block cache hits
-	"shared_blks_read",     // Total number of shared blocks read
-	"shared_blks_dirtied",  // Total number of shared blocks dirtied
-	"shared_blks_written",  // Total number of shared blocks written
-	"local_blks_hit",       // Total number of local block cache hits
-	"local_blks_read",      // Total number of local blocks read
-	"local_blks_dirtied",   // Total number of local blocks dirtied
-	"local_blks_written",   // Total number of local blocks written
-	"temp_blks_read",       // Total number of temp blocks read
-	"temp_blks_written",    // Total number of temp blocks written
-	"blk_read_time",        // Total time spent reading blocks (milliseconds)
-	"blk_write_time",       // Total time spent writing blocks (milliseconds)
-	"wal_records",          // Total number of WAL records generated
-	"wal_fpi",              // Total number of WAL full page images generated
-	"wal_bytes",            // Total bytes of WAL generated
+	"userid",              // OID of the user who executed the statement
+	"dbid",                // OID of the database in which the statement was executed
+	"toplevel",            // True if the query was executed as a top-level statement
+	"queryid",             // Hash code to identify identical statements
+	"query",               // Text of a representative statement
+	"plans",               // Number of times the statement was planned
+	"total_plan_time",     // Total time spent planning the statement (milliseconds)
+	"min_plan_time",       // Minimum time spent planning the statement
+	"max_plan_time",       // Maximum time spent planning the statement
+	"mean_plan_time",      // Mean time spent planning the statement
+	"stddev_plan_time",    // Population standard deviation of planning time
+	"calls",               // Number of times the statement was executed
+	"total_exec_time",     // Total time spent executing the statement (milliseconds)
+	"min_exec_time",       // Minimum time spent executing the statement
+	"max_exec_time",       // Maximum time spent executing the statement
+	"mean_exec_time",      // Mean time spent executing the statement
+	"stddev_exec_time",    // Population standard deviation of execution time
+	"rows",                // Total number of rows retrieved or affected
+	"shared_blks_hit",     // Total number of shared block cache hits
+	"shared_blks_read",    // Total number of shared blocks read
+	"shared_blks_dirtied", // Total number of shared blocks dirtied
+	"shared_blks_written", // Total number of shared blocks written
+	"local_blks_hit",      // Total number of local block cache hits
+	"local_blks_read",     // Total number of local blocks read
+	"local_blks_dirtied",  // Total number of local blocks dirtied
+	"local_blks_written",  // Total number of local blocks written
+	"temp_blks_read",      // Total number of temp blocks read
+	"temp_blks_written",   // Total number of temp blocks written
+	"blk_read_time",       // Total time spent reading blocks (milliseconds)
+	"blk_write_time",      // Total time spent writing blocks (milliseconds)
+	"wal_records",         // Total number of WAL records generated
+	"wal_fpi",             // Total number of WAL full page images generated
+	"wal_bytes",           // Total bytes of WAL generated
 }
 
 // StatementStatsProvider is an interface for getting statement statistics.
@@ -110,7 +110,10 @@ type PgStatStatementsView struct {
 }
 
 // NewPgStatStatementsView creates a new pg_stat_statements view handler.
-func NewPgStatStatementsView(provider StatementStatsProvider, databaseName string) *PgStatStatementsView {
+func NewPgStatStatementsView(
+	provider StatementStatsProvider,
+	databaseName string,
+) *PgStatStatementsView {
 	return &PgStatStatementsView{
 		provider:     provider,
 		databaseName: databaseName,

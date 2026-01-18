@@ -434,7 +434,10 @@ func ApplyFilter(chunk *storage.DataChunk, filter FilterExpr) *storage.DataChunk
 
 // ApplyFilterFunc applies a filter function to a DataChunk.
 // The filter function receives the chunk and row index and returns true if the row passes.
-func ApplyFilterFunc(chunk *storage.DataChunk, filterFunc func(chunk *storage.DataChunk, rowIdx int) bool) *storage.DataChunk {
+func ApplyFilterFunc(
+	chunk *storage.DataChunk,
+	filterFunc func(chunk *storage.DataChunk, rowIdx int) bool,
+) *storage.DataChunk {
 	if chunk == nil || filterFunc == nil {
 		return chunk
 	}
@@ -492,7 +495,11 @@ func ApplyProjection(chunk *storage.DataChunk, projections []int) *storage.DataC
 // ApplyFilterAndProjection applies both filter and projection efficiently.
 // This is more efficient than calling ApplyFilter followed by ApplyProjection
 // because it only copies matching rows once.
-func ApplyFilterAndProjection(chunk *storage.DataChunk, filter FilterExpr, projections []int) *storage.DataChunk {
+func ApplyFilterAndProjection(
+	chunk *storage.DataChunk,
+	filter FilterExpr,
+	projections []int,
+) *storage.DataChunk {
 	if chunk == nil {
 		return nil
 	}
@@ -659,8 +666,8 @@ func toFloat64Val(v any) (float64, bool) {
 // InMemoryTableReader is a simple in-memory implementation of TableDataReader.
 // Useful for testing and small tables that fit in memory.
 type InMemoryTableReader struct {
-	mu          sync.RWMutex
-	tables      map[uint64]*inMemoryTable
+	mu           sync.RWMutex
+	tables       map[uint64]*inMemoryTable
 	rowGroupSize int
 }
 
@@ -682,7 +689,11 @@ func NewInMemoryTableReader(rowGroupSize int) *InMemoryTableReader {
 }
 
 // RegisterTable registers a table with its column information.
-func (r *InMemoryTableReader) RegisterTable(tableOID uint64, columnNames []string, columnTypes []dukdb.Type) {
+func (r *InMemoryTableReader) RegisterTable(
+	tableOID uint64,
+	columnNames []string,
+	columnTypes []dukdb.Type,
+) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -704,7 +715,11 @@ func (r *InMemoryTableReader) AddChunk(tableOID uint64, chunk *storage.DataChunk
 }
 
 // ReadRowGroup implements TableDataReader.
-func (r *InMemoryTableReader) ReadRowGroup(tableOID uint64, rowGroupID int, projections []int) (*storage.DataChunk, error) {
+func (r *InMemoryTableReader) ReadRowGroup(
+	tableOID uint64,
+	rowGroupID int,
+	projections []int,
+) (*storage.DataChunk, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

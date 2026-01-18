@@ -147,7 +147,9 @@ func (e *Executor) executeIcebergMetadata(
 }
 
 // emptyIcebergMetadataResult returns an empty result with the correct schema.
-func (e *Executor) emptyIcebergMetadataResult(plan *planner.PhysicalTableFunctionScan) *ExecutionResult {
+func (e *Executor) emptyIcebergMetadataResult(
+	plan *planner.PhysicalTableFunctionScan,
+) *ExecutionResult {
 	columns := []string{
 		"file_path",
 		"file_format",
@@ -229,6 +231,10 @@ func bytesMapToJSONString(m map[int][]byte) string {
 }
 
 // getIcebergTable opens an Iceberg table with the given options.
-func getIcebergTable(ctx context.Context, path string, opts *iceberg.TableOptions) (*iceberg.Table, error) {
+func getIcebergTable(
+	ctx context.Context,
+	path string,
+	opts *iceberg.TableOptions,
+) (*iceberg.Table, error) {
 	return iceberg.OpenTable(ctx, path, opts)
 }

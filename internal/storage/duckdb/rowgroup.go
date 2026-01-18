@@ -718,7 +718,10 @@ func DeserializeValidityMask(data []byte) (*ValidityMask, error) {
 
 // Serialize writes NumericStatistics to a BinaryWriter.
 // Note: The caller must handle type-specific min/max serialization.
-func (s *NumericStatistics) Serialize(w *BinaryWriter, writeValue func(*BinaryWriter, any) error) error {
+func (s *NumericStatistics) Serialize(
+	w *BinaryWriter,
+	writeValue func(*BinaryWriter, any) error,
+) error {
 	w.WriteBool(s.HasMin)
 	if s.HasMin {
 		if err := writeValue(w, s.Min); err != nil {
@@ -738,7 +741,10 @@ func (s *NumericStatistics) Serialize(w *BinaryWriter, writeValue func(*BinaryWr
 
 // Deserialize reads NumericStatistics from a BinaryReader.
 // Note: The caller must handle type-specific min/max deserialization.
-func (s *NumericStatistics) Deserialize(r *BinaryReader, readValue func(*BinaryReader) (any, error)) error {
+func (s *NumericStatistics) Deserialize(
+	r *BinaryReader,
+	readValue func(*BinaryReader) (any, error),
+) error {
 	s.HasMin = r.ReadBool()
 	if s.HasMin {
 		var err error
@@ -829,7 +835,11 @@ func NewRowGroupPointer(tableOID, rowStart, tupleCount uint64, columnCount int) 
 }
 
 // NewDataPointer creates a new DataPointer with default values.
-func NewDataPointer(rowStart, tupleCount uint64, block BlockPointer, compression CompressionType) *DataPointer {
+func NewDataPointer(
+	rowStart, tupleCount uint64,
+	block BlockPointer,
+	compression CompressionType,
+) *DataPointer {
 	return &DataPointer{
 		RowStart:    rowStart,
 		TupleCount:  tupleCount,

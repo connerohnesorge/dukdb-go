@@ -84,7 +84,11 @@ func ParseCell(cell string) (col int, row int, err error) {
 	row = 0
 	for _, r := range rowStr {
 		if r < '0' || r > '9' {
-			return 0, 0, fmt.Errorf("invalid row number in cell reference %q: non-digit character %q", cell, r)
+			return 0, 0, fmt.Errorf(
+				"invalid row number in cell reference %q: non-digit character %q",
+				cell,
+				r,
+			)
 		}
 		row = row*10 + int(r-'0')
 	}

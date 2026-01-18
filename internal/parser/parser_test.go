@@ -868,8 +868,8 @@ func findCastInExpr(expr Expr, targetType dukdb.Type) bool {
 // Task 1.1: Verify parser correctly captures WHERE clauses in UpdateStmt AST nodes
 func TestParseUpdateWithWhere(t *testing.T) {
 	tests := []struct {
-		name    string
-		sql     string
+		name     string
+		sql      string
 		hasWhere bool
 	}{
 		{
@@ -1065,10 +1065,10 @@ func TestParseUpdateWhereInList(t *testing.T) {
 // Test set operations (UNION, INTERSECT, EXCEPT)
 func TestParseSetOperations(t *testing.T) {
 	tests := []struct {
-		name     string
-		sql      string
-		wantOp   SetOpType
-		wantErr  bool
+		name    string
+		sql     string
+		wantOp  SetOpType
+		wantErr bool
 	}{
 		{
 			name:    "UNION",
@@ -1181,7 +1181,13 @@ func TestTableExtractorSetOperations(t *testing.T) {
 			tables := extractor.GetTables()
 
 			if len(tables) != len(tt.expected) {
-				t.Errorf("Got %d tables %v, expected %d tables %v", len(tables), tables, len(tt.expected), tt.expected)
+				t.Errorf(
+					"Got %d tables %v, expected %d tables %v",
+					len(tables),
+					tables,
+					len(tt.expected),
+					tt.expected,
+				)
 				return
 			}
 
@@ -1371,7 +1377,11 @@ func TestParseWindowExcludeClause(t *testing.T) {
 			}
 
 			if windowExpr.Frame.Exclude != tt.excludeMode {
-				t.Errorf("Expected exclude mode %v, got %v", tt.excludeMode, windowExpr.Frame.Exclude)
+				t.Errorf(
+					"Expected exclude mode %v, got %v",
+					tt.excludeMode,
+					windowExpr.Frame.Exclude,
+				)
 			}
 		})
 	}
@@ -1430,7 +1440,11 @@ func TestParseWindowNullsFirstLast(t *testing.T) {
 			}
 
 			if windowExpr.OrderBy[0].NullsFirst != tt.nullsFirst {
-				t.Errorf("Expected NullsFirst = %v, got %v", tt.nullsFirst, windowExpr.OrderBy[0].NullsFirst)
+				t.Errorf(
+					"Expected NullsFirst = %v, got %v",
+					tt.nullsFirst,
+					windowExpr.OrderBy[0].NullsFirst,
+				)
 			}
 		})
 	}
@@ -1641,7 +1655,11 @@ func TestParseWindowValueFunctionsWithIgnoreNulls(t *testing.T) {
 	}{
 		{"LAG", "SELECT LAG(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LAG"},
 		{"LEAD", "SELECT LEAD(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LEAD"},
-		{"FIRST_VALUE", "SELECT FIRST_VALUE(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "FIRST_VALUE"},
+		{
+			"FIRST_VALUE",
+			"SELECT FIRST_VALUE(x) IGNORE NULLS OVER (ORDER BY id) FROM t",
+			"FIRST_VALUE",
+		},
 		{"LAST_VALUE", "SELECT LAST_VALUE(x) IGNORE NULLS OVER (ORDER BY id) FROM t", "LAST_VALUE"},
 		{"NTH_VALUE", "SELECT NTH_VALUE(x, 2) IGNORE NULLS OVER (ORDER BY id) FROM t", "NTH_VALUE"},
 	}
@@ -1911,84 +1929,84 @@ func TestParseWindowFunctions(t *testing.T) {
 // Test INTERVAL literal parsing
 func TestParseIntervalLiteral(t *testing.T) {
 	tests := []struct {
-		name        string
-		sql         string
-		wantMonths  int32
-		wantDays    int32
-		wantMicros  int64
-		wantErr     bool
+		name       string
+		sql        string
+		wantMonths int32
+		wantDays   int32
+		wantMicros int64
+		wantErr    bool
 	}{
 		{
-			name:        "INTERVAL with DAY unit keyword",
-			sql:         "SELECT INTERVAL '5' DAY",
-			wantMonths:  0,
-			wantDays:    5,
-			wantMicros:  0,
-			wantErr:     false,
+			name:       "INTERVAL with DAY unit keyword",
+			sql:        "SELECT INTERVAL '5' DAY",
+			wantMonths: 0,
+			wantDays:   5,
+			wantMicros: 0,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with HOUR unit keyword",
-			sql:         "SELECT INTERVAL '2' HOUR",
-			wantMonths:  0,
-			wantDays:    0,
-			wantMicros:  2 * 60 * 60 * 1_000_000,
-			wantErr:     false,
+			name:       "INTERVAL with HOUR unit keyword",
+			sql:        "SELECT INTERVAL '2' HOUR",
+			wantMonths: 0,
+			wantDays:   0,
+			wantMicros: 2 * 60 * 60 * 1_000_000,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with MONTH unit keyword",
-			sql:         "SELECT INTERVAL '3' MONTH",
-			wantMonths:  3,
-			wantDays:    0,
-			wantMicros:  0,
-			wantErr:     false,
+			name:       "INTERVAL with MONTH unit keyword",
+			sql:        "SELECT INTERVAL '3' MONTH",
+			wantMonths: 3,
+			wantDays:   0,
+			wantMicros: 0,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with YEAR unit keyword",
-			sql:         "SELECT INTERVAL '1' YEAR",
-			wantMonths:  12,
-			wantDays:    0,
-			wantMicros:  0,
-			wantErr:     false,
+			name:       "INTERVAL with YEAR unit keyword",
+			sql:        "SELECT INTERVAL '1' YEAR",
+			wantMonths: 12,
+			wantDays:   0,
+			wantMicros: 0,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with inline unit",
-			sql:         "SELECT INTERVAL '5 days'",
-			wantMonths:  0,
-			wantDays:    5,
-			wantMicros:  0,
-			wantErr:     false,
+			name:       "INTERVAL with inline unit",
+			sql:        "SELECT INTERVAL '5 days'",
+			wantMonths: 0,
+			wantDays:   5,
+			wantMicros: 0,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with compound units",
-			sql:         "SELECT INTERVAL '2 hours 30 minutes'",
-			wantMonths:  0,
-			wantDays:    0,
-			wantMicros:  2*60*60*1_000_000 + 30*60*1_000_000,
-			wantErr:     false,
+			name:       "INTERVAL with compound units",
+			sql:        "SELECT INTERVAL '2 hours 30 minutes'",
+			wantMonths: 0,
+			wantDays:   0,
+			wantMicros: 2*60*60*1_000_000 + 30*60*1_000_000,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with WEEK unit",
-			sql:         "SELECT INTERVAL '2' WEEKS",
-			wantMonths:  0,
-			wantDays:    14,
-			wantMicros:  0,
-			wantErr:     false,
+			name:       "INTERVAL with WEEK unit",
+			sql:        "SELECT INTERVAL '2' WEEKS",
+			wantMonths: 0,
+			wantDays:   14,
+			wantMicros: 0,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with MINUTE unit",
-			sql:         "SELECT INTERVAL '45' MINUTE",
-			wantMonths:  0,
-			wantDays:    0,
-			wantMicros:  45 * 60 * 1_000_000,
-			wantErr:     false,
+			name:       "INTERVAL with MINUTE unit",
+			sql:        "SELECT INTERVAL '45' MINUTE",
+			wantMonths: 0,
+			wantDays:   0,
+			wantMicros: 45 * 60 * 1_000_000,
+			wantErr:    false,
 		},
 		{
-			name:        "INTERVAL with SECOND unit",
-			sql:         "SELECT INTERVAL '30' SECOND",
-			wantMonths:  0,
-			wantDays:    0,
-			wantMicros:  30 * 1_000_000,
-			wantErr:     false,
+			name:       "INTERVAL with SECOND unit",
+			sql:        "SELECT INTERVAL '30' SECOND",
+			wantMonths: 0,
+			wantDays:   0,
+			wantMicros: 30 * 1_000_000,
+			wantErr:    false,
 		},
 	}
 
@@ -2324,7 +2342,9 @@ func TestParseExcelTableFunctionAST(t *testing.T) {
 
 		unknownArg, exists := tableFunc.NamedArgs["unknown_opt"]
 		if !exists {
-			t.Fatal("Expected 'unknown_opt' in NamedArgs - unknown options should be stored without parse error")
+			t.Fatal(
+				"Expected 'unknown_opt' in NamedArgs - unknown options should be stored without parse error",
+			)
 		}
 		unknownLit, ok := unknownArg.(*Literal)
 		if !ok {
@@ -3681,7 +3701,10 @@ func TestParseArrayLiteral(t *testing.T) {
 		arrayExpr := tableRef.TableFunction.Args[0].(*ArrayExpr)
 
 		if len(arrayExpr.Elements) != 2 {
-			t.Errorf("Expected 2 elements (trailing comma should be ignored), got %d", len(arrayExpr.Elements))
+			t.Errorf(
+				"Expected 2 elements (trailing comma should be ignored), got %d",
+				len(arrayExpr.Elements),
+			)
 		}
 	})
 

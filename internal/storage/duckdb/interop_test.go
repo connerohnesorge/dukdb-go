@@ -87,7 +87,12 @@ func runDuckDBCommand(t *testing.T, dbPath, sql string) string {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		t.Fatalf("duckdb CLI failed: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
+		t.Fatalf(
+			"duckdb CLI failed: %v\nstderr: %s\nstdout: %s",
+			err,
+			stderr.String(),
+			stdout.String(),
+		)
 	}
 	return stdout.String()
 }
@@ -1055,7 +1060,12 @@ func BenchmarkDuckDBFileOpen(b *testing.B) {
 	dbPath := filepath.Join(b.TempDir(), "bench.duckdb")
 
 	// Create test file once
-	cmd := exec.Command("duckdb", dbPath, "-c", "CREATE TABLE test (id INTEGER); INSERT INTO test SELECT range FROM range(1000);")
+	cmd := exec.Command(
+		"duckdb",
+		dbPath,
+		"-c",
+		"CREATE TABLE test (id INTEGER); INSERT INTO test SELECT range FROM range(1000);",
+	)
 	if err := cmd.Run(); err != nil {
 		b.Fatalf("failed to create test file: %v", err)
 	}

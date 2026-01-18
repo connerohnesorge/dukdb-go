@@ -3,50 +3,50 @@ package catalog
 // pg_class columns - PostgreSQL relation (table/view/index/sequence) catalog
 // Reference: https://www.postgresql.org/docs/current/catalog-pg-class.html
 var pgClassColumns = []string{
-	"oid",                  // Row identifier
-	"relname",              // Name of the table, index, view, etc.
-	"relnamespace",         // OID of namespace containing this relation
-	"reltype",              // OID of data type for this table's row type (0 for index)
-	"reloftype",            // OID of a composite type if typed table, else 0
-	"relowner",             // Owner of the relation
-	"relam",                // Access method; 0 for sequences and views
-	"relfilenode",          // Name of on-disk file; 0 means relation is a mapped relation
-	"reltablespace",        // Tablespace; 0 means default tablespace
-	"relpages",             // Number of disk pages
-	"reltuples",            // Number of live rows in table
-	"relallvisible",        // Number of pages marked all-visible
-	"reltoastrelid",        // OID of the TOAST table, 0 if none
-	"relhasindex",          // True if has (or recently had) any indexes
-	"relisshared",          // True if shared across all databases
-	"relpersistence",       // p = permanent, u = unlogged, t = temporary
-	"relkind",              // r = table, i = index, S = sequence, v = view, etc.
-	"relnatts",             // Number of user columns
-	"relchecks",            // Number of CHECK constraints
-	"relhasrules",          // True if has any rules
-	"relhastriggers",       // True if has any triggers
-	"relhassubclass",       // True if has any inheritance children
-	"relrowsecurity",       // True if row security enabled
-	"relforcerowsecurity",  // True if row security forced for owner
-	"relispopulated",       // True if populated (non-MATERIALIZED VIEW)
-	"relreplident",         // Columns used to form replica identity
-	"relispartition",       // True if is a partition
-	"relrewrite",           // OID used during table rewrite, else 0
-	"relfrozenxid",         // All rows with xmax < this are frozen
-	"relminmxid",           // All rows with xmax < this are frozen
-	"relacl",               // Access privileges
-	"reloptions",           // Options
-	"relpartbound",         // Partition bound definition
+	"oid",                 // Row identifier
+	"relname",             // Name of the table, index, view, etc.
+	"relnamespace",        // OID of namespace containing this relation
+	"reltype",             // OID of data type for this table's row type (0 for index)
+	"reloftype",           // OID of a composite type if typed table, else 0
+	"relowner",            // Owner of the relation
+	"relam",               // Access method; 0 for sequences and views
+	"relfilenode",         // Name of on-disk file; 0 means relation is a mapped relation
+	"reltablespace",       // Tablespace; 0 means default tablespace
+	"relpages",            // Number of disk pages
+	"reltuples",           // Number of live rows in table
+	"relallvisible",       // Number of pages marked all-visible
+	"reltoastrelid",       // OID of the TOAST table, 0 if none
+	"relhasindex",         // True if has (or recently had) any indexes
+	"relisshared",         // True if shared across all databases
+	"relpersistence",      // p = permanent, u = unlogged, t = temporary
+	"relkind",             // r = table, i = index, S = sequence, v = view, etc.
+	"relnatts",            // Number of user columns
+	"relchecks",           // Number of CHECK constraints
+	"relhasrules",         // True if has any rules
+	"relhastriggers",      // True if has any triggers
+	"relhassubclass",      // True if has any inheritance children
+	"relrowsecurity",      // True if row security enabled
+	"relforcerowsecurity", // True if row security forced for owner
+	"relispopulated",      // True if populated (non-MATERIALIZED VIEW)
+	"relreplident",        // Columns used to form replica identity
+	"relispartition",      // True if is a partition
+	"relrewrite",          // OID used during table rewrite, else 0
+	"relfrozenxid",        // All rows with xmax < this are frozen
+	"relminmxid",          // All rows with xmax < this are frozen
+	"relacl",              // Access privileges
+	"reloptions",          // Options
+	"relpartbound",        // Partition bound definition
 }
 
 // relkind values
 const (
-	relKindTable    = "r" // ordinary table
-	relKindIndex    = "i" // index
-	relKindSequence = "S" // sequence
-	relKindView     = "v" // view
-	relKindMatView  = "m" // materialized view
-	relKindComposite = "c" // composite type
-	relKindForeign  = "f" // foreign table
+	relKindTable       = "r" // ordinary table
+	relKindIndex       = "i" // index
+	relKindSequence    = "S" // sequence
+	relKindView        = "v" // view
+	relKindMatView     = "m" // materialized view
+	relKindComposite   = "c" // composite type
+	relKindForeign     = "f" // foreign table
 	relKindPartitioned = "p" // partitioned table
 )
 
@@ -78,7 +78,7 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 				"relam":               int64(2),  // heap access method
 				"relfilenode":         tableOID,
 				"reltablespace":       int64(0),
-				"relpages":            int64(0), // Unknown
+				"relpages":            int64(0),    // Unknown
 				"reltuples":           float64(-1), // Unknown
 				"relallvisible":       int64(0),
 				"reltoastrelid":       int64(0),

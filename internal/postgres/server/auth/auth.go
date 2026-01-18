@@ -108,23 +108,23 @@ type Permission string
 
 // Predefined permissions.
 const (
-	PermConnect      Permission = "CONNECT"
-	PermCreateDB     Permission = "CREATEDB"
-	PermCreateRole   Permission = "CREATEROLE"
-	PermCreateTable  Permission = "CREATE"
-	PermSelect       Permission = "SELECT"
-	PermInsert       Permission = "INSERT"
-	PermUpdate       Permission = "UPDATE"
-	PermDelete       Permission = "DELETE"
-	PermTruncate     Permission = "TRUNCATE"
-	PermReferences   Permission = "REFERENCES"
-	PermTrigger      Permission = "TRIGGER"
-	PermExecute      Permission = "EXECUTE"
-	PermUsage        Permission = "USAGE"
-	PermAll          Permission = "ALL"
-	PermSuperuser    Permission = "SUPERUSER"
-	PermReplication  Permission = "REPLICATION"
-	PermBypassRLS    Permission = "BYPASSRLS"
+	PermConnect     Permission = "CONNECT"
+	PermCreateDB    Permission = "CREATEDB"
+	PermCreateRole  Permission = "CREATEROLE"
+	PermCreateTable Permission = "CREATE"
+	PermSelect      Permission = "SELECT"
+	PermInsert      Permission = "INSERT"
+	PermUpdate      Permission = "UPDATE"
+	PermDelete      Permission = "DELETE"
+	PermTruncate    Permission = "TRUNCATE"
+	PermReferences  Permission = "REFERENCES"
+	PermTrigger     Permission = "TRIGGER"
+	PermExecute     Permission = "EXECUTE"
+	PermUsage       Permission = "USAGE"
+	PermAll         Permission = "ALL"
+	PermSuperuser   Permission = "SUPERUSER"
+	PermReplication Permission = "REPLICATION"
+	PermBypassRLS   Permission = "BYPASSRLS"
 )
 
 // User represents a database user with authentication information.
@@ -354,7 +354,10 @@ func NewPasswordAuthenticator(provider UserProvider) *PasswordAuthenticator {
 }
 
 // Authenticate implements the Authenticator interface.
-func (a *PasswordAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *PasswordAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	if a.provider == nil {
 		return false, errors.New("no user provider configured")
 	}
@@ -401,7 +404,10 @@ func NewNoAuthenticator() *NoAuthenticator {
 
 // Authenticate implements the Authenticator interface.
 // It always returns true for any credentials.
-func (a *NoAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *NoAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	return true, nil
 }
 
@@ -426,7 +432,10 @@ func NewSimpleAuthenticator(username, password string) *SimpleAuthenticator {
 }
 
 // Authenticate implements the Authenticator interface.
-func (a *SimpleAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *SimpleAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	return username == a.username && password == a.password, nil
 }
 
@@ -467,7 +476,10 @@ func GenerateSCRAMCredentials(password string) (*SCRAMCredentials, error) {
 }
 
 // GenerateSCRAMCredentialsWithIterations generates SCRAM credentials with custom iteration count.
-func GenerateSCRAMCredentialsWithIterations(password string, iterations int) (*SCRAMCredentials, error) {
+func GenerateSCRAMCredentialsWithIterations(
+	password string,
+	iterations int,
+) (*SCRAMCredentials, error) {
 	// Generate random salt
 	salt := make([]byte, SCRAMSaltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -620,7 +632,10 @@ func NewSCRAMAuthenticator(provider UserProvider) *SCRAMAuthenticator {
 
 // Authenticate implements the Authenticator interface.
 // For SCRAM, this validates credentials after the SCRAM exchange is complete.
-func (a *SCRAMAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *SCRAMAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	if a.provider == nil {
 		return false, errors.New("no user provider configured")
 	}
@@ -663,7 +678,10 @@ func (a *SCRAMAuthenticator) Method() Method {
 
 // ProcessClientFirst processes the client's first SCRAM message.
 // Returns the server's first message.
-func (a *SCRAMAuthenticator) ProcessClientFirst(sessionID string, clientFirstMessage string) (string, error) {
+func (a *SCRAMAuthenticator) ProcessClientFirst(
+	sessionID string,
+	clientFirstMessage string,
+) (string, error) {
 	// Parse client-first-message
 	// Format: n,,n=<username>,r=<client-nonce>
 	// or p=<channel-binding>,a=<authzid>,n=<username>,r=<client-nonce>
@@ -753,7 +771,10 @@ func (a *SCRAMAuthenticator) ProcessClientFirst(sessionID string, clientFirstMes
 
 // ProcessClientFinal processes the client's final SCRAM message.
 // Returns the server's final message and whether authentication succeeded.
-func (a *SCRAMAuthenticator) ProcessClientFinal(sessionID string, clientFinalMessage string) (string, bool, error) {
+func (a *SCRAMAuthenticator) ProcessClientFinal(
+	sessionID string,
+	clientFinalMessage string,
+) (string, bool, error) {
 	// Get state
 	a.mu.Lock()
 	state, ok := a.states[sessionID]
@@ -826,7 +847,13 @@ func (a *SCRAMAuthenticator) ProcessClientFinal(sessionID string, clientFinalMes
 // verifyPassword verifies a password against SCRAM credentials.
 func (a *SCRAMAuthenticator) verifyPassword(password string, creds *SCRAMCredentials) bool {
 	// Derive salted password using PBKDF2
-	saltedPassword := pbkdf2.Key([]byte(password), creds.Salt, creds.Iterations, sha256.Size, sha256.New)
+	saltedPassword := pbkdf2.Key(
+		[]byte(password),
+		creds.Salt,
+		creds.Iterations,
+		sha256.Size,
+		sha256.New,
+	)
 
 	// Calculate client key: HMAC(SaltedPassword, "Client Key")
 	clientKey := hmacSHA256(saltedPassword, []byte("Client Key"))
@@ -920,7 +947,10 @@ func (a *CertificateAuthenticator) RemoveCNMapping(cn string) {
 
 // Authenticate implements the Authenticator interface.
 // For certificate auth, this validates that the certificate CN maps to the user.
-func (a *CertificateAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *CertificateAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	// In certificate auth, password is actually the certificate CN
 	// This is passed from the TLS handshake through context
 	certCN := CertCNFromContext(ctx)
@@ -1066,12 +1096,17 @@ func NewLDAPAuthenticator(config *LDAPConfig, provider UserProvider) *LDAPAuthen
 }
 
 // SetLDAPBindFunc sets a custom LDAP bind function (for testing).
-func (a *LDAPAuthenticator) SetLDAPBindFunc(fn func(server string, port int, bindDN, password string, useTLS bool) error) {
+func (a *LDAPAuthenticator) SetLDAPBindFunc(
+	fn func(server string, port int, bindDN, password string, useTLS bool) error,
+) {
 	a.ldapBind = fn
 }
 
 // Authenticate implements the Authenticator interface.
-func (a *LDAPAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *LDAPAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	if a.config == nil {
 		return false, errors.New("LDAP not configured")
 	}
@@ -1135,9 +1170,9 @@ type HBAType string
 
 // HBA connection types.
 const (
-	HBALocal   HBAType = "local"   // Unix domain socket
-	HBAHost    HBAType = "host"    // TCP/IP (with or without SSL)
-	HBAHostSSL HBAType = "hostssl" // TCP/IP with SSL only
+	HBALocal     HBAType = "local"     // Unix domain socket
+	HBAHost      HBAType = "host"      // TCP/IP (with or without SSL)
+	HBAHostSSL   HBAType = "hostssl"   // TCP/IP with SSL only
 	HBAHostNoSSL HBAType = "hostnossl" // TCP/IP without SSL
 )
 
@@ -1387,7 +1422,11 @@ func (c *HBAController) RegisterAuthenticator(method Method, auth Authenticator)
 }
 
 // FindMatchingRule finds the first matching rule for the given parameters.
-func (c *HBAController) FindMatchingRule(connType HBAType, database, user, clientIP string, isSSL bool) *HBARule {
+func (c *HBAController) FindMatchingRule(
+	connType HBAType,
+	database, user, clientIP string,
+	isSSL bool,
+) *HBARule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -1400,7 +1439,12 @@ func (c *HBAController) FindMatchingRule(connType HBAType, database, user, clien
 }
 
 // Authenticate performs authentication using HBA rules.
-func (c *HBAController) Authenticate(ctx context.Context, connType HBAType, database, user, password, clientIP string, isSSL bool) (bool, error) {
+func (c *HBAController) Authenticate(
+	ctx context.Context,
+	connType HBAType,
+	database, user, password, clientIP string,
+	isSSL bool,
+) (bool, error) {
 	// Find matching rule
 	rule := c.FindMatchingRule(connType, database, user, clientIP, isSSL)
 	if rule == nil {
@@ -1470,7 +1514,10 @@ func (a *CombinedAuthenticator) SetDefaultAuthenticator(auth Authenticator) {
 }
 
 // Authenticate implements the Authenticator interface.
-func (a *CombinedAuthenticator) Authenticate(ctx context.Context, username, password, database string) (bool, error) {
+func (a *CombinedAuthenticator) Authenticate(
+	ctx context.Context,
+	username, password, database string,
+) (bool, error) {
 	// Get connection info from context
 	clientIP := ClientIPFromContext(ctx)
 	isSSL := IsSSLFromContext(ctx)

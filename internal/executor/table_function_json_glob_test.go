@@ -17,8 +17,16 @@ func TestJSONGlobPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test JSON files
-	writeJSON(t, filepath.Join(tmpDir, "data1.json"), `[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]`)
-	writeJSON(t, filepath.Join(tmpDir, "data2.json"), `[{"id":3,"name":"Charlie"},{"id":4,"name":"Diana"}]`)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data1.json"),
+		`[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]`,
+	)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data2.json"),
+		`[{"id":3,"name":"Charlie"},{"id":4,"name":"Diana"}]`,
+	)
 	writeJSON(t, filepath.Join(tmpDir, "other.txt"), `not,a,json`)
 
 	cat := catalog.NewCatalog()
@@ -78,7 +86,9 @@ func TestJSONFilenameColumn(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.json")
-	sql := `SELECT id, value, filename FROM read_json('` + escapeForSQL(pattern) + `', filename=true) ORDER BY id`
+	sql := `SELECT id, value, filename FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', filename=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -93,7 +103,11 @@ func TestJSONFilenameColumn(t *testing.T) {
 func TestJSONFileRowNumber(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	writeJSON(t, filepath.Join(tmpDir, "file1.json"), `[{"id":1,"value":"a"},{"id":2,"value":"b"},{"id":3,"value":"c"}]`)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "file1.json"),
+		`[{"id":1,"value":"a"},{"id":2,"value":"b"},{"id":3,"value":"c"}]`,
+	)
 	writeJSON(t, filepath.Join(tmpDir, "file2.json"), `[{"id":4,"value":"d"},{"id":5,"value":"e"}]`)
 
 	cat := catalog.NewCatalog()
@@ -101,7 +115,9 @@ func TestJSONFileRowNumber(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.json")
-	sql := `SELECT id, file_row_number FROM read_json('` + escapeForSQL(pattern) + `', file_row_number=true) ORDER BY id`
+	sql := `SELECT id, file_row_number FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', file_row_number=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -127,7 +143,9 @@ func TestJSONFileIndex(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.json")
-	sql := `SELECT id, file_index FROM read_json('` + escapeForSQL(pattern) + `', file_index=true) ORDER BY file_index`
+	sql := `SELECT id, file_index FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -154,7 +172,9 @@ func TestJSONFilesToSniff(t *testing.T) {
 	pattern := filepath.Join(tmpDir, "*.json")
 
 	// Test that files_to_sniff option is recognized and files are read
-	sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(pattern) + `', files_to_sniff=1)`
+	sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', files_to_sniff=1)`
 	result := execQuery(t, cat, exec, sql)
 	cnt := testToInt64(result.Rows[0]["cnt"])
 	assert.Equal(t, int64(3), cnt)
@@ -179,7 +199,9 @@ func TestJSONFileGlobBehavior(t *testing.T) {
 
 	t.Run("allow_empty", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "nonexistent*.json")
-		sql := `SELECT * FROM read_json('` + escapeForSQL(pattern) + `', file_glob_behavior='ALLOW_EMPTY')`
+		sql := `SELECT * FROM read_json('` + escapeForSQL(
+			pattern,
+		) + `', file_glob_behavior='ALLOW_EMPTY')`
 
 		result := execQuery(t, cat, exec, sql)
 		assert.Len(t, result.Rows, 0)
@@ -190,7 +212,9 @@ func TestJSONFileGlobBehavior(t *testing.T) {
 		writeJSON(t, filepath.Join(tmpDir, "data.json"), `[{"id":1}]`)
 
 		path := filepath.Join(tmpDir, "data.json")
-		sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(path) + `', file_glob_behavior='FALLBACK_GLOB')`
+		sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(
+			path,
+		) + `', file_glob_behavior='FALLBACK_GLOB')`
 
 		result := execQuery(t, cat, exec, sql)
 		cnt, ok := result.Rows[0]["cnt"].(int64)
@@ -224,7 +248,9 @@ func TestJSONHivePartitioning(t *testing.T) {
 	t.Run("hive_partitioning_enabled", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "**/*.json")
 		// Just read the data columns - partition columns are added by executor
-		sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(pattern) + `', hive_partitioning=true)`
+		sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(
+			pattern,
+		) + `', hive_partitioning=true)`
 
 		result := execQuery(t, cat, exec, sql)
 
@@ -247,7 +273,9 @@ func TestJSONUnionByName(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.json")
-	sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(pattern) + `', union_by_name=true)`
+	sql := `SELECT COUNT(*) as cnt FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', union_by_name=true)`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -308,7 +336,9 @@ func TestJSONAllMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.json")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_json('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_json('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -338,8 +368,16 @@ func TestNDJSONGlobPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test NDJSON files (newline-delimited JSON)
-	writeJSON(t, filepath.Join(tmpDir, "data1.ndjson"), "{\"id\":1,\"name\":\"Alice\"}\n{\"id\":2,\"name\":\"Bob\"}\n")
-	writeJSON(t, filepath.Join(tmpDir, "data2.ndjson"), "{\"id\":3,\"name\":\"Charlie\"}\n{\"id\":4,\"name\":\"Diana\"}\n")
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data1.ndjson"),
+		"{\"id\":1,\"name\":\"Alice\"}\n{\"id\":2,\"name\":\"Bob\"}\n",
+	)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data2.ndjson"),
+		"{\"id\":3,\"name\":\"Charlie\"}\n{\"id\":4,\"name\":\"Diana\"}\n",
+	)
 
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
@@ -374,7 +412,9 @@ func TestNDJSONMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.ndjson")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_ndjson('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_ndjson('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -404,8 +444,16 @@ func TestJSONAutoGlobPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test JSON files
-	writeJSON(t, filepath.Join(tmpDir, "data1.json"), `[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]`)
-	writeJSON(t, filepath.Join(tmpDir, "data2.json"), `[{"id":3,"name":"Charlie"},{"id":4,"name":"Diana"}]`)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data1.json"),
+		`[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]`,
+	)
+	writeJSON(
+		t,
+		filepath.Join(tmpDir, "data2.json"),
+		`[{"id":3,"name":"Charlie"},{"id":4,"name":"Diana"}]`,
+	)
 
 	cat := catalog.NewCatalog()
 	stor := storage.NewStorage()
@@ -425,7 +473,9 @@ func TestJSONAutoGlobPatterns(t *testing.T) {
 
 	t.Run("json_auto_with_metadata_columns", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "*.json")
-		sql := `SELECT id, filename, file_index FROM read_json_auto('` + escapeForSQL(pattern) + `', filename=true, file_index=true) ORDER BY id`
+		sql := `SELECT id, filename, file_index FROM read_json_auto('` + escapeForSQL(
+			pattern,
+		) + `', filename=true, file_index=true) ORDER BY id`
 
 		result := execQuery(t, cat, exec, sql)
 

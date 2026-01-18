@@ -52,13 +52,13 @@ func TestDebugAllNullVarcharParsing(t *testing.T) {
 		t.Logf("RowGroup 0:")
 		t.Logf("  TupleCount: %d", rowGroups[0].TupleCount)
 		t.Logf("  DataPointers: %d columns", len(rowGroups[0].DataPointers))
-		
+
 		// Log the MetaBlockPointers
 		for i, mbp := range rowGroups[0].DataPointers {
-			t.Logf("  Column %d MBP: BlockID=%d, BlockIndex=%d, Offset=%d", 
+			t.Logf("  Column %d MBP: BlockID=%d, BlockIndex=%d, Offset=%d",
 				i, mbp.BlockID, mbp.BlockIndex, mbp.Offset)
 		}
-		
+
 		// Read DataPointer for column 0 (INTEGER)
 		dp0, err := ReadColumnDataPointer(storage.blockManager, rowGroups[0].DataPointers[0])
 		if err != nil {
@@ -73,7 +73,11 @@ func TestDebugAllNullVarcharParsing(t *testing.T) {
 		t.Logf("  Statistics.StatData len: %d", len(dp0.Statistics.StatData))
 		if dp0.ValidityPointer != nil {
 			t.Logf("  ValidityPointer: EXISTS")
-			t.Logf("    Block: ID=%d, Offset=%d", dp0.ValidityPointer.Block.BlockID, dp0.ValidityPointer.Block.Offset)
+			t.Logf(
+				"    Block: ID=%d, Offset=%d",
+				dp0.ValidityPointer.Block.BlockID,
+				dp0.ValidityPointer.Block.Offset,
+			)
 			t.Logf("    Compression: %s", dp0.ValidityPointer.Compression.String())
 			t.Logf("    Statistics.HasStats: %v", dp0.ValidityPointer.Statistics.HasStats)
 			t.Logf("    Statistics.HasNull: %v", dp0.ValidityPointer.Statistics.HasNull)
@@ -81,7 +85,7 @@ func TestDebugAllNullVarcharParsing(t *testing.T) {
 		} else {
 			t.Logf("  ValidityPointer: nil")
 		}
-		
+
 		// Read DataPointer for column 1 (VARCHAR)
 		dp1, err := ReadColumnDataPointer(storage.blockManager, rowGroups[0].DataPointers[1])
 		if err != nil {
@@ -96,7 +100,11 @@ func TestDebugAllNullVarcharParsing(t *testing.T) {
 		t.Logf("  Statistics.StatData len: %d", len(dp1.Statistics.StatData))
 		if dp1.ValidityPointer != nil {
 			t.Logf("  ValidityPointer: EXISTS")
-			t.Logf("    Block: ID=%d, Offset=%d", dp1.ValidityPointer.Block.BlockID, dp1.ValidityPointer.Block.Offset)
+			t.Logf(
+				"    Block: ID=%d, Offset=%d",
+				dp1.ValidityPointer.Block.BlockID,
+				dp1.ValidityPointer.Block.Offset,
+			)
 			t.Logf("    Compression: %s", dp1.ValidityPointer.Compression.String())
 			t.Logf("    Statistics.HasStats: %v", dp1.ValidityPointer.Statistics.HasStats)
 			t.Logf("    Statistics.HasNull: %v", dp1.ValidityPointer.Statistics.HasNull)
@@ -104,7 +112,7 @@ func TestDebugAllNullVarcharParsing(t *testing.T) {
 		} else {
 			t.Logf("  ValidityPointer: nil")
 		}
-		
+
 		// Now read the actual data
 		rgReader := NewRowGroupReader(
 			storage.blockManager,

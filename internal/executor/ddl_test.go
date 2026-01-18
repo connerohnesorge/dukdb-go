@@ -22,7 +22,7 @@ func TestDDLExecution(t *testing.T) {
 	t.Run("CreateAndDropView", func(t *testing.T) {
 		// Create a test table first
 		tableDef := catalog.NewTableDef("test_table", []*catalog.ColumnDef{
-			{Name: "id", Type: 0}, // INTEGER
+			{Name: "id", Type: 0},   // INTEGER
 			{Name: "name", Type: 3}, // VARCHAR
 		})
 		err := cat.CreateTableInSchema("main", tableDef)
@@ -48,22 +48,28 @@ func TestDDLExecution(t *testing.T) {
 		require.Equal(t, "SELECT * FROM test_table", view.Query)
 
 		// Test IF NOT EXISTS
-		result, err = exec.executeCreateView(&ExecutionContext{Context: ctx}, &planpkg.PhysicalCreateView{
-			Schema:      "main",
-			View:        "test_view",
-			IfNotExists: true,
-			QueryText:   "SELECT * FROM test_table",
-		})
+		result, err = exec.executeCreateView(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalCreateView{
+				Schema:      "main",
+				View:        "test_view",
+				IfNotExists: true,
+				QueryText:   "SELECT * FROM test_table",
+			},
+		)
 		require.NoError(t, err)
 		require.Equal(t, int64(0), result.RowsAffected)
 
 		// Test duplicate without IF NOT EXISTS
-		_, err = exec.executeCreateView(&ExecutionContext{Context: ctx}, &planpkg.PhysicalCreateView{
-			Schema:      "main",
-			View:        "test_view",
-			IfNotExists: false,
-			QueryText:   "SELECT * FROM test_table",
-		})
+		_, err = exec.executeCreateView(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalCreateView{
+				Schema:      "main",
+				View:        "test_view",
+				IfNotExists: false,
+				QueryText:   "SELECT * FROM test_table",
+			},
+		)
 		require.Error(t, err)
 
 		// Drop view
@@ -82,11 +88,14 @@ func TestDDLExecution(t *testing.T) {
 		require.False(t, exists)
 
 		// Test IF EXISTS
-		result, err = exec.executeDropView(&ExecutionContext{Context: ctx}, &planpkg.PhysicalDropView{
-			Schema:   "main",
-			View:     "test_view",
-			IfExists: true,
-		})
+		result, err = exec.executeDropView(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalDropView{
+				Schema:   "main",
+				View:     "test_view",
+				IfExists: true,
+			},
+		)
 		require.NoError(t, err)
 		require.Equal(t, int64(0), result.RowsAffected)
 
@@ -132,15 +141,18 @@ func TestDDLExecution(t *testing.T) {
 		require.True(t, index.IsUnique)
 
 		// Test IF NOT EXISTS
-		result, err = exec.executeCreateIndex(&ExecutionContext{Context: ctx}, &planpkg.PhysicalCreateIndex{
-			Schema:      "main",
-			Table:       "indexed_table",
-			Index:       "idx_email",
-			IfNotExists: true,
-			Columns:     []string{"email"},
-			IsUnique:    true,
-			TableDef:    tableDef,
-		})
+		result, err = exec.executeCreateIndex(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalCreateIndex{
+				Schema:      "main",
+				Table:       "indexed_table",
+				Index:       "idx_email",
+				IfNotExists: true,
+				Columns:     []string{"email"},
+				IsUnique:    true,
+				TableDef:    tableDef,
+			},
+		)
 		require.NoError(t, err)
 
 		// Drop index
@@ -185,13 +197,16 @@ func TestDDLExecution(t *testing.T) {
 		require.Equal(t, int64(5), seq.IncrementBy)
 
 		// Test IF NOT EXISTS
-		result, err = exec.executeCreateSequence(&ExecutionContext{Context: ctx}, &planpkg.PhysicalCreateSequence{
-			Schema:      "main",
-			Sequence:    "test_seq",
-			IfNotExists: true,
-			StartWith:   100,
-			IncrementBy: 5,
-		})
+		result, err = exec.executeCreateSequence(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalCreateSequence{
+				Schema:      "main",
+				Sequence:    "test_seq",
+				IfNotExists: true,
+				StartWith:   100,
+				IncrementBy: 5,
+			},
+		)
 		require.NoError(t, err)
 
 		// Drop sequence
@@ -226,10 +241,13 @@ func TestDDLExecution(t *testing.T) {
 		require.True(t, exists)
 
 		// Test IF NOT EXISTS
-		result, err = exec.executeCreateSchema(&ExecutionContext{Context: ctx}, &planpkg.PhysicalCreateSchema{
-			Schema:      "test_schema",
-			IfNotExists: true,
-		})
+		result, err = exec.executeCreateSchema(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalCreateSchema{
+				Schema:      "test_schema",
+				IfNotExists: true,
+			},
+		)
 		require.NoError(t, err)
 
 		// Drop schema
@@ -248,11 +266,14 @@ func TestDDLExecution(t *testing.T) {
 		require.False(t, exists)
 
 		// Test dropping main schema (should fail)
-		_, err = exec.executeDropSchema(&ExecutionContext{Context: ctx}, &planpkg.PhysicalDropSchema{
-			Schema:   "main",
-			IfExists: false,
-			Cascade:  false,
-		})
+		_, err = exec.executeDropSchema(
+			&ExecutionContext{Context: ctx},
+			&planpkg.PhysicalDropSchema{
+				Schema:   "main",
+				IfExists: false,
+				Cascade:  false,
+			},
+		)
 		require.Error(t, err)
 	})
 
@@ -704,7 +725,9 @@ func TestSequenceFunctions(t *testing.T) {
 		require.NoError(t, err)
 
 		// Parse INSERT with NEXTVAL
-		stmt, err := parser.Parse("INSERT INTO test_table (id, name) VALUES (nextval('insert_seq'), 'Alice')")
+		stmt, err := parser.Parse(
+			"INSERT INTO test_table (id, name) VALUES (nextval('insert_seq'), 'Alice')",
+		)
 		require.NoError(t, err)
 
 		insertStmt, ok := stmt.(*parser.InsertStmt)
@@ -718,7 +741,7 @@ func TestSequenceFunctions(t *testing.T) {
 		require.True(t, ok)
 
 		// Verify the first value is a sequence call
-		require.Len(t, boundInsert.Values, 1) // One row
+		require.Len(t, boundInsert.Values, 1)    // One row
 		require.Len(t, boundInsert.Values[0], 2) // Two columns
 
 		seqCall, ok := boundInsert.Values[0][0].(*binder.BoundSequenceCall)

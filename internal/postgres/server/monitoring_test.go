@@ -30,7 +30,13 @@ func TestMetricsCollector(t *testing.T) {
 
 	// Test error tracking
 	mc.StartQuery(2, "SELECT * FROM nonexistent")
-	mc.EndQuery(2, "SELECT * FROM nonexistent", 5*time.Millisecond, 0, NewPgError("42P01", "table not found"))
+	mc.EndQuery(
+		2,
+		"SELECT * FROM nonexistent",
+		5*time.Millisecond,
+		0,
+		NewPgError("42P01", "table not found"),
+	)
 
 	stats = mc.GetGlobalStats()
 	assert.Equal(t, int64(2), stats.TotalQueries)
@@ -57,7 +63,7 @@ func TestMetricsCollectorStatementStats(t *testing.T) {
 
 	s := stats[0]
 	assert.Equal(t, int64(10), s.Calls)
-	assert.Equal(t, float64(1), s.MinTime) // 1ms
+	assert.Equal(t, float64(1), s.MinTime)  // 1ms
 	assert.Equal(t, float64(10), s.MaxTime) // 10ms
 	assert.Greater(t, s.MeanTime, float64(0))
 }
@@ -85,10 +91,10 @@ func TestMetricsCollectorHistogram(t *testing.T) {
 	mc := NewMetricsCollector()
 
 	// Record queries in different buckets
-	mc.EndQuery(1, "fast query", 500*time.Microsecond, 1, nil)   // 0-1ms bucket (bucket 0)
-	mc.EndQuery(2, "medium query", 3*time.Millisecond, 1, nil)   // 1-5ms bucket (bucket 1)
-	mc.EndQuery(3, "slow query", 75*time.Millisecond, 1, nil)    // 50-100ms bucket (bucket 4)
-	mc.EndQuery(4, "very slow query", 2*time.Second, 1, nil)     // 1-5s bucket (bucket 7)
+	mc.EndQuery(1, "fast query", 500*time.Microsecond, 1, nil) // 0-1ms bucket (bucket 0)
+	mc.EndQuery(2, "medium query", 3*time.Millisecond, 1, nil) // 1-5ms bucket (bucket 1)
+	mc.EndQuery(3, "slow query", 75*time.Millisecond, 1, nil)  // 50-100ms bucket (bucket 4)
+	mc.EndQuery(4, "very slow query", 2*time.Second, 1, nil)   // 1-5s bucket (bucket 7)
 
 	stats := mc.GetGlobalStats()
 	histogram := stats.Histogram
@@ -202,10 +208,14 @@ func TestQueryTracer(t *testing.T) {
 
 	// Execute traced query
 	var executed bool
-	err := qt.TraceQuery(context.Background(), "SELECT * FROM users", func(ctx context.Context) error {
-		executed = true
-		return nil
-	})
+	err := qt.TraceQuery(
+		context.Background(),
+		"SELECT * FROM users",
+		func(ctx context.Context) error {
+			executed = true
+			return nil
+		},
+	)
 
 	assert.NoError(t, err)
 	assert.True(t, executed)

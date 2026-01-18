@@ -17,10 +17,12 @@ import (
 // - Greedy longest-match encoding
 //
 // Format:
-//   [num_symbols:uint8][symbol_table][compressed_data]
+//
+//	[num_symbols:uint8][symbol_table][compressed_data]
 //
 // Symbol table format (for each symbol):
-//   [code:uint8][length:uint8][bytes:length]
+//
+//	[code:uint8][length:uint8][bytes:length]
 //
 // The compressed data consists of symbol codes that reference the table.
 type FSSTCodec struct {
@@ -283,7 +285,11 @@ func (c *FSSTCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 
 	// Validate decompressed size
 	if destSize > 0 && len(decompressed) != destSize {
-		return nil, fmt.Errorf("decompressed size mismatch: got %d, expected %d", len(decompressed), destSize)
+		return nil, fmt.Errorf(
+			"decompressed size mismatch: got %d, expected %d",
+			len(decompressed),
+			destSize,
+		)
 	}
 
 	return decompressed, nil

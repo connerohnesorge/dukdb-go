@@ -53,21 +53,21 @@ const (
 	OID_CIRCLE uint32 = 718 // circle
 
 	// Additional special types
-	OID_UNKNOWN  uint32 = 705  // unknown type (unresolved string literal)
-	OID_MACADDR8 uint32 = 774  // macaddr8 (EUI-64 MAC address)
-	OID_MONEY    uint32 = 790  // money (currency)
-	OID_MACADDR  uint32 = 829  // macaddr (MAC address)
-	OID_INET     uint32 = 869  // inet (IP address)
+	OID_UNKNOWN  uint32 = 705 // unknown type (unresolved string literal)
+	OID_MACADDR8 uint32 = 774 // macaddr8 (EUI-64 MAC address)
+	OID_MONEY    uint32 = 790 // money (currency)
+	OID_MACADDR  uint32 = 829 // macaddr (MAC address)
+	OID_INET     uint32 = 869 // inet (IP address)
 
 	// Array types (internal representation)
-	OID_BOOL_ARRAY   uint32 = 1000 // boolean[]
-	OID_INT2_ARRAY   uint32 = 1005 // smallint[]
-	OID_INT4_ARRAY   uint32 = 1007 // integer[]
-	OID_TEXT_ARRAY   uint32 = 1009 // text[]
+	OID_BOOL_ARRAY    uint32 = 1000 // boolean[]
+	OID_INT2_ARRAY    uint32 = 1005 // smallint[]
+	OID_INT4_ARRAY    uint32 = 1007 // integer[]
+	OID_TEXT_ARRAY    uint32 = 1009 // text[]
 	OID_VARCHAR_ARRAY uint32 = 1015 // varchar[]
-	OID_INT8_ARRAY   uint32 = 1016 // bigint[]
-	OID_FLOAT4_ARRAY uint32 = 1021 // real[]
-	OID_FLOAT8_ARRAY uint32 = 1022 // double precision[]
+	OID_INT8_ARRAY    uint32 = 1016 // bigint[]
+	OID_FLOAT4_ARRAY  uint32 = 1021 // real[]
+	OID_FLOAT8_ARRAY  uint32 = 1022 // double precision[]
 
 	// Character types with length
 	OID_BPCHAR  uint32 = 1042 // char(n) / character(n) (blank-padded)

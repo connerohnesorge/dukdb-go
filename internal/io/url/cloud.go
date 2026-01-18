@@ -181,7 +181,15 @@ func isNumeric(s string) bool {
 // IsCloudScheme returns true if the URL uses a cloud storage scheme.
 func (u *ParsedURL) IsCloudScheme() bool {
 	switch u.Scheme {
-	case schemeS3, schemeS3A, schemeS3N, schemeGS, schemeGCS, schemeAzure, schemeAZ, schemeHTTP, schemeHTTPS:
+	case schemeS3,
+		schemeS3A,
+		schemeS3N,
+		schemeGS,
+		schemeGCS,
+		schemeAzure,
+		schemeAZ,
+		schemeHTTP,
+		schemeHTTPS:
 		return true
 	default:
 		return false

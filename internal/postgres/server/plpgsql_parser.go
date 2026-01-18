@@ -497,7 +497,8 @@ func (p *PLpgSQLParser) parseVariableDeclaration() (*PLpgSQLVarDecl, error) {
 	}
 
 	// Check for DEFAULT or :=
-	if p.matchKeyword("DEFAULT") || (p.peek() == ':' && p.pos+1 < len(p.input) && p.input[p.pos+1] == '=') {
+	if p.matchKeyword("DEFAULT") ||
+		(p.peek() == ':' && p.pos+1 < len(p.input) && p.input[p.pos+1] == '=') {
 		if p.matchKeyword("DEFAULT") {
 			p.consumeKeyword("DEFAULT")
 		} else {
@@ -1794,7 +1795,8 @@ func (p *PLpgSQLParser) parseGetDiagnosticsStatement() (PLpgSQLStmt, error) {
 		p.skipWhitespaceAndComments()
 
 		// Expect = or :=
-		if p.peek() == '=' || (p.peek() == ':' && p.pos+1 < len(p.input) && p.input[p.pos+1] == '=') {
+		if p.peek() == '=' ||
+			(p.peek() == ':' && p.pos+1 < len(p.input) && p.input[p.pos+1] == '=') {
 			if p.peek() == ':' {
 				p.advance()
 			}
@@ -1910,7 +1912,16 @@ func (p *PLpgSQLParser) parseFetchStatement() (PLpgSQLStmt, error) {
 	}
 
 	// Check for direction
-	directions := []string{"NEXT", "PRIOR", "FIRST", "LAST", "ABSOLUTE", "RELATIVE", "FORWARD", "BACKWARD"}
+	directions := []string{
+		"NEXT",
+		"PRIOR",
+		"FIRST",
+		"LAST",
+		"ABSOLUTE",
+		"RELATIVE",
+		"FORWARD",
+		"BACKWARD",
+	}
 	for _, dir := range directions {
 		if p.matchKeyword(dir) {
 			p.consumeKeyword(dir)

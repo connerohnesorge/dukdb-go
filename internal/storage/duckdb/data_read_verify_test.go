@@ -1023,9 +1023,11 @@ func TestReadTimeValues(t *testing.T) {
 
 	// Expected values - TIME decodes to time.Duration
 	expected := [][]interface{}{
-		{time.Duration(0)},                                      // 00:00:00
-		{time.Duration(12 * time.Hour)},                         // 12:00:00
-		{time.Duration(23*time.Hour + 59*time.Minute + 59*time.Second + 999999*time.Microsecond)}, // 23:59:59.999999
+		{time.Duration(0)},              // 00:00:00
+		{time.Duration(12 * time.Hour)}, // 12:00:00
+		{
+			time.Duration(23*time.Hour + 59*time.Minute + 59*time.Second + 999999*time.Microsecond),
+		}, // 23:59:59.999999
 	}
 
 	// Collect rows
@@ -1301,10 +1303,14 @@ func TestReadIntervalValues(t *testing.T) {
 
 	// Expected values - INTERVAL decodes to Interval struct
 	expected := [][]interface{}{
-		{Interval{Months: 0, Days: 1, Micros: 0}},                 // 1 day
-		{Interval{Months: 0, Days: 0, Micros: 3600000000}},        // 1 hour (3600 seconds * 1,000,000 microseconds)
-		{Interval{Months: 1, Days: 0, Micros: 0}},                 // 1 month
-		{Interval{Months: 14, Days: 3, Micros: 0}},                // 1 year 2 months 3 days (14 months total)
+		{Interval{Months: 0, Days: 1, Micros: 0}}, // 1 day
+		{
+			Interval{Months: 0, Days: 0, Micros: 3600000000},
+		}, // 1 hour (3600 seconds * 1,000,000 microseconds)
+		{Interval{Months: 1, Days: 0, Micros: 0}}, // 1 month
+		{
+			Interval{Months: 14, Days: 3, Micros: 0},
+		}, // 1 year 2 months 3 days (14 months total)
 	}
 
 	// Collect rows
@@ -2372,7 +2378,14 @@ func TestReadRLECompression(t *testing.T) {
 		} else {
 			expectedValue = "C"
 		}
-		assert.Equal(t, expectedValue, currentValue, "row %d should have value %s", rowCount, expectedValue)
+		assert.Equal(
+			t,
+			expectedValue,
+			currentValue,
+			"row %d should have value %s",
+			rowCount,
+			expectedValue,
+		)
 		rowCount++
 	}
 	require.NoError(t, iter.Err())
@@ -2481,7 +2494,14 @@ func TestReadDictionaryCompression(t *testing.T) {
 		case 2:
 			expectedValue = "bird"
 		}
-		assert.Equal(t, expectedValue, value, "row %d should have value %s", rowCount, expectedValue)
+		assert.Equal(
+			t,
+			expectedValue,
+			value,
+			"row %d should have value %s",
+			rowCount,
+			expectedValue,
+		)
 
 		valueCounts[value]++
 		rowCount++
@@ -2568,11 +2588,24 @@ func TestReadBitpackingCompression(t *testing.T) {
 		value := row[0].(int32)
 
 		// Verify value is in range 0-7
-		assert.True(t, value >= 0 && value <= 7, "row %d value should be in range 0-7, got %d", rowCount, value)
+		assert.True(
+			t,
+			value >= 0 && value <= 7,
+			"row %d value should be in range 0-7, got %d",
+			rowCount,
+			value,
+		)
 
 		// Verify the pattern: row i % 8 determines the value
 		expectedValue := int32(rowCount % 8)
-		assert.Equal(t, expectedValue, value, "row %d should have value %d", rowCount, expectedValue)
+		assert.Equal(
+			t,
+			expectedValue,
+			value,
+			"row %d should have value %d",
+			rowCount,
+			expectedValue,
+		)
 
 		valueCounts[value]++
 		rowCount++
@@ -2674,11 +2707,25 @@ func TestReadMixedCompression(t *testing.T) {
 		case 2:
 			expectedDictValue = "bird"
 		}
-		assert.Equal(t, expectedDictValue, row[1], "row %d col 1 should be %s", rowCount, expectedDictValue)
+		assert.Equal(
+			t,
+			expectedDictValue,
+			row[1],
+			"row %d col 1 should be %s",
+			rowCount,
+			expectedDictValue,
+		)
 
 		// Column 2: bitpacking_col (BITPACKING compression) - cycles 0-7
 		expectedBitValue := int32(rowCount % 8)
-		assert.Equal(t, expectedBitValue, row[2], "row %d col 2 should be %d", rowCount, expectedBitValue)
+		assert.Equal(
+			t,
+			expectedBitValue,
+			row[2],
+			"row %d col 2 should be %d",
+			rowCount,
+			expectedBitValue,
+		)
 
 		rowCount++
 	}
@@ -3188,11 +3235,11 @@ line2'),
 
 	// Expected values
 	expected := [][]interface{}{
-		{"line1\nline2"},       // Newline
-		{"col1\tcol2"},         // Tab
-		{"it's a test"},        // Single quote
-		{"path\\to\\file"},     // Backslash (CHR(92) is \)
-		{"null\x00byte"},       // NULL byte (CHR(0) is \x00)
+		{"line1\nline2"},   // Newline
+		{"col1\tcol2"},     // Tab
+		{"it's a test"},    // Single quote
+		{"path\\to\\file"}, // Backslash (CHR(92) is \)
+		{"null\x00byte"},   // NULL byte (CHR(0) is \x00)
 	}
 
 	// Collect rows

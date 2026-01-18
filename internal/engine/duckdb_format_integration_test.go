@@ -455,7 +455,11 @@ func TestIntegrationLargeDataset(t *testing.T) {
 	// Verify file size
 	fileInfo, err := os.Stat(dbPath)
 	require.NoError(t, err)
-	t.Logf("Database file size: %d bytes (%.2f MB)", fileInfo.Size(), float64(fileInfo.Size())/1024/1024)
+	t.Logf(
+		"Database file size: %d bytes (%.2f MB)",
+		fileInfo.Size(),
+		float64(fileInfo.Size())/1024/1024,
+	)
 
 	// Reopen and verify
 	t.Logf("Reopening database...")
@@ -696,7 +700,11 @@ func TestAutoDetectDuckDBFile(t *testing.T) {
 
 	t.Run("detect non-existent file", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tmpDir, "non_existent.dukdb")
-		assert.False(t, detectDuckDBFile(nonExistentPath), "Should return false for non-existent file")
+		assert.False(
+			t,
+			detectDuckDBFile(nonExistentPath),
+			"Should return false for non-existent file",
+		)
 	})
 
 	t.Run("detect file too small", func(t *testing.T) {
@@ -828,7 +836,11 @@ func TestOpenExistingDuckDBFile(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := int64(1); i <= 5; i++ {
-		_, err = conn1.Execute(ctx, fmt.Sprintf("INSERT INTO existing_test VALUES (%d)", i*100), nil)
+		_, err = conn1.Execute(
+			ctx,
+			fmt.Sprintf("INSERT INTO existing_test VALUES (%d)", i*100),
+			nil,
+		)
 		require.NoError(t, err)
 	}
 
@@ -863,7 +875,11 @@ func TestFallbackForNonDuckDBFiles(t *testing.T) {
 		invalidPath := filepath.Join(tmpDir, "invalid.db")
 
 		// Create a file with invalid content
-		err := os.WriteFile(invalidPath, []byte("This is definitely not a database file with invalid format"), 0644)
+		err := os.WriteFile(
+			invalidPath,
+			[]byte("This is definitely not a database file with invalid format"),
+			0644,
+		)
 		require.NoError(t, err)
 
 		// Attempting to open should fail

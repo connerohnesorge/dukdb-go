@@ -145,13 +145,13 @@ func TestSelectPartitionCount(t *testing.T) {
 		numWorkers int
 		expected   int
 	}{
-		{0, 4, 4},                  // Min partitions = workers
-		{1000, 4, 4},               // Small dataset, use worker count
-		{100000, 4, 4},             // Medium dataset
-		{1000000, 4, 16},           // Large dataset, more partitions
-		{10000000, 8, 256},         // Very large dataset
-		{100000000, 16, 1024},      // Huge dataset, capped at 1024
-		{1000000000, 16, 1024},     // Beyond cap
+		{0, 4, 4},              // Min partitions = workers
+		{1000, 4, 4},           // Small dataset, use worker count
+		{100000, 4, 4},         // Medium dataset
+		{1000000, 4, 16},       // Large dataset, more partitions
+		{10000000, 8, 256},     // Very large dataset
+		{100000000, 16, 1024},  // Huge dataset, capped at 1024
+		{1000000000, 16, 1024}, // Beyond cap
 	}
 
 	for _, tt := range tests {

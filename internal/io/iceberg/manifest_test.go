@@ -56,40 +56,40 @@ func TestFilterManifestsByPartition(t *testing.T) {
 
 func TestResolveManifestPath(t *testing.T) {
 	tests := []struct {
-		name         string
+		name          string
 		tableLocation string
 		manifestPath  string
-		expected     string
+		expected      string
 	}{
 		{
-			name:         "absolute path",
+			name:          "absolute path",
 			tableLocation: "/warehouse/db/table",
 			manifestPath:  "/absolute/path/manifest.avro",
-			expected:     "/absolute/path/manifest.avro",
+			expected:      "/absolute/path/manifest.avro",
 		},
 		{
-			name:         "s3 URL",
+			name:          "s3 URL",
 			tableLocation: "/warehouse/db/table",
 			manifestPath:  "s3://bucket/path/manifest.avro",
-			expected:     "s3://bucket/path/manifest.avro",
+			expected:      "s3://bucket/path/manifest.avro",
 		},
 		{
-			name:         "gs URL",
+			name:          "gs URL",
 			tableLocation: "/warehouse/db/table",
 			manifestPath:  "gs://bucket/path/manifest.avro",
-			expected:     "gs://bucket/path/manifest.avro",
+			expected:      "gs://bucket/path/manifest.avro",
 		},
 		{
-			name:         "https URL",
+			name:          "https URL",
 			tableLocation: "/warehouse/db/table",
 			manifestPath:  "https://example.com/manifest.avro",
-			expected:     "https://example.com/manifest.avro",
+			expected:      "https://example.com/manifest.avro",
 		},
 		{
-			name:         "relative path",
+			name:          "relative path",
 			tableLocation: "/warehouse/db/table",
 			manifestPath:  "metadata/manifest.avro",
-			expected:     "/warehouse/db/table/metadata/manifest.avro",
+			expected:      "/warehouse/db/table/metadata/manifest.avro",
 		},
 	}
 

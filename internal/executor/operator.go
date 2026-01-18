@@ -145,7 +145,15 @@ type UndoRecorder interface {
 // SecretManager is an interface for managing secrets.
 // This allows the executor to work with secrets without importing the secret package directly.
 type SecretManager interface {
-	Create(ctx context.Context, name string, secretType string, provider string, scope string, persistent bool, options map[string]string) error
+	Create(
+		ctx context.Context,
+		name string,
+		secretType string,
+		provider string,
+		scope string,
+		persistent bool,
+		options map[string]string,
+	) error
 	Delete(ctx context.Context, name string) error
 	Update(ctx context.Context, name string, options map[string]string) error
 	Get(ctx context.Context, name string) (interface{}, error)
@@ -157,17 +165,17 @@ type Executor struct {
 	catalog       *catalog.Catalog
 	storage       *storage.Storage
 	planner       *planner.Planner
-	wal           *wal.Writer    // WAL writer for logging DML operations (optional, may be nil)
-	txnID         uint64         // Current transaction ID for WAL entries
-	undoRecorder  UndoRecorder   // Undo recorder for transaction rollback (optional, may be nil)
-	inTxn         bool           // Whether we're in an explicit transaction (BEGIN was called)
-	secretManager SecretManager  // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
+	wal           *wal.Writer   // WAL writer for logging DML operations (optional, may be nil)
+	txnID         uint64        // Current transaction ID for WAL entries
+	undoRecorder  UndoRecorder  // Undo recorder for transaction rollback (optional, may be nil)
+	inTxn         bool          // Whether we're in an explicit transaction (BEGIN was called)
+	secretManager SecretManager // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
 
 	// MVCC isolation level support
-	visibility       storage.VisibilityChecker   // Visibility checker based on isolation level (optional, may be nil)
-	txnCtx           storage.TransactionContext  // Transaction context for visibility checks (optional, may be nil)
-	conflictDetector *storage.ConflictDetector   // Conflict detector for SERIALIZABLE (optional, may be nil)
-	lockManager      *storage.LockManager        // Lock manager for SERIALIZABLE write locks (optional, may be nil)
+	visibility       storage.VisibilityChecker  // Visibility checker based on isolation level (optional, may be nil)
+	txnCtx           storage.TransactionContext // Transaction context for visibility checks (optional, may be nil)
+	conflictDetector *storage.ConflictDetector  // Conflict detector for SERIALIZABLE (optional, may be nil)
+	lockManager      *storage.LockManager       // Lock manager for SERIALIZABLE write locks (optional, may be nil)
 }
 
 // NewExecutor creates a new Executor.
@@ -641,7 +649,10 @@ func (e *Executor) executeIndexScan(
 //
 // For composite indexes (e.g., (category, price)), the key is the concatenation
 // of all encoded column values, ensuring unique keys and proper ordering.
-func (e *Executor) getOrCreateARTIndex(plan *planner.PhysicalIndexScan, _ *storage.HashIndex) *index.ART {
+func (e *Executor) getOrCreateARTIndex(
+	plan *planner.PhysicalIndexScan,
+	_ *storage.HashIndex,
+) *index.ART {
 	// Validate input
 	if plan.IndexDef == nil || len(plan.IndexDef.Columns) == 0 || plan.TableDef == nil {
 		return nil
@@ -1893,7 +1904,12 @@ func (e *Executor) executeInsert(
 // tableDef: the table definition with column info
 // values: the inserted row values (each []any corresponds to one row)
 // startRowID: the RowID of the first inserted row
-func (e *Executor) updateIndexesForInsert(tableName string, tableDef *catalog.TableDef, values [][]any, startRowID uint64) error {
+func (e *Executor) updateIndexesForInsert(
+	tableName string,
+	tableDef *catalog.TableDef,
+	values [][]any,
+	startRowID uint64,
+) error {
 	// Get the schema (default to "main")
 	schema := "main"
 	if tableDef != nil && tableDef.Schema != "" {

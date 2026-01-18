@@ -145,7 +145,11 @@ func NewMultiFileReader(
 // This should be called after schema detection for each file.
 func (r *MultiFileReader) SetSchemas(schemas []FileSchema) error {
 	if len(schemas) != len(r.Paths) {
-		return fmt.Errorf("schema count (%d) does not match file count (%d)", len(schemas), len(r.Paths))
+		return fmt.Errorf(
+			"schema count (%d) does not match file count (%d)",
+			len(schemas),
+			len(r.Paths),
+		)
 	}
 	r.fileSchemas = schemas
 	r.mergeResult = nil // Reset cached result

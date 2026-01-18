@@ -92,9 +92,17 @@ func main() {
 	}
 
 	for _, c := range customers {
-		_, err = db.Exec(`INSERT INTO customers (id, first_name, last_name, email, phone, city, country)
+		_, err = db.Exec(
+			`INSERT INTO customers (id, first_name, last_name, email, phone, city, country)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			c.id, c.firstName, c.lastName, c.email, c.phone, c.city, c.country)
+			c.id,
+			c.firstName,
+			c.lastName,
+			c.email,
+			c.phone,
+			c.city,
+			c.country,
+		)
 		if err != nil {
 			log.Printf("Failed to insert customer %s: %v", c.firstName, err)
 		}
@@ -155,9 +163,17 @@ func main() {
 	}
 
 	for _, o := range orders {
-		_, err = db.Exec(`INSERT INTO orders (id, customer_id, order_date, total_amount, status, shipping_city, shipping_country)
+		_, err = db.Exec(
+			`INSERT INTO orders (id, customer_id, order_date, total_amount, status, shipping_city, shipping_country)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			o.id, o.customerID, o.orderDate, o.totalAmount, o.status, o.shipCity, o.shipCountry)
+			o.id,
+			o.customerID,
+			o.orderDate,
+			o.totalAmount,
+			o.status,
+			o.shipCity,
+			o.shipCountry,
+		)
 		if err != nil {
 			log.Printf("Failed to insert order %d: %v", o.id, err)
 		}
@@ -193,9 +209,16 @@ func main() {
 	}
 
 	for _, item := range orderItems {
-		_, err = db.Exec(`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, discount)
+		_, err = db.Exec(
+			`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, discount)
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			item.id, item.orderID, item.productID, item.quantity, item.unitPrice, item.discount)
+			item.id,
+			item.orderID,
+			item.productID,
+			item.quantity,
+			item.unitPrice,
+			item.discount,
+		)
 		if err != nil {
 			log.Printf("Failed to insert order item %d: %v", item.id, err)
 		}
@@ -306,7 +329,15 @@ func main() {
 		var firstName, lastName, productName string
 		var unitPrice, itemTotal float64
 
-		err := rows.Scan(&orderID, &firstName, &lastName, &productName, &quantity, &unitPrice, &itemTotal)
+		err := rows.Scan(
+			&orderID,
+			&firstName,
+			&lastName,
+			&productName,
+			&quantity,
+			&unitPrice,
+			&itemTotal,
+		)
 		if err != nil {
 			log.Printf("Failed to scan row: %v", err)
 			continue
@@ -353,7 +384,9 @@ func main() {
 
 	// Example 5: FULL OUTER JOIN simulation (using UNION)
 	fmt.Println("\n=== Example 5: FULL OUTER JOIN Simulation ===")
-	fmt.Println("All customers and their orders (including customers without orders and orders without valid customers):")
+	fmt.Println(
+		"All customers and their orders (including customers without orders and orders without valid customers):",
+	)
 
 	// Get customers with orders
 	rows, err = db.Query(`SELECT
@@ -396,14 +429,26 @@ func main() {
 	}
 	defer rows.Close()
 
-	fmt.Println("Customer ID | Customer Name     | Country     | Order ID | Amount   | Relationship")
-	fmt.Println("------------|-------------------|-------------|----------|----------|----------------------")
+	fmt.Println(
+		"Customer ID | Customer Name     | Country     | Order ID | Amount   | Relationship",
+	)
+	fmt.Println(
+		"------------|-------------------|-------------|----------|----------|----------------------",
+	)
 	for rows.Next() {
 		var customerID, orderID sql.NullInt64
 		var firstName, lastName, country, relationship string
 		var totalAmount sql.NullFloat64
 
-		err := rows.Scan(&customerID, &firstName, &lastName, &country, &orderID, &totalAmount, &relationship)
+		err := rows.Scan(
+			&customerID,
+			&firstName,
+			&lastName,
+			&country,
+			&orderID,
+			&totalAmount,
+			&relationship,
+		)
 		if err != nil {
 			log.Printf("Failed to scan row: %v", err)
 			continue
@@ -450,7 +495,14 @@ func main() {
 	fmt.Println("--------------------|---------------------|---------------|--------")
 	for rows.Next() {
 		var customer1First, customer1Last, customer2First, customer2Last, city, country string
-		err := rows.Scan(&customer1First, &customer1Last, &customer2First, &customer2Last, &city, &country)
+		err := rows.Scan(
+			&customer1First,
+			&customer1Last,
+			&customer2First,
+			&customer2Last,
+			&city,
+			&country,
+		)
 		if err != nil {
 			log.Printf("Failed to scan row: %v", err)
 			continue
@@ -606,8 +658,12 @@ func main() {
 	}
 	defer rows.Close()
 
-	fmt.Println("Order | Date       | Customer          | Items | Qty | Amount   | Status   | Shipping Type")
-	fmt.Println("------|------------|-------------------|-------|-----|----------|----------|------------------")
+	fmt.Println(
+		"Order | Date       | Customer          | Items | Qty | Amount   | Status   | Shipping Type",
+	)
+	fmt.Println(
+		"------|------------|-------------------|-------|-----|----------|----------|------------------",
+	)
 	for rows.Next() {
 		var orderID, itemCount, totalQuantity int
 		var orderDate, firstName, lastName, email, customerCity, shippingCity, status, shippingType string
@@ -639,11 +695,13 @@ func main() {
 
 	err = db.QueryRow("SELECT COUNT(*) FROM customers").Scan(&stats.totalCustomers)
 	if err == nil {
-		err = db.QueryRow("SELECT COUNT(*) FROM orders WHERE customer_id IN (SELECT id FROM customers)").Scan(
-			&stats.totalOrders)
+		err = db.QueryRow("SELECT COUNT(*) FROM orders WHERE customer_id IN (SELECT id FROM customers)").
+			Scan(
+				&stats.totalOrders)
 		if err == nil {
-			err = db.QueryRow("SELECT AVG(COALESCE(total_amount, 0)) FROM orders WHERE status = 'Completed'").Scan(
-				&stats.avgOrderValue)
+			err = db.QueryRow("SELECT AVG(COALESCE(total_amount, 0)) FROM orders WHERE status = 'Completed'").
+				Scan(
+					&stats.avgOrderValue)
 			if err == nil {
 				err = db.QueryRow(`SELECT COUNT(DISTINCT customer_id) FROM orders
 					WHERE customer_id IN (SELECT id FROM customers)`).Scan(

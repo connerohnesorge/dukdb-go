@@ -258,7 +258,11 @@ func BenchmarkPatternMatching(b *testing.B) {
 		{"multiple_asterisks", "prefix*middle*suffix", "prefix_abc_middle_xyz_suffix"},
 		{"question_mark", "file?.csv", "file1.csv"},
 		{"negated_bracket", "file[!abc].txt", "filex.txt"},
-		{"complex_pattern", "data_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].csv", "data_2024-01-15.csv"},
+		{
+			"complex_pattern",
+			"data_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].csv",
+			"data_2024-01-15.csv",
+		},
 		{"long_prefix", "very_long_prefix_data_2024_*.csv", "very_long_prefix_data_2024_01.csv"},
 		{"escaped_chars", `file\*.txt`, "file*.txt"},
 	}

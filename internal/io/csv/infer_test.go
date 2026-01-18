@@ -70,9 +70,9 @@ func TestTryParseInteger(t *testing.T) {
 		{"-1", -1, true},
 		{"123", 123, true},
 		{"-123", -123, true},
-		{"2147483647", 2147483647, true},     // Max int32
-		{"-2147483648", -2147483648, true},   // Min int32
-		{"2147483648", 2147483648, true},     // Max int32 + 1
+		{"2147483647", 2147483647, true},   // Max int32
+		{"-2147483648", -2147483648, true}, // Min int32
+		{"2147483648", 2147483648, true},   // Max int32 + 1
 		{"9223372036854775807", 9223372036854775807, true},
 		{"-9223372036854775808", -9223372036854775808, true},
 		{"  42  ", 42, true}, // With whitespace
@@ -335,7 +335,7 @@ func TestTypeInferrer_InferTypes(t *testing.T) {
 		ti := NewTypeInferrer(1000)
 		samples := [][]string{
 			{"1"},
-			{""},  // NULL
+			{""}, // NULL
 			{"3"},
 		}
 		types := ti.InferTypes(samples)

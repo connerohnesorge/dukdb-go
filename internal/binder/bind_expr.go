@@ -850,7 +850,10 @@ func (b *Binder) validateWindowFrame(frame *parser.WindowFrame, orderBy []BoundW
 			(frame.End.Type == parser.BoundPreceding || frame.End.Type == parser.BoundFollowing)
 
 		if hasOffset && len(orderBy) != 1 {
-			return b.errorf("RANGE frame with offset requires exactly one ORDER BY column, got %d", len(orderBy))
+			return b.errorf(
+				"RANGE frame with offset requires exactly one ORDER BY column, got %d",
+				len(orderBy),
+			)
 		}
 	}
 

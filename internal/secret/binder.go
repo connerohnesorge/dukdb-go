@@ -103,7 +103,17 @@ func ParseScope(scope string) SecretScope {
 	}
 
 	// Check for known URL schemes
-	knownSchemes := []string{"s3://", "s3a://", "s3n://", "gs://", "gcs://", "azure://", "az://", "http://", "https://"}
+	knownSchemes := []string{
+		"s3://",
+		"s3a://",
+		"s3n://",
+		"gs://",
+		"gcs://",
+		"azure://",
+		"az://",
+		"http://",
+		"https://",
+	}
 	for _, scheme := range knownSchemes {
 		if strings.HasPrefix(strings.ToLower(scope), scheme) {
 			return SecretScope{

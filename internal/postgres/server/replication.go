@@ -378,7 +378,11 @@ func NewReplicationManager() *ReplicationManager {
 
 // CreateSlot creates a new replication slot.
 // This delegates to the internal slot storage.
-func (rm *ReplicationManager) CreateSlot(ctx context.Context, name, plugin string, temporary bool) (*ReplicationSlot, error) {
+func (rm *ReplicationManager) CreateSlot(
+	ctx context.Context,
+	name, plugin string,
+	temporary bool,
+) (*ReplicationSlot, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
@@ -428,7 +432,11 @@ func (rm *ReplicationManager) DropSlot(ctx context.Context, name string) error {
 
 // StartReplication begins streaming changes.
 // This prepares the replication connection for streaming.
-func (rm *ReplicationManager) StartReplication(ctx context.Context, slotName string, startLSN LSN) error {
+func (rm *ReplicationManager) StartReplication(
+	ctx context.Context,
+	slotName string,
+	startLSN LSN,
+) error {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 

@@ -143,7 +143,9 @@ func NewPhysicalIndexScanOperator(
 
 // NewPhysicalIndexScanOperatorWithConfig creates a new PhysicalIndexScanOperator with full configuration.
 // This constructor supports both point lookups and range scans.
-func NewPhysicalIndexScanOperatorWithConfig(cfg IndexScanConfig) (*PhysicalIndexScanOperator, error) {
+func NewPhysicalIndexScanOperatorWithConfig(
+	cfg IndexScanConfig,
+) (*PhysicalIndexScanOperator, error) {
 	tableName := cfg.TableName
 	tableDef := cfg.TableDef
 	projections := cfg.Projections
@@ -233,9 +235,9 @@ func NewPhysicalIndexScanOperatorWithConfig(cfg IndexScanConfig) (*PhysicalIndex
 // only stores RowIDs, not actual column values.
 //
 // Current behavior with isIndexOnly=true:
-// - The RowID filtering benefit is still realized (reduced heap access)
-// - Future optimization: Extend HashIndex to store column values for true
-//   index-only scans that avoid heap access entirely
+//   - The RowID filtering benefit is still realized (reduced heap access)
+//   - Future optimization: Extend HashIndex to store column values for true
+//     index-only scans that avoid heap access entirely
 //
 // The isIndexOnly flag is set by the optimizer when it detects a covering index
 // using the IsCoveringIndex() function from the optimizer package.

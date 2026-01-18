@@ -5,22 +5,22 @@ package catalog
 // pg_locks columns - PostgreSQL lock monitoring view.
 // Reference: https://www.postgresql.org/docs/current/view-pg-locks.html
 var pgLocksColumns = []string{
-	"locktype",       // Type of the lockable object
-	"database",       // OID of the database (null if not database-specific)
-	"relation",       // OID of the relation (null if not relation-specific)
-	"page",           // Page number within the relation (null if not page-specific)
-	"tuple",          // Tuple number within the page (null if not tuple-specific)
-	"virtualxid",     // Virtual transaction ID
-	"transactionid",  // Transaction ID (null if not transaction-specific)
-	"classid",        // OID of the system catalog containing the object
-	"objid",          // OID of the object within the system catalog
-	"objsubid",       // Column number for table-column-level locks
+	"locktype",           // Type of the lockable object
+	"database",           // OID of the database (null if not database-specific)
+	"relation",           // OID of the relation (null if not relation-specific)
+	"page",               // Page number within the relation (null if not page-specific)
+	"tuple",              // Tuple number within the page (null if not tuple-specific)
+	"virtualxid",         // Virtual transaction ID
+	"transactionid",      // Transaction ID (null if not transaction-specific)
+	"classid",            // OID of the system catalog containing the object
+	"objid",              // OID of the object within the system catalog
+	"objsubid",           // Column number for table-column-level locks
 	"virtualtransaction", // Virtual transaction ID holding/waiting for lock
-	"pid",            // Process ID of the backend holding/waiting for lock
-	"mode",           // Lock mode (AccessShareLock, RowShareLock, etc.)
-	"granted",        // True if lock is held, false if waiting
-	"fastpath",       // True if lock was taken via fast path
-	"waitstart",      // Time when lock wait started (null if not waiting)
+	"pid",                // Process ID of the backend holding/waiting for lock
+	"mode",               // Lock mode (AccessShareLock, RowShareLock, etc.)
+	"granted",            // True if lock is held, false if waiting
+	"fastpath",           // True if lock was taken via fast path
+	"waitstart",          // Time when lock wait started (null if not waiting)
 }
 
 // LockInfo represents information about a single lock.

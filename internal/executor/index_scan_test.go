@@ -122,7 +122,12 @@ func TestPhysicalIndexScanOperator_MultipleMatches(t *testing.T) {
 	require.NoError(t, table.AppendRow([]any{int32(5), "Eve", int32(20)}))
 
 	// Create a HashIndex on the "department_id" column (non-unique)
-	index := storage.NewHashIndex("idx_employees_dept", "employees", []string{"department_id"}, false)
+	index := storage.NewHashIndex(
+		"idx_employees_dept",
+		"employees",
+		[]string{"department_id"},
+		false,
+	)
 	// Insert index entries
 	require.NoError(t, index.Insert([]any{int32(10)}, storage.RowID(0))) // Alice
 	require.NoError(t, index.Insert([]any{int32(20)}, storage.RowID(1))) // Bob
@@ -138,7 +143,13 @@ func TestPhysicalIndexScanOperator_MultipleMatches(t *testing.T) {
 	})
 
 	// Create index definition
-	indexDef := catalog.NewIndexDef("idx_employees_dept", "main", "employees", []string{"department_id"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_employees_dept",
+		"main",
+		"employees",
+		[]string{"department_id"},
+		false,
+	)
 
 	// Create executor and context
 	cat := catalog.NewCatalog()
@@ -771,7 +782,13 @@ func TestIndexOnlyScan_CoveringIndex_SingleColumn(t *testing.T) {
 		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
 	})
-	indexDef := catalog.NewIndexDef("idx_covering_id", "main", "covering_single", []string{"id"}, true)
+	indexDef := catalog.NewIndexDef(
+		"idx_covering_id",
+		"main",
+		"covering_single",
+		[]string{"id"},
+		true,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -840,7 +857,12 @@ func TestIndexOnlyScan_CoveringIndex_CompositeIndex(t *testing.T) {
 	require.NoError(t, table.AppendRow([]any{int32(300), "Charlie", int32(35)}))
 
 	// Create composite index on (id, name)
-	index := storage.NewHashIndex("idx_covering_id_name", "covering_composite", []string{"id", "name"}, false)
+	index := storage.NewHashIndex(
+		"idx_covering_id_name",
+		"covering_composite",
+		[]string{"id", "name"},
+		false,
+	)
 	require.NoError(t, index.Insert([]any{int32(100), "Alice"}, storage.RowID(0)))
 	require.NoError(t, index.Insert([]any{int32(200), "Bob"}, storage.RowID(1)))
 	require.NoError(t, index.Insert([]any{int32(300), "Charlie"}, storage.RowID(2)))
@@ -850,7 +872,13 @@ func TestIndexOnlyScan_CoveringIndex_CompositeIndex(t *testing.T) {
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
 		catalog.NewColumnDef("age", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_covering_id_name", "main", "covering_composite", []string{"id", "name"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_covering_id_name",
+		"main",
+		"covering_composite",
+		[]string{"id", "name"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -927,7 +955,13 @@ func TestIndexOnlyScan_NonCoveringIndex(t *testing.T) {
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
 		catalog.NewColumnDef("age", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_non_covering_id", "main", "non_covering", []string{"id"}, true)
+	indexDef := catalog.NewIndexDef(
+		"idx_non_covering_id",
+		"main",
+		"non_covering",
+		[]string{"id"},
+		true,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1003,7 +1037,13 @@ func TestIndexOnlyScan_CoveringIndex_MultipleMatches(t *testing.T) {
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
 		catalog.NewColumnDef("department_id", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_emp_dept", "main", "emp_covering", []string{"department_id"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_emp_dept",
+		"main",
+		"emp_covering",
+		[]string{"department_id"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1133,7 +1173,12 @@ func TestIndexOnlyScan_WithDeletedRows(t *testing.T) {
 	require.NoError(t, table.AppendRow([]any{int32(2), "Second"}))
 	require.NoError(t, table.AppendRow([]any{int32(3), "Third"}))
 
-	index := storage.NewHashIndex("idx_deleted_covering", "deleted_rows_covering", []string{"id"}, true)
+	index := storage.NewHashIndex(
+		"idx_deleted_covering",
+		"deleted_rows_covering",
+		[]string{"id"},
+		true,
+	)
 	require.NoError(t, index.Insert([]any{int32(1)}, storage.RowID(0)))
 	require.NoError(t, index.Insert([]any{int32(2)}, storage.RowID(1)))
 	require.NoError(t, index.Insert([]any{int32(3)}, storage.RowID(2)))
@@ -1145,7 +1190,13 @@ func TestIndexOnlyScan_WithDeletedRows(t *testing.T) {
 		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR),
 	})
-	indexDef := catalog.NewIndexDef("idx_deleted_covering", "main", "deleted_rows_covering", []string{"id"}, true)
+	indexDef := catalog.NewIndexDef(
+		"idx_deleted_covering",
+		"main",
+		"deleted_rows_covering",
+		[]string{"id"},
+		true,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1189,7 +1240,13 @@ func TestIndexOnlyScan_TypesPreserved(t *testing.T) {
 		catalog.NewColumnDef("col2", dukdb.TYPE_BOOLEAN),
 		catalog.NewColumnDef("col3", dukdb.TYPE_DOUBLE),
 	})
-	indexDef := catalog.NewIndexDef("idx_types", "main", "types_test", []string{"col0", "col1"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_types",
+		"main",
+		"types_test",
+		[]string{"col0", "col1"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1351,12 +1408,21 @@ func TestPhysicalIndexScanOperator_VerifyResidualFilterAppliesCorrectly(t *testi
 	require.NoError(t, err)
 
 	// Insert test data
-	require.NoError(t, table.AppendRow([]any{"A", "active", int32(10)}))    // Row 0: matches both
-	require.NoError(t, table.AppendRow([]any{"A", "inactive", int32(20)}))  // Row 1: matches index, not residual
-	require.NoError(t, table.AppendRow([]any{"A", "active", int32(30)}))    // Row 2: matches both
-	require.NoError(t, table.AppendRow([]any{"B", "active", int32(40)}))    // Row 3: doesn't match index
-	require.NoError(t, table.AppendRow([]any{"A", "pending", int32(50)}))   // Row 4: matches index, not residual
-	require.NoError(t, table.AppendRow([]any{"A", "active", int32(60)}))    // Row 5: matches both
+	require.NoError(t, table.AppendRow([]any{"A", "active", int32(10)})) // Row 0: matches both
+	require.NoError(
+		t,
+		table.AppendRow([]any{"A", "inactive", int32(20)}),
+	) // Row 1: matches index, not residual
+	require.NoError(t, table.AppendRow([]any{"A", "active", int32(30)})) // Row 2: matches both
+	require.NoError(
+		t,
+		table.AppendRow([]any{"B", "active", int32(40)}),
+	) // Row 3: doesn't match index
+	require.NoError(
+		t,
+		table.AppendRow([]any{"A", "pending", int32(50)}),
+	) // Row 4: matches index, not residual
+	require.NoError(t, table.AppendRow([]any{"A", "active", int32(60)})) // Row 5: matches both
 
 	// Create index on category
 	index := storage.NewHashIndex("idx_category", "residual_test", []string{"category"}, false)
@@ -1372,7 +1438,13 @@ func TestPhysicalIndexScanOperator_VerifyResidualFilterAppliesCorrectly(t *testi
 		catalog.NewColumnDef("status", dukdb.TYPE_VARCHAR),
 		catalog.NewColumnDef("value", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_category", "main", "residual_test", []string{"category"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_category",
+		"main",
+		"residual_test",
+		[]string{"category"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1441,11 +1513,23 @@ func TestPhysicalIndexScanOperator_ResidualFilterWithCompositeIndexGap(t *testin
 
 	// Insert test data
 	// a=1 with various b and c values
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), int32(3)}))  // Row 0: matches a=1 AND c=3
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(20), int32(5)}))  // Row 1: matches a=1, NOT c=3
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(30), int32(3)}))  // Row 2: matches a=1 AND c=3
-	require.NoError(t, table.AppendRow([]any{int32(2), int32(40), int32(3)}))  // Row 3: NOT a=1
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(50), int32(7)}))  // Row 4: matches a=1, NOT c=3
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(10), int32(3)}),
+	) // Row 0: matches a=1 AND c=3
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(20), int32(5)}),
+	) // Row 1: matches a=1, NOT c=3
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(30), int32(3)}),
+	) // Row 2: matches a=1 AND c=3
+	require.NoError(t, table.AppendRow([]any{int32(2), int32(40), int32(3)})) // Row 3: NOT a=1
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(50), int32(7)}),
+	) // Row 4: matches a=1, NOT c=3
 
 	// Create single-column index on 'a' to simulate partial composite match
 	// In a real scenario, we'd use the first column of the composite index
@@ -1664,7 +1748,13 @@ func TestRangeScan_OperatorConfiguration(t *testing.T) {
 	})
 
 	// Create index definition
-	indexDef := catalog.NewIndexDef("idx_range_id", "main", "range_config_test", []string{"id"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_range_id",
+		"main",
+		"range_config_test",
+		[]string{"id"},
+		false,
+	)
 
 	// Create executor and context
 	cat := catalog.NewCatalog()
@@ -1896,14 +1986,25 @@ func TestExecuteIndexScan_ResidualFilter_PointLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), "active"}))   // matches both
-	require.NoError(t, table.AppendRow([]any{int32(2), int32(10), "inactive"})) // matches index, fails residual
-	require.NoError(t, table.AppendRow([]any{int32(3), int32(10), "active"}))   // matches both
-	require.NoError(t, table.AppendRow([]any{int32(4), int32(20), "active"}))   // fails index
-	require.NoError(t, table.AppendRow([]any{int32(5), int32(10), "pending"}))  // matches index, fails residual
+	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), "active"})) // matches both
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(2), int32(10), "inactive"}),
+	) // matches index, fails residual
+	require.NoError(t, table.AppendRow([]any{int32(3), int32(10), "active"})) // matches both
+	require.NoError(t, table.AppendRow([]any{int32(4), int32(20), "active"})) // fails index
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(5), int32(10), "pending"}),
+	) // matches index, fails residual
 
 	// Create hash index on department_id
-	hashIdx := storage.NewHashIndex("idx_dept_residual", "employees_residual", []string{"department_id"}, false)
+	hashIdx := storage.NewHashIndex(
+		"idx_dept_residual",
+		"employees_residual",
+		[]string{"department_id"},
+		false,
+	)
 	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(0)))
 	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(1)))
 	require.NoError(t, hashIdx.Insert([]any{int32(10)}, storage.RowID(2)))
@@ -1918,7 +2019,13 @@ func TestExecuteIndexScan_ResidualFilter_PointLookup(t *testing.T) {
 		catalog.NewColumnDef("department_id", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("status", dukdb.TYPE_VARCHAR),
 	})
-	indexDef := catalog.NewIndexDef("idx_dept_residual", "main", "employees_residual", []string{"department_id"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_dept_residual",
+		"main",
+		"employees_residual",
+		[]string{"department_id"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -1935,7 +2042,12 @@ func TestExecuteIndexScan_ResidualFilter_PointLookup(t *testing.T) {
 			&binder.BoundLiteral{Value: int32(10), ValType: dukdb.TYPE_INTEGER},
 		},
 		ResidualFilter: &binder.BoundBinaryExpr{
-			Left:  &binder.BoundColumnRef{Column: "status", Table: "", ColType: dukdb.TYPE_VARCHAR, ColumnIdx: 2},
+			Left: &binder.BoundColumnRef{
+				Column:    "status",
+				Table:     "",
+				ColType:   dukdb.TYPE_VARCHAR,
+				ColumnIdx: 2,
+			},
 			Op:    parser.OpEq,
 			Right: &binder.BoundLiteral{Value: "active", ValType: dukdb.TYPE_VARCHAR},
 		},
@@ -1971,15 +2083,23 @@ func TestExecuteIndexScan_ResidualFilter_MultiplePredicates(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	require.NoError(t, table.AppendRow([]any{int32(1), "A", int32(150), int32(5)}))  // passes all
-	require.NoError(t, table.AppendRow([]any{int32(2), "A", int32(80), int32(10)}))  // fails price
-	require.NoError(t, table.AppendRow([]any{int32(3), "A", int32(200), int32(0)}))  // fails stock
-	require.NoError(t, table.AppendRow([]any{int32(4), "B", int32(120), int32(3)}))  // fails index
-	require.NoError(t, table.AppendRow([]any{int32(5), "A", int32(110), int32(2)}))  // passes all
-	require.NoError(t, table.AppendRow([]any{int32(6), "A", int32(50), int32(0)}))   // fails both residual
+	require.NoError(t, table.AppendRow([]any{int32(1), "A", int32(150), int32(5)})) // passes all
+	require.NoError(t, table.AppendRow([]any{int32(2), "A", int32(80), int32(10)})) // fails price
+	require.NoError(t, table.AppendRow([]any{int32(3), "A", int32(200), int32(0)})) // fails stock
+	require.NoError(t, table.AppendRow([]any{int32(4), "B", int32(120), int32(3)})) // fails index
+	require.NoError(t, table.AppendRow([]any{int32(5), "A", int32(110), int32(2)})) // passes all
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(6), "A", int32(50), int32(0)}),
+	) // fails both residual
 
 	// Create hash index on category
-	hashIdx := storage.NewHashIndex("idx_cat_residual", "products_residual", []string{"category"}, false)
+	hashIdx := storage.NewHashIndex(
+		"idx_cat_residual",
+		"products_residual",
+		[]string{"category"},
+		false,
+	)
 	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(0)))
 	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(1)))
 	require.NoError(t, hashIdx.Insert([]any{"A"}, storage.RowID(2)))
@@ -1995,7 +2115,13 @@ func TestExecuteIndexScan_ResidualFilter_MultiplePredicates(t *testing.T) {
 		catalog.NewColumnDef("price", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("stock", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_cat_residual", "main", "products_residual", []string{"category"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_cat_residual",
+		"main",
+		"products_residual",
+		[]string{"category"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -2014,13 +2140,23 @@ func TestExecuteIndexScan_ResidualFilter_MultiplePredicates(t *testing.T) {
 		},
 		ResidualFilter: &binder.BoundBinaryExpr{
 			Left: &binder.BoundBinaryExpr{
-				Left:  &binder.BoundColumnRef{Column: "price", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+				Left: &binder.BoundColumnRef{
+					Column:    "price",
+					Table:     "",
+					ColType:   dukdb.TYPE_INTEGER,
+					ColumnIdx: 2,
+				},
 				Op:    parser.OpGt,
 				Right: &binder.BoundLiteral{Value: int32(100), ValType: dukdb.TYPE_INTEGER},
 			},
 			Op: parser.OpAnd,
 			Right: &binder.BoundBinaryExpr{
-				Left:  &binder.BoundColumnRef{Column: "stock", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 3},
+				Left: &binder.BoundColumnRef{
+					Column:    "stock",
+					Table:     "",
+					ColType:   dukdb.TYPE_INTEGER,
+					ColumnIdx: 3,
+				},
 				Op:    parser.OpGt,
 				Right: &binder.BoundLiteral{Value: int32(0), ValType: dukdb.TYPE_INTEGER},
 			},
@@ -2072,7 +2208,13 @@ func TestExecuteIndexScan_ResidualFilter_NoMatches(t *testing.T) {
 		catalog.NewColumnDef("key", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("filter_col", dukdb.TYPE_VARCHAR),
 	})
-	indexDef := catalog.NewIndexDef("idx_key_nomatch", "main", "no_match_residual", []string{"key"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_key_nomatch",
+		"main",
+		"no_match_residual",
+		[]string{"key"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -2089,7 +2231,12 @@ func TestExecuteIndexScan_ResidualFilter_NoMatches(t *testing.T) {
 			&binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
 		},
 		ResidualFilter: &binder.BoundBinaryExpr{
-			Left:  &binder.BoundColumnRef{Column: "filter_col", Table: "", ColType: dukdb.TYPE_VARCHAR, ColumnIdx: 1},
+			Left: &binder.BoundColumnRef{
+				Column:    "filter_col",
+				Table:     "",
+				ColType:   dukdb.TYPE_VARCHAR,
+				ColumnIdx: 1,
+			},
 			Op:    parser.OpEq,
 			Right: &binder.BoundLiteral{Value: "target", ValType: dukdb.TYPE_VARCHAR},
 		},
@@ -2119,10 +2266,16 @@ func TestExecuteIndexScan_ResidualFilter_CompositeIndexPartialMatch(t *testing.T
 
 	// Insert test data
 	require.NoError(t, table.AppendRow([]any{int32(1), int32(10), int32(3)})) // matches a=1 AND c=3
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(20), int32(5)})) // matches a=1, fails c=3
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(20), int32(5)}),
+	) // matches a=1, fails c=3
 	require.NoError(t, table.AppendRow([]any{int32(1), int32(30), int32(3)})) // matches a=1 AND c=3
 	require.NoError(t, table.AppendRow([]any{int32(2), int32(40), int32(3)})) // fails a=1
-	require.NoError(t, table.AppendRow([]any{int32(1), int32(50), int32(7)})) // matches a=1, fails c=3
+	require.NoError(
+		t,
+		table.AppendRow([]any{int32(1), int32(50), int32(7)}),
+	) // matches a=1, fails c=3
 
 	// Create single-column index on 'a' to simulate partial composite match
 	hashIdx := storage.NewHashIndex("idx_a_partial", "composite_partial", []string{"a"}, false)
@@ -2139,7 +2292,13 @@ func TestExecuteIndexScan_ResidualFilter_CompositeIndexPartialMatch(t *testing.T
 		catalog.NewColumnDef("b", dukdb.TYPE_INTEGER),
 		catalog.NewColumnDef("c", dukdb.TYPE_INTEGER),
 	})
-	indexDef := catalog.NewIndexDef("idx_a_partial", "main", "composite_partial", []string{"a"}, false)
+	indexDef := catalog.NewIndexDef(
+		"idx_a_partial",
+		"main",
+		"composite_partial",
+		[]string{"a"},
+		false,
+	)
 
 	cat := catalog.NewCatalog()
 	exec := NewExecutor(cat, stor)
@@ -2156,7 +2315,12 @@ func TestExecuteIndexScan_ResidualFilter_CompositeIndexPartialMatch(t *testing.T
 			&binder.BoundLiteral{Value: int32(1), ValType: dukdb.TYPE_INTEGER},
 		},
 		ResidualFilter: &binder.BoundBinaryExpr{
-			Left:  &binder.BoundColumnRef{Column: "c", Table: "", ColType: dukdb.TYPE_INTEGER, ColumnIdx: 2},
+			Left: &binder.BoundColumnRef{
+				Column:    "c",
+				Table:     "",
+				ColType:   dukdb.TYPE_INTEGER,
+				ColumnIdx: 2,
+			},
 			Op:    parser.OpEq,
 			Right: &binder.BoundLiteral{Value: int32(3), ValType: dukdb.TYPE_INTEGER},
 		},

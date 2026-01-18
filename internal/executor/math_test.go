@@ -235,11 +235,11 @@ func TestRoundingFunctions(t *testing.T) {
 			decimals any
 			expected any
 		}{
-			{"round to even - 2.5", 2.5, int64(0), 2.0},  // Banker's rounding
-			{"round to even - 3.5", 3.5, int64(0), 4.0},  // Banker's rounding
-			{"round to even - 4.5", 4.5, int64(0), 4.0},  // Banker's rounding
-			{"round to even - 5.5", 5.5, int64(0), 6.0},  // Banker's rounding
-			{"with decimals", 3.145, int64(2), 3.14},     // Banker's rounding
+			{"round to even - 2.5", 2.5, int64(0), 2.0}, // Banker's rounding
+			{"round to even - 3.5", 3.5, int64(0), 4.0}, // Banker's rounding
+			{"round to even - 4.5", 4.5, int64(0), 4.0}, // Banker's rounding
+			{"round to even - 5.5", 5.5, int64(0), 6.0}, // Banker's rounding
+			{"with decimals", 3.145, int64(2), 3.14},    // Banker's rounding
 			{"nil", nil, int64(0), nil},
 		}
 
@@ -963,9 +963,24 @@ func TestBitwiseOperators(t *testing.T) {
 		}{
 			{"basic shift", int64(1), uint64(4), int64(16)},
 			{"shift by 0", int64(42), uint64(0), int64(42)},
-			{"shift by 63", int64(1), uint64(63), int64(-9223372036854775808)}, // 1 << 63 = min int64
-			{"shift by 64", int64(1), uint64(64), int64(0)},      // Overflow returns 0
-			{"shift by 100", int64(1), uint64(100), int64(0)},    // Overflow returns 0
+			{
+				"shift by 63",
+				int64(1),
+				uint64(63),
+				int64(-9223372036854775808),
+			}, // 1 << 63 = min int64
+			{
+				"shift by 64",
+				int64(1),
+				uint64(64),
+				int64(0),
+			}, // Overflow returns 0
+			{
+				"shift by 100",
+				int64(1),
+				uint64(100),
+				int64(0),
+			}, // Overflow returns 0
 			{"negative value", int64(-1), uint64(4), int64(-16)}, // Arithmetic shift
 		}
 
@@ -988,9 +1003,19 @@ func TestBitwiseOperators(t *testing.T) {
 			{"basic shift", int64(16), uint64(4), int64(1)},
 			{"shift by 0", int64(42), uint64(0), int64(42)},
 			{"shift by 63", int64(1 << 62), uint64(62), int64(1)},
-			{"shift by 64 positive", int64(1), uint64(64), int64(0)},   // Returns 0 for positive
-			{"shift by 64 negative", int64(-1), uint64(64), int64(-1)}, // Returns -1 for negative (sign extension)
-			{"negative value", int64(-16), uint64(4), int64(-1)},       // Arithmetic shift preserves sign
+			{"shift by 64 positive", int64(1), uint64(64), int64(0)}, // Returns 0 for positive
+			{
+				"shift by 64 negative",
+				int64(-1),
+				uint64(64),
+				int64(-1),
+			}, // Returns -1 for negative (sign extension)
+			{
+				"negative value",
+				int64(-16),
+				uint64(4),
+				int64(-1),
+			}, // Arithmetic shift preserves sign
 		}
 
 		for _, tt := range tests {
@@ -1447,7 +1472,11 @@ func TestFACTORIALDomainErrors(t *testing.T) {
 			result, err := factorialValue(tt.input)
 			require.Error(t, err, "FACTORIAL with invalid input should return error")
 			assert.Nil(t, result, "Result should be nil for error case")
-			assert.Contains(t, err.Error(), "FACTORIAL domain error: input must be non-negative and <= 20")
+			assert.Contains(
+				t,
+				err.Error(),
+				"FACTORIAL domain error: input must be non-negative and <= 20",
+			)
 		})
 	}
 }

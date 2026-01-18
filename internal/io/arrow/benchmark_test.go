@@ -36,14 +36,22 @@ func createBenchmarkSchema() *arrow.Schema {
 			{Name: "string_col", Type: arrow.BinaryTypes.String, Nullable: true},
 			{Name: "binary_col", Type: arrow.BinaryTypes.Binary, Nullable: true},
 			{Name: "date_col", Type: arrow.FixedWidthTypes.Date32, Nullable: true},
-			{Name: "timestamp_col", Type: &arrow.TimestampType{Unit: arrow.Microsecond}, Nullable: true},
+			{
+				Name:     "timestamp_col",
+				Type:     &arrow.TimestampType{Unit: arrow.Microsecond},
+				Nullable: true,
+			},
 		},
 		nil,
 	)
 }
 
 // createBenchmarkRecord creates a record batch with the given number of rows.
-func createBenchmarkRecord(alloc memory.Allocator, schema *arrow.Schema, numRows int) arrow.RecordBatch {
+func createBenchmarkRecord(
+	alloc memory.Allocator,
+	schema *arrow.Schema,
+	numRows int,
+) arrow.RecordBatch {
 	bldr := array.NewRecordBuilder(alloc, schema)
 	defer bldr.Release()
 

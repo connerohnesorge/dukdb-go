@@ -202,7 +202,8 @@ func (e *Executor) executeReadJSON(
 	}
 
 	// Single file path - use optimized single file reader
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isJSONHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isJSONHivePartitioningEnabled(multiOpts) {
 		return e.executeReadJSONSingleFile(ctx, paths[0], opts, plan)
 	}
 
@@ -211,7 +212,11 @@ func (e *Executor) executeReadJSON(
 }
 
 // resolveJSONFilePaths resolves a path or glob pattern to a list of file paths.
-func (e *Executor) resolveJSONFilePaths(ctx context.Context, pathOrPattern string, multiOpts *JSONMultiFileOptions) ([]string, error) {
+func (e *Executor) resolveJSONFilePaths(
+	ctx context.Context,
+	pathOrPattern string,
+	multiOpts *JSONMultiFileOptions,
+) ([]string, error) {
 	// Check if it's a glob pattern
 	if fileio.IsGlobPattern(pathOrPattern) {
 		return e.expandJSONGlobPattern(ctx, pathOrPattern, multiOpts)
@@ -242,7 +247,11 @@ func (e *Executor) resolveJSONFilePaths(ctx context.Context, pathOrPattern strin
 }
 
 // expandJSONGlobPattern expands a glob pattern to a list of file paths.
-func (e *Executor) expandJSONGlobPattern(ctx context.Context, pattern string, multiOpts *JSONMultiFileOptions) ([]string, error) {
+func (e *Executor) expandJSONGlobPattern(
+	ctx context.Context,
+	pattern string,
+	multiOpts *JSONMultiFileOptions,
+) ([]string, error) {
 	var fs filesystem.FileSystem
 	if filesystem.IsCloudURL(pattern) {
 		provider := NewFileSystemProvider(e.getSecretManager())
@@ -596,7 +605,11 @@ func (e *Executor) executeReadJSONMultiFile(
 }
 
 // sniffJSONSchema reads the schema from a JSON file without reading all data.
-func (e *Executor) sniffJSONSchema(ctx context.Context, path string, opts *json.ReaderOptions) (fileio.FileSchema, error) {
+func (e *Executor) sniffJSONSchema(
+	ctx context.Context,
+	path string,
+	opts *json.ReaderOptions,
+) (fileio.FileSchema, error) {
 	var reader *json.Reader
 	var closer io.Closer
 
@@ -659,7 +672,11 @@ func (e *Executor) sniffJSONSchema(ctx context.Context, path string, opts *json.
 }
 
 // readJSONFileChunks reads all chunks from a JSON file.
-func (e *Executor) readJSONFileChunks(ctx context.Context, path string, opts *json.ReaderOptions) ([]*storage.DataChunk, error) {
+func (e *Executor) readJSONFileChunks(
+	ctx context.Context,
+	path string,
+	opts *json.ReaderOptions,
+) ([]*storage.DataChunk, error) {
 	var reader *json.Reader
 	var closer io.Closer
 
@@ -833,7 +850,8 @@ func (e *Executor) executeReadJSONAuto(
 	}
 
 	// Check if we need multi-file handling
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isJSONHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isJSONHivePartitioningEnabled(multiOpts) {
 		return e.executeReadJSONSingleFile(ctx, paths[0], opts, plan)
 	}
 
@@ -977,7 +995,8 @@ func (e *Executor) executeReadNDJSON(
 	}
 
 	// Check if we need multi-file handling
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isJSONHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isJSONHivePartitioningEnabled(multiOpts) {
 		return e.executeReadJSONSingleFile(ctx, paths[0], opts, plan)
 	}
 

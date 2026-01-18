@@ -498,7 +498,11 @@ type PLpgSQLExceptionHandler struct {
 // This is a stub interface for future implementation.
 type PLpgSQLRuntime interface {
 	// ExecuteFunction executes a stored function.
-	ExecuteFunction(ctx context.Context, schema, name string, args []interface{}) (interface{}, error)
+	ExecuteFunction(
+		ctx context.Context,
+		schema, name string,
+		args []interface{},
+	) (interface{}, error)
 
 	// ExecuteProcedure executes a stored procedure.
 	ExecuteProcedure(ctx context.Context, schema, name string, args []interface{}) error
@@ -656,7 +660,12 @@ func (pm *PLpgSQLManager) GetFunction(schema, name string) (*StoredFunction, boo
 }
 
 // DropFunction removes a function.
-func (pm *PLpgSQLManager) DropFunction(_ context.Context, schema, name string, argTypes []string, ifExists bool) error {
+func (pm *PLpgSQLManager) DropFunction(
+	_ context.Context,
+	schema, name string,
+	argTypes []string,
+	ifExists bool,
+) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -689,7 +698,12 @@ func (pm *PLpgSQLManager) ListFunctions() []*StoredFunction {
 }
 
 // ExecuteFunction executes a stored function.
-func (pm *PLpgSQLManager) ExecuteFunction(ctx context.Context, conn BackendConnInterface, schema, name string, args []interface{}) (interface{}, error) {
+func (pm *PLpgSQLManager) ExecuteFunction(
+	ctx context.Context,
+	conn BackendConnInterface,
+	schema, name string,
+	args []interface{},
+) (interface{}, error) {
 	pm.mu.RLock()
 	if !pm.enabled {
 		pm.mu.RUnlock()
@@ -726,7 +740,12 @@ func (pm *PLpgSQLManager) ExecuteFunction(ctx context.Context, conn BackendConnI
 }
 
 // executeSQLFunction executes a LANGUAGE SQL function.
-func (pm *PLpgSQLManager) executeSQLFunction(ctx context.Context, conn BackendConnInterface, fn *StoredFunction, args []interface{}) (interface{}, error) {
+func (pm *PLpgSQLManager) executeSQLFunction(
+	ctx context.Context,
+	conn BackendConnInterface,
+	fn *StoredFunction,
+	args []interface{},
+) (interface{}, error) {
 	// Substitute parameter references ($1, $2, etc.)
 	query := fn.Body
 	for i, arg := range args {
@@ -833,7 +852,12 @@ func (pm *PLpgSQLManager) GetProcedure(schema, name string) (*StoredProcedure, b
 }
 
 // DropProcedure removes a procedure.
-func (pm *PLpgSQLManager) DropProcedure(_ context.Context, schema, name string, argTypes []string, ifExists bool) error {
+func (pm *PLpgSQLManager) DropProcedure(
+	_ context.Context,
+	schema, name string,
+	argTypes []string,
+	ifExists bool,
+) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -866,7 +890,12 @@ func (pm *PLpgSQLManager) ListProcedures() []*StoredProcedure {
 }
 
 // ExecuteProcedure executes a stored procedure.
-func (pm *PLpgSQLManager) ExecuteProcedure(ctx context.Context, conn BackendConnInterface, schema, name string, args []interface{}) error {
+func (pm *PLpgSQLManager) ExecuteProcedure(
+	ctx context.Context,
+	conn BackendConnInterface,
+	schema, name string,
+	args []interface{},
+) error {
 	pm.mu.RLock()
 	if !pm.enabled {
 		pm.mu.RUnlock()
@@ -894,7 +923,12 @@ func (pm *PLpgSQLManager) ExecuteProcedure(ctx context.Context, conn BackendConn
 }
 
 // executeSQLProcedure executes a LANGUAGE SQL procedure.
-func (pm *PLpgSQLManager) executeSQLProcedure(ctx context.Context, conn BackendConnInterface, proc *StoredProcedure, args []interface{}) error {
+func (pm *PLpgSQLManager) executeSQLProcedure(
+	ctx context.Context,
+	conn BackendConnInterface,
+	proc *StoredProcedure,
+	args []interface{},
+) error {
 	// Substitute parameter references
 	query := proc.Body
 	for i, arg := range args {
@@ -958,7 +992,11 @@ func (pm *PLpgSQLManager) GetTrigger(schema, table, name string) (*Trigger, bool
 }
 
 // DropTrigger removes a trigger.
-func (pm *PLpgSQLManager) DropTrigger(_ context.Context, schema, name, table string, ifExists bool) error {
+func (pm *PLpgSQLManager) DropTrigger(
+	_ context.Context,
+	schema, name, table string,
+	ifExists bool,
+) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -1029,7 +1067,9 @@ func ParseCreateFunction(sql string) (*StoredFunction, error) {
 	_ = orReplace // Not used in parsing, but caller may need to know
 
 	// Extract function name
-	namePattern := regexp.MustCompile(`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(`)
+	namePattern := regexp.MustCompile(
+		`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(`,
+	)
 	nameMatches := namePattern.FindStringSubmatch(sql)
 	if len(nameMatches) < 3 {
 		return nil, errors.New("could not parse function name")
@@ -1073,7 +1113,8 @@ func ParseCreateFunction(sql string) (*StoredFunction, error) {
 	}
 
 	// Check for STRICT
-	fn.Strict = strings.Contains(upper, "STRICT") || strings.Contains(upper, "RETURNS NULL ON NULL INPUT")
+	fn.Strict = strings.Contains(upper, "STRICT") ||
+		strings.Contains(upper, "RETURNS NULL ON NULL INPUT")
 
 	// Check for SECURITY DEFINER
 	fn.SecurityDefiner = strings.Contains(upper, "SECURITY DEFINER")
@@ -1135,7 +1176,9 @@ func ParseCreateProcedure(sql string) (*StoredProcedure, error) {
 	}
 
 	// Extract procedure name
-	namePattern := regexp.MustCompile(`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+(?:(\w+)\.)?(\w+)\s*\(`)
+	namePattern := regexp.MustCompile(
+		`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+(?:(\w+)\.)?(\w+)\s*\(`,
+	)
 	nameMatches := namePattern.FindStringSubmatch(sql)
 	if len(nameMatches) < 3 {
 		return nil, errors.New("could not parse procedure name")

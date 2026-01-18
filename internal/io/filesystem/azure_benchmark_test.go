@@ -91,13 +91,17 @@ func (m *BenchmarkMockAzureServer) handleHead(w http.ResponseWriter) {
 // Azure operations with a real client require credentials.
 // This benchmark tests the pure Go buffer performance.
 func BenchmarkAzureRead(b *testing.B) {
-	b.Skip("Azure benchmarks require real Azure credentials - use BenchmarkAzureWriteBufferPerformance instead")
+	b.Skip(
+		"Azure benchmarks require real Azure credentials - use BenchmarkAzureWriteBufferPerformance instead",
+	)
 }
 
 // BenchmarkAzureWrite benchmarks sequential write operations on Azure Blob Storage.
 // Since Azure SDK requires real credentials, this benchmark uses the buffer-only approach.
 func BenchmarkAzureWrite(b *testing.B) {
-	b.Skip("Azure write benchmarks require real Azure credentials - use BenchmarkAzureWriteBufferPerformance instead")
+	b.Skip(
+		"Azure write benchmarks require real Azure credentials - use BenchmarkAzureWriteBufferPerformance instead",
+	)
 }
 
 // BenchmarkAzureReadAt benchmarks random read operations using ReadAt on Azure.

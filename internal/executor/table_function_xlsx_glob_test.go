@@ -133,7 +133,9 @@ func TestXLSXFilenameColumn(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT id, value, filename FROM read_xlsx('` + escapeForSQL(pattern) + `', filename=true) ORDER BY id`
+	sql := `SELECT id, value, filename FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', filename=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -166,7 +168,9 @@ func TestXLSXFileRowNumber(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT id, file_row_number FROM read_xlsx('` + escapeForSQL(pattern) + `', file_row_number=true) ORDER BY id`
+	sql := `SELECT id, file_row_number FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', file_row_number=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -201,7 +205,9 @@ func TestXLSXFileIndex(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT id, file_index FROM read_xlsx('` + escapeForSQL(pattern) + `', file_index=true) ORDER BY file_index`
+	sql := `SELECT id, file_index FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -231,7 +237,9 @@ func TestXLSXFileGlobBehavior(t *testing.T) {
 
 	t.Run("allow_empty", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "nonexistent*.xlsx")
-		sql := `SELECT * FROM read_xlsx('` + escapeForSQL(pattern) + `', file_glob_behavior='ALLOW_EMPTY')`
+		sql := `SELECT * FROM read_xlsx('` + escapeForSQL(
+			pattern,
+		) + `', file_glob_behavior='ALLOW_EMPTY')`
 
 		result := execQuery(t, cat, exec, sql)
 		assert.Len(t, result.Rows, 0)
@@ -246,7 +254,9 @@ func TestXLSXFileGlobBehavior(t *testing.T) {
 		})
 
 		path := filepath.Join(tmpDir, "data.xlsx")
-		sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(path) + `', file_glob_behavior='FALLBACK_GLOB')`
+		sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(
+			path,
+		) + `', file_glob_behavior='FALLBACK_GLOB')`
 
 		result := execQuery(t, cat, exec, sql)
 		cnt := testToInt64(result.Rows[0]["cnt"])
@@ -274,7 +284,9 @@ func TestXLSXUnionByName(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(pattern) + `', union_by_name=true)`
+	sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', union_by_name=true)`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -350,7 +362,9 @@ func TestXLSXAllMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_xlsx('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -400,7 +414,9 @@ func TestXLSXFilesToSniff(t *testing.T) {
 	pattern := filepath.Join(tmpDir, "*.xlsx")
 
 	// Test that files_to_sniff option is recognized and files are read
-	sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(pattern) + `', files_to_sniff=1)`
+	sql := `SELECT COUNT(*) as cnt FROM read_xlsx('` + escapeForSQL(
+		pattern,
+	) + `', files_to_sniff=1)`
 	result := execQuery(t, cat, exec, sql)
 	cnt := testToInt64(result.Rows[0]["cnt"])
 	assert.Equal(t, int64(3), cnt)
@@ -482,7 +498,9 @@ func TestXLSXAutoMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.xlsx")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_xlsx_auto('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_xlsx_auto('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 

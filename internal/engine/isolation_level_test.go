@@ -95,7 +95,11 @@ func TestShowTransactionIsolation(t *testing.T) {
 
 	// Test SHOW default_transaction_isolation
 	t.Run("SHOW default_transaction_isolation", func(t *testing.T) {
-		rows, columns, err := engineConn.Query(context.Background(), "SHOW default_transaction_isolation", nil)
+		rows, columns, err := engineConn.Query(
+			context.Background(),
+			"SHOW default_transaction_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, columns, 1)
 		assert.Equal(t, "default_transaction_isolation", columns[0])
@@ -105,7 +109,11 @@ func TestShowTransactionIsolation(t *testing.T) {
 
 	// Test SHOW transaction_isolation outside of transaction
 	t.Run("SHOW transaction_isolation outside transaction", func(t *testing.T) {
-		rows, columns, err := engineConn.Query(context.Background(), "SHOW transaction_isolation", nil)
+		rows, columns, err := engineConn.Query(
+			context.Background(),
+			"SHOW transaction_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, columns, 1)
 		assert.Equal(t, "transaction_isolation", columns[0])
@@ -116,10 +124,18 @@ func TestShowTransactionIsolation(t *testing.T) {
 
 	// Change default and verify
 	t.Run("SHOW after SET", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'READ COMMITTED'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'READ COMMITTED'",
+			nil,
+		)
 		require.NoError(t, err)
 
-		rows, _, err := engineConn.Query(context.Background(), "SHOW default_transaction_isolation", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SHOW default_transaction_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.Equal(t, "READ COMMITTED", rows[0]["default_transaction_isolation"])
@@ -141,7 +157,11 @@ func TestBeginWithIsolationLevel(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Begin transaction with explicit isolation level
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Check that transaction isolation level is set
@@ -174,7 +194,11 @@ func TestBeginUsesDefaultIsolationLevel(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Set default isolation level
-	_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'READ UNCOMMITTED'", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"SET default_transaction_isolation = 'READ UNCOMMITTED'",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction without explicit isolation level
@@ -211,7 +235,11 @@ func TestSetInvalidIsolationLevel(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Try to set an invalid isolation level
-	_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'INVALID'", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"SET default_transaction_isolation = 'INVALID'",
+		nil,
+	)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid isolation level")
 }
@@ -365,7 +393,11 @@ func TestConnectionTransactionIsolationLevelIntegration(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Set default isolation level
-	_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'REPEATABLE READ'", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"SET default_transaction_isolation = 'REPEATABLE READ'",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction without explicit isolation level
@@ -399,11 +431,19 @@ func TestConnectionTransactionExplicitIsolationLevel(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Set default isolation level to SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'SERIALIZABLE'", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"SET default_transaction_isolation = 'SERIALIZABLE'",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with explicit READ UNCOMMITTED (overrides default)
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Transaction should have READ UNCOMMITTED, not the default SERIALIZABLE
@@ -864,7 +904,11 @@ func TestConnectionRepeatableReadCreatesSnapshot(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Transaction should have a snapshot
@@ -889,7 +933,11 @@ func TestConnectionSerializableCreatesSnapshot(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Begin transaction with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Transaction should have a snapshot
@@ -914,7 +962,11 @@ func TestConnectionReadCommittedNoSnapshot(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Transaction should NOT have a snapshot

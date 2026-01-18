@@ -31,9 +31,9 @@ type LogicalScan struct {
 	TableName     string
 	Alias         string
 	TableDef      *catalog.TableDef
-	VirtualTable  *catalog.VirtualTableDef  // Set for virtual tables
+	VirtualTable  *catalog.VirtualTableDef      // Set for virtual tables
 	TableFunction *binder.BoundTableFunctionRef // Set for table functions
-	Projections   []int                     // Column indices to project, nil for all
+	Projections   []int                         // Column indices to project, nil for all
 	columns       []ColumnBinding
 }
 
@@ -161,8 +161,8 @@ const (
 	JoinTypeRight
 	JoinTypeFull
 	JoinTypeCross
-	JoinTypeSemi  // SEMI JOIN: outputs left rows where right match exists (for EXISTS, IN subqueries)
-	JoinTypeAnti  // ANTI JOIN: outputs left rows where right match does NOT exist (for NOT EXISTS, NOT IN)
+	JoinTypeSemi // SEMI JOIN: outputs left rows where right match exists (for EXISTS, IN subqueries)
+	JoinTypeAnti // ANTI JOIN: outputs left rows where right match does NOT exist (for NOT EXISTS, NOT IN)
 )
 
 func (*LogicalJoin) logicalPlanNode() {}
@@ -353,8 +353,8 @@ func (d *LogicalDistinct) OutputColumns() []ColumnBinding { return d.Child.Outpu
 // DISTINCT ON (col1, col2) keeps the first row for each unique combination of specified columns.
 // The query must include an ORDER BY that starts with the DISTINCT ON columns to define "first".
 type LogicalDistinctOn struct {
-	Child      LogicalPlan        // Child plan
-	DistinctOn []binder.BoundExpr // Expressions to distinct on
+	Child      LogicalPlan            // Child plan
+	DistinctOn []binder.BoundExpr     // Expressions to distinct on
 	OrderBy    []*binder.BoundOrderBy // The ORDER BY clause (used to determine which row to keep)
 }
 
@@ -371,8 +371,8 @@ type LogicalInsert struct {
 	TableDef  *catalog.TableDef
 	Columns   []int
 	Values    [][]binder.BoundExpr
-	Source    LogicalPlan                  // For INSERT ... SELECT
-	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
+	Source    LogicalPlan                 // For INSERT ... SELECT
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*LogicalInsert) logicalPlanNode() {}
@@ -392,8 +392,8 @@ type LogicalUpdate struct {
 	Table     string
 	TableDef  *catalog.TableDef
 	Set       []*binder.BoundSetClause
-	Source    LogicalPlan                  // Scan + Filter
-	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
+	Source    LogicalPlan                 // Scan + Filter
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*LogicalUpdate) logicalPlanNode() {}
@@ -412,8 +412,8 @@ type LogicalDelete struct {
 	Schema    string
 	Table     string
 	TableDef  *catalog.TableDef
-	Source    LogicalPlan                  // Scan + Filter
-	Returning []*binder.BoundSelectColumn  // RETURNING clause columns
+	Source    LogicalPlan                 // Scan + Filter
+	Returning []*binder.BoundSelectColumn // RETURNING clause columns
 }
 
 func (*LogicalDelete) logicalPlanNode() {}
@@ -497,7 +497,7 @@ type LogicalCopyFrom struct {
 	Schema   string
 	Table    string
 	TableDef *catalog.TableDef
-	Columns  []int          // Column indices to import (nil for all)
+	Columns  []int // Column indices to import (nil for all)
 	FilePath string
 	Options  map[string]any
 }
@@ -513,10 +513,10 @@ type LogicalCopyTo struct {
 	Schema   string
 	Table    string
 	TableDef *catalog.TableDef
-	Columns  []int          // Column indices to export (nil for all)
+	Columns  []int // Column indices to export (nil for all)
 	FilePath string
 	Options  map[string]any
-	Source   LogicalPlan    // For COPY (SELECT...) TO
+	Source   LogicalPlan // For COPY (SELECT...) TO
 }
 
 func (*LogicalCopyTo) logicalPlanNode() {}
@@ -651,12 +651,12 @@ type LogicalAlterTable struct {
 	Schema       string
 	Table        string
 	TableDef     *catalog.TableDef
-	Operation    int    // AlterTableOp from parser
-	IfExists     bool   // IF EXISTS modifier
-	NewTableName string // RENAME TO
-	OldColumn    string // RENAME COLUMN
-	NewColumn    string // RENAME COLUMN
-	DropColumn   string // DROP COLUMN
+	Operation    int                // AlterTableOp from parser
+	IfExists     bool               // IF EXISTS modifier
+	NewTableName string             // RENAME TO
+	OldColumn    string             // RENAME COLUMN
+	NewColumn    string             // RENAME COLUMN
+	DropColumn   string             // DROP COLUMN
 	AddColumn    *catalog.ColumnDef // ADD COLUMN
 }
 

@@ -9,12 +9,12 @@ import (
 
 func TestParsePrepareStatement(t *testing.T) {
 	tests := []struct {
-		name        string
-		sql         string
-		wantName    string
-		wantTypes   []string
-		wantQuery   string
-		wantErr     bool
+		name      string
+		sql       string
+		wantName  string
+		wantTypes []string
+		wantQuery string
+		wantErr   bool
 	}{
 		{
 			name:      "simple prepare without types",
@@ -164,11 +164,11 @@ func TestParseExecuteStatement(t *testing.T) {
 
 func TestParseDeallocateStatement(t *testing.T) {
 	tests := []struct {
-		name          string
-		sql           string
-		wantName      string
-		wantAll       bool
-		wantErr       bool
+		name     string
+		sql      string
+		wantName string
+		wantAll  bool
+		wantErr  bool
 	}{
 		{
 			name:     "deallocate specific",

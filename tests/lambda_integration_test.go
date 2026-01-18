@@ -122,7 +122,11 @@ func TestLambdaColumnNullHandling(t *testing.T) {
 		err = db.QueryRow(`SELECT id, expr FROM lambda_null_test WHERE id = 2`).Scan(&id, &expr)
 		require.NoError(t, err)
 		assert.Equal(t, 2, id)
-		assert.False(t, expr.Valid, "SQL NULL via parameter should result in NullString.Valid = false")
+		assert.False(
+			t,
+			expr.Valid,
+			"SQL NULL via parameter should result in NullString.Valid = false",
+		)
 	})
 
 	t.Run("Mix NULL and non-NULL values", func(t *testing.T) {
@@ -456,7 +460,10 @@ func TestLambdaColumnUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update the LAMBDA data
-	result, err := db.Exec(`UPDATE lambda_update_test SET expr = $1 WHERE id = 1`, "(x, y) -> x * y")
+	result, err := db.Exec(
+		`UPDATE lambda_update_test SET expr = $1 WHERE id = 1`,
+		"(x, y) -> x * y",
+	)
 	require.NoError(t, err)
 
 	rowsAffected, err := result.RowsAffected()
@@ -543,7 +550,8 @@ func TestLambdaColumnRoundtrip(t *testing.T) {
 			require.NoError(t, err)
 
 			var expr string
-			err = db.QueryRow(`SELECT expr FROM lambda_roundtrip_test WHERE id = $1`, id).Scan(&expr)
+			err = db.QueryRow(`SELECT expr FROM lambda_roundtrip_test WHERE id = $1`, id).
+				Scan(&expr)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expr, expr, "lambda expression should roundtrip correctly")
 		})

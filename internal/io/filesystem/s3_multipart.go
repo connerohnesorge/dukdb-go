@@ -100,7 +100,14 @@ func (m *MultipartUploader) Complete(ctx context.Context) error {
 	parts := m.parts
 	m.partsMu.Unlock()
 
-	_, err := m.core.CompleteMultipartUpload(ctx, m.bucket, m.key, m.uploadID, parts, minio.PutObjectOptions{})
+	_, err := m.core.CompleteMultipartUpload(
+		ctx,
+		m.bucket,
+		m.key,
+		m.uploadID,
+		parts,
+		minio.PutObjectOptions{},
+	)
 	if err != nil {
 		return fmt.Errorf("s3: failed to complete multipart upload: %w", err)
 	}

@@ -69,7 +69,10 @@ func TestMergeSchemasByName(t *testing.T) {
 			},
 			wantMaps: [][]int{
 				{0, 1}, // file1: id->0, name->1
-				{1, 0}, // file2: name is at position 0 (maps to merged 1), id is at 1 (maps to merged 0)
+				{
+					1,
+					0,
+				}, // file2: name is at position 0 (maps to merged 1), id is at 1 (maps to merged 0)
 			},
 		},
 		{
@@ -322,33 +325,108 @@ func TestValidateTypeCompatibility(t *testing.T) {
 		wantErr bool
 	}{
 		// Same types
-		{name: "same INTEGER", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_INTEGER, want: dukdb.TYPE_INTEGER},
-		{name: "same VARCHAR", t1: dukdb.TYPE_VARCHAR, t2: dukdb.TYPE_VARCHAR, want: dukdb.TYPE_VARCHAR},
+		{
+			name: "same INTEGER",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_INTEGER,
+			want: dukdb.TYPE_INTEGER,
+		},
+		{
+			name: "same VARCHAR",
+			t1:   dukdb.TYPE_VARCHAR,
+			t2:   dukdb.TYPE_VARCHAR,
+			want: dukdb.TYPE_VARCHAR,
+		},
 
 		// Signed integer widening
-		{name: "TINYINT to SMALLINT", t1: dukdb.TYPE_TINYINT, t2: dukdb.TYPE_SMALLINT, want: dukdb.TYPE_SMALLINT},
-		{name: "SMALLINT to INTEGER", t1: dukdb.TYPE_SMALLINT, t2: dukdb.TYPE_INTEGER, want: dukdb.TYPE_INTEGER},
-		{name: "INTEGER to BIGINT", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_BIGINT, want: dukdb.TYPE_BIGINT},
-		{name: "TINYINT to BIGINT", t1: dukdb.TYPE_TINYINT, t2: dukdb.TYPE_BIGINT, want: dukdb.TYPE_BIGINT},
+		{
+			name: "TINYINT to SMALLINT",
+			t1:   dukdb.TYPE_TINYINT,
+			t2:   dukdb.TYPE_SMALLINT,
+			want: dukdb.TYPE_SMALLINT,
+		},
+		{
+			name: "SMALLINT to INTEGER",
+			t1:   dukdb.TYPE_SMALLINT,
+			t2:   dukdb.TYPE_INTEGER,
+			want: dukdb.TYPE_INTEGER,
+		},
+		{
+			name: "INTEGER to BIGINT",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_BIGINT,
+			want: dukdb.TYPE_BIGINT,
+		},
+		{
+			name: "TINYINT to BIGINT",
+			t1:   dukdb.TYPE_TINYINT,
+			t2:   dukdb.TYPE_BIGINT,
+			want: dukdb.TYPE_BIGINT,
+		},
 
 		// Unsigned integer widening
-		{name: "UTINYINT to USMALLINT", t1: dukdb.TYPE_UTINYINT, t2: dukdb.TYPE_USMALLINT, want: dukdb.TYPE_USMALLINT},
-		{name: "USMALLINT to UINTEGER", t1: dukdb.TYPE_USMALLINT, t2: dukdb.TYPE_UINTEGER, want: dukdb.TYPE_UINTEGER},
-		{name: "UINTEGER to UBIGINT", t1: dukdb.TYPE_UINTEGER, t2: dukdb.TYPE_UBIGINT, want: dukdb.TYPE_UBIGINT},
+		{
+			name: "UTINYINT to USMALLINT",
+			t1:   dukdb.TYPE_UTINYINT,
+			t2:   dukdb.TYPE_USMALLINT,
+			want: dukdb.TYPE_USMALLINT,
+		},
+		{
+			name: "USMALLINT to UINTEGER",
+			t1:   dukdb.TYPE_USMALLINT,
+			t2:   dukdb.TYPE_UINTEGER,
+			want: dukdb.TYPE_UINTEGER,
+		},
+		{
+			name: "UINTEGER to UBIGINT",
+			t1:   dukdb.TYPE_UINTEGER,
+			t2:   dukdb.TYPE_UBIGINT,
+			want: dukdb.TYPE_UBIGINT,
+		},
 
 		// Floating point widening
-		{name: "FLOAT to DOUBLE", t1: dukdb.TYPE_FLOAT, t2: dukdb.TYPE_DOUBLE, want: dukdb.TYPE_DOUBLE},
+		{
+			name: "FLOAT to DOUBLE",
+			t1:   dukdb.TYPE_FLOAT,
+			t2:   dukdb.TYPE_DOUBLE,
+			want: dukdb.TYPE_DOUBLE,
+		},
 
 		// Integer to float
-		{name: "INTEGER to DOUBLE", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_DOUBLE, want: dukdb.TYPE_DOUBLE},
-		{name: "BIGINT to FLOAT", t1: dukdb.TYPE_BIGINT, t2: dukdb.TYPE_FLOAT, want: dukdb.TYPE_DOUBLE},
+		{
+			name: "INTEGER to DOUBLE",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_DOUBLE,
+			want: dukdb.TYPE_DOUBLE,
+		},
+		{
+			name: "BIGINT to FLOAT",
+			t1:   dukdb.TYPE_BIGINT,
+			t2:   dukdb.TYPE_FLOAT,
+			want: dukdb.TYPE_DOUBLE,
+		},
 
 		// Signed to unsigned (widen to larger signed)
-		{name: "INTEGER to UTINYINT", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_UTINYINT, want: dukdb.TYPE_INTEGER},
-		{name: "TINYINT to USMALLINT", t1: dukdb.TYPE_TINYINT, t2: dukdb.TYPE_USMALLINT, want: dukdb.TYPE_INTEGER},
+		{
+			name: "INTEGER to UTINYINT",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_UTINYINT,
+			want: dukdb.TYPE_INTEGER,
+		},
+		{
+			name: "TINYINT to USMALLINT",
+			t1:   dukdb.TYPE_TINYINT,
+			t2:   dukdb.TYPE_USMALLINT,
+			want: dukdb.TYPE_INTEGER,
+		},
 
 		// Timestamp types
-		{name: "TIMESTAMP to TIMESTAMP_NS", t1: dukdb.TYPE_TIMESTAMP, t2: dukdb.TYPE_TIMESTAMP_NS, want: dukdb.TYPE_TIMESTAMP_NS},
+		{
+			name: "TIMESTAMP to TIMESTAMP_NS",
+			t1:   dukdb.TYPE_TIMESTAMP,
+			t2:   dukdb.TYPE_TIMESTAMP_NS,
+			want: dukdb.TYPE_TIMESTAMP_NS,
+		},
 
 		// Incompatible types
 		{name: "INTEGER to VARCHAR", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_VARCHAR, wantErr: true},
@@ -377,11 +455,36 @@ func TestWidenType(t *testing.T) {
 		t2   dukdb.Type
 		want dukdb.Type
 	}{
-		{name: "same type", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_INTEGER, want: dukdb.TYPE_INTEGER},
-		{name: "INT to BIGINT", t1: dukdb.TYPE_INTEGER, t2: dukdb.TYPE_BIGINT, want: dukdb.TYPE_BIGINT},
-		{name: "BIGINT to INT", t1: dukdb.TYPE_BIGINT, t2: dukdb.TYPE_INTEGER, want: dukdb.TYPE_BIGINT},
-		{name: "FLOAT to DOUBLE", t1: dukdb.TYPE_FLOAT, t2: dukdb.TYPE_DOUBLE, want: dukdb.TYPE_DOUBLE},
-		{name: "TINYINT to HUGEINT", t1: dukdb.TYPE_TINYINT, t2: dukdb.TYPE_HUGEINT, want: dukdb.TYPE_HUGEINT},
+		{
+			name: "same type",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_INTEGER,
+			want: dukdb.TYPE_INTEGER,
+		},
+		{
+			name: "INT to BIGINT",
+			t1:   dukdb.TYPE_INTEGER,
+			t2:   dukdb.TYPE_BIGINT,
+			want: dukdb.TYPE_BIGINT,
+		},
+		{
+			name: "BIGINT to INT",
+			t1:   dukdb.TYPE_BIGINT,
+			t2:   dukdb.TYPE_INTEGER,
+			want: dukdb.TYPE_BIGINT,
+		},
+		{
+			name: "FLOAT to DOUBLE",
+			t1:   dukdb.TYPE_FLOAT,
+			t2:   dukdb.TYPE_DOUBLE,
+			want: dukdb.TYPE_DOUBLE,
+		},
+		{
+			name: "TINYINT to HUGEINT",
+			t1:   dukdb.TYPE_TINYINT,
+			t2:   dukdb.TYPE_HUGEINT,
+			want: dukdb.TYPE_HUGEINT,
+		},
 	}
 
 	for _, tt := range tests {
@@ -587,10 +690,10 @@ func TestAddMetadataColumns(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, 1, result.Count())
 		assert.Equal(t, 4, result.ColumnCount())
-		assert.Equal(t, int32(42), result.GetValue(0, 0))     // original data
+		assert.Equal(t, int32(42), result.GetValue(0, 0))        // original data
 		assert.Equal(t, "/data/file.csv", result.GetValue(0, 1)) // filename
-		assert.Equal(t, int64(11), result.GetValue(0, 2))       // row number (1-indexed)
-		assert.Equal(t, int32(3), result.GetValue(0, 3))        // file index
+		assert.Equal(t, int64(11), result.GetValue(0, 2))        // row number (1-indexed)
+		assert.Equal(t, int32(3), result.GetValue(0, 3))         // file index
 	})
 
 	t.Run("no metadata columns returns original", func(t *testing.T) {
@@ -737,12 +840,48 @@ func TestConvertValue(t *testing.T) {
 		targetType dukdb.Type
 		want       any
 	}{
-		{name: "nil value", val: nil, srcType: dukdb.TYPE_INTEGER, targetType: dukdb.TYPE_BIGINT, want: nil},
-		{name: "same type", val: int32(42), srcType: dukdb.TYPE_INTEGER, targetType: dukdb.TYPE_INTEGER, want: int32(42)},
-		{name: "int32 to int64", val: int32(42), srcType: dukdb.TYPE_INTEGER, targetType: dukdb.TYPE_BIGINT, want: int64(42)},
-		{name: "int8 to int64", val: int8(42), srcType: dukdb.TYPE_TINYINT, targetType: dukdb.TYPE_BIGINT, want: int64(42)},
-		{name: "int32 to float64", val: int32(42), srcType: dukdb.TYPE_INTEGER, targetType: dukdb.TYPE_DOUBLE, want: float64(42)},
-		{name: "float32 to float64", val: float32(3.14), srcType: dukdb.TYPE_FLOAT, targetType: dukdb.TYPE_DOUBLE, want: float64(float32(3.14))},
+		{
+			name:       "nil value",
+			val:        nil,
+			srcType:    dukdb.TYPE_INTEGER,
+			targetType: dukdb.TYPE_BIGINT,
+			want:       nil,
+		},
+		{
+			name:       "same type",
+			val:        int32(42),
+			srcType:    dukdb.TYPE_INTEGER,
+			targetType: dukdb.TYPE_INTEGER,
+			want:       int32(42),
+		},
+		{
+			name:       "int32 to int64",
+			val:        int32(42),
+			srcType:    dukdb.TYPE_INTEGER,
+			targetType: dukdb.TYPE_BIGINT,
+			want:       int64(42),
+		},
+		{
+			name:       "int8 to int64",
+			val:        int8(42),
+			srcType:    dukdb.TYPE_TINYINT,
+			targetType: dukdb.TYPE_BIGINT,
+			want:       int64(42),
+		},
+		{
+			name:       "int32 to float64",
+			val:        int32(42),
+			srcType:    dukdb.TYPE_INTEGER,
+			targetType: dukdb.TYPE_DOUBLE,
+			want:       float64(42),
+		},
+		{
+			name:       "float32 to float64",
+			val:        float32(3.14),
+			srcType:    dukdb.TYPE_FLOAT,
+			targetType: dukdb.TYPE_DOUBLE,
+			want:       float64(float32(3.14)),
+		},
 	}
 
 	for _, tt := range tests {

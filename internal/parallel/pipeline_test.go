@@ -591,9 +591,9 @@ func TestAggregateBreakerOp(t *testing.T) {
 			NewAggregateFunc(AggCount, 1, "count_col1"),
 		}
 		agg := NewAggregateBreakerOp(
-			[]int{0},                           // group by column 0
-			[]string{"group_col"},              // group by column names
-			[]dukdb.Type{dukdb.TYPE_INTEGER},   // group by types
+			[]int{0},                         // group by column 0
+			[]string{"group_col"},            // group by column names
+			[]dukdb.Type{dukdb.TYPE_INTEGER}, // group by types
 			aggregates,
 		)
 
@@ -620,7 +620,7 @@ func TestAggregateBreakerOp(t *testing.T) {
 		result, err := agg.Finalize()
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.Equal(t, 3, result.Count()) // 3 groups
+		assert.Equal(t, 3, result.Count())       // 3 groups
 		assert.Equal(t, 3, result.ColumnCount()) // group_col, sum, count
 	})
 
@@ -629,7 +629,7 @@ func TestAggregateBreakerOp(t *testing.T) {
 			NewAggregateFunc(AggSum, 0, "total"),
 		}
 		agg := NewAggregateBreakerOp(
-			[]int{},         // no group by
+			[]int{}, // no group by
 			[]string{},
 			[]dukdb.Type{},
 			aggregates,

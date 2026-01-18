@@ -1,6 +1,6 @@
 // Package tools provides utility tools for testing and development.
 //
-// Cardinality Estimate Comparison Tool
+// # Cardinality Estimate Comparison Tool
 //
 // Task 9.15: Extracts cardinality estimates from EXPLAIN ANALYZE output
 // and compares them with DuckDB estimates to measure estimation accuracy.
@@ -25,21 +25,21 @@ type CardinalityEstimate struct {
 
 // CardinalityComparisonReport contains analysis of cardinality estimates
 type CardinalityComparisonReport struct {
-	TotalQueries             int
-	QueriesWithinTolerance   int
-	MaxError                 float64
-	MinError                 float64
-	MeanAbsoluteError        float64
-	MedianAbsoluteError      float64
-	WorstPerformingQueries   []CardinalityEstimate
-	BestPerformingQueries    []CardinalityEstimate
-	Summary                  string
+	TotalQueries           int
+	QueriesWithinTolerance int
+	MaxError               float64
+	MinError               float64
+	MeanAbsoluteError      float64
+	MedianAbsoluteError    float64
+	WorstPerformingQueries []CardinalityEstimate
+	BestPerformingQueries  []CardinalityEstimate
+	Summary                string
 }
 
 // CardinalityComparator analyzes cardinality estimation accuracy
 type CardinalityComparator struct {
 	toleranceMultiplier float64 // e.g., 2.0 for 2x tolerance
-	estimates          []CardinalityEstimate
+	estimates           []CardinalityEstimate
 }
 
 // NewCardinalityComparator creates a new cardinality comparison tool
@@ -47,7 +47,7 @@ type CardinalityComparator struct {
 func NewCardinalityComparator(toleranceMultiplier float64) *CardinalityComparator {
 	return &CardinalityComparator{
 		toleranceMultiplier: toleranceMultiplier,
-		estimates:          []CardinalityEstimate{},
+		estimates:           []CardinalityEstimate{},
 	}
 }
 
@@ -55,7 +55,11 @@ func NewCardinalityComparator(toleranceMultiplier float64) *CardinalityComparato
 func (cc *CardinalityComparator) AddEstimate(estimate CardinalityEstimate) {
 	// Calculate estimation error
 	if estimate.ActualCardinality > 0 {
-		estimate.EstimationError = float64(estimate.EstimatedCardinality-estimate.ActualCardinality) / float64(estimate.ActualCardinality)
+		estimate.EstimationError = float64(
+			estimate.EstimatedCardinality-estimate.ActualCardinality,
+		) / float64(
+			estimate.ActualCardinality,
+		)
 	}
 
 	// Check if within tolerance
@@ -64,7 +68,8 @@ func (cc *CardinalityComparator) AddEstimate(estimate CardinalityEstimate) {
 		if ratio < 0 {
 			ratio = -ratio
 		}
-		estimate.IsWithinTolerance = ratio <= cc.toleranceMultiplier && ratio >= (1.0/cc.toleranceMultiplier)
+		estimate.IsWithinTolerance = ratio <= cc.toleranceMultiplier &&
+			ratio >= (1.0/cc.toleranceMultiplier)
 	}
 
 	cc.estimates = append(cc.estimates, estimate)

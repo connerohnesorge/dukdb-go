@@ -454,7 +454,11 @@ func (cm *ConnectionManager) GetStats() ConnectionStats {
 
 	// Calculate average wait time
 	if cm.totalWaitCount > 0 {
-		stats.AvgWaitTime = float64(atomic.LoadInt64(&cm.totalWaitTime)) / float64(atomic.LoadInt64(&cm.totalWaitCount))
+		stats.AvgWaitTime = float64(
+			atomic.LoadInt64(&cm.totalWaitTime),
+		) / float64(
+			atomic.LoadInt64(&cm.totalWaitCount),
+		)
 	}
 
 	return stats

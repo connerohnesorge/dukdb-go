@@ -271,7 +271,10 @@ func (c *TLSConfig) loadCRL() error {
 }
 
 // verifyCertificateWithCRL verifies a certificate against the CRL.
-func (c *TLSConfig) verifyCertificateWithCRL(_ [][]byte, verifiedChains [][]*x509.Certificate) error {
+func (c *TLSConfig) verifyCertificateWithCRL(
+	_ [][]byte,
+	verifiedChains [][]*x509.Certificate,
+) error {
 	c.mu.RLock()
 	crl := c.crl
 	c.mu.RUnlock()

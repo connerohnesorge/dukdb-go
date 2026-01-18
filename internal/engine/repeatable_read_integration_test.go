@@ -48,15 +48,27 @@ func TestRepeatableReadDirtyReadPrevention(t *testing.T) {
 	engineConn1 := conn1.(*EngineConn)
 
 	// Create a test table
-	_, err = engineConn1.Execute(context.Background(), "CREATE TABLE test_dirty_read_rr (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"CREATE TABLE test_dirty_read_rr (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert initial data and commit it
-	_, err = engineConn1.Execute(context.Background(), "INSERT INTO test_dirty_read_rr VALUES (1, 'Alice')", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"INSERT INTO test_dirty_read_rr VALUES (1, 'Alice')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with REPEATABLE READ
-	_, err = engineConn1.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify T1 is in REPEATABLE READ mode
@@ -100,19 +112,35 @@ func TestRepeatableReadSeesCommittedData(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_committed_rr (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_committed_rr (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert data (auto-committed in implicit transaction mode)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_committed_rr VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_committed_rr VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin explicit transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query should see the committed data
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_committed_rr WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_committed_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Should see the committed row")
 	assert.EqualValues(t, 100, rows[0]["value"], "Should see committed value")
@@ -146,13 +174,25 @@ func TestRepeatableReadNonRepeatableReadPrevention(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_nonrepeatable_rr (id INTEGER PRIMARY KEY, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_nonrepeatable_rr (id INTEGER PRIMARY KEY, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_nonrepeatable_rr VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_nonrepeatable_rr VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify snapshot was created at transaction start
@@ -160,7 +200,11 @@ func TestRepeatableReadNonRepeatableReadPrevention(t *testing.T) {
 	assert.False(t, snapshotTime.IsZero(), "Snapshot should be created at transaction start")
 
 	// T1: First read - should see value 100
-	rows, _, err := engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable_rr WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	firstValue := rows[0]["value"]
@@ -173,7 +217,11 @@ func TestRepeatableReadNonRepeatableReadPrevention(t *testing.T) {
 
 	// T1: Second read - should STILL see value 100 (snapshot isolation)
 	// In REPEATABLE READ, the same query within a transaction always returns the same result
-	rows, _, err = engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable_rr WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	secondValue := rows[0]["value"]
@@ -211,31 +259,64 @@ func TestRepeatableReadPhantomReadBehavior(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data (x > 5 rows)
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_phantom_rr (id INTEGER, x INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_phantom_rr (id INTEGER, x INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_rr VALUES (1, 6)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_rr VALUES (1, 6)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_rr VALUES (2, 7)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_rr VALUES (2, 7)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_rr VALUES (3, 8)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_rr VALUES (3, 8)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: First query - should see 3 rows where x > 5
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_phantom_rr WHERE x > 5", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom_rr WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	firstCount := len(rows)
 	assert.Equal(t, 3, firstCount, "First query should return 3 rows where x > 5")
 
 	// T1: Second query (within same transaction) - should return same count
 	// because REPEATABLE READ provides consistent reads within a transaction
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_phantom_rr WHERE x > 5", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom_rr WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	secondCount := len(rows)
-	assert.Equal(t, firstCount, secondCount, "Second query within REPEATABLE READ should return same row count")
+	assert.Equal(
+		t,
+		firstCount,
+		secondCount,
+		"Second query within REPEATABLE READ should return same row count",
+	)
 
 	// Cleanup
 	_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
@@ -258,15 +339,31 @@ func TestRepeatableReadSnapshotConsistencyAcrossStatements(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_snapshot_consistency (id INTEGER, version INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_snapshot_consistency (id INTEGER, version INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_snapshot_consistency VALUES (1, 1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_snapshot_consistency VALUES (1, 1)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_snapshot_consistency VALUES (2, 1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_snapshot_consistency VALUES (2, 1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify snapshot was taken at transaction start
@@ -280,7 +377,11 @@ func TestRepeatableReadSnapshotConsistencyAcrossStatements(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 
 		// Each query should return the same results
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_snapshot_consistency ORDER BY id", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_snapshot_consistency ORDER BY id",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 2, "All queries in REPEATABLE READ should see same row count")
 		assert.EqualValues(t, 1, rows[0]["version"], "All queries should see version 1 for id=1")
@@ -305,29 +406,53 @@ func TestRepeatableReadOwnChangesVisible(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_own_changes_rr (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_own_changes_rr (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Insert a row (not yet committed at transaction level)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_own_changes_rr VALUES (1, 'Test')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_own_changes_rr VALUES (1, 'Test')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see own insert
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_own_changes_rr WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own uncommitted insert")
 	assert.Equal(t, "Test", rows[0]["name"], "Should see correct value")
 
 	// T1: Update the row
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_own_changes_rr SET name = 'Updated' WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_own_changes_rr SET name = 'Updated' WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see the update
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_own_changes_rr WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own update")
 	assert.Equal(t, "Updated", rows[0]["name"], "Should see updated value")
@@ -355,7 +480,11 @@ func TestRepeatableReadIsolationLevelConfiguration(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	t.Run("explicit BEGIN with REPEATABLE READ", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 
 		assert.True(t, engineConn.inTxn)
@@ -376,11 +505,19 @@ func TestRepeatableReadIsolationLevelConfiguration(t *testing.T) {
 
 	t.Run("SET default then BEGIN", func(t *testing.T) {
 		// Set default isolation level
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'REPEATABLE READ'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'REPEATABLE READ'",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// SHOW default_transaction_isolation
-		rows, _, err := engineConn.Query(context.Background(), "SHOW default_transaction_isolation", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SHOW default_transaction_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.Equal(t, "REPEATABLE READ", rows[0]["default_transaction_isolation"])
@@ -397,22 +534,38 @@ func TestRepeatableReadIsolationLevelConfiguration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Reset default
-		_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'SERIALIZABLE'", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'SERIALIZABLE'",
+			nil,
+		)
 		require.NoError(t, err)
 	})
 
 	t.Run("explicit isolation level overrides default", func(t *testing.T) {
 		// Set default to READ COMMITTED (no snapshot)
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'READ COMMITTED'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'READ COMMITTED'",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// BEGIN with explicit REPEATABLE READ should override
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 
 		assert.Equal(t, "REPEATABLE READ", engineConn.currentIsolationLevel.String(),
 			"Explicit isolation level should override default")
-		assert.True(t, engineConn.txn.HasSnapshot(), "REPEATABLE READ should have snapshot even when default is READ COMMITTED")
+		assert.True(
+			t,
+			engineConn.txn.HasSnapshot(),
+			"REPEATABLE READ should have snapshot even when default is READ COMMITTED",
+		)
 
 		_, err = engineConn.Execute(context.Background(), "ROLLBACK", nil)
 		require.NoError(t, err)
@@ -440,13 +593,25 @@ func TestRepeatableReadComparisonWithReadCommitted(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_isolation_comparison (id INTEGER, data VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_isolation_comparison (id INTEGER, data VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_isolation_comparison VALUES (1, 'initial')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_isolation_comparison VALUES (1, 'initial')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	t.Run("REPEATABLE READ uses transaction-level snapshot", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Snapshot should exist
@@ -459,7 +624,11 @@ func TestRepeatableReadComparisonWithReadCommitted(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Execute a statement - this should NOT create a new snapshot
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_isolation_comparison", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_isolation_comparison",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -472,14 +641,22 @@ func TestRepeatableReadComparisonWithReadCommitted(t *testing.T) {
 	})
 
 	t.Run("READ COMMITTED uses statement-level timestamps", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// No transaction-level snapshot for READ COMMITTED
 		assert.False(t, engineConn.txn.HasSnapshot())
 
 		// First statement
-		_, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_isolation_comparison", nil)
+		_, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_isolation_comparison",
+			nil,
+		)
 		require.NoError(t, err)
 		firstStatementTime := engineConn.txn.GetStatementTime()
 
@@ -487,13 +664,21 @@ func TestRepeatableReadComparisonWithReadCommitted(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Second statement
-		_, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_isolation_comparison", nil)
+		_, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_isolation_comparison",
+			nil,
+		)
 		require.NoError(t, err)
 		secondStatementTime := engineConn.txn.GetStatementTime()
 
 		// Statement time should have been updated (statement-level)
-		assert.True(t, secondStatementTime.After(firstStatementTime) || secondStatementTime.Equal(firstStatementTime),
-			"READ COMMITTED should update statement time for each statement")
+		assert.True(
+			t,
+			secondStatementTime.After(firstStatementTime) ||
+				secondStatementTime.Equal(firstStatementTime),
+			"READ COMMITTED should update statement time for each statement",
+		)
 
 		_, err = engineConn.Execute(context.Background(), "ROLLBACK", nil)
 		require.NoError(t, err)
@@ -513,15 +698,31 @@ func TestRepeatableReadDeleteVisibility(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_delete_vis_rr (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_delete_vis_rr (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_delete_vis_rr VALUES (1, 'Alice')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_delete_vis_rr VALUES (1, 'Alice')",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_delete_vis_rr VALUES (2, 'Bob')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_delete_vis_rr VALUES (2, 'Bob')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify initial state
@@ -530,7 +731,11 @@ func TestRepeatableReadDeleteVisibility(t *testing.T) {
 	assert.Len(t, rows, 2, "Should see both rows initially")
 
 	// Delete one row within the transaction
-	_, err = engineConn.Execute(context.Background(), "DELETE FROM test_delete_vis_rr WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"DELETE FROM test_delete_vis_rr WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query should not see the deleted row (own changes are visible)
@@ -562,23 +767,47 @@ func TestRepeatableReadRollbackBehavior(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_rollback_rr (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_rollback_rr (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback_rr VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback_rr VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Make changes
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_rollback_rr SET value = 200 WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_rollback_rr SET value = 200 WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback_rr VALUES (2, 300)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback_rr VALUES (2, 300)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify changes are visible within transaction
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_rollback_rr ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_rollback_rr ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows in transaction")
 
@@ -606,15 +835,27 @@ func TestRepeatableReadWithSavepoints(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_savepoint_rr (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_savepoint_rr (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert first row
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_rr VALUES (1, 'First')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_rr VALUES (1, 'First')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create savepoint
@@ -622,11 +863,19 @@ func TestRepeatableReadWithSavepoints(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert second row after savepoint
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_rr VALUES (2, 'Second')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_rr VALUES (2, 'Second')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify both rows visible
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_savepoint_rr ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_savepoint_rr ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows before rollback to savepoint")
 
@@ -663,13 +912,25 @@ func TestRepeatableReadTransactionSnapshotPersistence(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_snapshot_persist (counter INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_snapshot_persist (counter INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_snapshot_persist VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_snapshot_persist VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Record the initial snapshot
@@ -682,7 +943,11 @@ func TestRepeatableReadTransactionSnapshotPersistence(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Execute a query
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_snapshot_persist", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_snapshot_persist",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -710,19 +975,35 @@ func TestRepeatableReadSwitchingIsolationLevels(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_switch_isolation (id INTEGER, data VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_switch_isolation (id INTEGER, data VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_switch_isolation VALUES (1, 'initial')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_switch_isolation VALUES (1, 'initial')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	t.Run("REPEATABLE READ to READ COMMITTED", func(t *testing.T) {
 		// First transaction with REPEATABLE READ
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "REPEATABLE READ", engineConn.currentIsolationLevel.String())
 		assert.True(t, engineConn.txn.HasSnapshot())
 
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_switch_isolation", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_switch_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -730,12 +1011,20 @@ func TestRepeatableReadSwitchingIsolationLevels(t *testing.T) {
 		require.NoError(t, err)
 
 		// Second transaction with READ COMMITTED
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "READ COMMITTED", engineConn.currentIsolationLevel.String())
 		assert.False(t, engineConn.txn.HasSnapshot())
 
-		rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_switch_isolation", nil)
+		rows, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_switch_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -745,14 +1034,22 @@ func TestRepeatableReadSwitchingIsolationLevels(t *testing.T) {
 
 	t.Run("READ COMMITTED to REPEATABLE READ", func(t *testing.T) {
 		// Transaction with READ COMMITTED
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.False(t, engineConn.txn.HasSnapshot())
 		_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
 		require.NoError(t, err)
 
 		// Transaction with REPEATABLE READ
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.True(t, engineConn.txn.HasSnapshot())
 		_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
@@ -761,7 +1058,11 @@ func TestRepeatableReadSwitchingIsolationLevels(t *testing.T) {
 
 	t.Run("REPEATABLE READ to SERIALIZABLE", func(t *testing.T) {
 		// Transaction with REPEATABLE READ
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.True(t, engineConn.txn.HasSnapshot())
 		rrSnapshot := engineConn.txn.GetSnapshot().GetTimestamp()
@@ -772,7 +1073,11 @@ func TestRepeatableReadSwitchingIsolationLevels(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Transaction with SERIALIZABLE
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.True(t, engineConn.txn.HasSnapshot())
 		serSnapshot := engineConn.txn.GetSnapshot().GetTimestamp()
@@ -799,21 +1104,45 @@ func TestRepeatableReadAggregateConsistency(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with numeric data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_aggregate_rr (id INTEGER, amount INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_aggregate_rr (id INTEGER, amount INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_rr VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_rr VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_rr VALUES (2, 200)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_rr VALUES (2, 200)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_rr VALUES (3, 300)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_rr VALUES (3, 300)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin with REPEATABLE READ
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// First aggregate query
-	rows, _, err := engineConn.Query(context.Background(), "SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_rr", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_rr",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	firstCount := rows[0]["cnt"]
@@ -823,7 +1152,11 @@ func TestRepeatableReadAggregateConsistency(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		time.Sleep(5 * time.Millisecond)
 
-		rows, _, err = engineConn.Query(context.Background(), "SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_rr", nil)
+		rows, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_rr",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 

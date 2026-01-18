@@ -319,7 +319,11 @@ func TestSerialTypes(t *testing.T) {
 	}
 
 	if len(serialTypes) != len(expectedSerials) {
-		t.Errorf("SerialTypes() returned %d types, expected %d", len(serialTypes), len(expectedSerials))
+		t.Errorf(
+			"SerialTypes() returned %d types, expected %d",
+			len(serialTypes),
+			len(expectedSerials),
+		)
 	}
 
 	for _, st := range serialTypes {

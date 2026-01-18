@@ -1,6 +1,6 @@
 // Package executor provides query execution for dukdb-go.
 //
-// TPC-H Performance Benchmark Tests
+// # TPC-H Performance Benchmark Tests
 //
 // This file contains integration tests that verify TPC-H query performance.
 // Tests create actual TPC-H test data and execute real queries, comparing
@@ -25,13 +25,13 @@ import (
 
 // TPCHQueryMetrics holds performance metrics for a TPC-H query
 type TPCHQueryMetrics struct {
-	QueryNumber        int
-	QueryName          string
-	ExecutionTimeMS    int64         // Execution time in milliseconds
-	RowsReturned       int64         // Number of rows returned
-	EstimatedTimeMS    int64         // Estimated execution time (optional)
-	PerformanceRatio   float64       // Actual / Baseline time ratio
-	PerformanceStatus  string        // "PASS", "WARNING", "FAIL"
+	QueryNumber       int
+	QueryName         string
+	ExecutionTimeMS   int64   // Execution time in milliseconds
+	RowsReturned      int64   // Number of rows returned
+	EstimatedTimeMS   int64   // Estimated execution time (optional)
+	PerformanceRatio  float64 // Actual / Baseline time ratio
+	PerformanceStatus string  // "PASS", "WARNING", "FAIL"
 }
 
 // TPCHBenchmarkConfig controls TPC-H test parameters
@@ -184,7 +184,16 @@ func createTPCHDatabase(t *testing.T, config TPCHBenchmarkConfig) *sql.DB {
 
 	// Run ANALYZE if configured
 	if config.EnableAnalyze {
-		tables := []string{"region", "nation", "customer", "orders", "lineitem", "part", "supplier", "partsupp"}
+		tables := []string{
+			"region",
+			"nation",
+			"customer",
+			"orders",
+			"lineitem",
+			"part",
+			"supplier",
+			"partsupp",
+		}
 		for _, table := range tables {
 			_, _ = conn.Exec(fmt.Sprintf("ANALYZE TABLE %s", table))
 		}
@@ -227,7 +236,7 @@ func loadTPCHTestData(t *testing.T, conn *sql.DB, config TPCHBenchmarkConfig) {
 		_, err := conn.Exec(fmt.Sprintf(`
 			INSERT INTO customer VALUES
 			(%d, 'Customer%d', 'Address%d', %d, '123-456-7890', %.2f, 'BUILDING', '')
-		`, i, i, i, (i%10), float64(5000+i*100)))
+		`, i, i, i, (i % 10), float64(5000+i*100)))
 		require.NoError(t, err)
 	}
 
@@ -265,7 +274,7 @@ func loadTPCHTestData(t *testing.T, conn *sql.DB, config TPCHBenchmarkConfig) {
 		_, err := conn.Exec(fmt.Sprintf(`
 			INSERT INTO supplier VALUES
 			(%d, 'Supplier%d', 'Address%d', %d, '123-456-7890', %.2f, '')
-		`, i, i, i, (i%10), float64(50000+i*100)))
+		`, i, i, i, (i % 10), float64(50000+i*100)))
 		require.NoError(t, err)
 	}
 

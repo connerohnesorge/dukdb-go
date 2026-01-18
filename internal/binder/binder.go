@@ -22,7 +22,7 @@ type BindScope struct {
 	tables     map[string]*BoundTableRef
 	aliases    map[string]string // alias -> table name
 	paramCount int
-	params     map[int]dukdb.Type // position -> inferred type
+	params     map[int]dukdb.Type     // position -> inferred type
 	ctes       map[string]*CTEBinding // CTE name -> binding info
 }
 
@@ -63,8 +63,8 @@ type BoundTableRef struct {
 	PivotStmt     *BoundPivotStmt          // Set for PIVOT table references
 	UnpivotStmt   *BoundUnpivotStmt        // Set for UNPIVOT table references
 	Columns       []*BoundColumn
-	Lateral       bool                     // LATERAL flag (subquery can reference outer scope)
-	IsCTESelfRef  bool                     // True if this is a self-reference within a recursive CTE's recursive part
+	Lateral       bool // LATERAL flag (subquery can reference outer scope)
+	IsCTESelfRef  bool // True if this is a self-reference within a recursive CTE's recursive part
 }
 
 // BoundTableFunctionRef represents a bound table function call.

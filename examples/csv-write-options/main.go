@@ -111,39 +111,39 @@ func main() {
 
 	fmt.Printf("Exported with custom null to %s:\n%s\n", outputFile, string(content))
 
-// 	// Example 4: Force quotes on all fields
-// 	fmt.Println("\n5. Export with all fields quoted:")
-// 
-// 	outputFile = "products_quoted.csv"
-// 	_, err = db.Exec(fmt.Sprintf("COPY products TO '%s' WITH (FORCE_QUOTE *)", outputFile))
-// 	if err != nil {
-// 		log.Fatal("Failed to export with quotes:", err)
-// 	}
-// 	defer os.Remove(outputFile)
-// 
-// 	content, err = os.ReadFile(outputFile)
-// 	if err != nil {
-// 		log.Fatal("Failed to read exported file:", err)
-// 	}
-// 
-// 	fmt.Printf("Exported with all fields quoted to %s:\n%s\n", outputFile, string(content))
-// 
-// 	// Example 5: Selective quoting
-// 	fmt.Println("\n6. Export with selective field quoting:")
-// 
-// 	outputFile = "products_selective_quote.csv"
-// 	_, err = db.Exec(fmt.Sprintf("COPY products TO '%s' WITH (FORCE_QUOTE (name, category))", outputFile))
-// 	if err != nil {
-// 		log.Fatal("Failed to export with selective quotes:", err)
-// 	}
-// 	defer os.Remove(outputFile)
-// 
-// 	content, err = os.ReadFile(outputFile)
-// 	if err != nil {
-// 		log.Fatal("Failed to read exported file:", err)
-// 	}
-// 
-// 	fmt.Printf("Exported with selective quoting to %s:\n%s\n", outputFile, string(content))
+	// 	// Example 4: Force quotes on all fields
+	// 	fmt.Println("\n5. Export with all fields quoted:")
+	//
+	// 	outputFile = "products_quoted.csv"
+	// 	_, err = db.Exec(fmt.Sprintf("COPY products TO '%s' WITH (FORCE_QUOTE *)", outputFile))
+	// 	if err != nil {
+	// 		log.Fatal("Failed to export with quotes:", err)
+	// 	}
+	// 	defer os.Remove(outputFile)
+	//
+	// 	content, err = os.ReadFile(outputFile)
+	// 	if err != nil {
+	// 		log.Fatal("Failed to read exported file:", err)
+	// 	}
+	//
+	// 	fmt.Printf("Exported with all fields quoted to %s:\n%s\n", outputFile, string(content))
+	//
+	// 	// Example 5: Selective quoting
+	// 	fmt.Println("\n6. Export with selective field quoting:")
+	//
+	// 	outputFile = "products_selective_quote.csv"
+	// 	_, err = db.Exec(fmt.Sprintf("COPY products TO '%s' WITH (FORCE_QUOTE (name, category))", outputFile))
+	// 	if err != nil {
+	// 		log.Fatal("Failed to export with selective quotes:", err)
+	// 	}
+	// 	defer os.Remove(outputFile)
+	//
+	// 	content, err = os.ReadFile(outputFile)
+	// 	if err != nil {
+	// 		log.Fatal("Failed to read exported file:", err)
+	// 	}
+	//
+	// 	fmt.Printf("Exported with selective quoting to %s:\n%s\n", outputFile, string(content))
 
 	// Example 6: Escape character
 	fmt.Println("\n7. Export with custom escape character:")
@@ -211,23 +211,23 @@ func main() {
 
 	fmt.Printf("Exported with UTF-8 encoding to %s:\n%s\n", outputFile, string(content))
 
-// 	// Example 8: Date format
-// 	fmt.Println("\n9. Export with custom date format:")
-// 
-// 	outputFile = "products_date_format.csv"
-// 	_, err = db.Exec(fmt.Sprintf("COPY (SELECT id, name, CURRENT_DATE as created_date FROM products) TO '%s' WITH (DATEFORMAT '%%d/%%m/%%Y')", outputFile))
-// 	if err != nil {
-// 		log.Fatal("Failed to export with date format:", err)
-// 	}
-// 	defer os.Remove(outputFile)
-// 
-// 	content, err = os.ReadFile(outputFile)
-// 	if err != nil {
-// 		log.Fatal("Failed to read exported file:", err)
-// 	}
-// 
-// 	fmt.Printf("Exported with custom date format to %s:\n%s\n", outputFile, string(content))
-// 
+	// 	// Example 8: Date format
+	// 	fmt.Println("\n9. Export with custom date format:")
+	//
+	// 	outputFile = "products_date_format.csv"
+	// 	_, err = db.Exec(fmt.Sprintf("COPY (SELECT id, name, CURRENT_DATE as created_date FROM products) TO '%s' WITH (DATEFORMAT '%%d/%%m/%%Y')", outputFile))
+	// 	if err != nil {
+	// 		log.Fatal("Failed to export with date format:", err)
+	// 	}
+	// 	defer os.Remove(outputFile)
+	//
+	// 	content, err = os.ReadFile(outputFile)
+	// 	if err != nil {
+	// 		log.Fatal("Failed to read exported file:", err)
+	// 	}
+	//
+	// 	fmt.Printf("Exported with custom date format to %s:\n%s\n", outputFile, string(content))
+	//
 	// Example 9: Multiple options combined
 	fmt.Println("\n10. Export with multiple options combined:")
 
@@ -275,7 +275,10 @@ func main() {
 	}
 
 	for _, opt := range options {
-		filename := fmt.Sprintf("test_%s.csv", strings.ReplaceAll(strings.ToLower(opt.name), " ", "_"))
+		filename := fmt.Sprintf(
+			"test_%s.csv",
+			strings.ReplaceAll(strings.ToLower(opt.name), " ", "_"),
+		)
 		query := fmt.Sprintf("COPY test_export TO '%s'", filename)
 		if opt.options != "" {
 			query += fmt.Sprintf(" WITH (%s)", opt.options)
@@ -357,7 +360,9 @@ func showCSVParsingDifferences(content string) {
 func createOptionComparison() {
 	fmt.Println("\n=== CSV Export Options Summary ===")
 	fmt.Println("\nOption              | Purpose                          | Example Usage")
-	fmt.Println("------------------- | -------------------------------- | -----------------------------")
+	fmt.Println(
+		"------------------- | -------------------------------- | -----------------------------",
+	)
 	fmt.Println("DELIMITER          | Change field separator           | DELIMITER '|'")
 	fmt.Println("HEADER             | Include/exclude header row       | HEADER false")
 	fmt.Println("NULL               | Custom null representation       | NULL 'N/A'")

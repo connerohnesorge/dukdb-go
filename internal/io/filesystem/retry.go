@@ -93,12 +93,12 @@ func IsRetryableError(err error) bool {
 // IsRetryableHTTPStatus returns true if the HTTP status code is retryable.
 func IsRetryableHTTPStatus(statusCode int) bool {
 	switch statusCode {
-	case http.StatusTooManyRequests,        // 429
-		http.StatusInternalServerError,      // 500
-		http.StatusBadGateway,               // 502
-		http.StatusServiceUnavailable,       // 503
-		http.StatusGatewayTimeout,           // 504
-		http.StatusRequestTimeout:           // 408
+	case http.StatusTooManyRequests, // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout,      // 504
+		http.StatusRequestTimeout:      // 408
 		return true
 	default:
 		return false

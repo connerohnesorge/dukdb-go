@@ -55,26 +55,26 @@ func TestSerializeSelectStmt(t *testing.T) {
 func TestSerializeAndReparse(t *testing.T) {
 	// Test that we can serialize and then reparse a view definition
 	sql := "SELECT id, name FROM users WHERE active = TRUE"
-	
+
 	// Parse
 	stmt, err := parser.Parse(sql)
 	if err != nil {
 		t.Fatalf("Failed to parse: %v", err)
 	}
-	
+
 	selectStmt := stmt.(*parser.SelectStmt)
-	
+
 	// Serialize
 	serialized := serializeSelectStmt(selectStmt)
 	t.Logf("Original:   %s", sql)
 	t.Logf("Serialized: %s", serialized)
-	
+
 	// Reparse
 	reparsed, err := parser.Parse(serialized)
 	if err != nil {
 		t.Fatalf("Failed to reparse: %v", err)
 	}
-	
+
 	// Verify it's still a SELECT
 	_, ok := reparsed.(*parser.SelectStmt)
 	if !ok {

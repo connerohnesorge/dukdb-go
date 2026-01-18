@@ -132,7 +132,9 @@ func TestParquetFilenameColumn(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.parquet")
-	sql := `SELECT id, value, filename FROM read_parquet('` + escapeForSQL(pattern) + `', filename=true) ORDER BY id`
+	sql := `SELECT id, value, filename FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', filename=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -165,7 +167,9 @@ func TestParquetFileRowNumber(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.parquet")
-	sql := `SELECT id, file_row_number FROM read_parquet('` + escapeForSQL(pattern) + `', file_row_number=true) ORDER BY id`
+	sql := `SELECT id, file_row_number FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', file_row_number=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -200,7 +204,9 @@ func TestParquetFileIndex(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.parquet")
-	sql := `SELECT id, file_index FROM read_parquet('` + escapeForSQL(pattern) + `', file_index=true) ORDER BY file_index`
+	sql := `SELECT id, file_index FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -230,7 +236,9 @@ func TestParquetFileGlobBehavior(t *testing.T) {
 
 	t.Run("allow_empty", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "nonexistent*.parquet")
-		sql := `SELECT * FROM read_parquet('` + escapeForSQL(pattern) + `', file_glob_behavior='ALLOW_EMPTY')`
+		sql := `SELECT * FROM read_parquet('` + escapeForSQL(
+			pattern,
+		) + `', file_glob_behavior='ALLOW_EMPTY')`
 
 		result := execQuery(t, cat, exec, sql)
 		assert.Len(t, result.Rows, 0)
@@ -245,7 +253,9 @@ func TestParquetFileGlobBehavior(t *testing.T) {
 		})
 
 		path := filepath.Join(tmpDir, "data.parquet")
-		sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(path) + `', file_glob_behavior='FALLBACK_GLOB')`
+		sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(
+			path,
+		) + `', file_glob_behavior='FALLBACK_GLOB')`
 
 		result := execQuery(t, cat, exec, sql)
 		cnt := testToInt64(result.Rows[0]["cnt"])
@@ -281,7 +291,9 @@ func TestParquetHivePartitioning(t *testing.T) {
 
 	t.Run("hive_partitioning_enabled", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "**/*.parquet")
-		sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(pattern) + `', hive_partitioning=true)`
+		sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(
+			pattern,
+		) + `', hive_partitioning=true)`
 
 		result := execQuery(t, cat, exec, sql)
 
@@ -292,7 +304,9 @@ func TestParquetHivePartitioning(t *testing.T) {
 
 	t.Run("hive_partitioning_with_autocast", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "**/*.parquet")
-		sql := `SELECT id, month, year FROM read_parquet('` + escapeForSQL(pattern) + `', hive_partitioning=true, hive_types_autocast=true) ORDER BY id`
+		sql := `SELECT id, month, year FROM read_parquet('` + escapeForSQL(
+			pattern,
+		) + `', hive_partitioning=true, hive_types_autocast=true) ORDER BY id`
 
 		result := execQuery(t, cat, exec, sql)
 
@@ -308,7 +322,9 @@ func TestParquetHivePartitioning(t *testing.T) {
 
 	t.Run("hive_partitioning_no_autocast", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "**/*.parquet")
-		sql := `SELECT id, month, year FROM read_parquet('` + escapeForSQL(pattern) + `', hive_partitioning=true, hive_types_autocast=false) ORDER BY id`
+		sql := `SELECT id, month, year FROM read_parquet('` + escapeForSQL(
+			pattern,
+		) + `', hive_partitioning=true, hive_types_autocast=false) ORDER BY id`
 
 		result := execQuery(t, cat, exec, sql)
 
@@ -339,7 +355,9 @@ func TestParquetUnionByName(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.parquet")
-	sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(pattern) + `', union_by_name=true)`
+	sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', union_by_name=true)`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -415,7 +433,9 @@ func TestParquetAllMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.parquet")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_parquet('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -465,7 +485,9 @@ func TestParquetFilesToSniff(t *testing.T) {
 	pattern := filepath.Join(tmpDir, "*.parquet")
 
 	// Test that files_to_sniff option is recognized and files are read
-	sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(pattern) + `', files_to_sniff=1)`
+	sql := `SELECT COUNT(*) as cnt FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', files_to_sniff=1)`
 	result := execQuery(t, cat, exec, sql)
 	cnt := testToInt64(result.Rows[0]["cnt"])
 	assert.Equal(t, int64(3), cnt)
@@ -493,7 +515,9 @@ func TestParquetHivePartitioningWithExplicitTypes(t *testing.T) {
 	// Note: hive_types is a map and cannot be easily passed through SQL syntax
 	// This test verifies that hive partitioning extracts the values
 	pattern := filepath.Join(tmpDir, "**/*.parquet")
-	sql := `SELECT id, year, active FROM read_parquet('` + escapeForSQL(pattern) + `', hive_partitioning=true, hive_types_autocast=true)`
+	sql := `SELECT id, year, active FROM read_parquet('` + escapeForSQL(
+		pattern,
+	) + `', hive_partitioning=true, hive_types_autocast=true)`
 
 	result := execQuery(t, cat, exec, sql)
 

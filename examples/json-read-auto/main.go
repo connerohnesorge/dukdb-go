@@ -77,7 +77,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to scan row: %v", err)
 		}
-		fmt.Printf("ID: %d, Name: %s, Price: $%.2f, Category: %s\n", productID, name, price, category)
+		fmt.Printf(
+			"ID: %d, Name: %s, Price: $%.2f, Category: %s\n",
+			productID,
+			name,
+			price,
+			category,
+		)
 	}
 	if err = rows.Err(); err != nil {
 		log.Fatalf("Error reading rows: %v", err)
@@ -103,14 +109,23 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to scan row: %v", err)
 		}
-		fmt.Printf("ID: %d, Name: %s, Price: $%.2f, Category: %s\n", productID, name, price, category)
+		fmt.Printf(
+			"ID: %d, Name: %s, Price: $%.2f, Category: %s\n",
+			productID,
+			name,
+			price,
+			category,
+		)
 	}
 
 	// Example 3: Comparing read_json_auto() with explicit format
 	fmt.Println("\n=== Example 3: Comparison with Explicit Format ===")
 
 	// Using explicit format
-	query = fmt.Sprintf("SELECT COUNT(*) as count FROM read_json('%s', format = 'array')", arrayFile)
+	query = fmt.Sprintf(
+		"SELECT COUNT(*) as count FROM read_json('%s', format = 'array')",
+		arrayFile,
+	)
 	rows, err = db.Query(query)
 	if err != nil {
 		log.Fatalf("Failed to read with explicit format: %v", err)
@@ -327,7 +342,10 @@ func main() {
 		log.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	query = fmt.Sprintf("SELECT COUNT(DISTINCT category) as unique_categories FROM read_json_auto('%s')", absPath)
+	query = fmt.Sprintf(
+		"SELECT COUNT(DISTINCT category) as unique_categories FROM read_json_auto('%s')",
+		absPath,
+	)
 	rows, err = db.Query(query)
 	if err != nil {
 		log.Fatalf("Failed to read with absolute path: %v", err)

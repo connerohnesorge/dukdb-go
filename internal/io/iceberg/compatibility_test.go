@@ -329,8 +329,16 @@ func TestCompatibility_PartitionTransforms(t *testing.T) {
 		example string
 	}{
 		{"identity", func() PartitionTransform { return IdentityTransform{} }, "identity(region)"},
-		{"bucket", func() PartitionTransform { return BucketTransform{NumBuckets: 16} }, "bucket(16, id)"},
-		{"truncate", func() PartitionTransform { return TruncateTransform{Width: 10} }, "truncate(10, name)"},
+		{
+			"bucket",
+			func() PartitionTransform { return BucketTransform{NumBuckets: 16} },
+			"bucket(16, id)",
+		},
+		{
+			"truncate",
+			func() PartitionTransform { return TruncateTransform{Width: 10} },
+			"truncate(10, name)",
+		},
 		{"year", func() PartitionTransform { return YearTransform{} }, "year(timestamp)"},
 		{"month", func() PartitionTransform { return MonthTransform{} }, "month(timestamp)"},
 		{"day", func() PartitionTransform { return DayTransform{} }, "day(timestamp)"},

@@ -243,7 +243,11 @@ func (p *RowPrefetcher) Initialize(rows []map[string]any, columns []string) {
 }
 
 // InitializeWithStmt sets up the prefetcher with a statement for lazy fetching.
-func (p *RowPrefetcher) InitializeWithStmt(ctx context.Context, stmt dukdb.BackendStmt, args []driver.NamedValue) {
+func (p *RowPrefetcher) InitializeWithStmt(
+	ctx context.Context,
+	stmt dukdb.BackendStmt,
+	args []driver.NamedValue,
+) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

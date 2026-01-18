@@ -58,7 +58,11 @@ func newAzureFileForReading(blobClient *blob.Client, container, blobName string)
 // newAzureFileForReadingWithConfig creates a new Azure file handle for reading with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newAzureFileForReadingWithConfig(blobClient *blob.Client, container, blobName string, config AzureConfig) *AzureFile {
+func newAzureFileForReadingWithConfig(
+	blobClient *blob.Client,
+	container, blobName string,
+	config AzureConfig,
+) *AzureFile {
 	return &AzureFile{
 		blobClient: blobClient,
 		container:  container,
@@ -70,7 +74,10 @@ func newAzureFileForReadingWithConfig(blobClient *blob.Client, container, blobNa
 
 // newAzureFileForWriting creates a new Azure file handle for writing to the given container and blob.
 // Data is buffered in memory and uploaded to Azure when Close() is called.
-func newAzureFileForWriting(blockBlobClient *blockblob.Client, container, blobName string) *AzureFile {
+func newAzureFileForWriting(
+	blockBlobClient *blockblob.Client,
+	container, blobName string,
+) *AzureFile {
 	return &AzureFile{
 		blockBlobClient: blockBlobClient,
 		container:       container,
@@ -84,7 +91,11 @@ func newAzureFileForWriting(blockBlobClient *blockblob.Client, container, blobNa
 // newAzureFileForWritingWithConfig creates a new Azure file handle for writing with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newAzureFileForWritingWithConfig(blockBlobClient *blockblob.Client, container, blobName string, config AzureConfig) *AzureFile {
+func newAzureFileForWritingWithConfig(
+	blockBlobClient *blockblob.Client,
+	container, blobName string,
+	config AzureConfig,
+) *AzureFile {
 	return &AzureFile{
 		blockBlobClient: blockBlobClient,
 		container:       container,

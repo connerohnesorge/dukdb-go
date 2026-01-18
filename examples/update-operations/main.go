@@ -51,8 +51,14 @@ func main() {
 	}
 
 	for _, item := range items {
-		_, err = db.Exec("INSERT INTO inventory (id, product_name, category, price, quantity) VALUES (?, ?, ?, ?, ?)",
-			item.id, item.name, item.category, item.price, item.quantity)
+		_, err = db.Exec(
+			"INSERT INTO inventory (id, product_name, category, price, quantity) VALUES (?, ?, ?, ?, ?)",
+			item.id,
+			item.name,
+			item.category,
+			item.price,
+			item.quantity,
+		)
 		if err != nil {
 			log.Printf("Failed to insert item %s: %v", item.name, err)
 		}
@@ -87,7 +93,11 @@ func main() {
 
 	// Example 3: UPDATE with calculation
 	fmt.Println("\n=== Example 3: UPDATE with calculation ===")
-	result, err = db.Exec("UPDATE inventory SET price = price * ? WHERE category = ?", 0.9, "Electronics")
+	result, err = db.Exec(
+		"UPDATE inventory SET price = price * ? WHERE category = ?",
+		0.9,
+		"Electronics",
+	)
 	if err != nil {
 		log.Printf("Failed to update Electronics: %v", err)
 	} else {
@@ -112,7 +122,8 @@ func main() {
 	fmt.Println("\n=== Example 5: UPDATE based on aggregate ===")
 	// First, get the average price for each category
 	var avgPrice float64
-	err = db.QueryRow("SELECT AVG(price) FROM inventory WHERE category = ?", "Furniture").Scan(&avgPrice)
+	err = db.QueryRow("SELECT AVG(price) FROM inventory WHERE category = ?", "Furniture").
+		Scan(&avgPrice)
 	if err != nil {
 		log.Printf("Failed to get average price: %v", err)
 	} else {
@@ -235,12 +246,18 @@ func main() {
 
 	err = db.QueryRow("SELECT COUNT(*) FROM inventory").Scan(&totalItems)
 	if err == nil {
-		err = db.QueryRow("SELECT COUNT(*) FROM inventory WHERE discount_percentage > 0").Scan(&discountedItems)
+		err = db.QueryRow("SELECT COUNT(*) FROM inventory WHERE discount_percentage > 0").
+			Scan(&discountedItems)
 		if err == nil {
-			err = db.QueryRow("SELECT AVG(discount_percentage) FROM inventory WHERE discount_percentage > 0").Scan(&avgDiscount)
+			err = db.QueryRow("SELECT AVG(discount_percentage) FROM inventory WHERE discount_percentage > 0").
+				Scan(&avgDiscount)
 			if err == nil {
 				fmt.Printf("Total items: %d\n", totalItems)
-				fmt.Printf("Items with discounts: %d (%.1f%%)\n", discountedItems, float64(discountedItems)/float64(totalItems)*100)
+				fmt.Printf(
+					"Items with discounts: %d (%.1f%%)\n",
+					discountedItems,
+					float64(discountedItems)/float64(totalItems)*100,
+				)
 				fmt.Printf("Average discount: %.1f%%\n", avgDiscount)
 			}
 		}

@@ -50,15 +50,27 @@ func TestSerializableDirtyReadPrevention(t *testing.T) {
 	engineConn1 := conn1.(*EngineConn)
 
 	// Create a test table
-	_, err = engineConn1.Execute(context.Background(), "CREATE TABLE test_dirty_read_ser (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"CREATE TABLE test_dirty_read_ser (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert initial data and commit it
-	_, err = engineConn1.Execute(context.Background(), "INSERT INTO test_dirty_read_ser VALUES (1, 'Alice')", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"INSERT INTO test_dirty_read_ser VALUES (1, 'Alice')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with SERIALIZABLE
-	_, err = engineConn1.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify T1 is in SERIALIZABLE mode
@@ -70,7 +82,11 @@ func TestSerializableDirtyReadPrevention(t *testing.T) {
 	assert.NotNil(t, engineConn1.txn.GetSnapshot())
 
 	// Query the table - should see the committed row
-	rows, _, err := engineConn1.Query(context.Background(), "SELECT * FROM test_dirty_read_ser", nil)
+	rows, _, err := engineConn1.Query(
+		context.Background(),
+		"SELECT * FROM test_dirty_read_ser",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Should see the committed row")
 
@@ -100,13 +116,25 @@ func TestSerializableNonRepeatableReadPrevention(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_nonrepeatable_ser (id INTEGER PRIMARY KEY, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_nonrepeatable_ser (id INTEGER PRIMARY KEY, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_nonrepeatable_ser VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_nonrepeatable_ser VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Begin transaction with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify snapshot was created at transaction start
@@ -114,7 +142,11 @@ func TestSerializableNonRepeatableReadPrevention(t *testing.T) {
 	assert.False(t, snapshotTime.IsZero(), "Snapshot should be created at transaction start")
 
 	// T1: First read - should see value 100
-	rows, _, err := engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable_ser WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable_ser WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	firstValue := rows[0]["value"]
@@ -122,7 +154,11 @@ func TestSerializableNonRepeatableReadPrevention(t *testing.T) {
 
 	// T1: Second read - should STILL see value 100 (snapshot isolation)
 	// In SERIALIZABLE, the same query within a transaction always returns the same result
-	rows, _, err = engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable_ser WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable_ser WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	secondValue := rows[0]["value"]
@@ -159,31 +195,64 @@ func TestSerializablePhantomReadPrevention(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data (x > 5 rows)
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_phantom_ser (id INTEGER, x INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_phantom_ser (id INTEGER, x INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_ser VALUES (1, 6)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_ser VALUES (1, 6)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_ser VALUES (2, 7)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_ser VALUES (2, 7)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom_ser VALUES (3, 8)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom_ser VALUES (3, 8)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Begin transaction with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: First query - should see 3 rows where x > 5
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_phantom_ser WHERE x > 5", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom_ser WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	firstCount := len(rows)
 	assert.Equal(t, 3, firstCount, "First query should return 3 rows where x > 5")
 
 	// T1: Second query (within same transaction) - should return same count
 	// because SERIALIZABLE provides snapshot isolation preventing phantom reads
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_phantom_ser WHERE x > 5", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom_ser WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	secondCount := len(rows)
-	assert.Equal(t, firstCount, secondCount, "Second query within SERIALIZABLE should return same row count (phantom prevented)")
+	assert.Equal(
+		t,
+		firstCount,
+		secondCount,
+		"Second query within SERIALIZABLE should return same row count (phantom prevented)",
+	)
 
 	// Cleanup
 	_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
@@ -203,29 +272,53 @@ func TestSerializableOwnChangesVisible(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_own_changes_ser (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_own_changes_ser (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Insert a row (not yet committed at transaction level)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_own_changes_ser VALUES (1, 'Test')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_own_changes_ser VALUES (1, 'Test')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see own insert
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_own_changes_ser WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes_ser WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own uncommitted insert")
 	assert.Equal(t, "Test", rows[0]["name"], "Should see correct value")
 
 	// T1: Update the row
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_own_changes_ser SET name = 'Updated' WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_own_changes_ser SET name = 'Updated' WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see the update
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_own_changes_ser WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes_ser WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own update")
 	assert.Equal(t, "Updated", rows[0]["name"], "Should see updated value")
@@ -711,7 +804,11 @@ func TestSerializableIsolationLevelConfiguration(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	t.Run("explicit BEGIN with SERIALIZABLE", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			nil,
+		)
 		require.NoError(t, err)
 
 		assert.True(t, engineConn.inTxn)
@@ -732,7 +829,11 @@ func TestSerializableIsolationLevelConfiguration(t *testing.T) {
 
 	t.Run("SET default then BEGIN", func(t *testing.T) {
 		// Set default isolation level
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'SERIALIZABLE'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'SERIALIZABLE'",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// BEGIN without explicit isolation level should use default
@@ -761,15 +862,31 @@ func TestSerializableSnapshotConsistency(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_snapshot_ser (id INTEGER, version INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_snapshot_ser (id INTEGER, version INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_snapshot_ser VALUES (1, 1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_snapshot_ser VALUES (1, 1)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_snapshot_ser VALUES (2, 1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_snapshot_ser VALUES (2, 1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify snapshot was taken at transaction start
@@ -781,7 +898,11 @@ func TestSerializableSnapshotConsistency(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		time.Sleep(5 * time.Millisecond)
 
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_snapshot_ser ORDER BY id", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_snapshot_ser ORDER BY id",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 2, "All queries in SERIALIZABLE should see same row count")
 		assert.EqualValues(t, 1, rows[0]["version"], "All queries should see version 1 for id=1")
@@ -806,15 +927,27 @@ func TestSerializableWithSavepoints(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_savepoint_ser (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_savepoint_ser (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert first row
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_ser VALUES (1, 'First')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_ser VALUES (1, 'First')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create savepoint
@@ -822,11 +955,19 @@ func TestSerializableWithSavepoints(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert second row after savepoint
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_ser VALUES (2, 'Second')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_ser VALUES (2, 'Second')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify both rows visible
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_savepoint_ser ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_savepoint_ser ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows before rollback to savepoint")
 
@@ -863,23 +1004,47 @@ func TestSerializableRollbackBehavior(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_rollback_ser (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_rollback_ser (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback_ser VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback_ser VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Make changes
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_rollback_ser SET value = 200 WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_rollback_ser SET value = 200 WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback_ser VALUES (2, 300)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback_ser VALUES (2, 300)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify changes are visible within transaction
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_rollback_ser ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_rollback_ser ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows in transaction")
 
@@ -907,21 +1072,45 @@ func TestSerializableAggregateConsistency(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with numeric data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_aggregate_ser (id INTEGER, amount INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_aggregate_ser (id INTEGER, amount INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_ser VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_ser VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_ser VALUES (2, 200)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_ser VALUES (2, 200)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_aggregate_ser VALUES (3, 300)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_aggregate_ser VALUES (3, 300)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin with SERIALIZABLE
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// First aggregate query
-	rows, _, err := engineConn.Query(context.Background(), "SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_ser", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_ser",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	firstCount := rows[0]["cnt"]
@@ -931,7 +1120,11 @@ func TestSerializableAggregateConsistency(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		time.Sleep(5 * time.Millisecond)
 
-		rows, _, err = engineConn.Query(context.Background(), "SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_ser", nil)
+		rows, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT COUNT(*) as cnt, SUM(amount) as total FROM test_aggregate_ser",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 
@@ -957,13 +1150,25 @@ func TestSerializableComparisonWithRepeatableRead(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_comparison (id INTEGER, data VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_comparison (id INTEGER, data VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_comparison VALUES (1, 'initial')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_comparison VALUES (1, 'initial')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	t.Run("SERIALIZABLE uses transaction-level snapshot", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// Snapshot should exist
@@ -990,7 +1195,11 @@ func TestSerializableComparisonWithRepeatableRead(t *testing.T) {
 
 	t.Run("SERIALIZABLE vs REPEATABLE READ both have snapshots", func(t *testing.T) {
 		// SERIALIZABLE transaction
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.True(t, engineConn.txn.HasSnapshot())
 		serSnapshot := engineConn.txn.GetSnapshot().GetTimestamp()
@@ -1001,7 +1210,11 @@ func TestSerializableComparisonWithRepeatableRead(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// REPEATABLE READ transaction
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.True(t, engineConn.txn.HasSnapshot())
 		rrSnapshot := engineConn.txn.GetSnapshot().GetTimestamp()
@@ -1039,13 +1252,25 @@ func TestSerializableCommitCleansUpLocks(t *testing.T) {
 	isolatedEngine := engineConn.engine
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_lock_cleanup (id INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_lock_cleanup (id INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_lock_cleanup VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_lock_cleanup VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin SERIALIZABLE transaction
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	txnID := engineConn.txn.ID()
@@ -1082,13 +1307,25 @@ func TestSerializableRollbackCleansUpLocks(t *testing.T) {
 	isolatedEngine := engineConn.engine
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_lock_rollback (id INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_lock_rollback (id INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_lock_rollback VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_lock_rollback VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin SERIALIZABLE transaction
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	txnID := engineConn.txn.ID()
@@ -1106,8 +1343,17 @@ func TestSerializableRollbackCleansUpLocks(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify locks are released
-	assert.False(t, lm.IsLocked("test_lock_rollback", "1"), "Lock should be released after rollback")
-	assert.Equal(t, 0, lm.GetLocksHeldByTxn(txnID), "Transaction should have no locks after rollback")
+	assert.False(
+		t,
+		lm.IsLocked("test_lock_rollback", "1"),
+		"Lock should be released after rollback",
+	)
+	assert.Equal(
+		t,
+		0,
+		lm.GetLocksHeldByTxn(txnID),
+		"Transaction should have no locks after rollback",
+	)
 }
 
 // TestSerializableCommitCleansUpConflictData verifies that read/write tracking
@@ -1124,13 +1370,25 @@ func TestSerializableCommitCleansUpConflictData(t *testing.T) {
 	isolatedEngine := engineConn.engine
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_conflict_cleanup (id INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_conflict_cleanup (id INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_conflict_cleanup VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_conflict_cleanup VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin SERIALIZABLE transaction
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	txnID := engineConn.txn.ID()
@@ -1167,13 +1425,25 @@ func TestSerializableRollbackCleansUpConflictData(t *testing.T) {
 	isolatedEngine := engineConn.engine
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_conflict_rollback (id INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_conflict_rollback (id INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_conflict_rollback VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_conflict_rollback VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin SERIALIZABLE transaction
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	txnID := engineConn.txn.ID()
@@ -1210,13 +1480,25 @@ func TestSerializableConflictAtCommitReturnsError(t *testing.T) {
 	isolatedEngine := engineConn.engine
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_conflict_error (id INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_conflict_error (id INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_conflict_error VALUES (1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_conflict_error VALUES (1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin SERIALIZABLE transaction T1
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		nil,
+	)
 	require.NoError(t, err)
 
 	txn1ID := engineConn.txn.ID()
@@ -1232,7 +1514,10 @@ func TestSerializableConflictAtCommitReturnsError(t *testing.T) {
 
 	// Add T2 to T1's concurrent committed list (simulating T2 committed while T1 was active)
 	isolatedEngine.txnMgr.mu.Lock()
-	isolatedEngine.txnMgr.committedSince[txn1ID] = append(isolatedEngine.txnMgr.committedSince[txn1ID], txn2ID)
+	isolatedEngine.txnMgr.committedSince[txn1ID] = append(
+		isolatedEngine.txnMgr.committedSince[txn1ID],
+		txn2ID,
+	)
 	isolatedEngine.txnMgr.mu.Unlock()
 
 	// T1 tries to commit - should fail due to read-write conflict
@@ -1242,5 +1527,10 @@ func TestSerializableConflictAtCommitReturnsError(t *testing.T) {
 
 	// Verify cleanup still happened despite error
 	assert.False(t, cd.HasReadSet(txn1ID), "Read set should be cleared after failed commit")
-	assert.Equal(t, 0, isolatedEngine.LockManager().GetLocksHeldByTxn(txn1ID), "Locks should be released after failed commit")
+	assert.Equal(
+		t,
+		0,
+		isolatedEngine.LockManager().GetLocksHeldByTxn(txn1ID),
+		"Locks should be released after failed commit",
+	)
 }

@@ -26,10 +26,10 @@ func TestBitpackingCompressionFormat(t *testing.T) {
 	skipIfNoDuckDBCLI(t)
 
 	testCases := []struct {
-		name           string
-		values         []int32
-		expectedBits   uint8  // Expected bit width (0 means we don't enforce)
-		allowUncompressed bool // Some cases might use UNCOMPRESSED instead
+		name              string
+		values            []int32
+		expectedBits      uint8 // Expected bit width (0 means we don't enforce)
+		allowUncompressed bool  // Some cases might use UNCOMPRESSED instead
 	}{
 		{
 			name:         "Small integers (0-15, fits in 4 bits)",
@@ -47,9 +47,9 @@ func TestBitpackingCompressionFormat(t *testing.T) {
 			expectedBits: 16,
 		},
 		{
-			name:         "Single constant value (may use CONSTANT compression)",
-			values:       []int32{42, 42, 42, 42, 42, 42, 42, 42},
-			expectedBits: 0, // Don't check bit width, CONSTANT compression likely
+			name:              "Single constant value (may use CONSTANT compression)",
+			values:            []int32{42, 42, 42, 42, 42, 42, 42, 42},
+			expectedBits:      0, // Don't check bit width, CONSTANT compression likely
 			allowUncompressed: true,
 		},
 		{
@@ -121,7 +121,10 @@ func TestBitpackingCompressionFormat(t *testing.T) {
 
 			// For most cases, we expect BITPACKING or PFOR_DELTA
 			if dp.Compression != CompressionBitPacking && dp.Compression != CompressionPFORDelta {
-				t.Logf("WARNING: Expected BITPACKING or PFOR_DELTA, got %s", dp.Compression.String())
+				t.Logf(
+					"WARNING: Expected BITPACKING or PFOR_DELTA, got %s",
+					dp.Compression.String(),
+				)
 				t.Logf("This may indicate DuckDB chose a different compression strategy")
 			}
 
@@ -222,7 +225,11 @@ func verifyBitpackingBitWidth(t *testing.T, data []byte, expectedBits uint8, tup
 		count := binary.LittleEndian.Uint64(data[9:17])
 
 		if count == tupleCount || count == tupleCount-1 { // DELTA_FOR has count-1 deltas
-			t.Logf("Found bit width in FOR/DELTA_FOR format: %d (expected: %d)", bitWidth, expectedBits)
+			t.Logf(
+				"Found bit width in FOR/DELTA_FOR format: %d (expected: %d)",
+				bitWidth,
+				expectedBits,
+			)
 			if bitWidth > 0 && bitWidth <= 64 {
 				t.Logf("Bit width is valid: %d bits", bitWidth)
 			}

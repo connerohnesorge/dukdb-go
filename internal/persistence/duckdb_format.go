@@ -21,33 +21,34 @@ const (
 // Based on DuckDB storage_info.cpp VERSION_NUMBER_LOWER and VERSION_NUMBER_UPPER
 //
 // Storage Version History:
-//   v64: Introduced in DuckDB v0.9.0 (September 2023)
-//        - First stable format with modern columnar storage
-//        - Used through v1.1.3 (January 2025)
-//        - Key features:
-//          * Dual 4KB rotating headers (blocks 0, 1, 2)
-//          * Binary property-based catalog serialization
-//          * Row group format with column segments
-//          * FSST, RLE, BitPacking, Chimp compression
-//          * Serialization compatibility field NOT stored (implicitly 1)
 //
-//   v65: Introduced in DuckDB v1.2.0 (February 2025)
-//        - Enhanced catalog serialization
-//        - Key changes from v64:
-//          * Serialization compatibility field now EXPLICITLY stored in header
-//          * Enhanced type system metadata serialization
+//	v64: Introduced in DuckDB v0.9.0 (September 2023)
+//	     - First stable format with modern columnar storage
+//	     - Used through v1.1.3 (January 2025)
+//	     - Key features:
+//	       * Dual 4KB rotating headers (blocks 0, 1, 2)
+//	       * Binary property-based catalog serialization
+//	       * Row group format with column segments
+//	       * FSST, RLE, BitPacking, Chimp compression
+//	       * Serialization compatibility field NOT stored (implicitly 1)
 //
-//   v66: Introduced in DuckDB v1.3.0 (May 2025)
-//        - Additional type system improvements
-//        - Key changes from v65:
-//          * Extended support for nested types (STRUCT, LIST, MAP, UNION)
-//          * Improved metadata for complex type hierarchies
+//	v65: Introduced in DuckDB v1.2.0 (February 2025)
+//	     - Enhanced catalog serialization
+//	     - Key changes from v64:
+//	       * Serialization compatibility field now EXPLICITLY stored in header
+//	       * Enhanced type system metadata serialization
 //
-//   v67: Introduced in DuckDB v1.4.0 (August 2025)
-//        - Current version as of v1.5.0 (November 2025)
-//        - Key changes from v66:
-//          * Added support for new types (BIT, TIME_TZ, TIMESTAMP_TZ)
-//          * Enhanced compression metadata
+//	v66: Introduced in DuckDB v1.3.0 (May 2025)
+//	     - Additional type system improvements
+//	     - Key changes from v65:
+//	       * Extended support for nested types (STRUCT, LIST, MAP, UNION)
+//	       * Improved metadata for complex type hierarchies
+//
+//	v67: Introduced in DuckDB v1.4.0 (August 2025)
+//	     - Current version as of v1.5.0 (November 2025)
+//	     - Key changes from v66:
+//	       * Added support for new types (BIT, TIME_TZ, TIMESTAMP_TZ)
+//	       * Enhanced compression metadata
 //
 // Compatibility:
 //   - We write: v64 (for maximum compatibility with DuckDB 0.9.0+)
@@ -55,9 +56,10 @@ const (
 //   - Forward compatibility: Limited to v67 (may require updates for newer formats)
 //
 // Key Format Differences Between Versions:
-//   v64 vs v65+: SerializationCompatibility field storage (implicit vs explicit)
-//   v65 vs v66: Type system metadata changes (nested type handling)
-//   v66 vs v67: New type additions (BIT, TIME_TZ, TIMESTAMP_TZ)
+//
+//	v64 vs v65+: SerializationCompatibility field storage (implicit vs explicit)
+//	v65 vs v66: Type system metadata changes (nested type handling)
+//	v66 vs v67: New type additions (BIT, TIME_TZ, TIMESTAMP_TZ)
 //
 // Note: Versions below v64 used different storage formats and are not supported.
 // For files from DuckDB < v0.9.0, use the official duckdb tool to upgrade them first.

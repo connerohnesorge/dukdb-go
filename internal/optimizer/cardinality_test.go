@@ -86,14 +86,14 @@ type mockLogicalScan struct {
 	columns         []OutputColumn
 }
 
-func (s *mockLogicalScan) PlanType() string             { return "LogicalScan" }
-func (s *mockLogicalScan) PlanChildren() []LogicalPlanNode { return nil }
+func (s *mockLogicalScan) PlanType() string                  { return "LogicalScan" }
+func (s *mockLogicalScan) PlanChildren() []LogicalPlanNode   { return nil }
 func (s *mockLogicalScan) PlanOutputColumns() []OutputColumn { return s.columns }
-func (s *mockLogicalScan) Schema() string                { return s.schema }
-func (s *mockLogicalScan) TableName() string             { return s.tableName }
-func (s *mockLogicalScan) Alias() string                 { return s.alias }
-func (s *mockLogicalScan) IsTableFunction() bool         { return s.isTableFunction }
-func (s *mockLogicalScan) IsVirtualTable() bool          { return s.isVirtualTable }
+func (s *mockLogicalScan) Schema() string                    { return s.schema }
+func (s *mockLogicalScan) TableName() string                 { return s.tableName }
+func (s *mockLogicalScan) Alias() string                     { return s.alias }
+func (s *mockLogicalScan) IsTableFunction() bool             { return s.isTableFunction }
+func (s *mockLogicalScan) IsVirtualTable() bool              { return s.isVirtualTable }
 
 // mockLogicalFilter implements FilterNode for testing.
 type mockLogicalFilter struct {
@@ -101,7 +101,7 @@ type mockLogicalFilter struct {
 	condition ExprNode
 }
 
-func (f *mockLogicalFilter) PlanType() string             { return "LogicalFilter" }
+func (f *mockLogicalFilter) PlanType() string                { return "LogicalFilter" }
 func (f *mockLogicalFilter) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{f.child} }
 func (f *mockLogicalFilter) PlanOutputColumns() []OutputColumn {
 	if f.child != nil {
@@ -138,11 +138,12 @@ type mockLogicalAggregate struct {
 	columns []OutputColumn
 }
 
-func (a *mockLogicalAggregate) PlanType() string             { return "LogicalAggregate" }
-func (a *mockLogicalAggregate) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{a.child} }
+func (a *mockLogicalAggregate) PlanType() string { return "LogicalAggregate" }
+
+func (a *mockLogicalAggregate) PlanChildren() []LogicalPlanNode   { return []LogicalPlanNode{a.child} }
 func (a *mockLogicalAggregate) PlanOutputColumns() []OutputColumn { return a.columns }
-func (a *mockLogicalAggregate) AggChild() LogicalPlanNode    { return a.child }
-func (a *mockLogicalAggregate) GroupByExprs() []ExprNode     { return a.groupBy }
+func (a *mockLogicalAggregate) AggChild() LogicalPlanNode         { return a.child }
+func (a *mockLogicalAggregate) GroupByExprs() []ExprNode          { return a.groupBy }
 
 // mockLogicalProject implements LogicalPlanNode for testing.
 type mockLogicalProject struct {
@@ -150,8 +151,9 @@ type mockLogicalProject struct {
 	columns []OutputColumn
 }
 
-func (p *mockLogicalProject) PlanType() string             { return "LogicalProject" }
-func (p *mockLogicalProject) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{p.child} }
+func (p *mockLogicalProject) PlanType() string { return "LogicalProject" }
+
+func (p *mockLogicalProject) PlanChildren() []LogicalPlanNode   { return []LogicalPlanNode{p.child} }
 func (p *mockLogicalProject) PlanOutputColumns() []OutputColumn { return p.columns }
 
 // mockLogicalSort implements LogicalPlanNode for testing.
@@ -159,7 +161,7 @@ type mockLogicalSort struct {
 	child LogicalPlanNode
 }
 
-func (s *mockLogicalSort) PlanType() string             { return "LogicalSort" }
+func (s *mockLogicalSort) PlanType() string                { return "LogicalSort" }
 func (s *mockLogicalSort) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{s.child} }
 func (s *mockLogicalSort) PlanOutputColumns() []OutputColumn {
 	if s.child != nil {
@@ -175,7 +177,7 @@ type mockLogicalLimit struct {
 	offset int64
 }
 
-func (l *mockLogicalLimit) PlanType() string             { return "LogicalLimit" }
+func (l *mockLogicalLimit) PlanType() string                { return "LogicalLimit" }
 func (l *mockLogicalLimit) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{l.child} }
 func (l *mockLogicalLimit) PlanOutputColumns() []OutputColumn {
 	if l.child != nil {
@@ -192,7 +194,7 @@ type mockLogicalDistinct struct {
 	child LogicalPlanNode
 }
 
-func (d *mockLogicalDistinct) PlanType() string             { return "LogicalDistinct" }
+func (d *mockLogicalDistinct) PlanType() string                { return "LogicalDistinct" }
 func (d *mockLogicalDistinct) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{d.child} }
 func (d *mockLogicalDistinct) PlanOutputColumns() []OutputColumn {
 	if d.child != nil {
@@ -206,7 +208,7 @@ type mockLogicalWindow struct {
 	child LogicalPlanNode
 }
 
-func (w *mockLogicalWindow) PlanType() string             { return "LogicalWindow" }
+func (w *mockLogicalWindow) PlanType() string                { return "LogicalWindow" }
 func (w *mockLogicalWindow) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{w.child} }
 func (w *mockLogicalWindow) PlanOutputColumns() []OutputColumn {
 	if w.child != nil {
@@ -218,8 +220,8 @@ func (w *mockLogicalWindow) PlanOutputColumns() []OutputColumn {
 // mockLogicalDummyScan implements LogicalPlanNode for testing.
 type mockLogicalDummyScan struct{}
 
-func (d *mockLogicalDummyScan) PlanType() string             { return "LogicalDummyScan" }
-func (d *mockLogicalDummyScan) PlanChildren() []LogicalPlanNode { return nil }
+func (d *mockLogicalDummyScan) PlanType() string                  { return "LogicalDummyScan" }
+func (d *mockLogicalDummyScan) PlanChildren() []LogicalPlanNode   { return nil }
 func (d *mockLogicalDummyScan) PlanOutputColumns() []OutputColumn { return nil }
 
 // mockLogicalSample implements SampleNode for testing.
@@ -229,7 +231,7 @@ type mockLogicalSample struct {
 	isPercentage bool
 }
 
-func (s *mockLogicalSample) PlanType() string             { return "LogicalSample" }
+func (s *mockLogicalSample) PlanType() string                { return "LogicalSample" }
 func (s *mockLogicalSample) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{s.child} }
 func (s *mockLogicalSample) PlanOutputColumns() []OutputColumn {
 	if s.child != nil {
@@ -243,15 +245,16 @@ func (s *mockLogicalSample) IsPercentage() bool           { return s.isPercentag
 
 // mockLogicalUnpivot implements UnpivotNode for testing.
 type mockLogicalUnpivot struct {
-	source            LogicalPlanNode
+	source             LogicalPlanNode
 	unpivotColumnCount int
 }
 
-func (u *mockLogicalUnpivot) PlanType() string             { return "LogicalUnpivot" }
-func (u *mockLogicalUnpivot) PlanChildren() []LogicalPlanNode { return []LogicalPlanNode{u.source} }
+func (u *mockLogicalUnpivot) PlanType() string { return "LogicalUnpivot" }
+
+func (u *mockLogicalUnpivot) PlanChildren() []LogicalPlanNode   { return []LogicalPlanNode{u.source} }
 func (u *mockLogicalUnpivot) PlanOutputColumns() []OutputColumn { return nil }
-func (u *mockLogicalUnpivot) UnpivotSource() LogicalPlanNode { return u.source }
-func (u *mockLogicalUnpivot) UnpivotColumnCount() int      { return u.unpivotColumnCount }
+func (u *mockLogicalUnpivot) UnpivotSource() LogicalPlanNode    { return u.source }
+func (u *mockLogicalUnpivot) UnpivotColumnCount() int           { return u.unpivotColumnCount }
 
 // Mock expression nodes for testing
 
@@ -263,11 +266,11 @@ type mockBinaryExpr struct {
 	resType dukdb.Type
 }
 
-func (e *mockBinaryExpr) ExprType() string          { return "BoundBinaryExpr" }
+func (e *mockBinaryExpr) ExprType() string           { return "BoundBinaryExpr" }
 func (e *mockBinaryExpr) ExprResultType() dukdb.Type { return e.resType }
-func (e *mockBinaryExpr) Left() ExprNode            { return e.left }
-func (e *mockBinaryExpr) Right() ExprNode           { return e.right }
-func (e *mockBinaryExpr) Operator() BinaryOp        { return e.op }
+func (e *mockBinaryExpr) Left() ExprNode             { return e.left }
+func (e *mockBinaryExpr) Right() ExprNode            { return e.right }
+func (e *mockBinaryExpr) Operator() BinaryOp         { return e.op }
 
 // mockUnaryExpr implements UnaryExprNode for testing.
 type mockUnaryExpr struct {
@@ -276,10 +279,10 @@ type mockUnaryExpr struct {
 	resType dukdb.Type
 }
 
-func (e *mockUnaryExpr) ExprType() string          { return "BoundUnaryExpr" }
+func (e *mockUnaryExpr) ExprType() string           { return "BoundUnaryExpr" }
 func (e *mockUnaryExpr) ExprResultType() dukdb.Type { return e.resType }
-func (e *mockUnaryExpr) Operand() ExprNode         { return e.operand }
-func (e *mockUnaryExpr) UnaryOperator() UnaryOp    { return e.op }
+func (e *mockUnaryExpr) Operand() ExprNode          { return e.operand }
+func (e *mockUnaryExpr) UnaryOperator() UnaryOp     { return e.op }
 
 // mockColumnRef implements ColumnRefNode for testing.
 type mockColumnRef struct {
@@ -288,10 +291,10 @@ type mockColumnRef struct {
 	colType dukdb.Type
 }
 
-func (c *mockColumnRef) ExprType() string          { return "BoundColumnRef" }
+func (c *mockColumnRef) ExprType() string           { return "BoundColumnRef" }
 func (c *mockColumnRef) ExprResultType() dukdb.Type { return c.colType }
-func (c *mockColumnRef) ColumnTable() string       { return c.table }
-func (c *mockColumnRef) ColumnName() string        { return c.column }
+func (c *mockColumnRef) ColumnTable() string        { return c.table }
+func (c *mockColumnRef) ColumnName() string         { return c.column }
 
 // mockLiteral implements LiteralNode for testing.
 type mockLiteral struct {
@@ -299,7 +302,7 @@ type mockLiteral struct {
 	valType dukdb.Type
 }
 
-func (l *mockLiteral) ExprType() string          { return "BoundLiteral" }
+func (l *mockLiteral) ExprType() string           { return "BoundLiteral" }
 func (l *mockLiteral) ExprResultType() dukdb.Type { return l.valType }
 func (l *mockLiteral) LiteralValue() any          { return l.value }
 
@@ -310,11 +313,11 @@ type mockInListExpr struct {
 	not    bool
 }
 
-func (e *mockInListExpr) ExprType() string          { return "BoundInListExpr" }
+func (e *mockInListExpr) ExprType() string           { return "BoundInListExpr" }
 func (e *mockInListExpr) ExprResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
-func (e *mockInListExpr) InExpr() ExprNode          { return e.expr }
-func (e *mockInListExpr) InValues() []ExprNode      { return e.values }
-func (e *mockInListExpr) IsNot() bool               { return e.not }
+func (e *mockInListExpr) InExpr() ExprNode           { return e.expr }
+func (e *mockInListExpr) InValues() []ExprNode       { return e.values }
+func (e *mockInListExpr) IsNot() bool                { return e.not }
 
 func TestCardinalityEstimator_NilPlan(t *testing.T) {
 	est := NewCardinalityEstimator(nil)
@@ -529,7 +532,11 @@ func TestCardinalityEstimator_FilterOr(t *testing.T) {
 			},
 			op: OpOr,
 			right: &mockBinaryExpr{
-				left:    &mockColumnRef{table: "o", column: "priority", colType: dukdb.TYPE_VARCHAR},
+				left: &mockColumnRef{
+					table:   "o",
+					column:  "priority",
+					colType: dukdb.TYPE_VARCHAR,
+				},
 				op:      OpEq,
 				right:   &mockLiteral{value: "high", valType: dukdb.TYPE_VARCHAR},
 				resType: dukdb.TYPE_BOOLEAN,
@@ -626,7 +633,11 @@ func TestCardinalityEstimator_FilterIsNull(t *testing.T) {
 	filter := &mockLogicalFilter{
 		child: scan,
 		condition: &mockBinaryExpr{
-			left:    &mockColumnRef{table: "d", column: "optional_field", colType: dukdb.TYPE_VARCHAR},
+			left: &mockColumnRef{
+				table:   "d",
+				column:  "optional_field",
+				colType: dukdb.TYPE_VARCHAR,
+			},
 			op:      OpIs,
 			right:   &mockLiteral{value: nil, valType: dukdb.TYPE_ANY},
 			resType: dukdb.TYPE_BOOLEAN,
@@ -1088,10 +1099,10 @@ func TestCardinalityEstimator_EstimateRowWidth(t *testing.T) {
 		tableName: "users",
 		alias:     "u",
 		columns: []OutputColumn{
-			{Column: "id", Type: dukdb.TYPE_INTEGER},       // 4 bytes
-			{Column: "name", Type: dukdb.TYPE_VARCHAR},     // 32 bytes
-			{Column: "balance", Type: dukdb.TYPE_DOUBLE},   // 8 bytes
-			{Column: "active", Type: dukdb.TYPE_BOOLEAN},   // 1 byte
+			{Column: "id", Type: dukdb.TYPE_INTEGER},     // 4 bytes
+			{Column: "name", Type: dukdb.TYPE_VARCHAR},   // 32 bytes
+			{Column: "balance", Type: dukdb.TYPE_DOUBLE}, // 8 bytes
+			{Column: "active", Type: dukdb.TYPE_BOOLEAN}, // 1 byte
 		},
 	}
 

@@ -1,6 +1,6 @@
 // Package executor provides query execution for dukdb-go.
 //
-// Edge Cases and Stress Tests
+// # Edge Cases and Stress Tests
 //
 // This file contains tests for edge cases and stress scenarios:
 // - Task 9.7: All subquery types
@@ -58,15 +58,30 @@ func executeEdgeCaseQuery(
 // Task 9.7: Test IN Subquery
 func TestInSubquery(t *testing.T) {
 	exec, cat, _ := setupEdgeCaseTestExecutor()
-	_, err := executeEdgeCaseQuery(t, exec, cat, `CREATE TABLE products (id INT, name VARCHAR, category_id INT)`)
+	_, err := executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE products (id INT, name VARCHAR, category_id INT)`,
+	)
 	require.NoError(t, err)
 	_, err = executeEdgeCaseQuery(t, exec, cat, `CREATE TABLE categories (id INT)`)
 	require.NoError(t, err)
-	_, err = executeEdgeCaseQuery(t, exec, cat, `INSERT INTO products VALUES (1, 'A', 1), (2, 'B', 2), (3, 'C', 1)`)
+	_, err = executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (1, 'A', 1), (2, 'B', 2), (3, 'C', 1)`,
+	)
 	require.NoError(t, err)
 	_, err = executeEdgeCaseQuery(t, exec, cat, `INSERT INTO categories VALUES (1), (3)`)
 	require.NoError(t, err)
-	result, err := executeEdgeCaseQuery(t, exec, cat, `SELECT name FROM products WHERE category_id IN (SELECT id FROM categories)`)
+	result, err := executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`SELECT name FROM products WHERE category_id IN (SELECT id FROM categories)`,
+	)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(result.Rows))
 }
@@ -74,9 +89,19 @@ func TestInSubquery(t *testing.T) {
 // Task 9.8: Test Simple Filter Pushdown
 func TestSimpleFilterPushdown(t *testing.T) {
 	exec, cat, _ := setupEdgeCaseTestExecutor()
-	_, err := executeEdgeCaseQuery(t, exec, cat, `CREATE TABLE products (id INT, name VARCHAR, price DECIMAL)`)
+	_, err := executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE products (id INT, name VARCHAR, price DECIMAL)`,
+	)
 	require.NoError(t, err)
-	_, err = executeEdgeCaseQuery(t, exec, cat, `INSERT INTO products VALUES (1, 'A', 100), (2, 'B', 50), (3, 'C', 200)`)
+	_, err = executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (1, 'A', 100), (2, 'B', 50), (3, 'C', 200)`,
+	)
 	require.NoError(t, err)
 	result, err := executeEdgeCaseQuery(t, exec, cat, `SELECT name FROM products WHERE price > 75`)
 	require.NoError(t, err)
@@ -86,11 +111,26 @@ func TestSimpleFilterPushdown(t *testing.T) {
 // Task 9.8: Test Complex AND/OR Filters
 func TestComplexAndOrFilters(t *testing.T) {
 	exec, cat, _ := setupEdgeCaseTestExecutor()
-	_, err := executeEdgeCaseQuery(t, exec, cat, `CREATE TABLE items (id INT, status VARCHAR, priority INT)`)
+	_, err := executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE items (id INT, status VARCHAR, priority INT)`,
+	)
 	require.NoError(t, err)
-	_, err = executeEdgeCaseQuery(t, exec, cat, `INSERT INTO items VALUES (1, 'active', 1), (2, 'inactive', 2), (3, 'active', 3), (4, 'pending', 1)`)
+	_, err = executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO items VALUES (1, 'active', 1), (2, 'inactive', 2), (3, 'active', 3), (4, 'pending', 1)`,
+	)
 	require.NoError(t, err)
-	result, err := executeEdgeCaseQuery(t, exec, cat, `SELECT id FROM items WHERE (status = 'active' AND priority > 1) OR status = 'pending'`)
+	result, err := executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		`SELECT id FROM items WHERE (status = 'active' AND priority > 1) OR status = 'pending'`,
+	)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(result.Rows))
 }
@@ -104,7 +144,12 @@ func TestLargeTableScan(t *testing.T) {
 	_, err := executeEdgeCaseQuery(t, exec, cat, `CREATE TABLE large_table (id INT, value INT)`)
 	require.NoError(t, err)
 	for i := 1; i <= 50; i++ {
-		_, err = executeEdgeCaseQuery(t, exec, cat, fmt.Sprintf(`INSERT INTO large_table VALUES (%d, %d)`, i, i*10))
+		_, err = executeEdgeCaseQuery(
+			t,
+			exec,
+			cat,
+			fmt.Sprintf(`INSERT INTO large_table VALUES (%d, %d)`, i, i*10),
+		)
 		require.NoError(t, err)
 	}
 	result, err := executeEdgeCaseQuery(t, exec, cat, `SELECT COUNT(*) as cnt FROM large_table`)
@@ -126,7 +171,12 @@ func TestWideTableSelection(t *testing.T) {
 	}
 	_, err := executeEdgeCaseQuery(t, exec, cat, fmt.Sprintf(`CREATE TABLE wide_table (%s)`, cols))
 	require.NoError(t, err)
-	_, err = executeEdgeCaseQuery(t, exec, cat, fmt.Sprintf(`INSERT INTO wide_table VALUES (%s)`, values))
+	_, err = executeEdgeCaseQuery(
+		t,
+		exec,
+		cat,
+		fmt.Sprintf(`INSERT INTO wide_table VALUES (%s)`, values),
+	)
 	require.NoError(t, err)
 	result, err := executeEdgeCaseQuery(t, exec, cat, `SELECT * FROM wide_table`)
 	require.NoError(t, err)
@@ -138,7 +188,12 @@ func TestStatisticsPersistenceRoundtrip(t *testing.T) {
 	exec1, cat1, _ := setupEdgeCaseTestExecutor()
 	_, err := executeEdgeCaseQuery(t, exec1, cat1, `CREATE TABLE test_table (id INT, value INT)`)
 	require.NoError(t, err)
-	_, err = executeEdgeCaseQuery(t, exec1, cat1, `INSERT INTO test_table VALUES (1, 100), (2, 200), (3, 300)`)
+	_, err = executeEdgeCaseQuery(
+		t,
+		exec1,
+		cat1,
+		`INSERT INTO test_table VALUES (1, 100), (2, 200), (3, 300)`,
+	)
 	require.NoError(t, err)
 	// Query should work regardless of statistics
 	result, err := executeEdgeCaseQuery(t, exec1, cat1, `SELECT COUNT(*) as cnt FROM test_table`)

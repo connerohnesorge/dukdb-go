@@ -1,6 +1,6 @@
 // Package tools provides utility tools for testing and development.
 //
-// EXPLAIN Comparison Tool
+// # EXPLAIN Comparison Tool
 //
 // Task 9.14: Compares EXPLAIN output between dukdb-go and DuckDB to validate
 // query planning behavior matches expectations. This tool parses EXPLAIN plans
@@ -14,23 +14,23 @@ import (
 
 // ExplainPlanNode represents a node in an EXPLAIN plan
 type ExplainPlanNode struct {
-	Name        string
-	Properties  map[string]string
-	Children    []*ExplainPlanNode
-	RowEstimate int64
+	Name         string
+	Properties   map[string]string
+	Children     []*ExplainPlanNode
+	RowEstimate  int64
 	CostEstimate float64
 }
 
 // ExplainComparisonReport contains results of comparing two EXPLAIN plans
 type ExplainComparisonReport struct {
-	Query               string
-	DukdbPlan          *ExplainPlanNode
-	DuckdbPlan         *ExplainPlanNode
-	StructureMatches   bool
-	CostDifference     float64
+	Query                 string
+	DukdbPlan             *ExplainPlanNode
+	DuckdbPlan            *ExplainPlanNode
+	StructureMatches      bool
+	CostDifference        float64
 	CardinalityDifference float64
-	Differences        []string
-	Summary            string
+	Differences           []string
+	Summary               string
 }
 
 // ExplainComparator compares EXPLAIN plans from two sources
@@ -47,11 +47,13 @@ func NewExplainComparator(targetCostVariance float64) *ExplainComparator {
 }
 
 // ComparePlans compares two EXPLAIN plans and returns a detailed report
-func (ec *ExplainComparator) ComparePlans(dukdbPlan, duckdbPlan *ExplainPlanNode) *ExplainComparisonReport {
+func (ec *ExplainComparator) ComparePlans(
+	dukdbPlan, duckdbPlan *ExplainPlanNode,
+) *ExplainComparisonReport {
 	report := &ExplainComparisonReport{
-		DukdbPlan:          dukdbPlan,
-		DuckdbPlan:         duckdbPlan,
-		Differences:        []string{},
+		DukdbPlan:   dukdbPlan,
+		DuckdbPlan:  duckdbPlan,
+		Differences: []string{},
 	}
 
 	// Check structure match
@@ -59,8 +61,14 @@ func (ec *ExplainComparator) ComparePlans(dukdbPlan, duckdbPlan *ExplainPlanNode
 
 	// Check cost estimates
 	if dukdbPlan != nil && duckdbPlan != nil {
-		report.CostDifference = ec.calculateCostDifference(dukdbPlan.CostEstimate, duckdbPlan.CostEstimate)
-		report.CardinalityDifference = ec.calculateCardinalityDifference(dukdbPlan.RowEstimate, duckdbPlan.RowEstimate)
+		report.CostDifference = ec.calculateCostDifference(
+			dukdbPlan.CostEstimate,
+			duckdbPlan.CostEstimate,
+		)
+		report.CardinalityDifference = ec.calculateCardinalityDifference(
+			dukdbPlan.RowEstimate,
+			duckdbPlan.RowEstimate,
+		)
 	}
 
 	// Generate summary
@@ -150,7 +158,13 @@ func (ec *ExplainComparator) generateSummary(report *ExplainComparisonReport) st
 	if !costWithinTolerance {
 		costStatus = "FAIL"
 	}
-	sb.WriteString(fmt.Sprintf("Cost Difference: %s (%.2f%% difference)\n", costStatus, report.CostDifference*100))
+	sb.WriteString(
+		fmt.Sprintf(
+			"Cost Difference: %s (%.2f%% difference)\n",
+			costStatus,
+			report.CostDifference*100,
+		),
+	)
 
 	// Cardinality analysis
 	cardWithinTolerance := report.CardinalityDifference <= ec.targetCostVariance
@@ -158,7 +172,13 @@ func (ec *ExplainComparator) generateSummary(report *ExplainComparisonReport) st
 	if !cardWithinTolerance {
 		cardStatus = "FAIL"
 	}
-	sb.WriteString(fmt.Sprintf("Cardinality Difference: %s (%.2f%% difference)\n", cardStatus, report.CardinalityDifference*100))
+	sb.WriteString(
+		fmt.Sprintf(
+			"Cardinality Difference: %s (%.2f%% difference)\n",
+			cardStatus,
+			report.CardinalityDifference*100,
+		),
+	)
 
 	// Detailed differences
 	if len(report.Differences) > 0 {

@@ -27,7 +27,15 @@ func newTestSecretManager() *testSecretManager {
 // --- Executor's SecretManager interface methods ---
 
 // Create implements the executor's SecretManager interface.
-func (t *testSecretManager) Create(ctx context.Context, name string, secretType string, provider string, scope string, persistent bool, options map[string]string) error {
+func (t *testSecretManager) Create(
+	ctx context.Context,
+	name string,
+	secretType string,
+	provider string,
+	scope string,
+	persistent bool,
+	options map[string]string,
+) error {
 	s := secret.Secret{
 		Name:       name,
 		Type:       secret.SecretType(secretType),
@@ -53,7 +61,11 @@ func (t *testSecretManager) Delete(ctx context.Context, name string) error {
 }
 
 // Update implements the executor's SecretManager interface.
-func (t *testSecretManager) Update(ctx context.Context, name string, options map[string]string) error {
+func (t *testSecretManager) Update(
+	ctx context.Context,
+	name string,
+	options map[string]string,
+) error {
 	opts := make(secret.SecretOptions)
 	for k, v := range options {
 		opts[k] = v
@@ -85,22 +97,36 @@ func (t *testSecretManager) DropSecret(ctx context.Context, name string, ifExist
 }
 
 // AlterSecret implements secret.Manager.
-func (t *testSecretManager) AlterSecret(ctx context.Context, name string, opts secret.SecretOptions) error {
+func (t *testSecretManager) AlterSecret(
+	ctx context.Context,
+	name string,
+	opts secret.SecretOptions,
+) error {
 	return t.mgr.AlterSecret(ctx, name, opts)
 }
 
 // GetSecret implements secret.Manager.
-func (t *testSecretManager) GetSecret(ctx context.Context, url string, secretType secret.SecretType) (*secret.Secret, error) {
+func (t *testSecretManager) GetSecret(
+	ctx context.Context,
+	url string,
+	secretType secret.SecretType,
+) (*secret.Secret, error) {
 	return t.mgr.GetSecret(ctx, url, secretType)
 }
 
 // GetSecretByName implements secret.Manager.
-func (t *testSecretManager) GetSecretByName(ctx context.Context, name string) (*secret.Secret, error) {
+func (t *testSecretManager) GetSecretByName(
+	ctx context.Context,
+	name string,
+) (*secret.Secret, error) {
 	return t.mgr.GetSecretByName(ctx, name)
 }
 
 // ListSecrets implements secret.Manager.
-func (t *testSecretManager) ListSecrets(ctx context.Context, scope secret.SecretScope) ([]secret.Secret, error) {
+func (t *testSecretManager) ListSecrets(
+	ctx context.Context,
+	scope secret.SecretScope,
+) ([]secret.Secret, error) {
 	return t.mgr.ListSecrets(ctx, scope)
 }
 
@@ -306,7 +332,11 @@ func TestDuckDBSecrets_Empty(t *testing.T) {
 	result, err := e.executeDuckDBSecrets(ctx, plan)
 	require.NoError(t, err)
 	assert.Empty(t, result.Rows)
-	assert.Equal(t, []string{"name", "type", "provider", "persistent", "storage", "scope", "secret_string"}, result.Columns)
+	assert.Equal(
+		t,
+		[]string{"name", "type", "provider", "persistent", "storage", "scope", "secret_string"},
+		result.Columns,
+	)
 }
 
 // TestDuckDBSecrets_WithSecrets tests duckdb_secrets with multiple secrets.

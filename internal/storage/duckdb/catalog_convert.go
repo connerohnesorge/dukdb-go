@@ -700,7 +700,10 @@ func ConvertTypeFromDuckDB(typeID LogicalTypeID, mods *TypeModifiers) (dukdb.Typ
 
 // ConvertTypeToDuckDBWithInfo converts a dukdb.Type along with TypeInfo to DuckDB types.
 // This version handles complex types with additional metadata (e.g., DECIMAL precision/scale).
-func ConvertTypeToDuckDBWithInfo(typ dukdb.Type, info dukdb.TypeInfo) (LogicalTypeID, *TypeModifiers, error) {
+func ConvertTypeToDuckDBWithInfo(
+	typ dukdb.Type,
+	info dukdb.TypeInfo,
+) (LogicalTypeID, *TypeModifiers, error) {
 	typeID, mods, err := ConvertTypeToDuckDB(typ)
 	if err != nil {
 		return typeID, mods, err
@@ -774,7 +777,10 @@ func ConvertTypeToDuckDBWithInfo(typ dukdb.Type, info dukdb.TypeInfo) (LogicalTy
 
 // ConvertTypeFromDuckDBWithInfo converts a DuckDB LogicalTypeID and TypeModifiers to
 // dukdb.Type and dukdb.TypeInfo for full type information preservation.
-func ConvertTypeFromDuckDBWithInfo(typeID LogicalTypeID, mods *TypeModifiers) (dukdb.Type, dukdb.TypeInfo, error) {
+func ConvertTypeFromDuckDBWithInfo(
+	typeID LogicalTypeID,
+	mods *TypeModifiers,
+) (dukdb.Type, dukdb.TypeInfo, error) {
 	typ, err := ConvertTypeFromDuckDB(typeID, mods)
 	if err != nil {
 		return typ, nil, err
@@ -790,7 +796,10 @@ func ConvertTypeFromDuckDBWithInfo(typeID LogicalTypeID, mods *TypeModifiers) (d
 		}
 	case TypeList:
 		if mods != nil && mods.ChildType != nil {
-			childType, childInfo, _ := ConvertTypeFromDuckDBWithInfo(mods.ChildTypeID, mods.ChildType)
+			childType, childInfo, _ := ConvertTypeFromDuckDBWithInfo(
+				mods.ChildTypeID,
+				mods.ChildType,
+			)
 			if childInfo == nil {
 				childInfo, _ = dukdb.NewTypeInfo(childType)
 			}
@@ -802,7 +811,10 @@ func ConvertTypeFromDuckDBWithInfo(typeID LogicalTypeID, mods *TypeModifiers) (d
 		if mods != nil && len(mods.StructFields) > 0 {
 			entries := make([]dukdb.StructEntry, 0, len(mods.StructFields))
 			for _, field := range mods.StructFields {
-				fieldType, fieldInfo, _ := ConvertTypeFromDuckDBWithInfo(field.Type, field.TypeModifiers)
+				fieldType, fieldInfo, _ := ConvertTypeFromDuckDBWithInfo(
+					field.Type,
+					field.TypeModifiers,
+				)
 				if fieldInfo == nil {
 					fieldInfo, _ = dukdb.NewTypeInfo(fieldType)
 				}
@@ -846,7 +858,10 @@ func ConvertTypeFromDuckDBWithInfo(typeID LogicalTypeID, mods *TypeModifiers) (d
 		}
 	case TypeArray:
 		if mods != nil && mods.ChildType != nil && mods.Length > 0 {
-			childType, childInfo, _ := ConvertTypeFromDuckDBWithInfo(mods.ChildTypeID, mods.ChildType)
+			childType, childInfo, _ := ConvertTypeFromDuckDBWithInfo(
+				mods.ChildTypeID,
+				mods.ChildType,
+			)
 			if childInfo == nil {
 				childInfo, _ = dukdb.NewTypeInfo(childType)
 			}

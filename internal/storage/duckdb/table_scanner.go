@@ -485,10 +485,10 @@ func (s *TableScanner) readProjectedColumnsLocked() ([]*ColumnData, error) {
 // TableScannerIterator provides a simplified row-by-row interface for TableScanner.
 // It implements an iterator pattern without requiring explicit Advance calls.
 type TableScannerIterator struct {
-	scanner    *TableScanner
-	row        []any
-	err        error
-	hasRow     bool
+	scanner *TableScanner
+	row     []any
+	err     error
+	hasRow  bool
 }
 
 // NewTableScannerIterator creates an iterator over the table scanner.

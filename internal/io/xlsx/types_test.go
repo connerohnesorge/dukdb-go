@@ -406,8 +406,18 @@ func TestReader_TypeInference_Disabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// All columns should be VARCHAR when inference is disabled
-	assert.Equal(t, dukdb.TYPE_VARCHAR, types[0], "NumCol should be VARCHAR when inference disabled")
-	assert.Equal(t, dukdb.TYPE_VARCHAR, types[1], "TextCol should be VARCHAR when inference disabled")
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		types[0],
+		"NumCol should be VARCHAR when inference disabled",
+	)
+	assert.Equal(
+		t,
+		dukdb.TYPE_VARCHAR,
+		types[1],
+		"TextCol should be VARCHAR when inference disabled",
+	)
 }
 
 func TestReader_ExplicitColumnTypes(t *testing.T) {

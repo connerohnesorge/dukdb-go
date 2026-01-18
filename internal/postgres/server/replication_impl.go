@@ -81,7 +81,11 @@ func NewInMemorySlotManager() *InMemorySlotManager {
 }
 
 // CreateSlot creates a new replication slot.
-func (m *InMemorySlotManager) CreateSlot(ctx context.Context, name, plugin string, temporary bool) (*ReplicationSlot, error) {
+func (m *InMemorySlotManager) CreateSlot(
+	ctx context.Context,
+	name, plugin string,
+	temporary bool,
+) (*ReplicationSlot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -182,7 +186,11 @@ func (m *InMemorySlotManager) AdvanceSlot(ctx context.Context, name string, lsn 
 }
 
 // AcquireSlot marks a slot as active for a session.
-func (m *InMemorySlotManager) AcquireSlot(ctx context.Context, name string, sessionID uint64) error {
+func (m *InMemorySlotManager) AcquireSlot(
+	ctx context.Context,
+	name string,
+	sessionID uint64,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -202,7 +210,11 @@ func (m *InMemorySlotManager) AcquireSlot(ctx context.Context, name string, sess
 }
 
 // ReleaseSlot marks a slot as inactive.
-func (m *InMemorySlotManager) ReleaseSlot(ctx context.Context, name string, sessionID uint64) error {
+func (m *InMemorySlotManager) ReleaseSlot(
+	ctx context.Context,
+	name string,
+	sessionID uint64,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -223,7 +235,11 @@ func (m *InMemorySlotManager) ReleaseSlot(ctx context.Context, name string, sess
 }
 
 // UpdateConfirmedFlushLSN updates the confirmed flush position.
-func (m *InMemorySlotManager) UpdateConfirmedFlushLSN(ctx context.Context, name string, lsn LSN) error {
+func (m *InMemorySlotManager) UpdateConfirmedFlushLSN(
+	ctx context.Context,
+	name string,
+	lsn LSN,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -321,7 +337,11 @@ type WALSender struct {
 }
 
 // NewWALSender creates a new WAL sender for streaming changes.
-func NewWALSender(manager *InMemorySlotManager, publications *PublicationManager, session *Session) *WALSender {
+func NewWALSender(
+	manager *InMemorySlotManager,
+	publications *PublicationManager,
+	session *Session,
+) *WALSender {
 	return &WALSender{
 		manager:           manager,
 		publications:      publications,
@@ -333,7 +353,12 @@ func NewWALSender(manager *InMemorySlotManager, publications *PublicationManager
 }
 
 // StartReplication starts streaming changes from the given LSN.
-func (w *WALSender) StartReplication(ctx context.Context, slotName string, startLSN LSN, options map[string]string) error {
+func (w *WALSender) StartReplication(
+	ctx context.Context,
+	slotName string,
+	startLSN LSN,
+	options map[string]string,
+) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -478,9 +503,9 @@ func (w *WALSender) BuildKeepalive(requestReply bool) *PrimaryKeepalive {
 	defer w.mu.Unlock()
 
 	return &PrimaryKeepalive{
-		WALEnd:            w.manager.CurrentLSN(),
-		ServerTime:        time.Now(),
-		ReplyRequested:    requestReply,
+		WALEnd:         w.manager.CurrentLSN(),
+		ServerTime:     time.Now(),
+		ReplyRequested: requestReply,
 	}
 }
 
@@ -629,7 +654,11 @@ func NewPublicationManager() *PublicationManager {
 }
 
 // CreatePublication creates a new publication.
-func (pm *PublicationManager) CreatePublication(name string, allTables bool, tables []string) error {
+func (pm *PublicationManager) CreatePublication(
+	name string,
+	allTables bool,
+	tables []string,
+) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -664,7 +693,11 @@ func (pm *PublicationManager) DropPublication(name string) error {
 }
 
 // AlterPublication modifies a publication.
-func (pm *PublicationManager) AlterPublication(name string, addTables, dropTables []string, setAllTables *bool) error {
+func (pm *PublicationManager) AlterPublication(
+	name string,
+	addTables, dropTables []string,
+	setAllTables *bool,
+) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -833,7 +866,11 @@ func (p *PgOutputPlugin) Shutdown(ctx context.Context) error {
 }
 
 // BeginTransaction encodes a transaction begin message.
-func (p *PgOutputPlugin) BeginTransaction(xid uint32, commitTime time.Time, finalLSN LSN) ([]byte, error) {
+func (p *PgOutputPlugin) BeginTransaction(
+	xid uint32,
+	commitTime time.Time,
+	finalLSN LSN,
+) ([]byte, error) {
 	// pgoutput BEGIN message format:
 	// Byte1('B') - Message type
 	// Int64 - Final LSN of transaction
@@ -848,7 +885,11 @@ func (p *PgOutputPlugin) BeginTransaction(xid uint32, commitTime time.Time, fina
 }
 
 // CommitTransaction encodes a transaction commit message.
-func (p *PgOutputPlugin) CommitTransaction(xid uint32, commitTime time.Time, commitLSN LSN) ([]byte, error) {
+func (p *PgOutputPlugin) CommitTransaction(
+	xid uint32,
+	commitTime time.Time,
+	commitLSN LSN,
+) ([]byte, error) {
 	// pgoutput COMMIT message format:
 	// Byte1('C') - Message type
 	// Byte1 - Flags (always 0)
@@ -888,7 +929,10 @@ func (p *PgOutputPlugin) Insert(relation string, newRow map[string]interface{}) 
 }
 
 // Update encodes an UPDATE change.
-func (p *PgOutputPlugin) Update(relation string, oldRow, newRow map[string]interface{}) ([]byte, error) {
+func (p *PgOutputPlugin) Update(
+	relation string,
+	oldRow, newRow map[string]interface{},
+) ([]byte, error) {
 	var buf []byte
 
 	// Relation message
@@ -963,8 +1007,8 @@ func (p *PgOutputPlugin) encodeRelation(relation string, row map[string]interfac
 	buf = append(buf, []byte(schema)...)
 	buf = append(buf, 0) // null terminator
 	buf = append(buf, []byte(table)...)
-	buf = append(buf, 0)                                            // null terminator
-	buf = append(buf, 'd')                                          // replica identity: default
+	buf = append(buf, 0)   // null terminator
+	buf = append(buf, 'd') // replica identity: default
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(row)))
 
 	// Column definitions
@@ -1045,7 +1089,9 @@ func NewReplicationHandler() *ReplicationHandler {
 }
 
 // HandleIdentifySystem handles the IDENTIFY_SYSTEM command.
-func (h *ReplicationHandler) HandleIdentifySystem(ctx context.Context) (systemID string, timeline int32, xlogPos LSN, dbName string) {
+func (h *ReplicationHandler) HandleIdentifySystem(
+	ctx context.Context,
+) (systemID string, timeline int32, xlogPos LSN, dbName string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -1053,7 +1099,11 @@ func (h *ReplicationHandler) HandleIdentifySystem(ctx context.Context) (systemID
 }
 
 // HandleCreateReplicationSlot handles CREATE_REPLICATION_SLOT command.
-func (h *ReplicationHandler) HandleCreateReplicationSlot(ctx context.Context, name, plugin string, temporary bool) (*ReplicationSlot, error) {
+func (h *ReplicationHandler) HandleCreateReplicationSlot(
+	ctx context.Context,
+	name, plugin string,
+	temporary bool,
+) (*ReplicationSlot, error) {
 	return h.slotManager.CreateSlot(ctx, name, plugin, temporary)
 }
 
@@ -1063,7 +1113,13 @@ func (h *ReplicationHandler) HandleDropReplicationSlot(ctx context.Context, name
 }
 
 // HandleStartReplication handles START_REPLICATION command.
-func (h *ReplicationHandler) HandleStartReplication(ctx context.Context, session *Session, slotName string, startLSN LSN, options map[string]string) (*WALSender, error) {
+func (h *ReplicationHandler) HandleStartReplication(
+	ctx context.Context,
+	session *Session,
+	slotName string,
+	startLSN LSN,
+	options map[string]string,
+) (*WALSender, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -1107,7 +1163,11 @@ func (h *ReplicationHandler) DropPublication(name string) error {
 }
 
 // AlterPublication alters a publication.
-func (h *ReplicationHandler) AlterPublication(name string, addTables, dropTables []string, setAllTables *bool) error {
+func (h *ReplicationHandler) AlterPublication(
+	name string,
+	addTables, dropTables []string,
+	setAllTables *bool,
+) error {
 	return h.publications.AlterPublication(name, addTables, dropTables, setAllTables)
 }
 
@@ -1180,7 +1240,11 @@ func (rm *ReplicationManager) ListSlots(ctx context.Context) ([]*ReplicationSlot
 }
 
 // CreatePublication creates a new publication.
-func (rm *ReplicationManager) CreatePublication(name string, allTables bool, tables []string) error {
+func (rm *ReplicationManager) CreatePublication(
+	name string,
+	allTables bool,
+	tables []string,
+) error {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 

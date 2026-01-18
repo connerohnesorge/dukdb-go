@@ -95,7 +95,13 @@ func TestColumnSegmentDataPointerStructure(t *testing.T) {
 		// Verify basic DataPointer fields
 		assert.Equal(t, uint64(0), dp.RowStart, "Column %d: RowStart should be 0", colIdx)
 		assert.Equal(t, uint64(3), dp.TupleCount, "Column %d: Should have 3 rows", colIdx)
-		assert.NotEqual(t, InvalidBlockID, dp.Block.BlockID, "Column %d: Block ID should be valid", colIdx)
+		assert.NotEqual(
+			t,
+			InvalidBlockID,
+			dp.Block.BlockID,
+			"Column %d: Block ID should be valid",
+			colIdx,
+		)
 	}
 }
 
@@ -132,9 +138,9 @@ func TestColumnSegmentCompressionType(t *testing.T) {
 			expectedComps: []CompressionType{},
 		},
 		{
-			name:      "Mixed types",
-			createSQL: "CREATE TABLE t3 (id INTEGER, val BIGINT, name VARCHAR)",
-			insertSQL: "INSERT INTO t3 VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c')",
+			name:          "Mixed types",
+			createSQL:     "CREATE TABLE t3 (id INTEGER, val BIGINT, name VARCHAR)",
+			insertSQL:     "INSERT INTO t3 VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c')",
 			expectedComps: []CompressionType{
 				// Three columns, compression depends on DuckDB's algorithm
 			},
@@ -361,10 +367,10 @@ func TestColumnSegmentStatistics(t *testing.T) {
 			storage, err := OpenDuckDBStorage(dbPath, &Config{ReadOnly: true})
 			require.NoError(t, err)
 			defer func() {
-		if closeErr := storage.Close(); closeErr != nil {
-			t.Logf("Warning: failed to close storage: %v", closeErr)
-		}
-	}()
+				if closeErr := storage.Close(); closeErr != nil {
+					t.Logf("Warning: failed to close storage: %v", closeErr)
+				}
+			}()
 
 			bm := storage.blockManager
 			ddbCat := storage.catalog
@@ -438,10 +444,10 @@ func TestColumnSegmentState(t *testing.T) {
 			storage, err := OpenDuckDBStorage(dbPath, &Config{ReadOnly: true})
 			require.NoError(t, err)
 			defer func() {
-		if closeErr := storage.Close(); closeErr != nil {
-			t.Logf("Warning: failed to close storage: %v", closeErr)
-		}
-	}()
+				if closeErr := storage.Close(); closeErr != nil {
+					t.Logf("Warning: failed to close storage: %v", closeErr)
+				}
+			}()
 
 			bm := storage.blockManager
 			ddbCat := storage.catalog

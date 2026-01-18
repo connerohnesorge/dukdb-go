@@ -90,7 +90,6 @@ func TestTableScannerSetProjection(t *testing.T) {
 	})
 }
 
-
 func TestTableScannerReset(t *testing.T) {
 	t.Parallel()
 
@@ -183,7 +182,6 @@ func TestTableScannerClose(t *testing.T) {
 	assert.ErrorIs(t, err, ErrScannerClosed)
 }
 
-
 func TestTableScannerScanRowGroupOutOfRange(t *testing.T) {
 	t.Parallel()
 
@@ -210,7 +208,6 @@ func TestTableScannerScanRowGroupOutOfRange(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrRowGroupIndexOutOfRange)
 }
-
 
 func TestScanResultMethods(t *testing.T) {
 	t.Parallel()
@@ -257,7 +254,6 @@ func TestScanResultMethods(t *testing.T) {
 		assert.True(t, result.IsNull(0, 5)) // Invalid column returns true
 	})
 }
-
 
 func TestTableScannerEmptyTable(t *testing.T) {
 	t.Parallel()
@@ -327,6 +323,7 @@ func TestTableScannerEmptyRowGroup(t *testing.T) {
 //   - Field 103: compression
 //   - Field 104: statistics (nested)
 //   - Terminator 0xFFFF
+//
 // - Terminator 0xFFFF
 //
 // For CONSTANT compression with a valid constant value, the constant should be
@@ -337,7 +334,7 @@ func serializePersistentColumnDataForTest(dp *DataPointer) []byte {
 
 	// Field 100: data_pointers count (always 1 for our tests)
 	buf = append(buf, 0x64, 0x00) // Field 100
-	buf = appendVarint(buf, 1)     // count = 1
+	buf = appendVarint(buf, 1)    // count = 1
 
 	// DataPointer fields:
 	// Field 101: tuple_count
@@ -439,7 +436,11 @@ func setupTestFile(t *testing.T, path string) (*os.File, *BlockManager, func()) 
 	return file, bm, cleanup
 }
 
-func setupTestFileWithBlocks(t *testing.T, path string, blockCount int) (*os.File, *BlockManager, func()) {
+func setupTestFileWithBlocks(
+	t *testing.T,
+	path string,
+	blockCount int,
+) (*os.File, *BlockManager, func()) {
 	t.Helper()
 
 	file, bm, cleanup := setupTestFile(t, path)

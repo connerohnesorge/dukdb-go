@@ -15,10 +15,10 @@ type mockIndexDef struct {
 	isUnique bool
 }
 
-func (m *mockIndexDef) GetName() string       { return m.name }
-func (m *mockIndexDef) GetTable() string      { return m.table }
-func (m *mockIndexDef) GetColumns() []string  { return m.columns }
-func (m *mockIndexDef) GetIsUnique() bool     { return m.isUnique }
+func (m *mockIndexDef) GetName() string      { return m.name }
+func (m *mockIndexDef) GetTable() string     { return m.table }
+func (m *mockIndexDef) GetColumns() []string { return m.columns }
+func (m *mockIndexDef) GetIsUnique() bool    { return m.isUnique }
 
 // mockIndexCatalog implements CatalogProvider with index support.
 type mockIndexCatalog struct {
@@ -70,7 +70,7 @@ type mockBinaryPredicate struct {
 	op    BinaryOp
 }
 
-func (m *mockBinaryPredicate) PredicateType() string       { return "BinaryPredicate" }
+func (m *mockBinaryPredicate) PredicateType() string         { return "BinaryPredicate" }
 func (m *mockBinaryPredicate) PredicateLeft() PredicateExpr  { return m.left }
 func (m *mockBinaryPredicate) PredicateRight() PredicateExpr { return m.right }
 func (m *mockBinaryPredicate) PredicateOperator() BinaryOp   { return m.op }
@@ -99,10 +99,10 @@ type mockInListPredicate struct {
 	not    bool
 }
 
-func (m *mockInListPredicate) PredicateType() string          { return "InList" }
-func (m *mockInListPredicate) PredicateInExpr() PredicateExpr { return m.expr }
+func (m *mockInListPredicate) PredicateType() string            { return "InList" }
+func (m *mockInListPredicate) PredicateInExpr() PredicateExpr   { return m.expr }
 func (m *mockInListPredicate) PredicateValues() []PredicateExpr { return m.values }
-func (m *mockInListPredicate) PredicateIsNot() bool           { return m.not }
+func (m *mockInListPredicate) PredicateIsNot() bool             { return m.not }
 
 func TestIndexMatcher_NilCatalog(t *testing.T) {
 	matcher := NewIndexMatcher(nil)
@@ -204,7 +204,11 @@ func TestIndexMatcher_SingleColumnIndex_NonUnique(t *testing.T) {
 	require.Len(t, matches, 1)
 
 	match := matches[0]
-	assert.Equal(t, DefaultEqualitySelectivity, match.Selectivity) // Non-unique: default selectivity
+	assert.Equal(
+		t,
+		DefaultEqualitySelectivity,
+		match.Selectivity,
+	) // Non-unique: default selectivity
 }
 
 func TestIndexMatcher_SingleColumnIndex_ReversedOperands(t *testing.T) {
@@ -1438,17 +1442,17 @@ func TestIsCoveringIndex_IntegrationWithMatcher(t *testing.T) {
 // --- mockBetweenPredicate for testing BETWEEN expressions ---
 
 type mockBetweenPredicate struct {
-	expr      PredicateExpr
-	low       PredicateExpr
-	high      PredicateExpr
+	expr       PredicateExpr
+	low        PredicateExpr
+	high       PredicateExpr
 	notBetween bool
 }
 
-func (m *mockBetweenPredicate) PredicateType() string           { return "Between" }
+func (m *mockBetweenPredicate) PredicateType() string               { return "Between" }
 func (m *mockBetweenPredicate) PredicateBetweenExpr() PredicateExpr { return m.expr }
-func (m *mockBetweenPredicate) PredicateLowBound() PredicateExpr   { return m.low }
-func (m *mockBetweenPredicate) PredicateHighBound() PredicateExpr  { return m.high }
-func (m *mockBetweenPredicate) PredicateIsNotBetween() bool        { return m.notBetween }
+func (m *mockBetweenPredicate) PredicateLowBound() PredicateExpr    { return m.low }
+func (m *mockBetweenPredicate) PredicateHighBound() PredicateExpr   { return m.high }
+func (m *mockBetweenPredicate) PredicateIsNotBetween() bool         { return m.notBetween }
 
 // --- findRangePredicates Tests ---
 
@@ -1681,9 +1685,9 @@ func TestFindRangePredicates_Between(t *testing.T) {
 	// age BETWEEN 18 AND 65
 	predicates := []PredicateExpr{
 		&mockBetweenPredicate{
-			expr:      &mockColumnRefPredicate{table: "users", column: "age"},
-			low:       &mockLiteralPredicate{value: 18},
-			high:      &mockLiteralPredicate{value: 65},
+			expr:       &mockColumnRefPredicate{table: "users", column: "age"},
+			low:        &mockLiteralPredicate{value: 18},
+			high:       &mockLiteralPredicate{value: 65},
 			notBetween: false,
 		},
 	}
@@ -1716,9 +1720,9 @@ func TestFindRangePredicates_NotBetween(t *testing.T) {
 	// age NOT BETWEEN 18 AND 65 (should not be supported)
 	predicates := []PredicateExpr{
 		&mockBetweenPredicate{
-			expr:      &mockColumnRefPredicate{table: "users", column: "age"},
-			low:       &mockLiteralPredicate{value: 18},
-			high:      &mockLiteralPredicate{value: 65},
+			expr:       &mockColumnRefPredicate{table: "users", column: "age"},
+			low:        &mockLiteralPredicate{value: 18},
+			high:       &mockLiteralPredicate{value: 65},
 			notBetween: true,
 		},
 	}
@@ -1731,9 +1735,9 @@ func TestFindRangePredicates_BetweenWrongColumn(t *testing.T) {
 	// age BETWEEN 18 AND 65 but searching for "salary"
 	predicates := []PredicateExpr{
 		&mockBetweenPredicate{
-			expr:      &mockColumnRefPredicate{table: "users", column: "age"},
-			low:       &mockLiteralPredicate{value: 18},
-			high:      &mockLiteralPredicate{value: 65},
+			expr:       &mockColumnRefPredicate{table: "users", column: "age"},
+			low:        &mockLiteralPredicate{value: 18},
+			high:       &mockLiteralPredicate{value: 65},
 			notBetween: false,
 		},
 	}
@@ -1746,9 +1750,9 @@ func TestFindRangePredicates_BetweenCaseInsensitive(t *testing.T) {
 	// AGE BETWEEN 18 AND 65 (uppercase)
 	predicates := []PredicateExpr{
 		&mockBetweenPredicate{
-			expr:      &mockColumnRefPredicate{table: "users", column: "AGE"},
-			low:       &mockLiteralPredicate{value: 18},
-			high:      &mockLiteralPredicate{value: 65},
+			expr:       &mockColumnRefPredicate{table: "users", column: "AGE"},
+			low:        &mockLiteralPredicate{value: 18},
+			high:       &mockLiteralPredicate{value: 65},
 			notBetween: false,
 		},
 	}
@@ -1761,9 +1765,9 @@ func TestFindRangePredicates_BetweenNonColumnExpr(t *testing.T) {
 	// BETWEEN on a non-column expression should not match
 	predicates := []PredicateExpr{
 		&mockBetweenPredicate{
-			expr:      &mockLiteralPredicate{value: 25}, // Not a column ref
-			low:       &mockLiteralPredicate{value: 18},
-			high:      &mockLiteralPredicate{value: 65},
+			expr:       &mockLiteralPredicate{value: 25}, // Not a column ref
+			low:        &mockLiteralPredicate{value: 18},
+			high:       &mockLiteralPredicate{value: 65},
 			notBetween: false,
 		},
 	}
@@ -1781,9 +1785,9 @@ func TestFindRangePredicates_MixedRangeAndBetween(t *testing.T) {
 			op:    OpGt,
 		},
 		&mockBetweenPredicate{
-			expr:      &mockColumnRefPredicate{table: "users", column: "salary"},
-			low:       &mockLiteralPredicate{value: 50000},
-			high:      &mockLiteralPredicate{value: 100000},
+			expr:       &mockColumnRefPredicate{table: "users", column: "salary"},
+			low:        &mockLiteralPredicate{value: 50000},
+			high:       &mockLiteralPredicate{value: 100000},
 			notBetween: false,
 		},
 	}
@@ -3628,11 +3632,11 @@ func TestRangeOp_UnknownString(t *testing.T) {
 // TestRangeOp_AllMethods tests all RangeOp method combinations.
 func TestRangeOp_AllMethods(t *testing.T) {
 	tests := []struct {
-		op              RangeOp
-		str             string
-		isLowerBound    bool
-		isUpperBound    bool
-		isInclusive     bool
+		op           RangeOp
+		str          string
+		isLowerBound bool
+		isUpperBound bool
+		isInclusive  bool
 	}{
 		{RangeOpLessThan, "<", false, true, false},
 		{RangeOpLessThanOrEqual, "<=", false, true, true},

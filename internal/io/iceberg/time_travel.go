@@ -327,7 +327,9 @@ func ValidateTimeTravelOptions(opts *TimeTravelOptions) error {
 	}
 
 	if count > 1 {
-		return fmt.Errorf("only one of snapshot_id, timestamp, timestamp_ms, snapshot_ref, or version may be specified")
+		return fmt.Errorf(
+			"only one of snapshot_id, timestamp, timestamp_ms, snapshot_ref, or version may be specified",
+		)
 	}
 
 	return nil

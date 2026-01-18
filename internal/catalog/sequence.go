@@ -106,7 +106,11 @@ func (s *SequenceDef) CurrVal() (int64, error) {
 	defer s.mu.Unlock()
 
 	if !s.Called {
-		return 0, fmt.Errorf("currval of sequence '%s.%s' is not yet defined in this session", s.Schema, s.Name)
+		return 0, fmt.Errorf(
+			"currval of sequence '%s.%s' is not yet defined in this session",
+			s.Schema,
+			s.Name,
+		)
 	}
 	return s.LastVal, nil
 }

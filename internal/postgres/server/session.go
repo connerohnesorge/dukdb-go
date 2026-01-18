@@ -330,7 +330,11 @@ func (s *Session) GetAllVariables() map[string]string {
 }
 
 // Execute executes a query that doesn't return rows using the underlying engine.
-func (s *Session) Execute(ctx context.Context, query string, args []driver.NamedValue) (int64, error) {
+func (s *Session) Execute(
+	ctx context.Context,
+	query string,
+	args []driver.NamedValue,
+) (int64, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -347,7 +351,11 @@ func (s *Session) Execute(ctx context.Context, query string, args []driver.Named
 }
 
 // Query executes a query that returns rows using the underlying engine.
-func (s *Session) Query(ctx context.Context, query string, args []driver.NamedValue) ([]map[string]any, []string, error) {
+func (s *Session) Query(
+	ctx context.Context,
+	query string,
+	args []driver.NamedValue,
+) ([]map[string]any, []string, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()

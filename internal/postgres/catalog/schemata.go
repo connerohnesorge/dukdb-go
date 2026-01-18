@@ -257,18 +257,18 @@ func (is *InformationSchema) querySequences(filters []Filter) *QueryResult {
 			}
 
 			row := map[string]any{
-				"sequence_catalog":       is.databaseName,
-				"sequence_schema":        schema.Name(),
-				"sequence_name":          seq.Name,
-				"data_type":              "bigint",
-				"numeric_precision":      64,
+				"sequence_catalog":        is.databaseName,
+				"sequence_schema":         schema.Name(),
+				"sequence_name":           seq.Name,
+				"data_type":               "bigint",
+				"numeric_precision":       64,
 				"numeric_precision_radix": 2,
-				"numeric_scale":          0,
-				"start_value":            intToString(seq.StartWith),
-				"minimum_value":          intToString(seq.MinValue),
-				"maximum_value":          intToString(seq.MaxValue),
-				"increment":              intToString(seq.IncrementBy),
-				"cycle_option":           cycleOption,
+				"numeric_scale":           0,
+				"start_value":             intToString(seq.StartWith),
+				"minimum_value":           intToString(seq.MinValue),
+				"maximum_value":           intToString(seq.MaxValue),
+				"increment":               intToString(seq.IncrementBy),
+				"cycle_option":            cycleOption,
 			}
 
 			if matchesFilters(row, filters) {

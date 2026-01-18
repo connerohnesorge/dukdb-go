@@ -220,7 +220,11 @@ func (e *Executor) executeReadXLSX(
 }
 
 // resolveXLSXFilePaths resolves a path or glob pattern to a list of file paths.
-func (e *Executor) resolveXLSXFilePaths(ctx context.Context, pathOrPattern string, multiOpts *XLSXMultiFileOptions) ([]string, error) {
+func (e *Executor) resolveXLSXFilePaths(
+	ctx context.Context,
+	pathOrPattern string,
+	multiOpts *XLSXMultiFileOptions,
+) ([]string, error) {
 	// Check if it's a glob pattern
 	if fileio.IsGlobPattern(pathOrPattern) {
 		return e.expandXLSXGlobPattern(ctx, pathOrPattern, multiOpts)
@@ -251,7 +255,11 @@ func (e *Executor) resolveXLSXFilePaths(ctx context.Context, pathOrPattern strin
 }
 
 // expandXLSXGlobPattern expands a glob pattern to a list of file paths.
-func (e *Executor) expandXLSXGlobPattern(ctx context.Context, pattern string, multiOpts *XLSXMultiFileOptions) ([]string, error) {
+func (e *Executor) expandXLSXGlobPattern(
+	ctx context.Context,
+	pattern string,
+	multiOpts *XLSXMultiFileOptions,
+) ([]string, error) {
 	var fs filesystem.FileSystem
 	if filesystem.IsCloudURL(pattern) {
 		provider := NewFileSystemProvider(e.getSecretManager())
@@ -560,7 +568,11 @@ func (e *Executor) executeReadXLSXMultiFile(
 }
 
 // sniffXLSXSchema reads the schema from an XLSX file without reading all data.
-func (e *Executor) sniffXLSXSchema(ctx context.Context, path string, opts *xlsx.ReaderOptions) (fileio.FileSchema, error) {
+func (e *Executor) sniffXLSXSchema(
+	ctx context.Context,
+	path string,
+	opts *xlsx.ReaderOptions,
+) (fileio.FileSchema, error) {
 	var reader *xlsx.Reader
 	var closer io.Closer
 
@@ -623,7 +635,11 @@ func (e *Executor) sniffXLSXSchema(ctx context.Context, path string, opts *xlsx.
 }
 
 // readXLSXFileChunks reads all chunks from an XLSX file.
-func (e *Executor) readXLSXFileChunks(ctx context.Context, path string, opts *xlsx.ReaderOptions) ([]*storage.DataChunk, error) {
+func (e *Executor) readXLSXFileChunks(
+	ctx context.Context,
+	path string,
+	opts *xlsx.ReaderOptions,
+) ([]*storage.DataChunk, error) {
 	var reader *xlsx.Reader
 	var closer io.Closer
 

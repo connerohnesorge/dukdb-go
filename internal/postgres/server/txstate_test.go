@@ -249,14 +249,22 @@ func TestGetCommandTagAllCommands(t *testing.T) {
 		{"ALTER TABLESPACE ts SET (random_page_cost = 1.0)", 0, "ALTER TABLESPACE"},
 		{"ALTER FOREIGN TABLE ft ADD COLUMN col INT", 0, "ALTER FOREIGN TABLE"},
 		{"ALTER SERVER myserver OPTIONS (SET host 'newhost')", 0, "ALTER SERVER"},
-		{"ALTER FOREIGN DATA WRAPPER myfdw OPTIONS (SET wrapper 'new')", 0, "ALTER FOREIGN DATA WRAPPER"},
+		{
+			"ALTER FOREIGN DATA WRAPPER myfdw OPTIONS (SET wrapper 'new')",
+			0,
+			"ALTER FOREIGN DATA WRAPPER",
+		},
 		{"ALTER AGGREGATE myagg(INT) RENAME TO new_agg", 0, "ALTER AGGREGATE"},
 		{"ALTER OPERATOR +(INT, INT) SET (restrict = myrestrict)", 0, "ALTER OPERATOR"},
 		{"ALTER COLLATION mycoll RENAME TO new_coll", 0, "ALTER COLLATION"},
 		{"ALTER DOMAIN mydomain SET DEFAULT 'test'", 0, "ALTER DOMAIN"},
 		{"ALTER RULE myrule ON t RENAME TO new_rule", 0, "ALTER RULE"},
 		{"ALTER POLICY mypolicy ON t RENAME TO new_policy", 0, "ALTER POLICY"},
-		{"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO public", 0, "ALTER DEFAULT PRIVILEGES"},
+		{
+			"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO public",
+			0,
+			"ALTER DEFAULT PRIVILEGES",
+		},
 
 		// Transaction commands
 		{"BEGIN", 0, "BEGIN"},
@@ -343,7 +351,11 @@ func TestGetCommandTagAllCommands(t *testing.T) {
 		{"LOAD 'plpgsql'", 0, "LOAD"},
 		{"DO $$ BEGIN RAISE NOTICE 'test'; END $$", 0, "DO"},
 		{"CALL myproc()", 0, "CALL"},
-		{"IMPORT FOREIGN SCHEMA myschema FROM SERVER myserver INTO public", 0, "IMPORT FOREIGN SCHEMA"},
+		{
+			"IMPORT FOREIGN SCHEMA myschema FROM SERVER myserver INTO public",
+			0,
+			"IMPORT FOREIGN SCHEMA",
+		},
 
 		// Default case
 		{"SOME_UNKNOWN_COMMAND", 0, "OK"},

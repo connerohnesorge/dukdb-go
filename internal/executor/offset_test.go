@@ -18,7 +18,12 @@ func TestOffsetWithoutLimit(t *testing.T) {
 
 	// Insert rows
 	for i := 1; i <= 10; i++ {
-		_, err := executeQuery(t, exec, cat, fmt.Sprintf("INSERT INTO t VALUES (%d, 'name%d')", i, i))
+		_, err := executeQuery(
+			t,
+			exec,
+			cat,
+			fmt.Sprintf("INSERT INTO t VALUES (%d, 'name%d')", i, i),
+		)
 		require.NoError(t, err)
 	}
 

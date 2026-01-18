@@ -287,9 +287,9 @@ func TestVersionedRow_Clone(t *testing.T) {
 // TestVersionedRow_ToVersionInfo tests conversion to VersionInfo.
 func TestVersionedRow_ToVersionInfo(t *testing.T) {
 	tests := []struct {
-		name        string
-		row         *VersionedRow
-		expectedVI  VersionInfo
+		name       string
+		row        *VersionedRow
+		expectedVI VersionInfo
 	}{
 		{
 			name: "committed row without deletion",
@@ -379,8 +379,8 @@ func TestVersionedRow_ToVersionInfo(t *testing.T) {
 // with the correct RowID.
 func TestVersionChain_NewVersionChain(t *testing.T) {
 	tests := []struct {
-		name   string
-		rowID  uint64
+		name  string
+		rowID uint64
 	}{
 		{"row ID 0", 0},
 		{"row ID 1", 1},

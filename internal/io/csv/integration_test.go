@@ -424,13 +424,13 @@ func TestFixture_MixedTypes(t *testing.T) {
 
 	types, err := reader.Types()
 	require.NoError(t, err)
-	assert.Equal(t, dukdb.TYPE_INTEGER, types[0])  // id
-	assert.Equal(t, dukdb.TYPE_INTEGER, types[1])  // int_col
-	assert.Equal(t, dukdb.TYPE_DOUBLE, types[2])   // double_col
-	assert.Equal(t, dukdb.TYPE_BOOLEAN, types[3])  // bool_col
-	assert.Equal(t, dukdb.TYPE_DATE, types[4])     // date_col
+	assert.Equal(t, dukdb.TYPE_INTEGER, types[0])   // id
+	assert.Equal(t, dukdb.TYPE_INTEGER, types[1])   // int_col
+	assert.Equal(t, dukdb.TYPE_DOUBLE, types[2])    // double_col
+	assert.Equal(t, dukdb.TYPE_BOOLEAN, types[3])   // bool_col
+	assert.Equal(t, dukdb.TYPE_DATE, types[4])      // date_col
 	assert.Equal(t, dukdb.TYPE_TIMESTAMP, types[5]) // timestamp_col
-	assert.Equal(t, dukdb.TYPE_VARCHAR, types[6])  // varchar_col
+	assert.Equal(t, dukdb.TYPE_VARCHAR, types[6])   // varchar_col
 
 	chunk, err := reader.ReadChunk()
 	require.NoError(t, err)
@@ -644,9 +644,9 @@ func TestRoundTrip_UnicodeCharacters(t *testing.T) {
 
 	// Various Unicode strings
 	unicodeValues := []string{
-		"hello",      // ASCII
-		"cafe",       // with accents would be good but keeping simple
-		"test",       // simple test
+		"hello", // ASCII
+		"cafe",  // with accents would be good but keeping simple
+		"test",  // simple test
 	}
 
 	for i, v := range unicodeValues {

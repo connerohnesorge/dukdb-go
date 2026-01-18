@@ -339,36 +339,38 @@ func BenchmarkMultipartWriter(b *testing.B) {
 
 			// Create mock server that accepts multipart uploads
 			uploadedData := make([]byte, 0, size.size)
-			mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch {
-				case r.Method == http.MethodPost && strings.Contains(r.URL.RawQuery, "uploads"):
-					// InitiateMultipartUpload
-					w.Header().Set("Content-Type", "application/xml")
-					_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			mock := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch {
+					case r.Method == http.MethodPost && strings.Contains(r.URL.RawQuery, "uploads"):
+						// InitiateMultipartUpload
+						w.Header().Set("Content-Type", "application/xml")
+						_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 						<InitiateMultipartUploadResult>
 							<Bucket>test-bucket</Bucket>
 							<Key>test-key</Key>
 							<UploadId>test-upload-id</UploadId>
 						</InitiateMultipartUploadResult>`))
-				case r.Method == http.MethodPut && strings.Contains(r.URL.RawQuery, "partNumber"):
-					// UploadPart
-					body, _ := io.ReadAll(r.Body)
-					uploadedData = append(uploadedData, body...)
-					w.Header().Set("ETag", "\"test-etag\"")
-					w.WriteHeader(http.StatusOK)
-				case r.Method == http.MethodPost && strings.Contains(r.URL.RawQuery, "uploadId"):
-					// CompleteMultipartUpload
-					w.Header().Set("Content-Type", "application/xml")
-					_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+					case r.Method == http.MethodPut && strings.Contains(r.URL.RawQuery, "partNumber"):
+						// UploadPart
+						body, _ := io.ReadAll(r.Body)
+						uploadedData = append(uploadedData, body...)
+						w.Header().Set("ETag", "\"test-etag\"")
+						w.WriteHeader(http.StatusOK)
+					case r.Method == http.MethodPost && strings.Contains(r.URL.RawQuery, "uploadId"):
+						// CompleteMultipartUpload
+						w.Header().Set("Content-Type", "application/xml")
+						_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 						<CompleteMultipartUploadResult>
 							<Bucket>test-bucket</Bucket>
 							<Key>test-key</Key>
 							<ETag>"test-etag"</ETag>
 						</CompleteMultipartUploadResult>`))
-				default:
-					w.WriteHeader(http.StatusOK)
-				}
-			}))
+					default:
+						w.WriteHeader(http.StatusOK)
+					}
+				}),
+			)
 			defer mock.Close()
 
 			config := S3Config{
@@ -393,7 +395,10 @@ func BenchmarkMultipartWriter(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				uploadedData = uploadedData[:0]
 
-				writer, err := fs.CreateMultipartWriter(context.Background(), "s3://test-bucket/test-key")
+				writer, err := fs.CreateMultipartWriter(
+					context.Background(),
+					"s3://test-bucket/test-key",
+				)
 				if err != nil {
 					b.Fatalf("Failed to create multipart writer: %v", err)
 				}
@@ -488,7 +493,10 @@ func BenchmarkConcurrentReader(b *testing.B) {
 			b.SetBytes(int64(size.size))
 
 			for i := 0; i < b.N; i++ {
-				reader, err := fs.CreateConcurrentReader(context.Background(), "s3://test-bucket/test-key")
+				reader, err := fs.CreateConcurrentReader(
+					context.Background(),
+					"s3://test-bucket/test-key",
+				)
 				if err != nil {
 					b.Fatalf("Failed to create concurrent reader: %v", err)
 				}

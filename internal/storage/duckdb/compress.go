@@ -287,8 +287,13 @@ func DecompressDictionary(data []byte, valueSize int, count uint64) ([]byte, err
 			value := make([]byte, valueSize)
 			n, err := io.ReadFull(r, value)
 			if err != nil {
-				return nil, fmt.Errorf("%w: failed to read dictionary entry %d: expected %d bytes, got %d",
-					ErrDictionaryDataTruncated, i, valueSize, n)
+				return nil, fmt.Errorf(
+					"%w: failed to read dictionary entry %d: expected %d bytes, got %d",
+					ErrDictionaryDataTruncated,
+					i,
+					valueSize,
+					n,
+				)
 			}
 			dictionary[i] = value
 		} else {
@@ -552,7 +557,10 @@ func DecompressBitPackingDuckDB(data []byte, count uint64, typeSize int) ([]uint
 			// CONSTANT_DELTA: frame_of_reference (T) + constant_delta (T)
 			headerSize := typeSize * 2
 			if groupDataStart+headerSize > len(data) {
-				return nil, fmt.Errorf("%w: CONSTANT_DELTA header truncated", ErrBitPackingDataTruncated)
+				return nil, fmt.Errorf(
+					"%w: CONSTANT_DELTA header truncated",
+					ErrBitPackingDataTruncated,
+				)
 			}
 			frameOfReference := int64(readTypedValue(groupDataStart))
 			constantDelta := int64(readTypedValue(groupDataStart + typeSize))
@@ -565,7 +573,11 @@ func DecompressBitPackingDuckDB(data []byte, count uint64, typeSize int) ([]uint
 			}
 
 		default:
-			return nil, fmt.Errorf("%w: unknown bitpacking mode %d", ErrUnsupportedCompression, mode)
+			return nil, fmt.Errorf(
+				"%w: unknown bitpacking mode %d",
+				ErrUnsupportedCompression,
+				mode,
+			)
 		}
 
 		// Copy group values to result
@@ -1030,7 +1042,12 @@ func EncodeZigZag(v int64) uint64 {
 //   - CompressionDictionary: Dictionary encoding with index lookup
 //   - CompressionBitPacking: Bit-packed integers (not yet implemented)
 //   - CompressionPFORDelta: PFOR with delta encoding (not yet implemented)
-func Decompress(compression CompressionType, data []byte, valueSize int, count uint64) ([]byte, error) {
+func Decompress(
+	compression CompressionType,
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	switch compression {
 	case CompressionUncompressed:
 		// Uncompressed data is returned as-is
@@ -1066,7 +1083,11 @@ func Decompress(compression CompressionType, data []byte, valueSize int, count u
 type constantDecompressor struct{}
 
 // Decompress implements Decompressor.Decompress for CONSTANT compression.
-func (d *constantDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *constantDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return DecompressConstant(data, valueSize, count)
 }
 
@@ -1092,7 +1113,11 @@ func NewRLEDecompressor() Decompressor {
 type dictionaryDecompressor struct{}
 
 // Decompress implements Decompressor.Decompress for DICTIONARY compression.
-func (d *dictionaryDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *dictionaryDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return DecompressDictionary(data, valueSize, count)
 }
 
@@ -1105,7 +1130,11 @@ func NewDictionaryDecompressor() Decompressor {
 type uncompressedDecompressor struct{}
 
 // Decompress implements Decompressor.Decompress for uncompressed data.
-func (d *uncompressedDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *uncompressedDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return data, nil
 }
 
@@ -1118,7 +1147,11 @@ func NewUncompressedDecompressor() Decompressor {
 type bitpackingDecompressor struct{}
 
 // Decompress implements Decompressor.Decompress for BITPACKING compression.
-func (d *bitpackingDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *bitpackingDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return DecompressBitPacking(data, valueSize, count)
 }
 
@@ -1131,7 +1164,11 @@ func NewBitPackingDecompressor() Decompressor {
 type pfordeltaDecompressor struct{}
 
 // Decompress implements Decompressor.Decompress for PFOR_DELTA compression.
-func (d *pfordeltaDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *pfordeltaDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return DecompressPFORDelta(data, valueSize, count)
 }
 

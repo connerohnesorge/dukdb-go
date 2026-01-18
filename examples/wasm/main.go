@@ -89,8 +89,8 @@ func registerTestFunctions() {
 			}
 
 			return map[string]interface{}{
-				"success":    true,
-				"bytesRead":  n,
+				"success":     true,
+				"bytesRead":   n,
 				"dataPreview": string(buf[:min(n, 200)]) + "...",
 			}, nil
 		})
@@ -129,7 +129,9 @@ func registerTestFunctions() {
 	// Register test function for HTTP range read
 	dukdb.Set("testHTTPRangeRead", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
 		if len(args) < 3 {
-			return wrapPromiseError(errors.New("testHTTPRangeRead requires URL, start, and length arguments"))
+			return wrapPromiseError(
+				errors.New("testHTTPRangeRead requires URL, start, and length arguments"),
+			)
 		}
 
 		url := args[0].String()
@@ -165,9 +167,9 @@ func registerTestFunctions() {
 			}
 
 			return map[string]interface{}{
-				"success":    true,
-				"bytesRead":  n,
-				"startPos":   start,
+				"success":     true,
+				"bytesRead":   n,
+				"startPos":    start,
 				"dataPreview": string(buf[:min(n, 100)]),
 			}, nil
 		})

@@ -778,7 +778,10 @@ func (p *parser) parseTimeTravelClause() (*TimeTravelClause, error) {
 		}
 
 	default:
-		return nil, p.errorf("expected TIMESTAMP, SNAPSHOT, or BRANCH after AS OF, got %s", typeKeyword)
+		return nil, p.errorf(
+			"expected TIMESTAMP, SNAPSHOT, or BRANCH after AS OF, got %s",
+			typeKeyword,
+		)
 	}
 
 	return clause, nil
@@ -860,7 +863,10 @@ func (p *parser) parseTablesample() (*SampleOptions, error) {
 	case "RESERVOIR":
 		sample.Method = SampleReservoir
 	default:
-		return nil, p.errorf("unknown sampling method: %s (expected BERNOULLI, SYSTEM, or RESERVOIR)", methodName)
+		return nil, p.errorf(
+			"unknown sampling method: %s (expected BERNOULLI, SYSTEM, or RESERVOIR)",
+			methodName,
+		)
 	}
 
 	// Parse percentage or row count in parentheses
@@ -932,7 +938,8 @@ func (p *parser) parseTableFunction(name string) (*TableFunctionRef, error) {
 	if p.current().typ != tokenRParen {
 		for {
 			// Check if this is a named argument (identifier = value)
-			if p.current().typ == tokenIdent && p.peek().typ == tokenOperator && p.peek().value == "=" {
+			if p.current().typ == tokenIdent && p.peek().typ == tokenOperator &&
+				p.peek().value == "=" {
 				// Named argument
 				argName := strings.ToLower(p.advance().value)
 				p.advance() // consume '='
@@ -1699,7 +1706,9 @@ func (p *parser) parseAlter() (Statement, error) {
 //	option_name option_value, ...
 //
 // )
-func (p *parser) parseCreateSecret(orReplace, persistent, temporary bool) (*CreateSecretStmt, error) {
+func (p *parser) parseCreateSecret(
+	orReplace, persistent, temporary bool,
+) (*CreateSecretStmt, error) {
 	if err := p.expectKeyword("SECRET"); err != nil {
 		return nil, err
 	}
@@ -1807,7 +1816,7 @@ func (p *parser) parseCreateFunction(orReplace bool) (*CreateFunctionStmt, error
 
 	stmt := &CreateFunctionStmt{
 		OrReplace:  orReplace,
-		Language:   "sql", // Default language
+		Language:   "sql",              // Default language
 		Volatility: VolatilityVolatile, // Default volatility
 	}
 
@@ -2134,7 +2143,9 @@ func (p *parser) parseIsolationLevel() (IsolationLevel, error) {
 		return IsolationLevelSerializable, nil
 	}
 
-	return IsolationLevelSerializable, p.errorf("expected isolation level (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, or SERIALIZABLE)")
+	return IsolationLevelSerializable, p.errorf(
+		"expected isolation level (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, or SERIALIZABLE)",
+	)
 }
 
 // parseRollback parses a ROLLBACK statement.
@@ -2660,7 +2671,11 @@ func (p *parser) parseMergeAction(isMatched bool) (MergeAction, error) {
 
 		// Build SetClause pairs for INSERT
 		if len(columns) > 0 && len(columns) != len(values) {
-			return action, p.errorf("column count (%d) does not match value count (%d)", len(columns), len(values))
+			return action, p.errorf(
+				"column count (%d) does not match value count (%d)",
+				len(columns),
+				len(values),
+			)
 		}
 
 		for i, val := range values {
@@ -4619,7 +4634,10 @@ func isIntervalUnit(s string) bool {
 // parseIntervalValue parses an interval string value.
 // If unitKeyword is provided, it's the INTERVAL '5' DAY syntax.
 // Otherwise, parse 'n unit' or 'n units m units' from the string itself.
-func parseIntervalValue(s string, unitKeyword string) (months int32, days int32, micros int64, err error) {
+func parseIntervalValue(
+	s string,
+	unitKeyword string,
+) (months int32, days int32, micros int64, err error) {
 	s = strings.TrimSpace(s)
 
 	// If unitKeyword is provided, parse as simple number + unit
@@ -4721,7 +4739,10 @@ func tokenizeIntervalString(s string) []string {
 }
 
 // applyIntervalUnit converts a value with a unit to months, days, and microseconds.
-func applyIntervalUnit(val float64, unit string) (months int32, days int32, micros int64, err error) {
+func applyIntervalUnit(
+	val float64,
+	unit string,
+) (months int32, days int32, micros int64, err error) {
 	switch strings.ToUpper(unit) {
 	case "YEAR", "YEARS":
 		months = int32(val * 12)

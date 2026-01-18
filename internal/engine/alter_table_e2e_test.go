@@ -64,7 +64,11 @@ func TestAlterTableRenameColumnE2E(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a table
-	_, err = conn.Execute(ctx, "CREATE TABLE users (id INTEGER, old_name VARCHAR, age INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE users (id INTEGER, old_name VARCHAR, age INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert some data
@@ -115,7 +119,11 @@ func TestAlterTableDropColumnE2E(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a table
-	_, err = conn.Execute(ctx, "CREATE TABLE products (id INTEGER, name VARCHAR, price DOUBLE, category VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE products (id INTEGER, name VARCHAR, price DOUBLE, category VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert some data
@@ -241,7 +249,11 @@ func TestAlterTableErrorCases(t *testing.T) {
 
 	t.Run("RenameNonexistentColumn", func(t *testing.T) {
 		// Try to rename non-existent column
-		_, err = conn.Execute(ctx, "ALTER TABLE test_table RENAME COLUMN nonexistent TO something", nil)
+		_, err = conn.Execute(
+			ctx,
+			"ALTER TABLE test_table RENAME COLUMN nonexistent TO something",
+			nil,
+		)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not found")
 	})

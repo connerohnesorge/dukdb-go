@@ -407,7 +407,10 @@ type panicOperator struct {
 	rowCount   int32
 }
 
-func (p *panicOperator) Execute(state map[int]any, chunk *storage.DataChunk) (*storage.DataChunk, error) {
+func (p *panicOperator) Execute(
+	state map[int]any,
+	chunk *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	if chunk == nil {
 		return nil, nil
 	}

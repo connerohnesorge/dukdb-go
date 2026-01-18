@@ -24,18 +24,18 @@ var pgSettingsColumns = []string{
 
 // serverSettings contains the dukdb server settings to expose.
 var serverSettings = []struct {
-	name       string
-	setting    string
-	unit       string
-	category   string
-	shortDesc  string
-	context    string
-	vartype    string
-	source     string
-	minVal     string
-	maxVal     string
-	enumvals   string
-	bootVal    string
+	name      string
+	setting   string
+	unit      string
+	category  string
+	shortDesc string
+	context   string
+	vartype   string
+	source    string
+	minVal    string
+	maxVal    string
+	enumvals  string
+	bootVal   string
 }{
 	// Version and identification
 	{

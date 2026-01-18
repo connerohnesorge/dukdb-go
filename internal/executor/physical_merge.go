@@ -114,7 +114,10 @@ func (e *Executor) executeMerge(
 					if action.Cond != nil {
 						condMatch, err := e.evaluateExprAsBool(ctx, action.Cond, combinedRow)
 						if err != nil {
-							return nil, fmt.Errorf("failed to evaluate WHEN MATCHED condition: %w", err)
+							return nil, fmt.Errorf(
+								"failed to evaluate WHEN MATCHED condition: %w",
+								err,
+							)
 						}
 						if !condMatch {
 							continue
@@ -181,7 +184,10 @@ func (e *Executor) executeMerge(
 				if action.Cond != nil {
 					condMatch, err := e.evaluateExprAsBool(ctx, action.Cond, sourceRow)
 					if err != nil {
-						return nil, fmt.Errorf("failed to evaluate WHEN NOT MATCHED condition: %w", err)
+						return nil, fmt.Errorf(
+							"failed to evaluate WHEN NOT MATCHED condition: %w",
+							err,
+						)
 					}
 					if !condMatch {
 						continue
@@ -257,7 +263,10 @@ func (e *Executor) executeMerge(
 				if action.Cond != nil {
 					condMatch, err := e.evaluateExprAsBool(ctx, action.Cond, target.values)
 					if err != nil {
-						return nil, fmt.Errorf("failed to evaluate WHEN NOT MATCHED BY SOURCE condition: %w", err)
+						return nil, fmt.Errorf(
+							"failed to evaluate WHEN NOT MATCHED BY SOURCE condition: %w",
+							err,
+						)
 					}
 					if !condMatch {
 						continue

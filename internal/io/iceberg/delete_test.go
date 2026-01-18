@@ -342,7 +342,10 @@ func TestFilterChunkAllDeleted(t *testing.T) {
 // TestDeleteApplierWithTracking tests the tracking wrapper.
 func TestDeleteApplierWithTracking(t *testing.T) {
 	inner := NewPositionalDeleteApplier(nil, "/test/table")
-	inner.deletedPositions["/test/table/data/file1.parquet"] = []int64{5, 2055} // Position in first and second chunk
+	inner.deletedPositions["/test/table/data/file1.parquet"] = []int64{
+		5,
+		2055,
+	} // Position in first and second chunk
 	inner.loaded = true
 
 	tracking := NewDeleteApplierWithTracking(inner)

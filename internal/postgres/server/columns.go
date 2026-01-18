@@ -168,7 +168,11 @@ func TypeSize(oid uint32) int16 {
 		return typeSizeInt2
 	case types.OID_INT4, types.OID_OID, types.OID_DATE:
 		return typeSizeInt4
-	case types.OID_INT8, types.OID_TIME, types.OID_TIMETZ, types.OID_TIMESTAMP, types.OID_TIMESTAMPTZ:
+	case types.OID_INT8,
+		types.OID_TIME,
+		types.OID_TIMETZ,
+		types.OID_TIMESTAMP,
+		types.OID_TIMESTAMPTZ:
 		return typeSizeInt8
 	case types.OID_FLOAT4:
 		return typeSizeFloat4

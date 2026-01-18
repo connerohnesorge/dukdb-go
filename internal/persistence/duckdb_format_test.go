@@ -327,10 +327,18 @@ func TestVersionCapabilities(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			caps := NewVersionCapabilities(tt.version)
 
-			assert.Equal(t, tt.hasExplicitSerializationCompat, caps.HasExplicitSerializationCompat(),
-				"HasExplicitSerializationCompat() mismatch")
-			assert.Equal(t, tt.expectedDefaultSerializationValue, caps.GetDefaultSerializationCompat(),
-				"GetDefaultSerializationCompat() mismatch")
+			assert.Equal(
+				t,
+				tt.hasExplicitSerializationCompat,
+				caps.HasExplicitSerializationCompat(),
+				"HasExplicitSerializationCompat() mismatch",
+			)
+			assert.Equal(
+				t,
+				tt.expectedDefaultSerializationValue,
+				caps.GetDefaultSerializationCompat(),
+				"GetDefaultSerializationCompat() mismatch",
+			)
 			assert.Equal(t, tt.isSupported, SupportsVersion(tt.version),
 				"SupportsVersion() mismatch")
 		})
@@ -441,7 +449,12 @@ func TestVersionRangeSupport(t *testing.T) {
 		t.Run(fmt.Sprintf("v%d_should_be_supported", version), func(t *testing.T) {
 			err := NegotiateVersion(version)
 			assert.NoError(t, err, "Version %d should be supported", version)
-			assert.True(t, SupportsVersion(version), "SupportsVersion should return true for v%d", version)
+			assert.True(
+				t,
+				SupportsVersion(version),
+				"SupportsVersion should return true for v%d",
+				version,
+			)
 		})
 	}
 
@@ -451,7 +464,12 @@ func TestVersionRangeSupport(t *testing.T) {
 		t.Run(fmt.Sprintf("v%d_should_be_unsupported", version), func(t *testing.T) {
 			err := NegotiateVersion(version)
 			assert.Error(t, err, "Version %d should be unsupported", version)
-			assert.False(t, SupportsVersion(version), "SupportsVersion should return false for v%d", version)
+			assert.False(
+				t,
+				SupportsVersion(version),
+				"SupportsVersion should return false for v%d",
+				version,
+			)
 		})
 	}
 }

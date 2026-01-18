@@ -176,7 +176,16 @@ func DetectFormatFromPath(path string) Format {
 // removeCompressionExtension removes known compression extensions from a path.
 // For example, "data.csv.gz" becomes "data.csv".
 func removeCompressionExtension(path string) string {
-	compressionExts := []string{".gz", ".gzip", ".zst", ".zstd", ".snappy", ".lz4", ".br", ".brotli"}
+	compressionExts := []string{
+		".gz",
+		".gzip",
+		".zst",
+		".zstd",
+		".snappy",
+		".lz4",
+		".br",
+		".brotli",
+	}
 	lower := strings.ToLower(path)
 	for _, ext := range compressionExts {
 		if strings.HasSuffix(lower, ext) {

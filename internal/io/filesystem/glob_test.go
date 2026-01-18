@@ -295,8 +295,18 @@ func TestMatchPattern(t *testing.T) {
 		{"bracket no match", "data/file[0-9].csv", "data/filea.csv", false},
 
 		// Hive partitioning patterns
-		{"hive pattern", "data/year=*/month=*/*.parquet", "data/year=2024/month=01/data.parquet", true},
-		{"hive pattern no match", "data/year=*/month=*/*.parquet", "data/year=2024/data.parquet", false},
+		{
+			"hive pattern",
+			"data/year=*/month=*/*.parquet",
+			"data/year=2024/month=01/data.parquet",
+			true,
+		},
+		{
+			"hive pattern no match",
+			"data/year=*/month=*/*.parquet",
+			"data/year=2024/data.parquet",
+			false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -604,12 +614,12 @@ func TestGlobMatcherErrors(t *testing.T) {
 
 func TestMatchCharClass(t *testing.T) {
 	tests := []struct {
-		name     string
-		pattern  string
-		char     rune
-		matched  bool
-		rest     string
-		ok       bool
+		name    string
+		pattern string
+		char    rune
+		matched bool
+		rest    string
+		ok      bool
 	}{
 		{"simple set match", "[abc]", 'b', true, "", true},
 		{"simple set no match", "[abc]", 'd', false, "", true},
@@ -990,7 +1000,12 @@ func TestCloudGlob_InvalidPattern(t *testing.T) {
 		for _, tt := range invalidPatterns {
 			t.Run(tt.name, func(t *testing.T) {
 				_, err := fs.Glob(tt.pattern)
-				assert.Error(t, err, "S3FileSystem should return error for invalid pattern: %s", tt.pattern)
+				assert.Error(
+					t,
+					err,
+					"S3FileSystem should return error for invalid pattern: %s",
+					tt.pattern,
+				)
 			})
 		}
 	})
@@ -1009,7 +1024,12 @@ func TestCloudGlob_InvalidPattern(t *testing.T) {
 					pattern = "gs://bucket/" + pattern
 				}
 				_, err := fs.Glob(pattern)
-				assert.Error(t, err, "GCSFileSystem should return error for invalid pattern: %s", tt.pattern)
+				assert.Error(
+					t,
+					err,
+					"GCSFileSystem should return error for invalid pattern: %s",
+					tt.pattern,
+				)
 			})
 		}
 	})
@@ -1028,7 +1048,12 @@ func TestCloudGlob_InvalidPattern(t *testing.T) {
 					pattern = "azure://container/" + pattern
 				}
 				_, err := fs.Glob(pattern)
-				assert.Error(t, err, "AzureFileSystem should return error for invalid pattern: %s", tt.pattern)
+				assert.Error(
+					t,
+					err,
+					"AzureFileSystem should return error for invalid pattern: %s",
+					tt.pattern,
+				)
 			})
 		}
 	})

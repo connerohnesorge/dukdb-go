@@ -205,7 +205,10 @@ func TestPgxDDL(t *testing.T) {
 
 	// INSERT
 	t.Run("INSERT", func(t *testing.T) {
-		tag, err := conn.Exec(ctx, "INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')")
+		tag, err := conn.Exec(
+			ctx,
+			"INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), tag.RowsAffected())
 	})
@@ -326,14 +329,18 @@ func TestPgxPreparedStatements(t *testing.T) {
 		// Use simple query with inline values (avoids extended query protocol)
 		var name string
 		var price int
-		err := conn.QueryRow(ctx, "SELECT name, price FROM products WHERE id = 2").Scan(&name, &price)
+		err := conn.QueryRow(ctx, "SELECT name, price FROM products WHERE id = 2").
+			Scan(&name, &price)
 		require.NoError(t, err)
 		assert.Equal(t, "Banana", name)
 		assert.Equal(t, 50, price)
 	})
 
 	t.Run("SELECT with range filter", func(t *testing.T) {
-		rows, err := conn.Query(ctx, "SELECT name FROM products WHERE price >= 50 AND price <= 150 ORDER BY name")
+		rows, err := conn.Query(
+			ctx,
+			"SELECT name FROM products WHERE price >= 50 AND price <= 150 ORDER BY name",
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -578,7 +585,10 @@ func TestPgxInformationSchema(t *testing.T) {
 		// The query may fail if catalog not properly initialized, which is acceptable
 		// for this integration test - we're testing wire protocol, not catalog completeness
 		if err != nil {
-			t.Logf("information_schema.tables query failed (expected if catalog not initialized): %v", err)
+			t.Logf(
+				"information_schema.tables query failed (expected if catalog not initialized): %v",
+				err,
+			)
 			return
 		}
 		defer rows.Close()
@@ -599,7 +609,10 @@ func TestPgxInformationSchema(t *testing.T) {
 		`)
 		// The query may fail if catalog not properly initialized
 		if err != nil {
-			t.Logf("information_schema.columns query failed (expected if catalog not initialized): %v", err)
+			t.Logf(
+				"information_schema.columns query failed (expected if catalog not initialized): %v",
+				err,
+			)
 			return
 		}
 		defer rows.Close()
@@ -633,7 +646,10 @@ func TestPgxPgCatalog(t *testing.T) {
 		rows, err := conn.Query(ctx, "SELECT nspname FROM pg_catalog.pg_namespace")
 		// The query may fail if catalog not properly initialized
 		if err != nil {
-			t.Logf("pg_catalog.pg_namespace query failed (expected if catalog not initialized): %v", err)
+			t.Logf(
+				"pg_catalog.pg_namespace query failed (expected if catalog not initialized): %v",
+				err,
+			)
 			return
 		}
 		defer rows.Close()
@@ -729,7 +745,8 @@ func TestPgxDataTypes(t *testing.T) {
 		var intVal int32
 		var bigVal int64
 
-		err := conn.QueryRow(ctx, "SELECT 32767, 2147483647, 9223372036854775807").Scan(&smallVal, &intVal, &bigVal)
+		err := conn.QueryRow(ctx, "SELECT 32767, 2147483647, 9223372036854775807").
+			Scan(&smallVal, &intVal, &bigVal)
 		require.NoError(t, err)
 		assert.Equal(t, int16(32767), smallVal)
 		assert.Equal(t, int32(2147483647), intVal)

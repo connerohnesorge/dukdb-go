@@ -174,7 +174,11 @@ func TestGroupingSetExprStructure(t *testing.T) {
 			gse: &GroupingSetExpr{
 				Type: GroupingSetRollup,
 				Exprs: [][]Expr{
-					{&ColumnRef{Column: "year"}, &ColumnRef{Column: "quarter"}, &ColumnRef{Column: "month"}},
+					{
+						&ColumnRef{Column: "year"},
+						&ColumnRef{Column: "quarter"},
+						&ColumnRef{Column: "month"},
+					},
 				},
 			},
 			wantType: GroupingSetRollup,
@@ -698,7 +702,7 @@ func TestDeleteStmtReturning(t *testing.T) {
 
 func TestMergeStmtReturning(t *testing.T) {
 	stmt := &MergeStmt{
-		Into: TableRef{TableName: "target"},
+		Into:  TableRef{TableName: "target"},
 		Using: TableRef{TableName: "source"},
 		On: &BinaryExpr{
 			Left:  &ColumnRef{Table: "target", Column: "id"},

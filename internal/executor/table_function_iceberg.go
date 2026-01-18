@@ -205,7 +205,10 @@ func (e *Executor) executeIcebergScan(
 
 // getFileSystemForPath returns a filesystem for the given path.
 // For cloud URLs, it uses the FileSystemProvider with secret management.
-func (e *Executor) getFileSystemForPath(ctx context.Context, path string) (filesystem.FileSystem, error) {
+func (e *Executor) getFileSystemForPath(
+	ctx context.Context,
+	path string,
+) (filesystem.FileSystem, error) {
 	provider := NewFileSystemProvider(e.getSecretManager())
 
 	fs, err := provider.GetFileSystem(ctx, path)

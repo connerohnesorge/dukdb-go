@@ -525,7 +525,12 @@ func TestInsertMemoryUsage(t *testing.T) {
 	// Target: <100MB for 100K rows (10x smaller than 1M rows target)
 	// This corresponds to <100MB for 1M rows with linear scaling
 	targetMB := 100.0
-	t.Logf("Memory used for %d row INSERT: %.2f MB (target: <%.2f MB)", numRows, memUsedMB, targetMB)
+	t.Logf(
+		"Memory used for %d row INSERT: %.2f MB (target: <%.2f MB)",
+		numRows,
+		memUsedMB,
+		targetMB,
+	)
 
 	// Note: We don't fail the test for memory usage since it varies by system,
 	// but we log it for monitoring purposes.
@@ -749,6 +754,8 @@ func TestAppenderComparisonReport(t *testing.T) {
 	// Task 2.28: INSERT should be within 20% of Appender
 	// Note: INSERT includes SQL parsing overhead, so some difference is expected
 	if percentDiff > 500 { // Allow significant overhead since INSERT includes parsing
-		t.Logf("NOTE: INSERT is significantly slower than DirectAppend, but this is expected due to SQL parsing overhead")
+		t.Logf(
+			"NOTE: INSERT is significantly slower than DirectAppend, but this is expected due to SQL parsing overhead",
+		)
 	}
 }

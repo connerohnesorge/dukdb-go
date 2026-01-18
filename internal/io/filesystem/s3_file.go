@@ -61,7 +61,11 @@ func newS3FileForReading(client *minio.Client, bucket, key string) *S3File {
 // newS3FileForReadingWithConfig creates a new S3 file handle for reading with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newS3FileForReadingWithConfig(client *minio.Client, bucket, key string, config S3Config) *S3File {
+func newS3FileForReadingWithConfig(
+	client *minio.Client,
+	bucket, key string,
+	config S3Config,
+) *S3File {
 	return &S3File{
 		client:    client,
 		bucket:    bucket,
@@ -87,7 +91,11 @@ func newS3FileForWriting(client *minio.Client, bucket, key string) *S3File {
 // newS3FileForWritingWithConfig creates a new S3 file handle for writing with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newS3FileForWritingWithConfig(client *minio.Client, bucket, key string, config S3Config) *S3File {
+func newS3FileForWritingWithConfig(
+	client *minio.Client,
+	bucket, key string,
+	config S3Config,
+) *S3File {
 	return &S3File{
 		client:      client,
 		bucket:      bucket,

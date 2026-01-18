@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEngineOpen(t *testing.T) {
@@ -581,8 +581,8 @@ func TestStatementType(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			intro, ok := stmt.(dukdb.BackendStmtIntrospector)
 			if !ok {
@@ -670,8 +670,8 @@ func TestParameterMetadata(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			if stmt.NumInput() != 3 {
 				t.Errorf(
@@ -696,8 +696,8 @@ func TestParameterMetadata(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			if stmt.NumInput() != 3 {
 				t.Errorf(
@@ -717,8 +717,8 @@ func TestParameterMetadata(t *testing.T) {
 			t.Fatalf("Prepare failed: %v", err)
 		}
 		defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+			require.NoError(t, stmt.Close())
+		}()
 
 		if stmt.NumInput() != 0 {
 			t.Errorf(
@@ -767,8 +767,8 @@ func TestColumnMetadata(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -842,8 +842,8 @@ func TestColumnMetadata(t *testing.T) {
 			t.Fatalf("Prepare failed: %v", err)
 		}
 		defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+			require.NoError(t, stmt.Close())
+		}()
 
 		intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -880,8 +880,8 @@ func TestColumnMetadata(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 
@@ -1136,8 +1136,8 @@ func TestBoundExecution(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			// Execute with bound parameter
 			rows, cols, err := stmt.Query(
@@ -1185,8 +1185,8 @@ func TestBoundExecution(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			// Execute with bound parameters
 			affected, err := stmt.Execute(
@@ -1499,8 +1499,8 @@ func TestParameterTypeInference(t *testing.T) {
 				)
 			}
 			defer func() {
-		require.NoError(t, stmt.Close())
-	}()
+				require.NoError(t, stmt.Close())
+			}()
 
 			intro := stmt.(dukdb.BackendStmtIntrospector)
 			actualType := intro.ParamType(

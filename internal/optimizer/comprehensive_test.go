@@ -17,11 +17,11 @@ import (
 // Task 9.1: Create comprehensive DuckDB test database suite
 // Database location: testing/testdata/databases/comprehensive.db
 // Contains 14 tables with:
-//  - Small tables (1K rows): uniform, skewed, clustered, wide
-//  - Medium tables (100K rows): uniform, skewed, clustered
-//  - Large table (1M rows): uniform distribution
-//  - Join tables: orders, customers, products, order_items
-//  - Correlation tables: correlated_base, departments
+//   - Small tables (1K rows): uniform, skewed, clustered, wide
+//   - Medium tables (100K rows): uniform, skewed, clustered
+//   - Large table (1M rows): uniform distribution
+//   - Join tables: orders, customers, products, order_items
+//   - Correlation tables: correlated_base, departments
 //
 // The test database provides a comprehensive suite for validating:
 // 1. Correctness (Task 9.2): Query results match DuckDB
@@ -30,7 +30,6 @@ import (
 // 4. Performance (Tasks 9.5-9.6): Execution time comparable to DuckDB
 // 5. Edge cases (Tasks 9.7-9.9): Correctness on edge case inputs
 // 6. Stress testing (Tasks 9.10-9.12): Performance at scale
-//
 type ComprehensiveTestSuite struct {
 	t      *testing.T
 	dbPath string
@@ -68,33 +67,33 @@ func NewComprehensiveTestSuite(t *testing.T) *ComprehensiveTestSuite {
 
 // QueryResult represents results from a query execution
 type QueryResult struct {
-	Rows      [][]interface{}
-	RowCount  int64
-	Columns   []string
-	Error     error
+	Rows     [][]interface{}
+	RowCount int64
+	Columns  []string
+	Error    error
 }
 
 // ExplainPlan represents a parsed EXPLAIN output
 type ExplainPlan struct {
-	OperatorType    string
-	Cardinality     int64
-	Selectivity     float64
-	Filters         []string
-	JoinType        string
-	OperatorCost    float64
-	Children        []*ExplainPlan
+	OperatorType     string
+	Cardinality      int64
+	Selectivity      float64
+	Filters          []string
+	JoinType         string
+	OperatorCost     float64
+	Children         []*ExplainPlan
 	EstimateAccurate bool
 }
 
 // CardinalityEstimateResult holds estimate accuracy metrics
 type CardinalityEstimateResult struct {
-	Query            string
-	EstimatedRows    int64
-	ActualRows       int64
-	EstimateError    float64 // (Estimated - Actual) / Actual
-	WithinTwox       bool    // Estimate within 2x of actual
+	Query             string
+	EstimatedRows     int64
+	ActualRows        int64
+	EstimateError     float64 // (Estimated - Actual) / Actual
+	WithinTwox        bool    // Estimate within 2x of actual
 	OperatorEstimates map[string]int64
-	OperatorActuals  map[string]int64
+	OperatorActuals   map[string]int64
 }
 
 // ============================================================================
@@ -103,7 +102,11 @@ type CardinalityEstimateResult struct {
 
 // CompareQueryResults compares results from duckdb and dukdb-go
 // Returns true if results are equivalent (order-independent)
-func (s *ComprehensiveTestSuite) CompareQueryResults(ctx context.Context, query string, duckdbResult, dukdbResult *QueryResult) bool {
+func (s *ComprehensiveTestSuite) CompareQueryResults(
+	ctx context.Context,
+	query string,
+	duckdbResult, dukdbResult *QueryResult,
+) bool {
 	if duckdbResult.Error != nil || dukdbResult.Error != nil {
 		// Both should have same error
 		if duckdbResult.Error == nil || dukdbResult.Error == nil {
@@ -151,7 +154,11 @@ func TestDatabaseExistence(t *testing.T) {
 // ============================================================================
 
 // RunQueryAndCollectStats executes a query and collects execution statistics
-func (s *ComprehensiveTestSuite) RunQueryAndCollectStats(ctx context.Context, db *sql.DB, query string) (*QueryResult, error) {
+func (s *ComprehensiveTestSuite) RunQueryAndCollectStats(
+	ctx context.Context,
+	db *sql.DB,
+	query string,
+) (*QueryResult, error) {
 	// Placeholder implementation
 	result := &QueryResult{
 		Rows:    make([][]interface{}, 0),
@@ -162,7 +169,11 @@ func (s *ComprehensiveTestSuite) RunQueryAndCollectStats(ctx context.Context, db
 }
 
 // GetExplainPlan parses EXPLAIN output into structured form
-func (s *ComprehensiveTestSuite) GetExplainPlan(ctx context.Context, db *sql.DB, query string) (*ExplainPlan, error) {
+func (s *ComprehensiveTestSuite) GetExplainPlan(
+	ctx context.Context,
+	db *sql.DB,
+	query string,
+) (*ExplainPlan, error) {
 	// Placeholder implementation
 	return &ExplainPlan{}, nil
 }

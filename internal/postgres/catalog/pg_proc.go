@@ -3,36 +3,36 @@ package catalog
 // pg_proc columns - PostgreSQL procedure/function catalog
 // Reference: https://www.postgresql.org/docs/current/catalog-pg-proc.html
 var pgProcColumns = []string{
-	"oid",           // Row identifier
-	"proname",       // Name of the function
-	"pronamespace",  // OID of namespace containing this function
-	"proowner",      // Owner of the function
-	"prolang",       // Language of the function
-	"procost",       // Estimated execution cost
-	"prorows",       // Estimated number of result rows (0 for non-SRF)
-	"provariadic",   // Data type of variadic array parameter
-	"prosupport",    // Planner support function
-	"prokind",       // Function kind: f = ordinary function, p = procedure, a = aggregate, w = window
-	"prosecdef",     // Function is a security definer
-	"proleakproof",  // Function has no side effects
-	"proisstrict",   // Function returns null on null input
-	"proretset",     // Function returns a set
-	"provolatile",   // Volatility (i = immutable, s = stable, v = volatile)
-	"proparallel",   // Parallel safety (s = safe, r = restricted, u = unsafe)
-	"pronargs",      // Number of input arguments
+	"oid",             // Row identifier
+	"proname",         // Name of the function
+	"pronamespace",    // OID of namespace containing this function
+	"proowner",        // Owner of the function
+	"prolang",         // Language of the function
+	"procost",         // Estimated execution cost
+	"prorows",         // Estimated number of result rows (0 for non-SRF)
+	"provariadic",     // Data type of variadic array parameter
+	"prosupport",      // Planner support function
+	"prokind",         // Function kind: f = ordinary function, p = procedure, a = aggregate, w = window
+	"prosecdef",       // Function is a security definer
+	"proleakproof",    // Function has no side effects
+	"proisstrict",     // Function returns null on null input
+	"proretset",       // Function returns a set
+	"provolatile",     // Volatility (i = immutable, s = stable, v = volatile)
+	"proparallel",     // Parallel safety (s = safe, r = restricted, u = unsafe)
+	"pronargs",        // Number of input arguments
 	"pronargdefaults", // Number of arguments with defaults
-	"prorettype",    // Return data type OID
-	"proargtypes",   // Argument types (as an OID vector)
-	"proallargtypes", // All argument types (including OUT and INOUT)
-	"proargmodes",   // Modes of arguments (i = IN, o = OUT, b = INOUT, v = VARIADIC, t = TABLE)
-	"proargnames",   // Names of arguments
-	"proargdefaults", // Default expressions
-	"protrftypes",   // Types for which to apply transforms
-	"prosrc",        // Function source code or info
-	"probin",        // Additional info about function
-	"prosqlbody",    // SQL body definition
-	"proconfig",     // Configuration parameter settings
-	"proacl",        // Access privileges
+	"prorettype",      // Return data type OID
+	"proargtypes",     // Argument types (as an OID vector)
+	"proallargtypes",  // All argument types (including OUT and INOUT)
+	"proargmodes",     // Modes of arguments (i = IN, o = OUT, b = INOUT, v = VARIADIC, t = TABLE)
+	"proargnames",     // Names of arguments
+	"proargdefaults",  // Default expressions
+	"protrftypes",     // Types for which to apply transforms
+	"prosrc",          // Function source code or info
+	"probin",          // Additional info about function
+	"prosqlbody",      // SQL body definition
+	"proconfig",       // Configuration parameter settings
+	"proacl",          // Access privileges
 }
 
 // builtinFunctions contains commonly used PostgreSQL functions.
@@ -57,13 +57,13 @@ var builtinFunctions = []struct {
 	{10, "split_part", "f", 3, 25, "split_part"},
 
 	// Date/time functions
-	{100, "now", "f", 0, 1184, "now"},              // timestamptz
+	{100, "now", "f", 0, 1184, "now"}, // timestamptz
 	{101, "current_timestamp", "f", 0, 1184, "current_timestamp"},
 	{102, "current_date", "f", 0, 1082, "current_date"}, // date
 	{103, "current_time", "f", 0, 1266, "current_time"}, // timetz
 	{104, "date_part", "f", 2, 701, "date_part"},        // float8
 	{105, "extract", "f", 2, 701, "extract"},
-	{106, "age", "f", 2, 1186, "age"},   // interval
+	{106, "age", "f", 2, 1186, "age"}, // interval
 	{107, "date_trunc", "f", 2, 1184, "date_trunc"},
 
 	// Math functions
@@ -77,10 +77,10 @@ var builtinFunctions = []struct {
 	{207, "random", "f", 0, 701, "random"},
 
 	// Aggregate functions
-	{300, "count", "a", 1, 20, "count"},   // int8
-	{301, "sum", "a", 1, 1700, "sum"},     // numeric
+	{300, "count", "a", 1, 20, "count"}, // int8
+	{301, "sum", "a", 1, 1700, "sum"},   // numeric
 	{302, "avg", "a", 1, 1700, "avg"},
-	{303, "min", "a", 1, 0, "min"},        // any type
+	{303, "min", "a", 1, 0, "min"}, // any type
 	{304, "max", "a", 1, 0, "max"},
 	{305, "array_agg", "a", 1, 0, "array_agg"},
 	{306, "string_agg", "a", 2, 25, "string_agg"},
@@ -104,11 +104,11 @@ var builtinFunctions = []struct {
 	{603, "least", "f", -1, 0, "least"},
 
 	// System information
-	{700, "current_user", "f", 0, 19, "current_user"},  // name
+	{700, "current_user", "f", 0, 19, "current_user"}, // name
 	{701, "current_database", "f", 0, 19, "current_database"},
 	{702, "current_schema", "f", 0, 19, "current_schema"},
 	{703, "version", "f", 0, 25, "version"},
-	{704, "pg_typeof", "f", 1, 2206, "pg_typeof"},  // regtype
+	{704, "pg_typeof", "f", 1, 2206, "pg_typeof"}, // regtype
 }
 
 // queryPgProc returns data for pg_catalog.pg_proc.

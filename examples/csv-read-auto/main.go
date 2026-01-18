@@ -171,23 +171,23 @@ func printRowsWithTypes(rows *sql.Rows, db *sql.DB, filename string) {
 	}
 
 	// Get column types using DESCRIBE
-// 	typeRows, err := db.Query(fmt.Sprintf("DESCRIBE SELECT * FROM read_csv_auto('%s')", filename))
-// 	if err != nil {
-// 		log.Fatal("Failed to get column types:", err)
-// 	}
-// 	defer typeRows.Close()
-// 
-// 	fmt.Println("Column Information:")
-// 	fmt.Printf("%-20s %-20s %-20s\n", "Column Name", "Column Type", "Nullable")
-// 	fmt.Println(strings.Repeat("-", 60))
-// 
-// 	for typeRows.Next() {
-// 		var colName, colType, nullInfo string
-// 		if err := typeRows.Scan(&colName, &colType, &nullInfo); err != nil {
-// 			log.Fatal("Failed to scan type info:", err)
-// 		}
-// 		fmt.Printf("%-20s %-20s %-20s\n", colName, colType, nullInfo)
-// 	}
+	// 	typeRows, err := db.Query(fmt.Sprintf("DESCRIBE SELECT * FROM read_csv_auto('%s')", filename))
+	// 	if err != nil {
+	// 		log.Fatal("Failed to get column types:", err)
+	// 	}
+	// 	defer typeRows.Close()
+	//
+	// 	fmt.Println("Column Information:")
+	// 	fmt.Printf("%-20s %-20s %-20s\n", "Column Name", "Column Type", "Nullable")
+	// 	fmt.Println(strings.Repeat("-", 60))
+	//
+	// 	for typeRows.Next() {
+	// 		var colName, colType, nullInfo string
+	// 		if err := typeRows.Scan(&colName, &colType, &nullInfo); err != nil {
+	// 			log.Fatal("Failed to scan type info:", err)
+	// 		}
+	// 		fmt.Printf("%-20s %-20s %-20s\n", colName, colType, nullInfo)
+	// 	}
 
 	fmt.Println("\nData:")
 	fmt.Printf("%-60s\n", strings.Join(columns, " | "))

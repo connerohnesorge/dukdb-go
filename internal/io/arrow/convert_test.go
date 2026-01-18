@@ -384,7 +384,12 @@ func TestArrowTypeToDuckDB_AllTypes(t *testing.T) {
 		// Interval types
 		{"interval_months", arrow.FixedWidthTypes.MonthInterval, dukdb.TYPE_INTERVAL, false},
 		{"interval_day_time", arrow.FixedWidthTypes.DayTimeInterval, dukdb.TYPE_INTERVAL, false},
-		{"interval_month_day_nano", arrow.FixedWidthTypes.MonthDayNanoInterval, dukdb.TYPE_INTERVAL, false},
+		{
+			"interval_month_day_nano",
+			arrow.FixedWidthTypes.MonthDayNanoInterval,
+			dukdb.TYPE_INTERVAL,
+			false,
+		},
 		// Fixed size binary - UUID (16 bytes)
 		{
 			"uuid_fsb",
@@ -430,7 +435,10 @@ func TestArrowTypeToDuckDB_AllTypes(t *testing.T) {
 		// Dictionary (ENUM)
 		{
 			"dictionary",
-			&arrow.DictionaryType{IndexType: arrow.PrimitiveTypes.Int32, ValueType: arrow.BinaryTypes.String},
+			&arrow.DictionaryType{
+				IndexType: arrow.PrimitiveTypes.Int32,
+				ValueType: arrow.BinaryTypes.String,
+			},
 			dukdb.TYPE_VARCHAR,
 			false,
 		},
@@ -446,7 +454,14 @@ func TestArrowTypeToDuckDB_AllTypes(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.expected, got, "expected %s, got %s", tt.expected.String(), got.String())
+			assert.Equal(
+				t,
+				tt.expected,
+				got,
+				"expected %s, got %s",
+				tt.expected.String(),
+				got.String(),
+			)
 		})
 	}
 }
@@ -554,10 +569,26 @@ func TestRecordBatchToDataChunk_Timestamps(t *testing.T) {
 
 	schema := arrow.NewSchema(
 		[]arrow.Field{
-			{Name: "ts_s", Type: &arrow.TimestampType{Unit: arrow.Second, TimeZone: "UTC"}, Nullable: true},
-			{Name: "ts_ms", Type: &arrow.TimestampType{Unit: arrow.Millisecond, TimeZone: "UTC"}, Nullable: true},
-			{Name: "ts_us", Type: &arrow.TimestampType{Unit: arrow.Microsecond, TimeZone: "UTC"}, Nullable: true},
-			{Name: "ts_ns", Type: &arrow.TimestampType{Unit: arrow.Nanosecond, TimeZone: "UTC"}, Nullable: true},
+			{
+				Name:     "ts_s",
+				Type:     &arrow.TimestampType{Unit: arrow.Second, TimeZone: "UTC"},
+				Nullable: true,
+			},
+			{
+				Name:     "ts_ms",
+				Type:     &arrow.TimestampType{Unit: arrow.Millisecond, TimeZone: "UTC"},
+				Nullable: true,
+			},
+			{
+				Name:     "ts_us",
+				Type:     &arrow.TimestampType{Unit: arrow.Microsecond, TimeZone: "UTC"},
+				Nullable: true,
+			},
+			{
+				Name:     "ts_ns",
+				Type:     &arrow.TimestampType{Unit: arrow.Nanosecond, TimeZone: "UTC"},
+				Nullable: true,
+			},
 		},
 		nil,
 	)
@@ -596,7 +627,11 @@ func TestRecordBatchToDataChunk_Interval(t *testing.T) {
 
 	schema := arrow.NewSchema(
 		[]arrow.Field{
-			{Name: "interval_col", Type: arrow.FixedWidthTypes.MonthDayNanoInterval, Nullable: true},
+			{
+				Name:     "interval_col",
+				Type:     arrow.FixedWidthTypes.MonthDayNanoInterval,
+				Nullable: true,
+			},
 		},
 		nil,
 	)
@@ -631,7 +666,11 @@ func TestRecordBatchToDataChunk_Decimal(t *testing.T) {
 
 	schema := arrow.NewSchema(
 		[]arrow.Field{
-			{Name: "decimal_col", Type: &arrow.Decimal128Type{Precision: 18, Scale: 2}, Nullable: true},
+			{
+				Name:     "decimal_col",
+				Type:     &arrow.Decimal128Type{Precision: 18, Scale: 2},
+				Nullable: true,
+			},
 		},
 		nil,
 	)
@@ -1072,7 +1111,11 @@ func TestRoundTrip_RecordBatch_DataChunk(t *testing.T) {
 
 	for col := 0; col < int(originalRecord.NumCols()); col++ {
 		for row := 0; row < int(originalRecord.NumRows()); row++ {
-			assert.Equal(t, originalRecord.Column(col).IsNull(row), roundTripRecord.Column(col).IsNull(row))
+			assert.Equal(
+				t,
+				originalRecord.Column(col).IsNull(row),
+				roundTripRecord.Column(col).IsNull(row),
+			)
 			if !originalRecord.Column(col).IsNull(row) {
 				assert.Equal(t,
 					originalRecord.Column(col).ValueStr(row),

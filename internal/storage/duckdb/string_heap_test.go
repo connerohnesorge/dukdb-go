@@ -281,15 +281,31 @@ func TestStringHeapRawFormat(t *testing.T) {
 
 	for i, expectedStr := range expectedStrings {
 		// Each string should start with uint32 length prefix
-		require.True(t, offset+4 <= uint64(len(data)), "should have room for length at offset %d", offset)
+		require.True(
+			t,
+			offset+4 <= uint64(len(data)),
+			"should have room for length at offset %d",
+			offset,
+		)
 		length := binary.LittleEndian.Uint32(data[offset:])
 		offset += 4
 
 		// Length should match expected string length
-		require.Equal(t, uint32(len(expectedStr)), length, "string %d length should be %d", i, len(expectedStr))
+		require.Equal(
+			t,
+			uint32(len(expectedStr)),
+			length,
+			"string %d length should be %d",
+			i,
+			len(expectedStr),
+		)
 
 		// Extract string bytes
-		require.True(t, offset+uint64(length) <= uint64(len(data)), "should have room for string data")
+		require.True(
+			t,
+			offset+uint64(length) <= uint64(len(data)),
+			"should have room for string data",
+		)
 		actualStr := string(data[offset : offset+uint64(length)])
 		offset += uint64(length)
 

@@ -496,7 +496,11 @@ func TestDuckDBIcebergTables(t *testing.T) {
 				// format_version should be 1 or 2
 				formatVersion, ok := row["format_version"].(int32)
 				assert.True(t, ok, "format_version should be int32")
-				assert.True(t, formatVersion == 1 || formatVersion == 2, "format_version should be 1 or 2")
+				assert.True(
+					t,
+					formatVersion == 1 || formatVersion == 2,
+					"format_version should be 1 or 2",
+				)
 
 				break
 			}
@@ -522,7 +526,12 @@ func TestDuckDBIcebergTables(t *testing.T) {
 		require.NoError(t, err)
 
 		// When pointing directly at a table, should return 1 result
-		assert.Equal(t, 1, len(result.Rows), "Should find exactly one table when pointing to table root")
+		assert.Equal(
+			t,
+			1,
+			len(result.Rows),
+			"Should find exactly one table when pointing to table root",
+		)
 
 		row := result.Rows[0]
 		tableName := row["table_name"].(string)
@@ -575,7 +584,14 @@ func getTestIcebergTablePath(t *testing.T) string {
 	}
 
 	// Navigate from internal/executor to internal/io/iceberg/testdata/simple_table
-	testdataPath := filepath.Join(filepath.Dir(currentFile), "..", "io", "iceberg", "testdata", "simple_table")
+	testdataPath := filepath.Join(
+		filepath.Dir(currentFile),
+		"..",
+		"io",
+		"iceberg",
+		"testdata",
+		"simple_table",
+	)
 	absPath, err := filepath.Abs(testdataPath)
 	if err != nil {
 		return ""
@@ -602,7 +618,14 @@ func getTimeTravelIcebergTablePath(t *testing.T) string {
 	}
 
 	// Navigate from internal/executor to internal/io/iceberg/testdata/time_travel_table
-	testdataPath := filepath.Join(filepath.Dir(currentFile), "..", "io", "iceberg", "testdata", "time_travel_table")
+	testdataPath := filepath.Join(
+		filepath.Dir(currentFile),
+		"..",
+		"io",
+		"iceberg",
+		"testdata",
+		"time_travel_table",
+	)
 	absPath, err := filepath.Abs(testdataPath)
 	if err != nil {
 		return ""

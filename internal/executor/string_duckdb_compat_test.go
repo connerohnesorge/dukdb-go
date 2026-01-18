@@ -46,7 +46,12 @@ func setupDuckDBCompatTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeDuckDBCompatQuery executes a SQL query and returns the result
-func executeDuckDBCompatQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeDuckDBCompatQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -1464,7 +1469,12 @@ func TestDuckDBCompat_DAMERAU_LEVENSHTEIN(t *testing.T) {
 		require.NoError(t, err)
 		lev := getDuckDBCompatFirstResultValue(t, levResult).(int64)
 
-		damLevResult, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT DAMERAU_LEVENSHTEIN('ab', 'ba')")
+		damLevResult, err := executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT DAMERAU_LEVENSHTEIN('ab', 'ba')",
+		)
 		require.NoError(t, err)
 		damLev := getDuckDBCompatFirstResultValue(t, damLevResult).(int64)
 
@@ -1581,7 +1591,14 @@ func TestDuckDBCompat_SimilarityFunctions(t *testing.T) {
 				require.True(t, ok, "JACCARD should return float64")
 
 				if tt.isExact {
-					assert.InDelta(t, tt.exactVal, f, 0.0001, "Expected exact value %f", tt.exactVal)
+					assert.InDelta(
+						t,
+						tt.exactVal,
+						f,
+						0.0001,
+						"Expected exact value %f",
+						tt.exactVal,
+					)
 				} else {
 					assert.GreaterOrEqual(t, f, tt.minVal, "Should be >= %f", tt.minVal)
 					assert.LessOrEqual(t, f, tt.maxVal, "Should be <= %f", tt.maxVal)
@@ -1695,15 +1712,30 @@ func TestDuckDBCompat_SimilarityFunctions(t *testing.T) {
 
 		// Verify Jaro-Winkler >= Jaro for strings with common prefix
 		t.Run("jaro_winkler >= jaro with prefix", func(t *testing.T) {
-			jaroResult, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT JARO_SIMILARITY('prefix_abc', 'prefix_xyz')")
+			jaroResult, err := executeDuckDBCompatQuery(
+				t,
+				exec,
+				cat,
+				"SELECT JARO_SIMILARITY('prefix_abc', 'prefix_xyz')",
+			)
 			require.NoError(t, err)
 			jaro := getDuckDBCompatFirstResultValue(t, jaroResult).(float64)
 
-			jaroWinklerResult, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT JARO_WINKLER_SIMILARITY('prefix_abc', 'prefix_xyz')")
+			jaroWinklerResult, err := executeDuckDBCompatQuery(
+				t,
+				exec,
+				cat,
+				"SELECT JARO_WINKLER_SIMILARITY('prefix_abc', 'prefix_xyz')",
+			)
 			require.NoError(t, err)
 			jaroWinkler := getDuckDBCompatFirstResultValue(t, jaroWinklerResult).(float64)
 
-			assert.GreaterOrEqual(t, jaroWinkler, jaro, "Jaro-Winkler should be >= Jaro for common prefix")
+			assert.GreaterOrEqual(
+				t,
+				jaroWinkler,
+				jaro,
+				"Jaro-Winkler should be >= Jaro for common prefix",
+			)
 		})
 	})
 
@@ -1740,8 +1772,12 @@ func TestDuckDBCompat_StringErrorMessages(t *testing.T) {
 	t.Run("Invalid regex pattern", func(t *testing.T) {
 		_, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT REGEXP_MATCHES('test', '[')")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Invalid regular expression",
-			"DuckDB says 'Invalid Input Error: Invalid regex' - we say 'Invalid regular expression'")
+		assert.Contains(
+			t,
+			err.Error(),
+			"Invalid regular expression",
+			"DuckDB says 'Invalid Input Error: Invalid regex' - we say 'Invalid regular expression'",
+		)
 	})
 
 	t.Run("HAMMING unequal lengths", func(t *testing.T) {
@@ -1850,14 +1886,24 @@ func TestDuckDBCompat_RegexEdgeCases(t *testing.T) {
 	// Replace with empty pattern
 	t.Run("replace empty pattern", func(t *testing.T) {
 		// Empty pattern replacement behavior
-		result, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT REGEXP_REPLACE('abc', '', 'X')")
+		result, err := executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT REGEXP_REPLACE('abc', '', 'X')",
+		)
 		require.NoError(t, err)
 		val := getDuckDBCompatFirstResultValue(t, result)
 		// Empty pattern matches at position 0, replaces with X
 		assert.Equal(t, "Xabc", val, "Empty pattern replaces at first position")
 
 		// With global flag
-		result, err = executeDuckDBCompatQuery(t, exec, cat, "SELECT REGEXP_REPLACE('abc', '', 'X', 'g')")
+		result, err = executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT REGEXP_REPLACE('abc', '', 'X', 'g')",
+		)
 		require.NoError(t, err)
 		val = getDuckDBCompatFirstResultValue(t, result)
 		// Empty pattern matches between every character
@@ -1882,13 +1928,23 @@ func TestDuckDBCompat_RegexEdgeCases(t *testing.T) {
 	// Anchors in multiline context
 	t.Run("anchor behavior", func(t *testing.T) {
 		// Start anchor
-		result, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT REGEXP_MATCHES('hello\\nworld', '^hello')")
+		result, err := executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT REGEXP_MATCHES('hello\\nworld', '^hello')",
+		)
 		require.NoError(t, err)
 		val := getDuckDBCompatFirstResultValue(t, result)
 		assert.Equal(t, true, val, "^ matches start of string")
 
 		// End anchor
-		result, err = executeDuckDBCompatQuery(t, exec, cat, "SELECT REGEXP_MATCHES('hello\\nworld', 'world$')")
+		result, err = executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT REGEXP_MATCHES('hello\\nworld', 'world$')",
+		)
 		require.NoError(t, err)
 		val = getDuckDBCompatFirstResultValue(t, result)
 		assert.Equal(t, true, val, "$ matches end of string")
@@ -1897,28 +1953,28 @@ func TestDuckDBCompat_RegexEdgeCases(t *testing.T) {
 	// Special regex characters
 	t.Run("special characters", func(t *testing.T) {
 		tests := []struct {
-			name    string
-			query   string
+			name     string
+			query    string
 			expected any
 		}{
 			{
-				name:    "escaped dot",
-				query:   "SELECT REGEXP_MATCHES('a.b', 'a\\.b')",
+				name:     "escaped dot",
+				query:    "SELECT REGEXP_MATCHES('a.b', 'a\\.b')",
 				expected: true,
 			},
 			{
-				name:    "unescaped dot",
-				query:   "SELECT REGEXP_MATCHES('aXb', 'a.b')",
+				name:     "unescaped dot",
+				query:    "SELECT REGEXP_MATCHES('aXb', 'a.b')",
 				expected: true,
 			},
 			{
-				name:    "escaped brackets",
-				query:   "SELECT REGEXP_MATCHES('a[b]c', 'a\\[b\\]c')",
+				name:     "escaped brackets",
+				query:    "SELECT REGEXP_MATCHES('a[b]c', 'a\\[b\\]c')",
 				expected: true,
 			},
 			{
-				name:    "escaped backslash",
-				query:   "SELECT REGEXP_MATCHES('a\\b', 'a\\\\b')",
+				name:     "escaped backslash",
+				query:    "SELECT REGEXP_MATCHES('a\\b', 'a\\\\b')",
 				expected: true,
 			},
 		}
@@ -1970,12 +2026,12 @@ func TestDuckDBCompat_UnicodeHandling(t *testing.T) {
 
 	// Unicode test strings
 	unicodeStrings := map[string]string{
-		"emoji":     "\xf0\x9f\x98\x80\xf0\x9f\x8e\x89\xf0\x9f\x8e\x8a", // Three emojis
-		"chinese":   "\xe4\xb8\xad\xe6\x96\x87",                         // Chinese
-		"japanese":  "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",             // Japanese
-		"arabic":    "\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9", // Arabic
-		"accented":  "caf\xc3\xa9",                                       // cafe with accent
-		"mixed":     "hello\xe4\xb8\x96\xe7\x95\x8c",                     // hello world in mixed
+		"emoji":    "\xf0\x9f\x98\x80\xf0\x9f\x8e\x89\xf0\x9f\x8e\x8a",         // Three emojis
+		"chinese":  "\xe4\xb8\xad\xe6\x96\x87",                                 // Chinese
+		"japanese": "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",                     // Japanese
+		"arabic":   "\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9", // Arabic
+		"accented": "caf\xc3\xa9",                                              // cafe with accent
+		"mixed":    "hello\xe4\xb8\x96\xe7\x95\x8c",                            // hello world in mixed
 	}
 
 	// Test REVERSE with Unicode
@@ -1993,7 +2049,12 @@ func TestDuckDBCompat_UnicodeHandling(t *testing.T) {
 		// Chinese characters
 		result, err = reverseValue("\xe4\xb8\xad\xe6\x96\x87")
 		require.NoError(t, err)
-		assert.Equal(t, "\xe6\x96\x87\xe4\xb8\xad", result, "Chinese characters should reverse correctly")
+		assert.Equal(
+			t,
+			"\xe6\x96\x87\xe4\xb8\xad",
+			result,
+			"Chinese characters should reverse correctly",
+		)
 	})
 
 	// Test LEFT/RIGHT with Unicode
@@ -2039,16 +2100,33 @@ func TestDuckDBCompat_UnicodeHandling(t *testing.T) {
 		val := getDuckDBCompatFirstResultValue(t, result)
 		// DuckDB returns 4 (character count), dukdb-go returns 5 (byte count)
 		// This documents the current behavior difference
-		assert.Equal(t, int64(5), val, "LENGTH returns byte length in dukdb-go (differs from DuckDB)")
+		assert.Equal(
+			t,
+			int64(5),
+			val,
+			"LENGTH returns byte length in dukdb-go (differs from DuckDB)",
+		)
 
-		result, err = executeDuckDBCompatQuery(t, exec, cat, "SELECT LENGTH('\xe4\xb8\xad\xe6\x96\x87')")
+		result, err = executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT LENGTH('\xe4\xb8\xad\xe6\x96\x87')",
+		)
 		require.NoError(t, err)
 		val = getDuckDBCompatFirstResultValue(t, result)
 		// DuckDB returns 2 (character count), dukdb-go returns 6 (byte count)
-		assert.Equal(t, int64(6), val, "LENGTH returns byte length for Chinese in dukdb-go (differs from DuckDB)")
+		assert.Equal(
+			t,
+			int64(6),
+			val,
+			"LENGTH returns byte length for Chinese in dukdb-go (differs from DuckDB)",
+		)
 
 		// Document the difference
-		t.Log("Known difference: DuckDB LENGTH returns character count, dukdb-go returns byte count")
+		t.Log(
+			"Known difference: DuckDB LENGTH returns character count, dukdb-go returns byte count",
+		)
 	})
 
 	// Test POSITION with Unicode
@@ -2117,7 +2195,10 @@ func TestDuckDBCompat_UnicodeHandling(t *testing.T) {
 	// Test REGEXP with Unicode
 	t.Run("REGEXP Unicode", func(t *testing.T) {
 		// Unicode in pattern
-		result, err := regexpMatchesValue("hello\xe4\xb8\x96\xe7\x95\x8c", "\xe4\xb8\x96\xe7\x95\x8c")
+		result, err := regexpMatchesValue(
+			"hello\xe4\xb8\x96\xe7\x95\x8c",
+			"\xe4\xb8\x96\xe7\x95\x8c",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 
@@ -2129,7 +2210,10 @@ func TestDuckDBCompat_UnicodeHandling(t *testing.T) {
 
 	// Test STRING_SPLIT with Unicode separator
 	t.Run("STRING_SPLIT Unicode", func(t *testing.T) {
-		result, err := stringSplitValue("a\xe2\x80\x93b\xe2\x80\x93c", "\xe2\x80\x93") // en-dash separator
+		result, err := stringSplitValue(
+			"a\xe2\x80\x93b\xe2\x80\x93c",
+			"\xe2\x80\x93",
+		) // en-dash separator
 		require.NoError(t, err)
 		expected := []string{"a", "b", "c"}
 		assert.Equal(t, expected, result)
@@ -2172,10 +2256,10 @@ func TestDuckDBCompat_FunctionAliases(t *testing.T) {
 
 	// DuckDB has multiple names for some functions
 	tests := []struct {
-		name      string
-		query1    string
-		query2    string
-		expectEq  bool
+		name     string
+		query1   string
+		query2   string
+		expectEq bool
 	}{
 		{
 			name:     "STRPOS and INSTR",
@@ -2273,7 +2357,11 @@ func TestDuckDBCompat_ReturnTypes(t *testing.T) {
 		// DOUBLE return types
 		{"JACCARD returns DOUBLE", "SELECT JACCARD('abc', 'abd')", "float64"},
 		{"JARO_SIMILARITY returns DOUBLE", "SELECT JARO_SIMILARITY('a', 'b')", "float64"},
-		{"JARO_WINKLER_SIMILARITY returns DOUBLE", "SELECT JARO_WINKLER_SIMILARITY('a', 'b')", "float64"},
+		{
+			"JARO_WINKLER_SIMILARITY returns DOUBLE",
+			"SELECT JARO_WINKLER_SIMILARITY('a', 'b')",
+			"float64",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2362,7 +2450,12 @@ func TestDuckDBCompat_StringNullPropagation(t *testing.T) {
 
 	// CONCAT_WS special behavior: skips NULLs
 	t.Run("CONCAT_WS skips NULLs", func(t *testing.T) {
-		result, err := executeDuckDBCompatQuery(t, exec, cat, "SELECT CONCAT_WS(',', 'a', NULL, 'b')")
+		result, err := executeDuckDBCompatQuery(
+			t,
+			exec,
+			cat,
+			"SELECT CONCAT_WS(',', 'a', NULL, 'b')",
+		)
 		require.NoError(t, err)
 		val := getDuckDBCompatFirstResultValue(t, result)
 		assert.Equal(t, "a,b", val, "CONCAT_WS should skip NULL values")
@@ -2387,7 +2480,11 @@ func TestDuckDBCompat_BoundaryValues(t *testing.T) {
 			expected any
 		}{
 			{"MD5 empty", "SELECT MD5('')", "d41d8cd98f00b204e9800998ecf8427e"},
-			{"SHA256 empty", "SELECT SHA256('')", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+			{
+				"SHA256 empty",
+				"SELECT SHA256('')",
+				"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			},
 			{"REVERSE empty", "SELECT REVERSE('')", ""},
 			{"REPEAT empty 0", "SELECT REPEAT('', 0)", ""},
 			{"REPEAT empty 3", "SELECT REPEAT('', 3)", ""},

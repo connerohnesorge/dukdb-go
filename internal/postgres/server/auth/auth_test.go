@@ -16,8 +16,13 @@ func TestUser_CanAccessDatabase(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "superuser can access any database",
-			user:     &User{Username: "admin", Superuser: true, Databases: []string{"db1"}, Enabled: true},
+			name: "superuser can access any database",
+			user: &User{
+				Username:  "admin",
+				Superuser: true,
+				Databases: []string{"db1"},
+				Enabled:   true,
+			},
 			database: "db2",
 			expected: true,
 		},
@@ -640,12 +645,14 @@ func TestLDAPAuthenticator(t *testing.T) {
 		auth := NewLDAPAuthenticator(config, nil)
 
 		// Mock successful bind
-		auth.SetLDAPBindFunc(func(server string, port int, bindDN, password string, useTLS bool) error {
-			if password == "correctpass" {
-				return nil
-			}
-			return ErrLDAPAuthFailed
-		})
+		auth.SetLDAPBindFunc(
+			func(server string, port int, bindDN, password string, useTLS bool) error {
+				if password == "correctpass" {
+					return nil
+				}
+				return ErrLDAPAuthFailed
+			},
+		)
 
 		// Should succeed with correct password
 		success, err := auth.Authenticate(ctx, "testuser", "correctpass", "testdb")
@@ -778,7 +785,15 @@ func TestHBAController(t *testing.T) {
 		hba := NewHBAController()
 		hba.AddRule(NewHBARule(HBAHost, "all", "all", MethodTrust).WithAddress("0.0.0.0/0"))
 
-		success, err := hba.Authenticate(ctx, HBAHost, "testdb", "user", "pass", "192.168.1.1", false)
+		success, err := hba.Authenticate(
+			ctx,
+			HBAHost,
+			"testdb",
+			"user",
+			"pass",
+			"192.168.1.1",
+			false,
+		)
 		require.NoError(t, err)
 		assert.True(t, success)
 	})
@@ -787,7 +802,15 @@ func TestHBAController(t *testing.T) {
 		hba := NewHBAController()
 		hba.AddRule(NewHBARule(HBAHost, "all", "all", MethodReject).WithAddress("0.0.0.0/0"))
 
-		success, err := hba.Authenticate(ctx, HBAHost, "testdb", "user", "pass", "192.168.1.1", false)
+		success, err := hba.Authenticate(
+			ctx,
+			HBAHost,
+			"testdb",
+			"user",
+			"pass",
+			"192.168.1.1",
+			false,
+		)
 		assert.Equal(t, ErrAccessDenied, err)
 		assert.False(t, success)
 	})
@@ -796,7 +819,15 @@ func TestHBAController(t *testing.T) {
 		hba := NewHBAController()
 		// No rules added
 
-		success, err := hba.Authenticate(ctx, HBAHost, "testdb", "user", "pass", "192.168.1.1", false)
+		success, err := hba.Authenticate(
+			ctx,
+			HBAHost,
+			"testdb",
+			"user",
+			"pass",
+			"192.168.1.1",
+			false,
+		)
 		assert.Equal(t, ErrAccessDenied, err)
 		assert.False(t, success)
 	})
@@ -839,11 +870,27 @@ func TestHBAController(t *testing.T) {
 		hba.RegisterAuthenticator(MethodPassword, NewPasswordAuthenticator(provider))
 		hba.AddRule(NewHBARule(HBAHost, "all", "all", MethodPassword).WithAddress("0.0.0.0/0"))
 
-		success, err := hba.Authenticate(ctx, HBAHost, "testdb", "testuser", "testpass", "192.168.1.1", false)
+		success, err := hba.Authenticate(
+			ctx,
+			HBAHost,
+			"testdb",
+			"testuser",
+			"testpass",
+			"192.168.1.1",
+			false,
+		)
 		require.NoError(t, err)
 		assert.True(t, success)
 
-		success, err = hba.Authenticate(ctx, HBAHost, "testdb", "testuser", "wrongpass", "192.168.1.1", false)
+		success, err = hba.Authenticate(
+			ctx,
+			HBAHost,
+			"testdb",
+			"testuser",
+			"wrongpass",
+			"192.168.1.1",
+			false,
+		)
 		require.NoError(t, err)
 		assert.False(t, success)
 	})

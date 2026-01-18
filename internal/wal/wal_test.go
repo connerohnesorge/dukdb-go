@@ -438,7 +438,7 @@ func TestDeleteEntrySerializationWithData(t *testing.T) {
 			},
 		},
 		{
-			name:   "large_delete_batch",
+			name: "large_delete_batch",
 			rowIDs: func() []uint64 {
 				ids := make([]uint64, 100)
 				for i := range 100 {
@@ -540,8 +540,8 @@ func TestUpdateEntrySerializationWithBeforeAfter(t *testing.T) {
 			},
 		},
 		{
-			name:       "large_update_batch",
-			rowIDs:     func() []uint64 {
+			name: "large_update_batch",
+			rowIDs: func() []uint64 {
 				ids := make([]uint64, 50)
 				for i := range 50 {
 					ids[i] = uint64(i)
@@ -1422,10 +1422,10 @@ func TestRecoveryUpdate(t *testing.T) {
 		2,
 		"main",
 		"users",
-		[]uint64{0}, // RowID 0
-		[]int{1},    // Update column 1 (name)
-		[][]any{{"Alice"}},  // Before value
-		[][]any{{"ALICE"}},  // After value
+		[]uint64{0},        // RowID 0
+		[]int{1},           // Update column 1 (name)
+		[][]any{{"Alice"}}, // Before value
+		[][]any{{"ALICE"}}, // After value
 	)
 	err = writer.WriteEntry(updateEntry)
 	require.NoError(t, err)
@@ -1520,7 +1520,7 @@ func TestRecoveryDelete(t *testing.T) {
 		2,
 		"main",
 		"users",
-		[]uint64{1}, // Delete RowID 1 (Bob)
+		[]uint64{1},                // Delete RowID 1 (Bob)
 		[][]any{{int32(2), "Bob"}}, // Deleted data for rollback
 	)
 	err = writer.WriteEntry(deleteEntry)
@@ -2220,7 +2220,12 @@ func TestCrashMidDelete_RecoverCommitted(t *testing.T) {
 		row := table.GetRow(storage.RowID(i + 500))
 		require.NotNil(t, row, "Row %d should exist (uncommitted delete rolled back)", i+500)
 		assert.Equal(t, int32(i+500), row[0])
-		assert.False(t, table.IsTombstoned(storage.RowID(i+500)), "Row %d should NOT be tombstoned", i+500)
+		assert.False(
+			t,
+			table.IsTombstoned(storage.RowID(i+500)),
+			"Row %d should NOT be tombstoned",
+			i+500,
+		)
 	}
 }
 

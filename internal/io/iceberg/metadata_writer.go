@@ -119,7 +119,10 @@ type IcebergSortField struct {
 }
 
 // WriteMetadataJSON writes the metadata.json file.
-func (w *MetadataWriter) WriteMetadataJSON(_ context.Context, metadata *IcebergTableMetadata) error {
+func (w *MetadataWriter) WriteMetadataJSON(
+	_ context.Context,
+	metadata *IcebergTableMetadata,
+) error {
 	// Determine metadata file name
 	metadataPath := filepath.Join(w.tableLocation, "metadata", "v1.metadata.json")
 
@@ -292,17 +295,17 @@ func (w *MetadataWriter) WriteManifest(
 			"snapshot_id":     map[string]any{"long": snapshotID},
 			"sequence_number": map[string]any{"long": sequenceNumber},
 			"data_file": map[string]any{
-				"content":             int32(0), // DATA content type
-				"file_path":           df.Path,
-				"file_format":         string(df.Format),
-				"record_count":        df.RecordCount,
-				"file_size_in_bytes":  df.FileSizeBytes,
-				"column_sizes":        map[string]any{"null": nil},
-				"value_counts":        map[string]any{"null": nil},
-				"null_value_counts":   map[string]any{"null": nil},
-				"nan_value_counts":    map[string]any{"null": nil},
-				"lower_bounds":        map[string]any{"null": nil},
-				"upper_bounds":        map[string]any{"null": nil},
+				"content":            int32(0), // DATA content type
+				"file_path":          df.Path,
+				"file_format":        string(df.Format),
+				"record_count":       df.RecordCount,
+				"file_size_in_bytes": df.FileSizeBytes,
+				"column_sizes":       map[string]any{"null": nil},
+				"value_counts":       map[string]any{"null": nil},
+				"null_value_counts":  map[string]any{"null": nil},
+				"nan_value_counts":   map[string]any{"null": nil},
+				"lower_bounds":       map[string]any{"null": nil},
+				"upper_bounds":       map[string]any{"null": nil},
 			},
 		}
 

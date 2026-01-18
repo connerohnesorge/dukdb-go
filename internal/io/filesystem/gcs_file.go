@@ -57,7 +57,11 @@ func newGCSFileForReading(client *storage.Client, bucket, object string) *GCSFil
 // newGCSFileForReadingWithConfig creates a new GCS file handle for reading with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newGCSFileForReadingWithConfig(client *storage.Client, bucket, object string, config GCSConfig) *GCSFile {
+func newGCSFileForReadingWithConfig(
+	client *storage.Client,
+	bucket, object string,
+	config GCSConfig,
+) *GCSFile {
 	return &GCSFile{
 		client:    client,
 		bucket:    bucket,
@@ -83,7 +87,11 @@ func newGCSFileForWriting(client *storage.Client, bucket, object string) *GCSFil
 // newGCSFileForWritingWithConfig creates a new GCS file handle for writing with configuration.
 //
 //nolint:gocritic // hugeParam: config is passed by value for API simplicity
-func newGCSFileForWritingWithConfig(client *storage.Client, bucket, object string, config GCSConfig) *GCSFile {
+func newGCSFileForWritingWithConfig(
+	client *storage.Client,
+	bucket, object string,
+	config GCSConfig,
+) *GCSFile {
 	return &GCSFile{
 		client:      client,
 		bucket:      bucket,

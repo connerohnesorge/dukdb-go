@@ -346,7 +346,11 @@ func TestVariantColumnNullHandling(t *testing.T) {
 		err = db.QueryRow(`SELECT id, data FROM variant_null_test WHERE id = 2`).Scan(&id, &data)
 		require.NoError(t, err)
 		assert.Equal(t, 2, id)
-		assert.False(t, data.Valid, "SQL NULL via parameter should result in NullString.Valid = false")
+		assert.False(
+			t,
+			data.Valid,
+			"SQL NULL via parameter should result in NullString.Valid = false",
+		)
 	})
 
 	t.Run("Distinguish SQL NULL from JSON null", func(t *testing.T) {
@@ -573,7 +577,10 @@ func TestVariantColumnTransaction(t *testing.T) {
 		tx, err := db.Begin()
 		require.NoError(t, err)
 
-		_, err = tx.Exec(`INSERT INTO variant_tx_test VALUES (2, $1)`, `{"status":"should_be_rolled_back"}`)
+		_, err = tx.Exec(
+			`INSERT INTO variant_tx_test VALUES (2, $1)`,
+			`{"status":"should_be_rolled_back"}`,
+		)
 		require.NoError(t, err)
 
 		err = tx.Rollback()
@@ -622,7 +629,8 @@ func TestVariantColumnUnicodeAndEscaping(t *testing.T) {
 			require.NoError(t, err)
 
 			var data string
-			err = db.QueryRow(`SELECT data FROM variant_unicode_test WHERE id = $1`, tc.id).Scan(&data)
+			err = db.QueryRow(`SELECT data FROM variant_unicode_test WHERE id = $1`, tc.id).
+				Scan(&data)
 			require.NoError(t, err)
 
 			// Verify the value can be parsed
@@ -652,7 +660,10 @@ func TestVariantColumnUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update the VARIANT data
-	result, err := db.Exec(`UPDATE variant_update_test SET data = $1 WHERE id = 1`, `{"version":2,"updated":true}`)
+	result, err := db.Exec(
+		`UPDATE variant_update_test SET data = $1 WHERE id = 1`,
+		`{"version":2,"updated":true}`,
+	)
 	require.NoError(t, err)
 
 	rowsAffected, err := result.RowsAffected()
@@ -741,7 +752,9 @@ func TestVariantColumnMixedWithOtherColumns(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query and verify
-	rows, err := db.Query(`SELECT id, name, score, active, metadata FROM variant_mixed_test ORDER BY id`)
+	rows, err := db.Query(
+		`SELECT id, name, score, active, metadata FROM variant_mixed_test ORDER BY id`,
+	)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, rows.Close())

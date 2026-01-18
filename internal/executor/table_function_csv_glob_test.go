@@ -82,7 +82,9 @@ func TestCSVFilenameColumn(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.csv")
-	sql := `SELECT id, value, filename FROM read_csv('` + escapeForSQL(pattern) + `', filename=true) ORDER BY id`
+	sql := `SELECT id, value, filename FROM read_csv('` + escapeForSQL(
+		pattern,
+	) + `', filename=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -105,7 +107,9 @@ func TestCSVFileRowNumber(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.csv")
-	sql := `SELECT id, file_row_number FROM read_csv('` + escapeForSQL(pattern) + `', file_row_number=true) ORDER BY id`
+	sql := `SELECT id, file_row_number FROM read_csv('` + escapeForSQL(
+		pattern,
+	) + `', file_row_number=true) ORDER BY id`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -131,7 +135,9 @@ func TestCSVFileIndex(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.csv")
-	sql := `SELECT id, file_index FROM read_csv('` + escapeForSQL(pattern) + `', file_index=true) ORDER BY file_index`
+	sql := `SELECT id, file_index FROM read_csv('` + escapeForSQL(
+		pattern,
+	) + `', file_index=true) ORDER BY file_index`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -183,7 +189,9 @@ func TestCSVFileGlobBehavior(t *testing.T) {
 
 	t.Run("allow_empty", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "nonexistent*.csv")
-		sql := `SELECT * FROM read_csv('` + escapeForSQL(pattern) + `', file_glob_behavior='ALLOW_EMPTY')`
+		sql := `SELECT * FROM read_csv('` + escapeForSQL(
+			pattern,
+		) + `', file_glob_behavior='ALLOW_EMPTY')`
 
 		result := execQuery(t, cat, exec, sql)
 		assert.Len(t, result.Rows, 0)
@@ -194,7 +202,9 @@ func TestCSVFileGlobBehavior(t *testing.T) {
 		writeCSV(t, filepath.Join(tmpDir, "data.csv"), "id\n1\n")
 
 		path := filepath.Join(tmpDir, "data.csv")
-		sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(path) + `', file_glob_behavior='FALLBACK_GLOB')`
+		sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(
+			path,
+		) + `', file_glob_behavior='FALLBACK_GLOB')`
 
 		result := execQuery(t, cat, exec, sql)
 		cnt, ok := result.Rows[0]["cnt"].(int64)
@@ -228,7 +238,9 @@ func TestCSVHivePartitioning(t *testing.T) {
 	t.Run("hive_partitioning_enabled", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "**/*.csv")
 		// Just read the data columns - partition columns are added by executor
-		sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(pattern) + `', hive_partitioning=true)`
+		sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(
+			pattern,
+		) + `', hive_partitioning=true)`
 
 		result := execQuery(t, cat, exec, sql)
 
@@ -251,7 +263,9 @@ func TestCSVUnionByName(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.csv")
-	sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(pattern) + `', union_by_name=true)`
+	sql := `SELECT COUNT(*) as cnt FROM read_csv('` + escapeForSQL(
+		pattern,
+	) + `', union_by_name=true)`
 
 	result := execQuery(t, cat, exec, sql)
 
@@ -312,7 +326,9 @@ func TestCSVAllMetadataColumns(t *testing.T) {
 	exec := NewExecutor(cat, stor)
 
 	pattern := filepath.Join(tmpDir, "*.csv")
-	sql := `SELECT id, filename, file_row_number, file_index FROM read_csv('` + escapeForSQL(pattern) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
+	sql := `SELECT id, filename, file_row_number, file_index FROM read_csv('` + escapeForSQL(
+		pattern,
+	) + `', filename=true, file_row_number=true, file_index=true) ORDER BY file_index, file_row_number`
 
 	result := execQuery(t, cat, exec, sql)
 

@@ -88,7 +88,12 @@ type EnhancedPortal struct {
 }
 
 // NewEnhancedPortal creates a new enhanced portal with the given name and statement.
-func NewEnhancedPortal(name string, stmt *PreparedStatement, params []driver.NamedValue, resultFormats []wire.FormatCode) *EnhancedPortal {
+func NewEnhancedPortal(
+	name string,
+	stmt *PreparedStatement,
+	params []driver.NamedValue,
+	resultFormats []wire.FormatCode,
+) *EnhancedPortal {
 	return &EnhancedPortal{
 		Name:           name,
 		Statement:      stmt,
@@ -167,7 +172,11 @@ type EnhancedPortalCache struct {
 }
 
 // NewEnhancedPortalCache creates a new enhanced portal cache.
-func NewEnhancedPortalCache(session *Session, server *Server, handler *Handler) *EnhancedPortalCache {
+func NewEnhancedPortalCache(
+	session *Session,
+	server *Server,
+	handler *Handler,
+) *EnhancedPortalCache {
 	return &EnhancedPortalCache{
 		portals: make(map[string]*EnhancedPortal),
 		session: session,
@@ -178,7 +187,13 @@ func NewEnhancedPortalCache(session *Session, server *Server, handler *Handler) 
 
 // Bind binds parameters to a prepared statement and creates a portal.
 // This implements wire.PortalCache.Bind.
-func (c *EnhancedPortalCache) Bind(ctx context.Context, name string, statement *wire.Statement, parameters []wire.Parameter, resultFormats []wire.FormatCode) error {
+func (c *EnhancedPortalCache) Bind(
+	ctx context.Context,
+	name string,
+	statement *wire.Statement,
+	parameters []wire.Parameter,
+	resultFormats []wire.FormatCode,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -248,7 +263,13 @@ func (c *EnhancedPortalCache) GetEnhanced(name string) (*EnhancedPortal, bool) {
 
 // Execute executes the portal with the given row limit.
 // This implements wire.PortalCache.Execute.
-func (c *EnhancedPortalCache) Execute(ctx context.Context, name string, limit wire.Limit, reader *buffer.Reader, writer *buffer.Writer) error {
+func (c *EnhancedPortalCache) Execute(
+	ctx context.Context,
+	name string,
+	limit wire.Limit,
+	reader *buffer.Reader,
+	writer *buffer.Writer,
+) error {
 	c.mu.Lock()
 	portal, ok := c.portals[name]
 	if !ok {
@@ -361,7 +382,10 @@ func (c *EnhancedPortalCache) CacheResults(name string, rows []map[string]any, c
 
 // FetchRows fetches up to maxRows rows from a portal starting at the current cursor position.
 // Returns the rows, whether there are more rows available, and any error.
-func (c *EnhancedPortalCache) FetchRows(name string, maxRows int) ([]map[string]any, []string, bool, error) {
+func (c *EnhancedPortalCache) FetchRows(
+	name string,
+	maxRows int,
+) ([]map[string]any, []string, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -418,7 +442,13 @@ func NewSessionPortalCache(session *Session, server *Server, handler *Handler) *
 }
 
 // Bind binds parameters to a prepared statement, creating a portal.
-func (c *SessionPortalCache) Bind(ctx context.Context, name string, statement *wire.Statement, parameters []wire.Parameter, resultFormats []wire.FormatCode) error {
+func (c *SessionPortalCache) Bind(
+	ctx context.Context,
+	name string,
+	statement *wire.Statement,
+	parameters []wire.Parameter,
+	resultFormats []wire.FormatCode,
+) error {
 	if c.session == nil {
 		return ErrSessionClosed
 	}
@@ -469,7 +499,13 @@ func (c *SessionPortalCache) Get(ctx context.Context, name string) (*wire.Portal
 }
 
 // Execute executes the portal with the given row limit.
-func (c *SessionPortalCache) Execute(ctx context.Context, name string, limit wire.Limit, reader *buffer.Reader, writer *buffer.Writer) error {
+func (c *SessionPortalCache) Execute(
+	ctx context.Context,
+	name string,
+	limit wire.Limit,
+	reader *buffer.Reader,
+	writer *buffer.Writer,
+) error {
 	if c.session == nil {
 		return ErrSessionClosed
 	}

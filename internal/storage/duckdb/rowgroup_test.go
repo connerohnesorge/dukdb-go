@@ -194,7 +194,7 @@ func TestValidityMask_Serialization(t *testing.T) {
 func TestValidityMask_NewValidityMaskFromData(t *testing.T) {
 	// Create some data with specific patterns
 	data := []uint64{
-		^uint64(0),         // All valid
+		^uint64(0),             // All valid
 		^uint64(0) ^ (1 << 10), // Row 74 invalid (64 + 10)
 	}
 
@@ -350,8 +350,16 @@ func TestDataPointer_Serialization(t *testing.T) {
 
 	// Segment state
 	assert.Equal(t, dp.SegmentState.HasValidityMask, restored.SegmentState.HasValidityMask)
-	assert.Equal(t, dp.SegmentState.ValidityBlock.BlockID, restored.SegmentState.ValidityBlock.BlockID)
-	assert.Equal(t, dp.SegmentState.ValidityBlock.Offset, restored.SegmentState.ValidityBlock.Offset)
+	assert.Equal(
+		t,
+		dp.SegmentState.ValidityBlock.BlockID,
+		restored.SegmentState.ValidityBlock.BlockID,
+	)
+	assert.Equal(
+		t,
+		dp.SegmentState.ValidityBlock.Offset,
+		restored.SegmentState.ValidityBlock.Offset,
+	)
 	assert.Equal(t, dp.SegmentState.StateData, restored.SegmentState.StateData)
 }
 

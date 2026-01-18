@@ -90,13 +90,17 @@ func (m *BenchmarkMockGCSServer) handleHead(w http.ResponseWriter) {
 // BenchmarkGCSRead benchmarks sequential read operations on GCS.
 // GCS client requires proper setup even with mock server, so this uses buffer performance tests.
 func BenchmarkGCSRead(b *testing.B) {
-	b.Skip("GCS read benchmarks require real GCS credentials - use BenchmarkGCSWriteBufferPerformance instead")
+	b.Skip(
+		"GCS read benchmarks require real GCS credentials - use BenchmarkGCSWriteBufferPerformance instead",
+	)
 }
 
 // BenchmarkGCSWrite benchmarks sequential write operations on GCS.
 // GCS client requires proper setup, so this uses buffer performance tests.
 func BenchmarkGCSWrite(b *testing.B) {
-	b.Skip("GCS write benchmarks require real GCS credentials - use BenchmarkGCSWriteBufferPerformance instead")
+	b.Skip(
+		"GCS write benchmarks require real GCS credentials - use BenchmarkGCSWriteBufferPerformance instead",
+	)
 }
 
 // BenchmarkGCSReadAt benchmarks random read operations using ReadAt on GCS.

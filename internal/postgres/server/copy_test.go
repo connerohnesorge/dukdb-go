@@ -214,11 +214,21 @@ func TestParseCopyCommand(t *testing.T) {
 
 			assert.Equal(t, tt.expected.Options.Format, cmd.Options.Format, "Format mismatch")
 			assert.Equal(t, tt.expected.Options.Header, cmd.Options.Header, "Header mismatch")
-			assert.Equal(t, tt.expected.Options.Delimiter, cmd.Options.Delimiter, "Delimiter mismatch")
+			assert.Equal(
+				t,
+				tt.expected.Options.Delimiter,
+				cmd.Options.Delimiter,
+				"Delimiter mismatch",
+			)
 			assert.Equal(t, tt.expected.Options.Null, cmd.Options.Null, "Null mismatch")
 
 			if len(tt.expected.Options.Columns) > 0 {
-				assert.Equal(t, tt.expected.Options.Columns, cmd.Options.Columns, "Columns mismatch")
+				assert.Equal(
+					t,
+					tt.expected.Options.Columns,
+					cmd.Options.Columns,
+					"Columns mismatch",
+				)
 			}
 		})
 	}

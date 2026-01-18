@@ -216,10 +216,12 @@ func main() {
 	fmt.Println("\n=== Testing Data Insertion ===")
 
 	// Insert into products table
-	_, err = db.Exec(`INSERT INTO products (id, product_name, price, quantity, is_available, created_at) VALUES
+	_, err = db.Exec(
+		`INSERT INTO products (id, product_name, price, quantity, is_available, created_at) VALUES
 		(1, 'Laptop', 999.99, 10, true, '2024-01-01 10:00:00'),
 		(2, 'Mouse', 29.99, 50, true, '2024-01-01 10:00:00'),
-		(3, 'Keyboard', 79.99, 30, true, '2024-01-01 10:00:00')`)
+		(3, 'Keyboard', 79.99, 30, true, '2024-01-01 10:00:00')`,
+	)
 	if err != nil {
 		log.Printf("Failed to insert products: %v", err)
 	} else {
@@ -237,9 +239,11 @@ func main() {
 	}
 
 	// Insert into users table
-	_, err = db.Exec(`INSERT INTO users (id, username, email, age, score, is_active, created_at) VALUES
+	_, err = db.Exec(
+		`INSERT INTO users (id, username, email, age, score, is_active, created_at) VALUES
 		(1, 'john_doe', 'john@example.com', 25, 100, true, '2024-01-01 10:00:00'),
-		(2, 'jane_smith', 'jane@example.com', 30, 150, true, '2024-01-01 10:00:00')`)
+		(2, 'jane_smith', 'jane@example.com', 30, 150, true, '2024-01-01 10:00:00')`,
+	)
 	if err != nil {
 		log.Printf("Failed to insert users: %v", err)
 	} else {
@@ -248,7 +252,18 @@ func main() {
 
 	// Display table structures
 	fmt.Println("\n=== Table Structures Summary ===")
-	tables := []string{"products", "documents", "financial_records", "events", "users", "orders", "products_catalog", "categories", "invoices", "api_logs"}
+	tables := []string{
+		"products",
+		"documents",
+		"financial_records",
+		"events",
+		"users",
+		"orders",
+		"products_catalog",
+		"categories",
+		"invoices",
+		"api_logs",
+	}
 
 	for _, table := range tables {
 		var count int
@@ -283,6 +298,8 @@ func main() {
 	fmt.Println("- Self-referencing tables (parent-child relationships)")
 	fmt.Println("- Tables for storing API data (as TEXT)")
 	fmt.Println("\nNote: Advanced constraints like NOT NULL, UNIQUE, CHECK, DEFAULT values,")
-	fmt.Println("and FOREIGN KEY constraints may vary depending on the database engine implementation.")
+	fmt.Println(
+		"and FOREIGN KEY constraints may vary depending on the database engine implementation.",
+	)
 	fmt.Println("This example uses basic table structures that are widely supported.")
 }

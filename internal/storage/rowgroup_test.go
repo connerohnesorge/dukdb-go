@@ -200,7 +200,7 @@ func TestFromDuckDBRowGroup(t *testing.T) {
 
 func TestMapTypeToLogicalTypeID(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		dukdbType dukdb.Type
 		expected  compression.LogicalTypeID
 	}{
@@ -744,10 +744,10 @@ func TestRowGroup_DateColumn(t *testing.T) {
 
 	// Create DATE column (stored as int32 days since epoch)
 	col := NewDuckDBColumnSegment(compression.LogicalTypeDate)
-	data := make([]byte, 12) // 3 int32 values
-	writeInt32(data[0:], 18000)  // 2019-04-11
-	writeInt32(data[4:], 18001)  // 2019-04-12
-	writeInt32(data[8:], 18002)  // 2019-04-13
+	data := make([]byte, 12)    // 3 int32 values
+	writeInt32(data[0:], 18000) // 2019-04-11
+	writeInt32(data[4:], 18001) // 2019-04-12
+	writeInt32(data[8:], 18002) // 2019-04-13
 	col.SetData(data, false)
 	rg.AddColumn(0, col)
 
@@ -772,9 +772,9 @@ func TestRowGroup_TimestampColumn(t *testing.T) {
 
 	// Create TIMESTAMP column (stored as int64 microseconds since epoch)
 	col := NewDuckDBColumnSegment(compression.LogicalTypeTimestamp)
-	data := make([]byte, 16) // 2 int64 values
-	writeInt64(data[0:], 1609459200000000)  // 2021-01-01 00:00:00
-	writeInt64(data[8:], 1609545600000000)  // 2021-01-02 00:00:00
+	data := make([]byte, 16)               // 2 int64 values
+	writeInt64(data[0:], 1609459200000000) // 2021-01-01 00:00:00
+	writeInt64(data[8:], 1609545600000000) // 2021-01-02 00:00:00
 	col.SetData(data, false)
 	rg.AddColumn(0, col)
 
@@ -1043,9 +1043,9 @@ func TestRowGroup_IndexReconstruction(t *testing.T) {
 
 	// Create a mock index (in real use, this would be ART.Serialize())
 	mockIndexData := []byte{
-		0x01, // Key type
-		0x01, // Has root
-		0x00, // Node type (leaf)
+		0x01,       // Key type
+		0x01,       // Has root
+		0x00,       // Node type (leaf)
 		0x00, 0x00, // Prefix length
 		0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Value (100)
 	}

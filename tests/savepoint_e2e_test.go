@@ -1018,7 +1018,8 @@ func TestSavepoint_E2E_SavepointWithDifferentDataTypes(t *testing.T) {
 	var name string
 	var amount float64
 	var active bool
-	err = db.QueryRow("SELECT id, name, amount, active FROM test").Scan(&id, &name, &amount, &active)
+	err = db.QueryRow("SELECT id, name, amount, active FROM test").
+		Scan(&id, &name, &amount, &active)
 	require.NoError(t, err)
 	assert.Equal(t, 1, id)
 	assert.Equal(t, "Alice", name)

@@ -241,18 +241,18 @@ type BoundWindowOrder struct {
 
 // BoundWindowExpr represents a bound window expression.
 type BoundWindowExpr struct {
-	FunctionName string             // e.g., "row_number", "sum"
-	FunctionType WindowFunctionType // Ranking, Value, Distribution, Aggregate
-	Args         []BoundExpr        // Bound function arguments
-	PartitionBy  []BoundExpr        // Bound partition expressions
-	OrderBy      []BoundWindowOrder // Bound order expressions with NULLS FIRST/LAST
+	FunctionName string              // e.g., "row_number", "sum"
+	FunctionType WindowFunctionType  // Ranking, Value, Distribution, Aggregate
+	Args         []BoundExpr         // Bound function arguments
+	PartitionBy  []BoundExpr         // Bound partition expressions
+	OrderBy      []BoundWindowOrder  // Bound order expressions with NULLS FIRST/LAST
 	Frame        *parser.WindowFrame // Resolved frame (with defaults applied)
 	ResType      dukdb.Type          // Result type of the window function
-	IgnoreNulls  bool               // IGNORE NULLS modifier
-	Filter       BoundExpr          // Bound FILTER expression (or nil)
-	Distinct     bool               // DISTINCT modifier for aggregates
-	ResultIndex  int                // Column index in output
-	Alias        string             // Column alias from SELECT (e.g., "rn" in "ROW_NUMBER() OVER (...) as rn")
+	IgnoreNulls  bool                // IGNORE NULLS modifier
+	Filter       BoundExpr           // Bound FILTER expression (or nil)
+	Distinct     bool                // DISTINCT modifier for aggregates
+	ResultIndex  int                 // Column index in output
+	Alias        string              // Column alias from SELECT (e.g., "rn" in "ROW_NUMBER() OVER (...) as rn")
 }
 
 func (*BoundWindowExpr) boundExprNode() {}

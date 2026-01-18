@@ -5,34 +5,34 @@ package catalog
 // Note: pg_roles is actually a view on pg_authid, but we implement it directly
 // since we don't have pg_authid.
 var pgRolesColumns = []string{
-	"oid",              // Row identifier (from pg_authid)
-	"rolname",          // Role name
-	"rolsuper",         // Role has superuser privileges
-	"rolinherit",       // Role automatically inherits privileges of roles it is a member of
-	"rolcreaterole",    // Role can create more roles
-	"rolcreatedb",      // Role can create databases
-	"rolcanlogin",      // Role can log in (is a user)
-	"rolreplication",   // Role is a replication role
-	"rolconnlimit",     // For roles that can log in, max concurrent connections (-1 = no limit)
-	"rolpassword",      // Not the password (always shows as ********)
-	"rolvaliduntil",    // Password expiry time (null = never expires)
-	"rolbypassrls",     // Role bypasses row-level security policies
-	"rolconfig",        // Role-specific defaults for configuration variables
+	"oid",            // Row identifier (from pg_authid)
+	"rolname",        // Role name
+	"rolsuper",       // Role has superuser privileges
+	"rolinherit",     // Role automatically inherits privileges of roles it is a member of
+	"rolcreaterole",  // Role can create more roles
+	"rolcreatedb",    // Role can create databases
+	"rolcanlogin",    // Role can log in (is a user)
+	"rolreplication", // Role is a replication role
+	"rolconnlimit",   // For roles that can log in, max concurrent connections (-1 = no limit)
+	"rolpassword",    // Not the password (always shows as ********)
+	"rolvaliduntil",  // Password expiry time (null = never expires)
+	"rolbypassrls",   // Role bypasses row-level security policies
+	"rolconfig",      // Role-specific defaults for configuration variables
 }
 
 // pg_user columns - PostgreSQL users view
 // Reference: https://www.postgresql.org/docs/current/view-pg-user.html
 // Note: pg_user shows only roles that have rolcanlogin = true
 var pgUserColumns = []string{
-	"usename",        // User name
-	"usesysid",       // ID of user
-	"usecreatedb",    // User can create databases
-	"usesuper",       // User is a superuser
-	"userepl",        // User can initiate streaming replication
-	"usebypassrls",   // User bypasses row-level security policies
-	"passwd",         // Not the password (always shows as ********)
-	"valuntil",       // Password expiry time (null = never expires)
-	"useconfig",      // Session defaults for configuration variables
+	"usename",      // User name
+	"usesysid",     // ID of user
+	"usecreatedb",  // User can create databases
+	"usesuper",     // User is a superuser
+	"userepl",      // User can initiate streaming replication
+	"usebypassrls", // User bypasses row-level security policies
+	"passwd",       // Not the password (always shows as ********)
+	"valuntil",     // Password expiry time (null = never expires)
+	"useconfig",    // Session defaults for configuration variables
 }
 
 // builtinRoles contains the default roles for DukDB.

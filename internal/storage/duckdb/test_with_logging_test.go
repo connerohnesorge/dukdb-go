@@ -46,13 +46,13 @@ func TestDebugWithLogging(t *testing.T) {
 
 	if len(rowGroups) > 0 {
 		mbp := rowGroups[0].DataPointers[1]
-		
+
 		// Use the actual ReadColumnDataPointer
 		dp, err := ReadColumnDataPointer(storage.blockManager, mbp)
 		if err != nil {
 			t.Fatalf("ReadColumnDataPointer failed: %v", err)
 		}
-		
+
 		t.Logf("DataPointer result:")
 		t.Logf("  TupleCount: %d", dp.TupleCount)
 		t.Logf("  Block.BlockID: %d", dp.Block.BlockID)

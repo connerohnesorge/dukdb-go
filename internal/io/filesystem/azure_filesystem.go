@@ -190,7 +190,9 @@ func (fs *AzureFileSystem) Open(path string) (File, error) {
 		return nil, err
 	}
 
-	blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	blobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlobClient(blobName)
 
 	return newAzureFileForReading(blobClient, containerName, blobName), nil
 }
@@ -203,7 +205,9 @@ func (fs *AzureFileSystem) Create(path string) (File, error) {
 		return nil, err
 	}
 
-	blockBlobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
+	blockBlobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlockBlobClient(blobName)
 
 	return newAzureFileForWriting(blockBlobClient, containerName, blobName), nil
 }
@@ -223,7 +227,9 @@ func (fs *AzureFileSystem) Stat(path string) (FileInfo, error) {
 	}
 
 	ctx := context.Background()
-	blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	blobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlobClient(blobName)
 
 	props, err := blobClient.GetProperties(ctx, nil)
 	if err != nil {
@@ -242,7 +248,9 @@ func (fs *AzureFileSystem) Remove(path string) error {
 	}
 
 	ctx := context.Background()
-	blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	blobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlobClient(blobName)
 
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
@@ -308,9 +316,12 @@ func (fs *AzureFileSystem) ReadDir(path string) ([]DirEntry, error) {
 	containerClient := fs.client.ServiceClient().NewContainerClient(containerName)
 
 	delimiter := azurePathSeparator
-	pager := containerClient.NewListBlobsHierarchyPager(delimiter, &container.ListBlobsHierarchyOptions{
-		Prefix: &prefix,
-	})
+	pager := containerClient.NewListBlobsHierarchyPager(
+		delimiter,
+		&container.ListBlobsHierarchyOptions{
+			Prefix: &prefix,
+		},
+	)
 
 	entries := make([]DirEntry, 0)
 	for pager.More() {
@@ -375,7 +386,9 @@ func (fs *AzureFileSystem) Exists(path string) (bool, error) {
 	}
 
 	ctx := context.Background()
-	blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	blobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlobClient(blobName)
 
 	_, err = blobClient.GetProperties(ctx, nil)
 	if err != nil {
@@ -543,7 +556,9 @@ func (fs *AzureFileSystem) OpenContext(ctx context.Context, path string) (File, 
 	default:
 	}
 
-	blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	blobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlobClient(blobName)
 
 	return newAzureFileForReadingWithConfig(blobClient, containerName, blobName, fs.config), nil
 }
@@ -562,9 +577,16 @@ func (fs *AzureFileSystem) CreateContext(ctx context.Context, path string) (File
 	default:
 	}
 
-	blockBlobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
+	blockBlobClient := fs.client.ServiceClient().
+		NewContainerClient(containerName).
+		NewBlockBlobClient(blobName)
 
-	return newAzureFileForWritingWithConfig(blockBlobClient, containerName, blobName, fs.config), nil
+	return newAzureFileForWritingWithConfig(
+		blockBlobClient,
+		containerName,
+		blobName,
+		fs.config,
+	), nil
 }
 
 // StatContext returns file info with context support.
@@ -575,7 +597,9 @@ func (fs *AzureFileSystem) StatContext(ctx context.Context, path string) (FileIn
 	}
 
 	statFn := func() (FileInfo, error) {
-		blobClient := fs.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+		blobClient := fs.client.ServiceClient().
+			NewContainerClient(containerName).
+			NewBlobClient(blobName)
 
 		props, err := blobClient.GetProperties(ctx, nil)
 		if err != nil {
@@ -607,9 +631,12 @@ func (fs *AzureFileSystem) ReadDirContext(ctx context.Context, path string) ([]D
 	containerClient := fs.client.ServiceClient().NewContainerClient(containerName)
 
 	delimiter := azurePathSeparator
-	pager := containerClient.NewListBlobsHierarchyPager(delimiter, &container.ListBlobsHierarchyOptions{
-		Prefix: &prefix,
-	})
+	pager := containerClient.NewListBlobsHierarchyPager(
+		delimiter,
+		&container.ListBlobsHierarchyOptions{
+			Prefix: &prefix,
+		},
+	)
 
 	entries := make([]DirEntry, 0)
 	for pager.More() {

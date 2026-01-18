@@ -389,7 +389,12 @@ func TestBlockManager(t *testing.T) {
 		// Block 0 is reserved for metadata, so first allocation returns 1
 		id1, err := bm.AllocateBlock()
 		require.NoError(t, err)
-		assert.Equal(t, uint64(1), id1, "first allocation should skip block 0 (reserved for metadata)")
+		assert.Equal(
+			t,
+			uint64(1),
+			id1,
+			"first allocation should skip block 0 (reserved for metadata)",
+		)
 
 		id2, err := bm.AllocateBlock()
 		require.NoError(t, err)

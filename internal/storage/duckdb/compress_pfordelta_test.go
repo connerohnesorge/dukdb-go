@@ -18,10 +18,10 @@ import (
 // These are ideal candidates for PFOR-DELTA because deltas are constant (1).
 func TestPFORDelta_Sequential(t *testing.T) {
 	tests := []struct {
-		name      string
-		values    []int64
-		expectOK  bool
-		expectBW  uint8 // expected bit width for deltas
+		name     string
+		values   []int64
+		expectOK bool
+		expectBW uint8 // expected bit width for deltas
 	}{
 		{
 			name:     "sequential 0-99",
@@ -311,7 +311,9 @@ func TestPFORDelta_DuckDBInterop(t *testing.T) {
 
 			// Create database with DuckDB CLI
 			createCmd := exec.Command("duckdb", dbPath)
-			createCmd.Stdin = bytes.NewBufferString(fmt.Sprintf("%s\n%s\n", tt.createSQL, tt.insertSQL))
+			createCmd.Stdin = bytes.NewBufferString(
+				fmt.Sprintf("%s\n%s\n", tt.createSQL, tt.insertSQL),
+			)
 			output, err := createCmd.CombinedOutput()
 			require.NoError(t, err, "failed to create database: %s", string(output))
 

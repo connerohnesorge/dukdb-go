@@ -261,14 +261,22 @@ func (w *CatalogWriter) Write() (MetaBlockPointer, error) {
 	// 5. Write sequences
 	for _, sequence := range w.catalog.Sequences {
 		if err := w.writeSequenceEntry(sequence); err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to write sequence %s: %w", sequence.Name, err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to write sequence %s: %w",
+				sequence.Name,
+				err,
+			)
 		}
 	}
 
 	// 6. Write custom types
 	for _, typeEntry := range w.catalog.Types {
 		if err := w.writeTypeEntry(typeEntry); err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to write type %s: %w", typeEntry.Name, err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to write type %s: %w",
+				typeEntry.Name,
+				err,
+			)
 		}
 	}
 
@@ -542,9 +550,9 @@ func (w *CatalogWriter) writeTableStorageMetadata() (map[uint64]TableStorageInfo
 		// The Offset=8 skips the 8-byte next_ptr header at the start of each sub-block
 		storageMap[tableOID] = TableStorageInfo{
 			TablePointer: MetaBlockPointer{
-				BlockID:    0,          // Block 0 (catalog block)
-				BlockIndex: 1,          // Sub-block 1 (after catalog entries in sub-block 0)
-				Offset:     8,          // After the 8-byte next_ptr header
+				BlockID:    0, // Block 0 (catalog block)
+				BlockIndex: 1, // Sub-block 1 (after catalog entries in sub-block 0)
+				Offset:     8, // After the 8-byte next_ptr header
 			},
 			TotalRows: totalRows,
 		}
@@ -811,7 +819,12 @@ func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
 	for i := 1; i < numBlocks; i++ {
 		blockID, err := w.blockManager.AllocateBlock()
 		if err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to allocate block %d/%d: %w", i+1, numBlocks, err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to allocate block %d/%d: %w",
+				i+1,
+				numBlocks,
+				err,
+			)
 		}
 		blockIDs[i] = blockID
 	}
@@ -900,7 +913,11 @@ func (w *CatalogWriter) WriteBinaryFormat() (MetaBlockPointer, error) {
 		}
 
 		if err := w.blockManager.WriteBlock(block); err != nil {
-			return MetaBlockPointer{}, fmt.Errorf("failed to write metadata block %d: %w", blockIDs[i], err)
+			return MetaBlockPointer{}, fmt.Errorf(
+				"failed to write metadata block %d: %w",
+				blockIDs[i],
+				err,
+			)
 		}
 	}
 
@@ -998,7 +1015,11 @@ func (w *CatalogWriter) serializeTableStorageData(rowGroups []*RowGroupPointer) 
 // collectCatalogEntries collects all catalog entries in the correct order.
 // The caller must hold w.mu when calling this method.
 func (w *CatalogWriter) collectCatalogEntries() []CatalogEntry {
-	entries := make([]CatalogEntry, 0, w.catalog.EntryCount()+1) // +1 for potential auto-added schema
+	entries := make(
+		[]CatalogEntry,
+		0,
+		w.catalog.EntryCount()+1,
+	) // +1 for potential auto-added schema
 
 	// Add schemas first
 	for _, schema := range w.catalog.Schemas {
@@ -1151,7 +1172,10 @@ func (w *CatalogWriter) IsClosed() bool {
 
 // getTableStorageSubBlockCount returns the number of sub-blocks needed for a table's storage metadata.
 // This matches the logic in DuckDBStorage.getTableStorageSubBlockCount.
-func (w *CatalogWriter) getTableStorageSubBlockCount(columnCount int, columns []ColumnDefinition) int {
+func (w *CatalogWriter) getTableStorageSubBlockCount(
+	columnCount int,
+	columns []ColumnDefinition,
+) int {
 	if columnCount == 0 {
 		return 0
 	}

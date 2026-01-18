@@ -62,7 +62,9 @@ func (m *testMVCCManager) nextTimestampLocked() uint64 {
 }
 
 // BeginTransaction starts a new MVCC transaction.
-func (m *testMVCCManager) BeginTransaction(isolationLevel parser.IsolationLevel) *testMVCCTransaction {
+func (m *testMVCCManager) BeginTransaction(
+	isolationLevel parser.IsolationLevel,
+) *testMVCCTransaction {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -429,7 +431,11 @@ func TestSnapshotIsolation_OtherUncommittedWritesInvisible(t *testing.T) {
 	// Step 6: T1 still should NOT see the row (committed after T1's snapshot)
 	// T2 was active when T1 started, so its row should remain invisible to T1
 	visibleVersion = chains[0].FindVisibleVersion(visibility, t1Ctx)
-	assert.Nil(t, visibleVersion, "T1 should NOT see T2's row even after T2 commits (committed after T1's snapshot)")
+	assert.Nil(
+		t,
+		visibleVersion,
+		"T1 should NOT see T2's row even after T2 commits (committed after T1's snapshot)",
+	)
 
 	// Cleanup
 	err = mvccMgr.Commit(t1)
@@ -453,7 +459,10 @@ func TestSnapshotIsolation_CommittedBeforeStartVisible(t *testing.T) {
 	mvccMgr := newTestMVCCManager(mockClock)
 
 	// Create a test table
-	table := NewTable("test_committed_visible", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	table := NewTable(
+		"test_committed_visible",
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+	)
 
 	// Step 1: T1 inserts and commits a row
 	mockClock.Advance(time.Millisecond)
@@ -572,7 +581,10 @@ func TestSnapshotIsolation_DeleteVisibility(t *testing.T) {
 	mvccMgr := newTestMVCCManager(mockClock)
 
 	// Create a test table
-	table := NewTable("test_delete_visibility", []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	table := NewTable(
+		"test_delete_visibility",
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+	)
 
 	// Step 1: T1 inserts and commits a row
 	mockClock.Advance(time.Millisecond)
@@ -630,7 +642,11 @@ func TestSnapshotIsolation_DeleteVisibility(t *testing.T) {
 
 	// For proper snapshot isolation, T2 should still see the row
 	// because the delete was committed after T2's snapshot
-	require.NotNil(t, visibleVersion, "T2 should still see the row (delete happened after T2's snapshot)")
+	require.NotNil(
+		t,
+		visibleVersion,
+		"T2 should still see the row (delete happened after T2's snapshot)",
+	)
 	assert.Equal(t, int32(100), visibleVersion.Data[0])
 	assert.Equal(t, "to_be_deleted", visibleVersion.Data[1])
 
@@ -713,7 +729,12 @@ func TestSnapshotIsolation_UpdateCreatesNewVersion(t *testing.T) {
 
 	// T2 should see the OLD version "A", not the new version "B"
 	// because T3's update committed after T2's snapshot
-	assert.Equal(t, "A", visibleVersion.Data[1], "T2 should see value A (version at T2's snapshot time)")
+	assert.Equal(
+		t,
+		"A",
+		visibleVersion.Data[1],
+		"T2 should see value A (version at T2's snapshot time)",
+	)
 	assert.Equal(t, int32(1), visibleVersion.Data[0], "T2 should see the old integer value")
 
 	// Note: ReadVersioned uses an internal versionedTxnContext that doesn't have

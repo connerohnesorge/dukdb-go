@@ -152,8 +152,14 @@ func TestLocalFileSystem_ReadDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create some files and directories
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("1"), filePermission))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("2"), filePermission))
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("1"), filePermission),
+	)
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("2"), filePermission),
+	)
 	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "subdir"), dirPermission))
 
 	fs := NewLocalFileSystem("")
@@ -533,7 +539,10 @@ func TestLocalFileSystem_BasePath(t *testing.T) {
 	subDir := filepath.Join(tmpDir, "subdir")
 
 	require.NoError(t, os.Mkdir(subDir, dirPermission))
-	require.NoError(t, os.WriteFile(filepath.Join(subDir, "file.txt"), []byte("test"), filePermission))
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(subDir, "file.txt"), []byte("test"), filePermission),
+	)
 
 	fs := NewLocalFileSystem(subDir)
 

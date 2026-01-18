@@ -1,102 +1,66 @@
-# Iceberg Test Fixtures
+# Iceberg Test Infrastructure
 
-This directory contains test Iceberg tables used for integration testing of the dukdb-go Iceberg reader implementation.
+This directory contains Docker Compose setup and scripts for comprehensive Iceberg compatibility testing.
 
-## Test Tables
+## Overview
 
-### simple_table
+The test infrastructure includes:
+1. **MinIO** - S3-compatible storage for cloud storage testing
+2. **Fake GCS Server** - GCS emulator for Google Cloud Storage testing
+3. **Apache Spark** - Generate Spark-compatible Iceberg tables
+4. **Apache Flink** - Generate Flink-compatible Iceberg tables
 
-A basic unpartitioned Iceberg table with 100 rows and a single snapshot.
+## Prerequisites
 
-**Schema:**
-- `id` (LONG, required): Row identifier (1-100)
-- `name` (STRING, nullable): Name field (null every 10th row)
-- `value` (DOUBLE, nullable): Numeric value (null every 5th row)
+- Docker and Docker Compose installed
+- Go 1.21+ for running tests
+- At least 4GB RAM available for Docker
 
-**Properties:**
-- Format version: 2
-- Snapshots: 1
-- Total rows: 100
-- Data files: 1
+## Quick Start
 
-### time_travel_table
-
-An Iceberg table with 3 snapshots demonstrating data evolution over time.
-
-**Schema:**
-- `id` (LONG, required): Row identifier
-- `name` (STRING, nullable): Name field
-- `value` (DOUBLE, nullable): Numeric value
-
-**Snapshots:**
-
-| Snapshot ID | Timestamp (ms) | Rows in Snapshot | Cumulative Rows |
-|-------------|----------------|------------------|-----------------|
-| 1000000001  | 1700000000000  | 50 (id 1-50)     | 50              |
-| 1000000002  | 1700003600000  | 30 (id 51-80)    | 80              |
-| 1000000003  | 1700007200000  | 20 (id 81-100)   | 100             |
-
-**Time Travel Testing:**
-- Query at snapshot 1000000001 returns 50 rows
-- Query at snapshot 1000000002 returns 80 rows
-- Query at snapshot 1000000003 returns 100 rows (current)
-
-## Regenerating Fixtures
-
-If you need to regenerate the test fixtures:
+### Start All Services
 
 ```bash
-cd internal/io/iceberg/testdata
-uv run --with pyarrow --with fastavro python3 generate_fixtures.py
+docker compose up -d
 ```
 
-Or with pip:
+### Run Cloud Storage Tests
 
 ```bash
-pip install pyarrow fastavro
-python3 generate_fixtures.py
+# From the iceberg directory
+go test -v -run TestCloudStorage
 ```
 
-### Requirements
-- Python 3.8+
-- pyarrow
-- fastavro
+### Run Spark Compatibility Tests
 
-## File Structure
+```bash
+# Start Spark and generate tables
+docker compose up -d spark
+docker exec iceberg-spark /opt/spark/bin/spark-submit \
+  --master local[*] \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.3 \
+  /opt/spark-scripts/generate_iceberg_tables.py
 
-Each test table has the following structure:
-
-```
-<table_name>/
-  metadata/
-    v<N>.metadata.json    # Table metadata (Iceberg format v2)
-    version-hint.text     # Points to current metadata version
-    snap-*-manifest-list.avro  # Manifest list files
-    snap-*-1-manifest.avro     # Manifest files
-  data/
-    *.parquet             # Parquet data files
+# Run tests
+go test -v -run TestSparkGenerated
 ```
 
-## Usage in Tests
+### Run Flink Compatibility Tests
 
-The integration tests in `integration_test.go` automatically locate and use these fixtures. The tests update the absolute paths in metadata at runtime to match the test environment.
+```bash
+# Start Flink and generate tables
+docker compose up -d flink-jobmanager flink-taskmanager
+sleep 20  # Wait for Flink to initialize
+docker exec iceberg-flink-jobmanager /opt/flink/bin/sql-client.sh \
+  -f /opt/flink-scripts/generate_iceberg_tables.sql
 
-```go
-func TestExample(t *testing.T) {
-    tablePath := getSimpleTablePath(t)
-    updateMetadataLocations(t, tablePath)
-
-    reader, err := NewReader(ctx, tablePath, nil)
-    // ...
-}
+# Run tests
+go test -v -run TestFlinkGenerated
 ```
 
-## Notes
+## References
 
-- Fixtures use absolute paths which are updated at test time
-- Data is deterministic for reproducible tests
-- Parquet files use SNAPPY compression
-- Timestamps are fixed for reproducibility:
-  - 1700000000000 (Nov 14, 2023 22:13:20 UTC)
-  - 1700003600000 (Nov 14, 2023 23:13:20 UTC)
-  - 1700007200000 (Nov 15, 2023 00:13:20 UTC)
+- [Apache Iceberg Specification](https://iceberg.apache.org/spec/)
+- [Iceberg Spark Runtime](https://iceberg.apache.org/docs/latest/spark/)
+- [Iceberg Flink](https://iceberg.apache.org/docs/latest/flink/)
+- [MinIO Documentation](https://min.io/docs/)

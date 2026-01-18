@@ -135,7 +135,12 @@ func TestSelectCompression_DictionaryData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SelectCompression(tt.data, tt.typeID)
-			assert.Equal(t, CompressionDictionary, result, "data with few unique values should return DICTIONARY")
+			assert.Equal(
+				t,
+				CompressionDictionary,
+				result,
+				"data with few unique values should return DICTIONARY",
+			)
 		})
 	}
 }
@@ -186,7 +191,12 @@ func TestSelectCompression_PFORDeltaData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SelectCompression(tt.data, tt.typeID)
-			assert.Equal(t, CompressionPFORDelta, result, "sorted integers should return PFOR_DELTA")
+			assert.Equal(
+				t,
+				CompressionPFORDelta,
+				result,
+				"sorted integers should return PFOR_DELTA",
+			)
 		})
 	}
 }
@@ -230,7 +240,12 @@ func TestSelectCompression_BitPackingData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SelectCompression(tt.data, tt.typeID)
-			assert.Equal(t, CompressionBitPacking, result, "random small integers should return BITPACKING")
+			assert.Equal(
+				t,
+				CompressionBitPacking,
+				result,
+				"random small integers should return BITPACKING",
+			)
 		})
 	}
 }
@@ -287,7 +302,12 @@ func TestSelectCompression_UncompressedData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SelectCompression(tt.data, tt.typeID)
-			assert.Equal(t, CompressionUncompressed, result, "random high-entropy data should return UNCOMPRESSED")
+			assert.Equal(
+				t,
+				CompressionUncompressed,
+				result,
+				"random high-entropy data should return UNCOMPRESSED",
+			)
 		})
 	}
 }

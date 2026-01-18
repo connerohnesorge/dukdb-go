@@ -1,32 +1,32 @@
 // Package compatibility provides a test framework for verifying dukdb-go
 // compatibility with the duckdb-go reference implementation.
 //
-// Window Function Benchmarks
+// # Window Function Benchmarks
 //
 // This file contains performance benchmarks for window function operations.
 // The benchmarks measure:
 //
 // 1. Large Single Partition Performance (Tasks 6.1-6.4)
-//    - 100K rows in a single partition
-//    - ROW_NUMBER, SUM window functions
-//    - Target: < 1 second for 100K rows
+//   - 100K rows in a single partition
+//   - ROW_NUMBER, SUM window functions
+//   - Target: < 1 second for 100K rows
 //
 // 2. Many Partitions Performance (Tasks 6.5-6.8)
-//    - 100K rows across 10K partitions (10 rows per partition)
-//    - Measures partitioning overhead
-//    - Target: < 2 seconds for 100K rows / 10K partitions
+//   - 100K rows across 10K partitions (10 rows per partition)
+//   - Measures partitioning overhead
+//   - Target: < 2 seconds for 100K rows / 10K partitions
 //
 // 3. Frame Overhead (Tasks 6.9-6.11)
-//    - Various frame sizes to measure sliding window overhead
-//    - Documents O(n) vs O(n^2) behavior for different cases
+//   - Various frame sizes to measure sliding window overhead
+//   - Documents O(n) vs O(n^2) behavior for different cases
 //
 // Performance Characteristics:
 //
-// - O(n): Row-by-row ranking functions (ROW_NUMBER, RANK, DENSE_RANK)
-// - O(n): Full partition aggregates (no sliding window)
-// - O(n^2) worst case: Sliding windows without optimization
-//   (each row computes aggregate over potentially large frame)
-// - Partition overhead: O(k) where k is number of partitions
+//   - O(n): Row-by-row ranking functions (ROW_NUMBER, RANK, DENSE_RANK)
+//   - O(n): Full partition aggregates (no sliding window)
+//   - O(n^2) worst case: Sliding windows without optimization
+//     (each row computes aggregate over potentially large frame)
+//   - Partition overhead: O(k) where k is number of partitions
 //
 // Run benchmarks with:
 //

@@ -9,15 +9,21 @@ import (
 // ============================================================================
 
 func TestDecorrelation_EXISTS_Correctness_BasicMatch(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_EXISTS_Correctness_NoMatches(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_EXISTS_Correctness_MultipleRightRows(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -25,11 +31,15 @@ func TestDecorrelation_EXISTS_Correctness_MultipleRightRows(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_NOT_EXISTS_Correctness_BasicNoMatch(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_NOT_EXISTS_Correctness_AllMatches(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -37,15 +47,21 @@ func TestDecorrelation_NOT_EXISTS_Correctness_AllMatches(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_SCALAR_Correctness_SingleMatch(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_SCALAR_Correctness_NoMatch(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_SCALAR_Correctness_MultipleMatches_Error(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -53,11 +69,15 @@ func TestDecorrelation_SCALAR_Correctness_MultipleMatches_Error(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_IN_Correctness_WithMatches(t *testing.T) {
-	t.Skip("IN subquery execution not yet implemented - requires subquery expression execution and IN operator correlation support")
+	t.Skip(
+		"IN subquery execution not yet implemented - requires subquery expression execution and IN operator correlation support",
+	)
 }
 
 func TestDecorrelation_IN_Correctness_NoMatches(t *testing.T) {
-	t.Skip("IN subquery execution not yet implemented - requires subquery expression execution and IN operator correlation support")
+	t.Skip(
+		"IN subquery execution not yet implemented - requires subquery expression execution and IN operator correlation support",
+	)
 }
 
 // ============================================================================
@@ -65,11 +85,15 @@ func TestDecorrelation_IN_Correctness_NoMatches(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_NOT_IN_Correctness_WithoutMatches(t *testing.T) {
-	t.Skip("NOT IN subquery execution not yet implemented - requires subquery expression execution and NOT IN operator correlation support")
+	t.Skip(
+		"NOT IN subquery execution not yet implemented - requires subquery expression execution and NOT IN operator correlation support",
+	)
 }
 
 func TestDecorrelation_NOT_IN_Correctness_WithNullSemantics(t *testing.T) {
-	t.Skip("NOT IN subquery execution not yet implemented - requires subquery expression execution and NOT IN operator correlation support")
+	t.Skip(
+		"NOT IN subquery execution not yet implemented - requires subquery expression execution and NOT IN operator correlation support",
+	)
 }
 
 // ============================================================================
@@ -77,11 +101,15 @@ func TestDecorrelation_NOT_IN_Correctness_WithNullSemantics(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_ANY_Correctness_GreaterThan(t *testing.T) {
-	t.Skip("ANY/ALL expression parsing not yet supported - requires parser and executor implementation for comparison quantifiers")
+	t.Skip(
+		"ANY/ALL expression parsing not yet supported - requires parser and executor implementation for comparison quantifiers",
+	)
 }
 
 func TestDecorrelation_ALL_Correctness_GreaterThan(t *testing.T) {
-	t.Skip("ANY/ALL expression parsing not yet supported - requires parser and executor implementation for comparison quantifiers")
+	t.Skip(
+		"ANY/ALL expression parsing not yet supported - requires parser and executor implementation for comparison quantifiers",
+	)
 }
 
 // ============================================================================
@@ -89,7 +117,9 @@ func TestDecorrelation_ALL_Correctness_GreaterThan(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_MultiLevel_Correlation(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - nested subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - nested subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -107,7 +137,9 @@ func TestDecorrelation_LATERAL_Correctness(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EXPLAIN_EXISTS_Plan(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - EXPLAIN for subquery expressions requires full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - EXPLAIN for subquery expressions requires full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -115,7 +147,9 @@ func TestDecorrelation_EXPLAIN_EXISTS_Plan(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EXPLAIN_SCALAR_Plan(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - EXPLAIN for scalar subquery expressions requires full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - EXPLAIN for scalar subquery expressions requires full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -123,7 +157,9 @@ func TestDecorrelation_EXPLAIN_SCALAR_Plan(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EXPLAIN_IN_Plan(t *testing.T) {
-	t.Skip("IN subquery execution not yet implemented - EXPLAIN for IN subquery expressions requires full executor support for decorrelated execution")
+	t.Skip(
+		"IN subquery execution not yet implemented - EXPLAIN for IN subquery expressions requires full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -131,7 +167,9 @@ func TestDecorrelation_EXPLAIN_IN_Plan(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_Cardinality_Estimates(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - cardinality estimation for subquery expressions requires full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - cardinality estimation for subquery expressions requires full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -139,15 +177,21 @@ func TestDecorrelation_Cardinality_Estimates(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EdgeCase_EmptySubquery_EXISTS(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_EdgeCase_EmptySubquery_NOT_EXISTS(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_EdgeCase_EmptySubquery_SCALAR(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -155,11 +199,15 @@ func TestDecorrelation_EdgeCase_EmptySubquery_SCALAR(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EdgeCase_NullCorrelation_EXISTS(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 func TestDecorrelation_EdgeCase_NullCorrelation_NOT_EXISTS(t *testing.T) {
-	t.Skip("BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundExistsExpr execution not yet implemented - subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -167,7 +215,9 @@ func TestDecorrelation_EdgeCase_NullCorrelation_NOT_EXISTS(t *testing.T) {
 // ============================================================================
 
 func TestDecorrelation_EdgeCase_SCALAR_MultipleRows(t *testing.T) {
-	t.Skip("BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution")
+	t.Skip(
+		"BoundSelectStmt execution not yet implemented - scalar subquery expressions require full executor support for decorrelated execution",
+	)
 }
 
 // ============================================================================
@@ -214,7 +264,9 @@ func TestDecorrelation_RecursiveCTE_WithCorrelation_BaseCase(t *testing.T) {
 	//   UNION ALL
 	//   SELECT c.id, cte.path || '/' || c.name FROM categories c JOIN cte ON c.parent_id = cte.id
 	// ) SELECT * FROM cte
-	t.Skip("Recursive CTE support depends on full binder/executor integration with correlation handling")
+	t.Skip(
+		"Recursive CTE support depends on full binder/executor integration with correlation handling",
+	)
 }
 
 func TestDecorrelation_RecursiveCTE_WithCorrelation_MultipleConditions(t *testing.T) {
@@ -224,7 +276,9 @@ func TestDecorrelation_RecursiveCTE_WithCorrelation_MultipleConditions(t *testin
 	//   UNION ALL
 	//   SELECT id FROM cte WHERE level < 10
 	// ) SELECT * FROM cte
-	t.Skip("Recursive CTE support with multiple base case correlations depends on full binder/executor integration")
+	t.Skip(
+		"Recursive CTE support with multiple base case correlations depends on full binder/executor integration",
+	)
 }
 
 func TestDecorrelation_RecursiveCTE_WithCorrelation_NullHandling(t *testing.T) {
@@ -280,7 +334,9 @@ func TestDecorrelation_MixedPattern_MultipleCorrelations_SameTable(t *testing.T)
 	// Expected transformation:
 	//   SEMI JOIN t1.x = t2.x AND t1.y = t2.y
 	//   delim_columns: [t1.x, t1.y]
-	t.Skip("Mixed correlation patterns depend on full binder/executor integration with multiple join conditions")
+	t.Skip(
+		"Mixed correlation patterns depend on full binder/executor integration with multiple join conditions",
+	)
 }
 
 func TestDecorrelation_MixedPattern_MultipleCorrelations_DifferentTables(t *testing.T) {
@@ -293,7 +349,9 @@ func TestDecorrelation_MixedPattern_MultipleCorrelations_DifferentTables(t *test
 	//   Outer side produces (t1.x, t3.z) for each combination
 	//   SEMI JOIN ON t2.x = t1.x AND t2.z = t3.z
 	//   delim_columns: [t1.x, t3.z]
-	t.Skip("Mixed correlation patterns with different tables depend on full binder/executor with column tracking")
+	t.Skip(
+		"Mixed correlation patterns with different tables depend on full binder/executor with column tracking",
+	)
 }
 
 func TestDecorrelation_MixedPattern_MultipleOperators(t *testing.T) {
@@ -328,7 +386,9 @@ func TestDecorrelation_MixedPattern_SCALAR_MultipleCorrelations(t *testing.T) {
 	// Expected transformation:
 	//   LEFT JOIN (SELECT cust_id, status, SUM(amount) FROM orders GROUP BY cust_id, status)
 	//   ON o.cust_id = c.id AND o.status = c.status
-	t.Skip("Scalar subqueries with multiple correlations depend on full binder/executor integration")
+	t.Skip(
+		"Scalar subqueries with multiple correlations depend on full binder/executor integration",
+	)
 }
 
 func TestDecorrelation_MixedPattern_NullHandling_AnyNull(t *testing.T) {
@@ -345,5 +405,7 @@ func TestDecorrelation_MixedPattern_Cardinality_Estimation(t *testing.T) {
 	// Test cardinality estimation for mixed correlation patterns
 	// Multiple independent correlations: selectivity = sel(cond1) * sel(cond2)
 	// Multiple correlated correlations: use multi-column statistics (task 6.x)
-	t.Skip("Cardinality estimation for mixed patterns depends on multi-column statistics (task 6.x)")
+	t.Skip(
+		"Cardinality estimation for mixed patterns depends on multi-column statistics (task 6.x)",
+	)
 }

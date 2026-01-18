@@ -30,7 +30,10 @@ type NotificationDeliveryContext struct {
 }
 
 // NewNotificationDeliveryContext creates a new notification delivery context.
-func NewNotificationDeliveryContext(sessionID uint64, hub *NotificationHub) *NotificationDeliveryContext {
+func NewNotificationDeliveryContext(
+	sessionID uint64,
+	hub *NotificationHub,
+) *NotificationDeliveryContext {
 	return &NotificationDeliveryContext{
 		sessionID: sessionID,
 		hub:       hub,
@@ -97,12 +100,17 @@ func (ndc *NotificationDeliveryContext) HasPendingNotifications() bool {
 type sessionNotificationContextKey struct{}
 
 // NotificationDeliveryContextFromContext retrieves the notification delivery context from the context.
-func NotificationDeliveryContextFromContext(ctx context.Context) (*NotificationDeliveryContext, bool) {
+func NotificationDeliveryContextFromContext(
+	ctx context.Context,
+) (*NotificationDeliveryContext, bool) {
 	ndc, ok := ctx.Value(sessionNotificationContextKey{}).(*NotificationDeliveryContext)
 	return ndc, ok
 }
 
 // ContextWithNotificationDelivery adds the notification delivery context to the context.
-func ContextWithNotificationDelivery(ctx context.Context, ndc *NotificationDeliveryContext) context.Context {
+func ContextWithNotificationDelivery(
+	ctx context.Context,
+	ndc *NotificationDeliveryContext,
+) context.Context {
 	return context.WithValue(ctx, sessionNotificationContextKey{}, ndc)
 }

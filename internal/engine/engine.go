@@ -653,7 +653,10 @@ func (t *Transaction) CreateSavepoint(name string, createdAt time.Time) error {
 // RollbackToSavepoint rolls back the transaction to the specified savepoint.
 // This undoes all operations performed after the savepoint was created.
 // The savepoint and any nested savepoints are released after the rollback.
-func (t *Transaction) RollbackToSavepoint(name string, undoFunc func(op UndoOperation) error) error {
+func (t *Transaction) RollbackToSavepoint(
+	name string,
+	undoFunc func(op UndoOperation) error,
+) error {
 	if !t.active {
 		return errors.New("cannot rollback to savepoint: transaction is not active")
 	}
@@ -736,7 +739,10 @@ type TransactionContextAdapter struct {
 }
 
 // NewTransactionContextAdapter creates a new TransactionContextAdapter.
-func NewTransactionContextAdapter(txn *Transaction, txnMgr *TransactionManager) *TransactionContextAdapter {
+func NewTransactionContextAdapter(
+	txn *Transaction,
+	txnMgr *TransactionManager,
+) *TransactionContextAdapter {
 	return &TransactionContextAdapter{
 		txn:    txn,
 		txnMgr: txnMgr,
@@ -940,12 +946,12 @@ func init() {
 //   - Storage marker (STRG)
 //   - Number of tables (uint32)
 //   - For each table:
-//     - Table name length (uint32) + name bytes
-//     - Column count (uint16)
-//     - Column types (uint8 each)
-//     - Row group count (uint32)
-//     - For each row group:
-//       - Serialized row group data
+//   - Table name length (uint32) + name bytes
+//   - Column count (uint16)
+//   - Column types (uint8 each)
+//   - Row group count (uint32)
+//   - For each row group:
+//   - Serialized row group data
 func (e *Engine) exportDatabase() ([]byte, error) {
 	// Export catalog first
 	catalogData, err := e.catalog.Export()
@@ -1008,7 +1014,12 @@ func (e *Engine) exportDatabase() ([]byte, error) {
 		for i, rg := range rowGroups {
 			rgData, err := table.ExportRowGroup(rg)
 			if err != nil {
-				return nil, fmt.Errorf("failed to export row group %d of table %s: %w", i, name, err)
+				return nil, fmt.Errorf(
+					"failed to export row group %d of table %s: %w",
+					i,
+					name,
+					err,
+				)
 			}
 
 			// Write row group data length and data
@@ -1179,7 +1190,12 @@ func (e *Engine) importDatabase(data []byte) error {
 			// Import the row group
 			rg, err := table.ImportRowGroup(rgData)
 			if err != nil {
-				return fmt.Errorf("failed to import row group %d of table %s: %w", j, tableName, err)
+				return fmt.Errorf(
+					"failed to import row group %d of table %s: %w",
+					j,
+					tableName,
+					err,
+				)
 			}
 
 			// Add to table

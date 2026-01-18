@@ -488,9 +488,9 @@ func TestParallelAggregateBasic(t *testing.T) {
 
 	agg := NewParallelAggregate(
 		source,
-		[]int{0},                          // Group by column 0
-		[]string{"group"},                 // Group column name
-		[]dukdb.Type{dukdb.TYPE_VARCHAR},  // Group column type
+		[]int{0},                         // Group by column 0
+		[]string{"group"},                // Group column name
+		[]dukdb.Type{dukdb.TYPE_VARCHAR}, // Group column type
 		aggregates,
 		pool.NumWorkers,
 	)
@@ -500,7 +500,7 @@ func TestParallelAggregateBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.Equal(t, 2, result.Count())    // 2 groups: A and B
+	assert.Equal(t, 2, result.Count())       // 2 groups: A and B
 	assert.Equal(t, 3, result.ColumnCount()) // group + sum + count
 
 	// Collect results
@@ -714,9 +714,9 @@ func TestParallelAggregateAllAggTypes(t *testing.T) {
 	assert.Equal(t, 1, result.Count())
 
 	// Verify all aggregates
-	assert.Equal(t, 60.0, result.GetValue(0, 1))  // sum
-	assert.Equal(t, int64(3), result.GetValue(0, 2)) // count
-	assert.Equal(t, 20.0, result.GetValue(0, 3))  // avg
+	assert.Equal(t, 60.0, result.GetValue(0, 1))      // sum
+	assert.Equal(t, int64(3), result.GetValue(0, 2))  // count
+	assert.Equal(t, 20.0, result.GetValue(0, 3))      // avg
 	assert.Equal(t, int64(10), result.GetValue(0, 4)) // min
 	assert.Equal(t, int64(30), result.GetValue(0, 5)) // max
 	assert.Equal(t, int64(10), result.GetValue(0, 6)) // first
@@ -754,11 +754,11 @@ func TestSimpleAggregation(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, result.Count())
-	assert.Equal(t, 150.0, result.GetValue(0, 0))    // sum
-	assert.Equal(t, int64(5), result.GetValue(0, 1)) // count
-	assert.Equal(t, 30.0, result.GetValue(0, 2))     // avg
-	assert.Equal(t, int64(10), result.GetValue(0, 3))   // min
-	assert.Equal(t, int64(50), result.GetValue(0, 4))   // max
+	assert.Equal(t, 150.0, result.GetValue(0, 0))     // sum
+	assert.Equal(t, int64(5), result.GetValue(0, 1))  // count
+	assert.Equal(t, 30.0, result.GetValue(0, 2))      // avg
+	assert.Equal(t, int64(10), result.GetValue(0, 3)) // min
+	assert.Equal(t, int64(50), result.GetValue(0, 4)) // max
 }
 
 // TestParallelAggregateConcurrency tests concurrent access to aggregation.

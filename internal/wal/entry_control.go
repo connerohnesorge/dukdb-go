@@ -217,7 +217,7 @@ func (e *FlushEntry) Deserialize(
 type SavepointEntry struct {
 	txnID     uint64
 	Name      string
-	UndoIndex int   // Position in undo log when savepoint was created
+	UndoIndex int // Position in undo log when savepoint was created
 	Timestamp int64
 }
 
@@ -364,7 +364,7 @@ func (e *ReleaseSavepointEntry) Deserialize(
 type RollbackSavepointEntry struct {
 	txnID     uint64
 	Name      string
-	UndoIndex int   // Position rolled back to
+	UndoIndex int // Position rolled back to
 	Timestamp int64
 }
 

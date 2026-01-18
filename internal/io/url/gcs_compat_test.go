@@ -132,7 +132,12 @@ func TestGCSURLSchemeEquivalence(t *testing.T) {
 				parsed, err := Parse(urlStr)
 				require.NoError(t, err)
 
-				assert.Equal(t, p.bucket, parsed.Bucket(), "Bucket should be identical across schemes")
+				assert.Equal(
+					t,
+					p.bucket,
+					parsed.Bucket(),
+					"Bucket should be identical across schemes",
+				)
 				assert.Equal(t, p.object, parsed.Key(), "Object should be identical across schemes")
 				assert.True(t, parsed.IsGCS(), "Both schemes should return true for IsGCS()")
 				assert.True(t, parsed.IsCloudScheme(), "Both should be cloud schemes")
@@ -164,8 +169,18 @@ func TestGCSURLSchemeEquivalenceSameBucketKey(t *testing.T) {
 			require.NoError(t, err)
 
 			// Core properties must match
-			assert.Equal(t, gsParsed.Bucket(), gcsParsed.Bucket(), "Bucket should match between gs:// and gcs://")
-			assert.Equal(t, gsParsed.Key(), gcsParsed.Key(), "Key should match between gs:// and gcs://")
+			assert.Equal(
+				t,
+				gsParsed.Bucket(),
+				gcsParsed.Bucket(),
+				"Bucket should match between gs:// and gcs://",
+			)
+			assert.Equal(
+				t,
+				gsParsed.Key(),
+				gcsParsed.Key(),
+				"Key should match between gs:// and gcs://",
+			)
 			assert.Equal(t, gsParsed.IsGCS(), gcsParsed.IsGCS(), "IsGCS() should match")
 		})
 	}

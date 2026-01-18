@@ -168,7 +168,9 @@ func (m *mockCatalog) GetIndexesForTable(schemaName, tableName string) []*catalo
 	return m.catalog.GetIndexesForTable(schemaName, tableName)
 }
 
-func (m *mockCatalog) GetSequenceInSchema(schemaName, sequenceName string) (*catalog.SequenceDef, bool) {
+func (m *mockCatalog) GetSequenceInSchema(
+	schemaName, sequenceName string,
+) (*catalog.SequenceDef, bool) {
 	return m.catalog.GetSequenceInSchema(schemaName, sequenceName)
 }
 
@@ -181,7 +183,9 @@ func createTestCatalog() *mockCatalog {
 		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER).WithNullable(false),
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR).WithNullable(false),
 		catalog.NewColumnDef("email", dukdb.TYPE_VARCHAR).WithNullable(true),
-		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).WithNullable(true).WithDefault("CURRENT_TIMESTAMP"),
+		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).
+			WithNullable(true).
+			WithDefault("CURRENT_TIMESTAMP"),
 	}
 	usersTable := catalog.NewTableDef("users", usersCols)
 	_ = usersTable.SetPrimaryKey([]string{"id"})
@@ -285,7 +289,9 @@ func TestQueryColumns(t *testing.T) {
 	})
 
 	t.Run("check data types", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -295,7 +301,9 @@ func TestQueryColumns(t *testing.T) {
 	})
 
 	t.Run("check nullable column", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -368,14 +376,18 @@ func TestQueryTableConstraints(t *testing.T) {
 	})
 
 	t.Run("filter by table name", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.table_constraints WHERE table_name = 'users'")
+		result := is.Query(
+			"SELECT * FROM information_schema.table_constraints WHERE table_name = 'users'",
+		)
 		require.NotNil(t, result)
 		// users has primary key + unique index on email
 		assert.Len(t, result.Rows, 2)
 	})
 
 	t.Run("filter by constraint type", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.table_constraints WHERE constraint_type = 'PRIMARY KEY'")
+		result := is.Query(
+			"SELECT * FROM information_schema.table_constraints WHERE constraint_type = 'PRIMARY KEY'",
+		)
 		require.NotNil(t, result)
 		assert.Len(t, result.Rows, 2)
 	})
@@ -396,7 +408,9 @@ func TestQueryKeyColumnUsage(t *testing.T) {
 	})
 
 	t.Run("filter by constraint name", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.key_column_usage WHERE constraint_name = 'users_pkey'")
+		result := is.Query(
+			"SELECT * FROM information_schema.key_column_usage WHERE constraint_name = 'users_pkey'",
+		)
 		require.NotNil(t, result)
 		assert.Len(t, result.Rows, 1)
 		assert.Equal(t, "id", result.Rows[0]["column_name"])

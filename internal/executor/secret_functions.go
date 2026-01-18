@@ -96,7 +96,15 @@ func (e *Executor) executeDuckDBSecrets(
 	plan *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
 	// Define result columns
-	columns := []string{"name", "type", "provider", "persistent", "storage", "scope", "secret_string"}
+	columns := []string{
+		"name",
+		"type",
+		"provider",
+		"persistent",
+		"storage",
+		"scope",
+		"secret_string",
+	}
 
 	// Get the secret manager
 	mgr := e.getSecretManager()
@@ -186,26 +194,26 @@ func redactedSecretString(s *secret.Secret) string {
 func redactValue(key, value string) string {
 	// List of sensitive keys that should be fully redacted
 	sensitiveKeys := map[string]bool{
-		"secret":                 true,
-		"secret_access_key":      true,
-		"account_key":            true,
-		"client_secret":          true,
-		"bearer_token":           true,
-		"connection_string":      true,
-		"service_account_json":   true,
-		"session_token":          true,
-		"password":               true,
-		"api_key":                true,
-		"token":                  true,
+		"secret":               true,
+		"secret_access_key":    true,
+		"account_key":          true,
+		"client_secret":        true,
+		"bearer_token":         true,
+		"connection_string":    true,
+		"service_account_json": true,
+		"session_token":        true,
+		"password":             true,
+		"api_key":              true,
+		"token":                true,
 	}
 
 	// List of keys that should be partially redacted
 	partialKeys := map[string]bool{
-		"key_id":           true,
-		"access_key_id":    true,
-		"account_name":     true,
-		"client_id":        true,
-		"tenant_id":        true,
+		"key_id":        true,
+		"access_key_id": true,
+		"account_name":  true,
+		"client_id":     true,
+		"tenant_id":     true,
 	}
 
 	keyLower := strings.ToLower(key)

@@ -12,7 +12,8 @@ import (
 // For example, values in the range 0-15 only need 4 bits per value, saving 50% vs 8-bit storage.
 //
 // Format:
-//   [bit_width:uint8][packed_data:bytes]
+//
+//	[bit_width:uint8][packed_data:bytes]
 //
 // The bit_width specifies how many bits each value uses (1-64).
 // Values are packed sequentially into bytes, potentially spanning byte boundaries.
@@ -39,7 +40,9 @@ func NewBitPackCodecAuto(data []byte, valueSize int) *BitPackCodec {
 	}
 
 	if len(data)%valueSize != 0 {
-		panic(fmt.Sprintf("data length %d is not a multiple of value size %d", len(data), valueSize))
+		panic(
+			fmt.Sprintf("data length %d is not a multiple of value size %d", len(data), valueSize),
+		)
 	}
 
 	// Find the maximum value to determine required bit width
@@ -102,7 +105,11 @@ func (c *BitPackCodec) Compress(data []byte) ([]byte, error) {
 
 	// Validate input size
 	if len(data)%valueSize != 0 {
-		return nil, fmt.Errorf("data length %d is not a multiple of value size %d", len(data), valueSize)
+		return nil, fmt.Errorf(
+			"data length %d is not a multiple of value size %d",
+			len(data),
+			valueSize,
+		)
 	}
 
 	numValues := len(data) / valueSize
@@ -128,13 +135,27 @@ func (c *BitPackCodec) Compress(data []byte) ([]byte, error) {
 			val = uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
 		case 5:
 			// Handle 5-byte values
-			val = uint64(binary.LittleEndian.Uint32(data[offset:offset+4])) | uint64(data[offset+4])<<32
+			val = uint64(
+				binary.LittleEndian.Uint32(data[offset:offset+4]),
+			) | uint64(
+				data[offset+4],
+			)<<32
 		case 6:
 			// Handle 6-byte values
-			val = uint64(binary.LittleEndian.Uint32(data[offset:offset+4])) | uint64(binary.LittleEndian.Uint16(data[offset+4:offset+6]))<<32
+			val = uint64(
+				binary.LittleEndian.Uint32(data[offset:offset+4]),
+			) | uint64(
+				binary.LittleEndian.Uint16(data[offset+4:offset+6]),
+			)<<32
 		case 7:
 			// Handle 7-byte values
-			val = uint64(binary.LittleEndian.Uint32(data[offset:offset+4])) | uint64(binary.LittleEndian.Uint16(data[offset+4:offset+6]))<<32 | uint64(data[offset+6])<<48
+			val = uint64(
+				binary.LittleEndian.Uint32(data[offset:offset+4]),
+			) | uint64(
+				binary.LittleEndian.Uint16(data[offset+4:offset+6]),
+			)<<32 | uint64(
+				data[offset+6],
+			)<<48
 		case 8:
 			val = binary.LittleEndian.Uint64(data[offset : offset+8])
 		}
@@ -198,7 +219,11 @@ func (c *BitPackCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 	}
 
 	if destSize%valueSize != 0 {
-		return nil, fmt.Errorf("destination size %d is not a multiple of value size %d", destSize, valueSize)
+		return nil, fmt.Errorf(
+			"destination size %d is not a multiple of value size %d",
+			destSize,
+			valueSize,
+		)
 	}
 
 	result := make([]byte, destSize)
@@ -218,7 +243,11 @@ func (c *BitPackCodec) Decompress(data []byte, destSize int) ([]byte, error) {
 		}
 
 		if bitsInBuffer < bitWidth {
-			return nil, fmt.Errorf("insufficient data: need %d bits but only %d available", bitWidth, bitsInBuffer)
+			return nil, fmt.Errorf(
+				"insufficient data: need %d bits but only %d available",
+				bitWidth,
+				bitsInBuffer,
+			)
 		}
 
 		// Extract value

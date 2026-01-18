@@ -212,7 +212,6 @@ func TestDecodeValidityMask(t *testing.T) {
 	})
 }
 
-
 func TestRowIterator(t *testing.T) {
 	t.Parallel()
 
@@ -311,7 +310,6 @@ func TestRowIterator(t *testing.T) {
 		assert.Equal(t, int32(1), val)
 	})
 }
-
 
 // Helper functions for tests
 

@@ -24,7 +24,7 @@ func TestResolve(t *testing.T) {
 		wantNil    bool
 	}{
 		{"now", "current_timestamp", false},
-		{"NOW", "current_timestamp", false}, // Case insensitive
+		{"NOW", "current_timestamp", false},            // Case insensitive
 		{"pg_catalog.now", "current_timestamp", false}, // With prefix
 		{"concat", "concat", false},
 		{"array_agg", "list", false},
@@ -111,19 +111,31 @@ func TestAliasCategories(t *testing.T) {
 	// Verify categories are correct
 	for _, alias := range direct {
 		if alias.Category != DirectAlias {
-			t.Errorf("DirectAliases contains %q with category %d", alias.PostgreSQLName, alias.Category)
+			t.Errorf(
+				"DirectAliases contains %q with category %d",
+				alias.PostgreSQLName,
+				alias.Category,
+			)
 		}
 	}
 
 	for _, alias := range transformed {
 		if alias.Category != TransformedAlias {
-			t.Errorf("TransformedAliases contains %q with category %d", alias.PostgreSQLName, alias.Category)
+			t.Errorf(
+				"TransformedAliases contains %q with category %d",
+				alias.PostgreSQLName,
+				alias.Category,
+			)
 		}
 	}
 
 	for _, alias := range system {
 		if alias.Category != SystemFunction {
-			t.Errorf("SystemFunctions contains %q with category %d", alias.PostgreSQLName, alias.Category)
+			t.Errorf(
+				"SystemFunctions contains %q with category %d",
+				alias.PostgreSQLName,
+				alias.Category,
+			)
 		}
 	}
 }
@@ -261,8 +273,8 @@ func TestPgCatalogPrefix(t *testing.T) {
 
 	// Test that pg_catalog. prefix is handled correctly
 	tests := []struct {
-		name     string
-		wantNil  bool
+		name    string
+		wantNil bool
 	}{
 		{"pg_catalog.now", false},
 		{"pg_catalog.concat", false},

@@ -166,7 +166,14 @@ func TestConnId_DifferentDatabases(t *testing.T) {
 	id2, err := dukdb.ConnId(conn2)
 	require.NoError(t, err)
 
-	require.NotEqual(t, id1, id2, "different databases should have different IDs (id1=%d, id2=%d)", id1, id2)
+	require.NotEqual(
+		t,
+		id1,
+		id2,
+		"different databases should have different IDs (id1=%d, id2=%d)",
+		id1,
+		id2,
+	)
 }
 
 // TestConnId_SameDatabase verifies connections to the same database share the same backend ID.

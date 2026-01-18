@@ -10,9 +10,9 @@ import (
 
 func TestEntryType_String(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		entryType EntryType
-		expected string
+		expected  string
 	}{
 		// Catalog operations
 		{"CREATE_TABLE", EntryCreateTable, "CREATE_TABLE"},
@@ -140,7 +140,12 @@ func TestEntryHeader_Serialize(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify size
-			assert.Equal(t, EntryHeaderSize, buf.Len(), "serialized header should be exactly 16 bytes")
+			assert.Equal(
+				t,
+				EntryHeaderSize,
+				buf.Len(),
+				"serialized header should be exactly 16 bytes",
+			)
 
 			// Deserialize
 			var deserialized EntryHeader
@@ -178,8 +183,24 @@ func TestEntryHeader_Deserialize_Errors(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:      "partial_header_15bytes",
-			data:      []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			name: "partial_header_15bytes",
+			data: []byte{
+				0x01,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+				0x00,
+			},
 			expectErr: true,
 		},
 	}
@@ -250,7 +271,12 @@ func TestEntryHeader_CalculateChecksum(t *testing.T) {
 				copy(modifiedPayload, tt.payload)
 				modifiedPayload[0] ^= 0xFF
 				checksum3 := tt.header.CalculateChecksum(modifiedPayload)
-				assert.NotEqual(t, checksum1, checksum3, "checksum should change with different payload")
+				assert.NotEqual(
+					t,
+					checksum1,
+					checksum3,
+					"checksum should change with different payload",
+				)
 			}
 
 			// Modify header - checksum should change

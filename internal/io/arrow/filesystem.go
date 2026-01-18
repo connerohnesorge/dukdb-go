@@ -35,7 +35,11 @@ func NewReaderFromURL(url string, opts *ReaderOptions) (*Reader, error) {
 
 // NewReaderFromURLWithContext creates a new Arrow IPC file reader from a URL with context.
 // The context can be used for cancellation and timeout control.
-func NewReaderFromURLWithContext(ctx context.Context, url string, opts *ReaderOptions) (*Reader, error) {
+func NewReaderFromURLWithContext(
+	ctx context.Context,
+	url string,
+	opts *ReaderOptions,
+) (*Reader, error) {
 	readerOpts := opts
 	if readerOpts == nil {
 		readerOpts = DefaultReaderOptions()
@@ -77,7 +81,11 @@ func NewStreamReaderFromURL(url string, opts *ReaderOptions) (*StreamReader, err
 }
 
 // NewStreamReaderFromURLWithContext creates a new Arrow IPC stream reader from a URL with context.
-func NewStreamReaderFromURLWithContext(ctx context.Context, url string, opts *ReaderOptions) (*StreamReader, error) {
+func NewStreamReaderFromURLWithContext(
+	ctx context.Context,
+	url string,
+	opts *ReaderOptions,
+) (*StreamReader, error) {
 	readerOpts := opts
 	if readerOpts == nil {
 		readerOpts = DefaultReaderOptions()
@@ -123,7 +131,11 @@ func NewWriterToURL(url string, opts *WriterOptions) (*Writer, error) {
 }
 
 // NewWriterToURLWithContext creates a new Arrow IPC file writer to a URL with context.
-func NewWriterToURLWithContext(ctx context.Context, url string, opts *WriterOptions) (*Writer, error) {
+func NewWriterToURLWithContext(
+	ctx context.Context,
+	url string,
+	opts *WriterOptions,
+) (*Writer, error) {
 	writerOpts := opts
 	if writerOpts == nil {
 		writerOpts = DefaultWriterOptions()
@@ -168,7 +180,11 @@ func NewStreamWriterToURL(url string, opts *WriterOptions) (*StreamWriter, error
 }
 
 // NewStreamWriterToURLWithContext creates a new Arrow IPC stream writer to a URL with context.
-func NewStreamWriterToURLWithContext(ctx context.Context, url string, opts *WriterOptions) (*StreamWriter, error) {
+func NewStreamWriterToURLWithContext(
+	ctx context.Context,
+	url string,
+	opts *WriterOptions,
+) (*StreamWriter, error) {
 	writerOpts := opts
 	if writerOpts == nil {
 		writerOpts = DefaultWriterOptions()

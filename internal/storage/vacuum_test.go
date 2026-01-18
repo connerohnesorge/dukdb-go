@@ -122,7 +122,7 @@ func TestVacuum_CanRemoveVersion(t *testing.T) {
 			Data:      []any{"test"},
 			RowID:     1,
 			TxnID:     100,
-			CommitTS:  500,  // Before watermark
+			CommitTS:  500, // Before watermark
 			DeletedBy: 200,
 			DeleteTS:  1000, // At watermark
 		}
@@ -136,7 +136,7 @@ func TestVacuum_CanRemoveVersion(t *testing.T) {
 			Data:      []any{"test"},
 			RowID:     1,
 			TxnID:     100,
-			CommitTS:  500,  // Before watermark
+			CommitTS:  500, // Before watermark
 			DeletedBy: 200,
 			DeleteTS:  1500, // After watermark
 		}
@@ -159,22 +159,25 @@ func TestVacuum_CanRemoveVersion(t *testing.T) {
 		assert.True(t, result, "delete marker before watermark should be removable")
 	})
 
-	t.Run("version with DeletedBy but no DeleteTS is removable if CommitTS < watermark", func(t *testing.T) {
-		// This is a pending delete (DeletedBy set but DeleteTS == 0)
-		version := &VersionedRow{
-			Data:      []any{"test"},
-			RowID:     1,
-			TxnID:     100,
-			CommitTS:  500, // Before watermark
-			DeletedBy: 200, // Pending delete
-			DeleteTS:  0,   // Delete not committed yet
-		}
+	t.Run(
+		"version with DeletedBy but no DeleteTS is removable if CommitTS < watermark",
+		func(t *testing.T) {
+			// This is a pending delete (DeletedBy set but DeleteTS == 0)
+			version := &VersionedRow{
+				Data:      []any{"test"},
+				RowID:     1,
+				TxnID:     100,
+				CommitTS:  500, // Before watermark
+				DeletedBy: 200, // Pending delete
+				DeleteTS:  0,   // Delete not committed yet
+			}
 
-		// DeleteTS is 0, so the check `DeleteTS >= lowWatermark` becomes `0 >= 1000`
-		// which is false, so this version CAN be removed (as long as CommitTS < watermark)
-		result := vacuum.CanRemoveVersion(version, 1000)
-		assert.True(t, result, "pending delete with old CommitTS should be removable")
-	})
+			// DeleteTS is 0, so the check `DeleteTS >= lowWatermark` becomes `0 >= 1000`
+			// which is false, so this version CAN be removed (as long as CommitTS < watermark)
+			result := vacuum.CanRemoveVersion(version, 1000)
+			assert.True(t, result, "pending delete with old CommitTS should be removable")
+		},
+	)
 }
 
 // ============================================================================
@@ -389,43 +392,46 @@ func TestVacuum_CleanVersionChain(t *testing.T) {
 		assert.Equal(t, expectedTime, stats.LastRunTime)
 	})
 
-	t.Run("zero low watermark means max watermark - everything old is removable", func(t *testing.T) {
-		mockClock := quartz.NewMock(t)
-		// When lowWatermarkFunc returns 0, it means no active transactions
-		// The vacuum treats this as max uint64, meaning all committed versions
-		// except head can be removed
-		vacuum := NewVacuum(func() uint64 { return 0 }, mockClock)
+	t.Run(
+		"zero low watermark means max watermark - everything old is removable",
+		func(t *testing.T) {
+			mockClock := quartz.NewMock(t)
+			// When lowWatermarkFunc returns 0, it means no active transactions
+			// The vacuum treats this as max uint64, meaning all committed versions
+			// except head can be removed
+			vacuum := NewVacuum(func() uint64 { return 0 }, mockClock)
 
-		chain := NewVersionChain(1)
-		v1 := &VersionedRow{
-			Data:     []any{"v1"},
-			RowID:    1,
-			TxnID:    100,
-			CommitTS: 100,
-		}
-		v2 := &VersionedRow{
-			Data:     []any{"v2"},
-			RowID:    1,
-			TxnID:    101,
-			CommitTS: 200,
-		}
-		v3 := &VersionedRow{
-			Data:     []any{"v3"},
-			RowID:    1,
-			TxnID:    102,
-			CommitTS: 300,
-		}
+			chain := NewVersionChain(1)
+			v1 := &VersionedRow{
+				Data:     []any{"v1"},
+				RowID:    1,
+				TxnID:    100,
+				CommitTS: 100,
+			}
+			v2 := &VersionedRow{
+				Data:     []any{"v2"},
+				RowID:    1,
+				TxnID:    101,
+				CommitTS: 200,
+			}
+			v3 := &VersionedRow{
+				Data:     []any{"v3"},
+				RowID:    1,
+				TxnID:    102,
+				CommitTS: 300,
+			}
 
-		chain.AddVersion(v1)
-		chain.AddVersion(v2)
-		chain.AddVersion(v3)
+			chain.AddVersion(v1)
+			chain.AddVersion(v2)
+			chain.AddVersion(v3)
 
-		result := vacuum.CleanVersionChain(chain)
+			result := vacuum.CleanVersionChain(chain)
 
-		// v2 and v1 should be removed (all committed versions except head)
-		assert.Equal(t, 2, result)
-		assert.Equal(t, 1, chain.Len())
-	})
+			// v2 and v1 should be removed (all committed versions except head)
+			assert.Equal(t, 2, result)
+			assert.Equal(t, 1, chain.Len())
+		},
+	)
 }
 
 // ============================================================================
@@ -673,8 +679,12 @@ func TestVacuum_ConcurrentAccess(t *testing.T) {
 			chain := NewVersionChain(uint64(i))
 			// Add some versions
 			chain.AddVersion(&VersionedRow{RowID: uint64(i), TxnID: uint64(i * 10), CommitTS: 100})
-			chain.AddVersion(&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 1), CommitTS: 200})
-			chain.AddVersion(&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 2), CommitTS: 1500})
+			chain.AddVersion(
+				&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 1), CommitTS: 200},
+			)
+			chain.AddVersion(
+				&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 2), CommitTS: 1500},
+			)
 			chains[i] = chain
 		}
 
@@ -753,7 +763,9 @@ func TestVacuum_ConcurrentAccess(t *testing.T) {
 		for i := 0; i < numChains; i++ {
 			chain := NewVersionChain(uint64(i))
 			chain.AddVersion(&VersionedRow{RowID: uint64(i), TxnID: uint64(i * 10), CommitTS: 100})
-			chain.AddVersion(&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 1), CommitTS: 1500})
+			chain.AddVersion(
+				&VersionedRow{RowID: uint64(i), TxnID: uint64(i*10 + 1), CommitTS: 1500},
+			)
 			chains[i] = chain
 		}
 
@@ -892,7 +904,7 @@ func TestVacuum_EdgeCases(t *testing.T) {
 		version := &VersionedRow{
 			RowID:     1,
 			TxnID:     100,
-			CommitTS:  999,  // Just before watermark
+			CommitTS:  999, // Just before watermark
 			DeletedBy: 200,
 			DeleteTS:  1000, // Exactly at watermark
 		}

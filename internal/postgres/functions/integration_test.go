@@ -24,7 +24,14 @@ func TestFunctionAliasIntegration(t *testing.T) {
 	}{
 		// Date/Time functions
 		{"now_to_current_timestamp", "now", "current_timestamp", DirectAlias, 0, 0},
-		{"current_timestamp_passthrough", "current_timestamp", "current_timestamp", DirectAlias, 0, 0},
+		{
+			"current_timestamp_passthrough",
+			"current_timestamp",
+			"current_timestamp",
+			DirectAlias,
+			0,
+			0,
+		},
 		{"current_date_passthrough", "current_date", "current_date", DirectAlias, 0, 0},
 		{"localtime_to_current_time", "localtime", "current_time", DirectAlias, 0, 0},
 		{"clock_timestamp", "clock_timestamp", "current_timestamp", DirectAlias, 0, 0},

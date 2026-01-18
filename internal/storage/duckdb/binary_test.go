@@ -397,15 +397,15 @@ func TestBinaryVarint(t *testing.T) {
 
 	t.Run("uvarint large values", func(t *testing.T) {
 		testValues := []uint64{
-			16384,      // 3 bytes
-			2097151,    // 3 bytes max
-			2097152,    // 4 bytes
-			268435455,  // 4 bytes max
-			268435456,  // 5 bytes
-			1 << 32,    // 5 bytes
-			1 << 56,    // 8 bytes
-			1<<63 - 1,  // near max
-			1<<64 - 1,  // max uint64
+			16384,     // 3 bytes
+			2097151,   // 3 bytes max
+			2097152,   // 4 bytes
+			268435455, // 4 bytes max
+			268435456, // 5 bytes
+			1 << 32,   // 5 bytes
+			1 << 56,   // 8 bytes
+			1<<63 - 1, // near max
+			1<<64 - 1, // max uint64
 		}
 		for _, v := range testValues {
 			buf := &bytes.Buffer{}

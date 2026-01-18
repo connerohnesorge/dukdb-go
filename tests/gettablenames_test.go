@@ -508,8 +508,8 @@ func TestGetTableNames_ComplexJoinPatterns(t *testing.T) {
 			expectedTables: []string{"customers", "orders", "products"},
 		},
 		{
-			name: "RIGHT OUTER JOIN explicit",
-			query: `SELECT * FROM t1 RIGHT OUTER JOIN t2 ON t1.id = t2.t1_id`,
+			name:           "RIGHT OUTER JOIN explicit",
+			query:          `SELECT * FROM t1 RIGHT OUTER JOIN t2 ON t1.id = t2.t1_id`,
 			expectedTables: []string{"t1", "t2"},
 		},
 		// Note: NATURAL JOIN is not supported by the parser
@@ -521,8 +521,8 @@ func TestGetTableNames_ComplexJoinPatterns(t *testing.T) {
 			expectedTables: []string{"employees"},
 		},
 		{
-			name: "mixed implicit and explicit joins",
-			query: `SELECT * FROM t1, t2 JOIN t3 ON t2.id = t3.t2_id, t4 LEFT JOIN t5 ON t4.id = t5.t4_id`,
+			name:           "mixed implicit and explicit joins",
+			query:          `SELECT * FROM t1, t2 JOIN t3 ON t2.id = t3.t2_id, t4 LEFT JOIN t5 ON t4.id = t5.t4_id`,
 			expectedTables: []string{"t1", "t2", "t3", "t4", "t5"},
 		},
 	}

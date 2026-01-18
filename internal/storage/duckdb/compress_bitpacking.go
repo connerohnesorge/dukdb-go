@@ -37,11 +37,19 @@ var (
 // Returns:
 //   - []byte: Decompressed data as byte slice
 //   - error: Mode-specific errors if decompression fails
-func DecompressBitPackingWithMode(data []byte, mode BitpackingMode, valueSize int, count uint64) ([]byte, error) {
+func DecompressBitPackingWithMode(
+	data []byte,
+	mode BitpackingMode,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	switch mode {
 	case BitpackingAuto:
 		// AUTO mode should have been resolved to a specific mode before storage
-		return nil, fmt.Errorf("%w: AUTO mode is not valid for decompression", ErrBitpackingModeInvalid)
+		return nil, fmt.Errorf(
+			"%w: AUTO mode is not valid for decompression",
+			ErrBitpackingModeInvalid,
+		)
 
 	case BitpackingConstant:
 		return DecompressBitPackingConstant(data, valueSize, count)
@@ -326,7 +334,11 @@ func DecompressBitPackingDeltaFOR(data []byte, valueSize int) ([]byte, error) {
 // Returns:
 //   - []int64: Decompressed values
 //   - error: Mode-specific errors if decompression fails
-func DecompressBitPackingWithModeToInt64(data []byte, mode BitpackingMode, count uint64) ([]int64, error) {
+func DecompressBitPackingWithModeToInt64(
+	data []byte,
+	mode BitpackingMode,
+	count uint64,
+) ([]int64, error) {
 	result, err := DecompressBitPackingWithMode(data, mode, 8, count)
 	if err != nil {
 		return nil, err
@@ -446,7 +458,11 @@ type bitpackingModeDecompressor struct {
 }
 
 // Decompress implements Decompressor.Decompress for bitpacking with specific mode.
-func (d *bitpackingModeDecompressor) Decompress(data []byte, valueSize int, count uint64) ([]byte, error) {
+func (d *bitpackingModeDecompressor) Decompress(
+	data []byte,
+	valueSize int,
+	count uint64,
+) ([]byte, error) {
 	return DecompressBitPackingWithMode(data, d.mode, valueSize, count)
 }
 

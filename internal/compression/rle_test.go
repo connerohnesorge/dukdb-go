@@ -242,8 +242,8 @@ func TestRLECodec_RoundTrip_4Byte(t *testing.T) {
 	// Create int32 data with various run lengths
 	values := []int32{
 		1000, 1000, 1000, 1000, 1000, // run of 5
-		2000, 2000,                   // run of 2
-		3000,                         // run of 1
+		2000, 2000, // run of 2
+		3000,                                     // run of 1
 		4000, 4000, 4000, 4000, 4000, 4000, 4000, // run of 7
 	}
 	data := make([]byte, len(values)*4)
@@ -272,8 +272,8 @@ func TestRLECodec_RoundTrip_8Byte(t *testing.T) {
 	// Create int64 data (timestamps, dates, etc.)
 	values := []int64{
 		1234567890, 1234567890, 1234567890, // run of 3
-		9876543210, 9876543210,             // run of 2
-		1111111111,                         // run of 1
+		9876543210, 9876543210, // run of 2
+		1111111111,                                     // run of 1
 		2222222222, 2222222222, 2222222222, 2222222222, // run of 4
 	}
 	data := make([]byte, len(values)*8)
@@ -360,8 +360,8 @@ func TestRLECodec_CorruptedData(t *testing.T) {
 		name string
 		data []byte
 	}{
-		{"truncated run length", []byte{0x80}}, // incomplete varint
-		{"missing value", []byte{0x05}},        // run length but no value
+		{"truncated run length", []byte{0x80}},      // incomplete varint
+		{"missing value", []byte{0x05}},             // run length but no value
 		{"partial value", []byte{0x05, 0xAA, 0xBB}}, // run length + incomplete value
 	}
 

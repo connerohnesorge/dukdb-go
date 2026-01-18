@@ -120,7 +120,7 @@ func (hll *HyperLogLog) applyBiasCorrection(estimate float64) float64 {
 	}
 
 	// Large range correction (for very large cardinalities close to 2^64)
-	const twoTo64 = float64(1 << 63) * 2
+	const twoTo64 = float64(1<<63) * 2
 	if estimate > twoTo64/30 {
 		return -twoTo64 * math.Log(1-estimate/twoTo64)
 	}
@@ -197,15 +197,15 @@ func countLeadingZeros(x uint64) int {
 type HyperLogLogPacked struct {
 	registers []uint64 // Packed registers, 10 per uint64
 	precision uint8
-	m         uint32  // Number of logical registers
-	numWords  int     // Number of uint64 words
+	m         uint32 // Number of logical registers
+	numWords  int    // Number of uint64 words
 	alpha     float64
 }
 
 const (
-	bitsPerRegister   = 6  // Each register needs 6 bits (max value 64)
-	registersPerWord  = 10 // 10 * 6 = 60 bits per uint64
-	registerMask      = 0x3F // 6 bits = 0b111111
+	bitsPerRegister  = 6    // Each register needs 6 bits (max value 64)
+	registersPerWord = 10   // 10 * 6 = 60 bits per uint64
+	registerMask     = 0x3F // 6 bits = 0b111111
 )
 
 // NewHyperLogLogPacked creates a bit-packed HyperLogLog for memory efficiency.
@@ -305,7 +305,7 @@ func (hll *HyperLogLogPacked) applyBiasCorrection(estimate float64) float64 {
 	}
 
 	// Large range correction
-	const twoTo64 = float64(1 << 63) * 2
+	const twoTo64 = float64(1<<63) * 2
 	if estimate > twoTo64/30 {
 		return -twoTo64 * math.Log(1-estimate/twoTo64)
 	}

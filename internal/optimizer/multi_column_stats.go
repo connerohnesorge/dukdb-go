@@ -10,8 +10,9 @@
 // - Joint NDV collection for selected column pairs (limited to avoid memory bloat)
 // - Correlation detection during ANALYZE (Pearson correlation coefficient)
 // - Heuristics for selecting which pairs to track:
-//   1. Join columns (used together in predicates or joins)
-//   2. Highly correlated columns (r > 0.7)
+//  1. Join columns (used together in predicates or joins)
+//  2. Highly correlated columns (r > 0.7)
+//
 // - Integration with cardinality estimation (use joint NDV instead of independence assumption)
 package optimizer
 
@@ -177,7 +178,8 @@ func (cd *CorrelationDetector) AddSample(columnName string, numericValue float64
 // Returns the correlation in range [-1, 1], or 0 if either column is missing data.
 //
 // Formula (Pearson correlation):
-//   r = Σ((x_i - mean_x) * (y_i - mean_y)) / (sqrt(Σ(x_i - mean_x)²) * sqrt(Σ(y_i - mean_y)²))
+//
+//	r = Σ((x_i - mean_x) * (y_i - mean_y)) / (sqrt(Σ(x_i - mean_x)²) * sqrt(Σ(y_i - mean_y)²))
 //
 // This measures linear correlation. Strong values (|r| > 0.7) indicate dependencies
 // that multi-column statistics should capture.
@@ -190,10 +192,11 @@ func (cd *CorrelationDetector) AddSample(columnName string, numericValue float64
 // 5. Divide to get correlation coefficient
 //
 // Interpretation:
-//   r > 0.7: Strong positive correlation (e.g., city_id and state_id in customer data)
-//   r < -0.7: Strong negative correlation (e.g., price and discount)
-//   -0.3 < r < 0.3: Weak/no linear correlation (independent columns)
-//   r = 0: No linear correlation (may have non-linear relationship)
+//
+//	r > 0.7: Strong positive correlation (e.g., city_id and state_id in customer data)
+//	r < -0.7: Strong negative correlation (e.g., price and discount)
+//	-0.3 < r < 0.3: Weak/no linear correlation (independent columns)
+//	r = 0: No linear correlation (may have non-linear relationship)
 //
 // Use in Multi-Column Stats:
 // High correlation (|r| > 0.7) indicates JointNDV should differ significantly from
@@ -306,11 +309,11 @@ func (je *JointNDVEstimator) AddSample(col1, col2, col1Value, col2Value string) 
 // This matches DuckDB's approach for single-column distinct counts.
 //
 // Algorithm (Good-Turing estimation):
-// 1. In sample: u unique combinations observed
-// 2. Assume proportion of unseen combinations: (u/s)² where s = sample size
-// 3. Estimate unseen: u1 = (u/s)² * u
-// 4. Extrapolate to full table: estimate = u + (u1/s) * (n - s)
-//    where n = total rows (if known, else use sample size)
+//  1. In sample: u unique combinations observed
+//  2. Assume proportion of unseen combinations: (u/s)² where s = sample size
+//  3. Estimate unseen: u1 = (u/s)² * u
+//  4. Extrapolate to full table: estimate = u + (u1/s) * (n - s)
+//     where n = total rows (if known, else use sample size)
 //
 // This is conservative and matches DuckDB's proven estimation approach.
 func (je *JointNDVEstimator) EstimateJointNDV(col1, col2 string, totalRows int64) int64 {
@@ -408,17 +411,19 @@ func (s *ColumnPairSelector) ShouldTrack(
 // This replaces the independence assumption with actual data when multi-column statistics are available.
 //
 // Example:
-//   Query: WHERE city = 'NY' AND state = 'NY'
-//   Without multi-column stats (independence assumption):
-//     rows = total * P(city='NY') * P(state='NY') = total * (1/50) * (1/51) ≈ total/2550
-//   With multi-column stats:
-//     rows = total * (distinct_pairs_with_ny_ny / joint_ndv) ≈ more accurate
+//
+//	Query: WHERE city = 'NY' AND state = 'NY'
+//	Without multi-column stats (independence assumption):
+//	  rows = total * P(city='NY') * P(state='NY') = total * (1/50) * (1/51) ≈ total/2550
+//	With multi-column stats:
+//	  rows = total * (distinct_pairs_with_ny_ny / joint_ndv) ≈ more accurate
 //
 // Formula:
-//   If multi-column stats available:
-//     selectivity = 1.0 / jointNDV  (assuming uniform distribution)
-//   Else (fallback):
-//     selectivity = P(col1) * P(col2)  (independence assumption)
+//
+//	If multi-column stats available:
+//	  selectivity = 1.0 / jointNDV  (assuming uniform distribution)
+//	Else (fallback):
+//	  selectivity = P(col1) * P(col2)  (independence assumption)
 func CardinalityWithMultiColumnStats(
 	totalRows int64,
 	col1Selectivity, col2Selectivity float64,

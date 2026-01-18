@@ -3,12 +3,12 @@ package catalog
 // pg_tables columns - Simplified PostgreSQL tables view
 // Reference: https://www.postgresql.org/docs/current/view-pg-tables.html
 var pgTablesColumns = []string{
-	"schemaname", // Name of schema containing table
-	"tablename",  // Name of the table
-	"tableowner", // Name of table's owner
-	"tablespace", // Name of tablespace containing table (null if default)
-	"hasindexes", // True if table has (or recently had) any indexes
-	"hasrules",   // True if table has (or ever had) rules
+	"schemaname",  // Name of schema containing table
+	"tablename",   // Name of the table
+	"tableowner",  // Name of table's owner
+	"tablespace",  // Name of tablespace containing table (null if default)
+	"hasindexes",  // True if table has (or recently had) any indexes
+	"hasrules",    // True if table has (or ever had) rules
 	"hastriggers", // True if table has (or ever had) triggers
 	"rowsecurity", // True if table has row level security enabled
 }

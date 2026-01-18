@@ -241,7 +241,7 @@ func (s *StatsSerializer) serializeTypeSpecificStats(colStats *ColumnStatistics)
 		s.serializeDateMinMax(colStats)
 	case dukdb.TYPE_TIMESTAMP:
 		s.serializeTimestampMinMax(colStats)
-	// Other types: no min/max serialization
+		// Other types: no min/max serialization
 	}
 }
 

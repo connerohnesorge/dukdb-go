@@ -85,7 +85,8 @@ func main() {
 	// Read specific user
 	var userName, userEmail string
 	var userAge int
-	err = db.QueryRow("SELECT name, email, age FROM users WHERE id = ?", 2).Scan(&userName, &userEmail, &userAge)
+	err = db.QueryRow("SELECT name, email, age FROM users WHERE id = ?", 2).
+		Scan(&userName, &userEmail, &userAge)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			fmt.Println("User not found")

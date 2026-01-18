@@ -445,7 +445,10 @@ func (s *DuckDBStorage) SaveCatalog(cat *catalog.Catalog) error {
 }
 
 // ScanTable scans a table with optional projection.
-func (s *DuckDBStorage) ScanTable(schema, table string, projection []int) (StorageRowIterator, error) {
+func (s *DuckDBStorage) ScanTable(
+	schema, table string,
+	projection []int,
+) (StorageRowIterator, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -935,11 +938,11 @@ func (s *DuckDBStorage) writeTableStorageToSubBlocks(block *Block, columnCount i
 	sb2Offset := TableStorageSubBlockIndex2*MetadataSubBlockSize - BlockChecksumSize
 	sb3Offset := TableStorageSubBlockIndex3*MetadataSubBlockSize - BlockChecksumSize
 	sb4Offset := TableStorageSubBlockIndex4*MetadataSubBlockSize - BlockChecksumSize
-	sb5Offset := 5*MetadataSubBlockSize - BlockChecksumSize   // Sub-block 5 for multi-table/wide INTEGER
-	sb6Offset := 6*MetadataSubBlockSize - BlockChecksumSize   // Sub-block 6 for wide INTEGER
-	sb7Offset := 7*MetadataSubBlockSize - BlockChecksumSize   // Sub-block 7 for wide INTEGER
-	sb8Offset := 8*MetadataSubBlockSize - BlockChecksumSize   // Sub-block 8 for wide INTEGER
-	sb9Offset := 9*MetadataSubBlockSize - BlockChecksumSize   // Sub-block 9 for wide INTEGER
+	sb5Offset := 5*MetadataSubBlockSize - BlockChecksumSize // Sub-block 5 for multi-table/wide INTEGER
+	sb6Offset := 6*MetadataSubBlockSize - BlockChecksumSize // Sub-block 6 for wide INTEGER
+	sb7Offset := 7*MetadataSubBlockSize - BlockChecksumSize // Sub-block 7 for wide INTEGER
+	sb8Offset := 8*MetadataSubBlockSize - BlockChecksumSize // Sub-block 8 for wide INTEGER
+	sb9Offset := 9*MetadataSubBlockSize - BlockChecksumSize // Sub-block 9 for wide INTEGER
 
 	// Write sub-block 1 data
 	if sb1Offset+len(sb1Data) <= len(block.Data) {
@@ -1046,7 +1049,10 @@ func (s *DuckDBStorage) writeTableStorageToSubBlocks(block *Block, columnCount i
 //
 // The format is based on native DuckDB's output for an empty 2-column table (INTEGER, VARCHAR).
 // Native DuckDB writes column metadata at specific offsets with a terminator at the end.
-func (s *DuckDBStorage) buildTableStorageSubBlock1(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock1(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	// Create a full sub-block filled with zeros
 	data := make([]byte, MetadataSubBlockSize)
 
@@ -1104,7 +1110,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock1(columnCount int, columnTypes 
 	data[43] = 0x01
 	data[44] = 0x65
 
-	copy(data[46:58], []byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65})
+	copy(
+		data[46:58],
+		[]byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65},
+	)
 
 	data[59] = 0x01
 	data[60] = 0x66
@@ -1140,7 +1149,9 @@ func (s *DuckDBStorage) buildTableStorageSubBlock1(columnCount int, columnTypes 
 	// Second column metadata - for 2+ column tables
 	// For 3-column and 5-column tables with VARCHAR second column, use the same pattern as 2-column
 	hasVarcharSecond := len(columnTypes) >= 2 && columnTypes[1] == TypeVarchar
-	if columnCount >= 2 && (columnCount == 2 || (columnCount == 3 && s.is3ColVarcharTable(columnTypes)) || (columnCount == 5 && s.is5ColMixedTypes(columnTypes))) && hasVarcharSecond {
+	if columnCount >= 2 &&
+		(columnCount == 2 || (columnCount == 3 && s.is3ColVarcharTable(columnTypes)) || (columnCount == 5 && s.is5ColMixedTypes(columnTypes))) &&
+		hasVarcharSecond {
 		// 2-column table with (INTEGER, VARCHAR): Write VARCHAR metadata at 0xc57
 		// Native DuckDB writes this at offset 0xc57 for VARCHAR columns
 		// Pattern: ff ff ff ff ff ff 01 64 00 64 00 00 65 00 01 66 00 00 67 00 c8 00 08 ff ff ff ff ff ff ff ff c9
@@ -1446,8 +1457,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock1(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock2 creates the continuation data for sub-block 2.
 // This contains the terminator and continuation structures.
-//
-func (s *DuckDBStorage) buildTableStorageSubBlock2(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock2(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	// Sub-block 2 is mostly zeros with some scattered data and a terminator at the end
 	// The terminator is at the very end of the sub-block
 	data := make([]byte, MetadataSubBlockSize)
@@ -1730,7 +1743,10 @@ const TableStorageSubBlockIndex4 = 4
 
 // buildTableStorageSubBlock3 creates additional continuation data for sub-block 3.
 // This contains continuation structures for 3-column tables.
-func (s *DuckDBStorage) buildTableStorageSubBlock3(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock3(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	// Sub-block 3 is mostly zeros with continuation data for additional columns
 	data := make([]byte, MetadataSubBlockSize)
 
@@ -1905,7 +1921,10 @@ func (s *DuckDBStorage) writeIntegerColumnMetadataPattern(data []byte, offset in
 	data[offset+38] = 0x01
 	data[offset+39] = 0x65
 	data[offset+40] = 0x00
-	copy(data[offset+41:offset+51], []byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff})
+	copy(
+		data[offset+41:offset+51],
+		[]byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff},
+	)
 	data[offset+51] = 0xff
 	data[offset+52] = 0x65
 	data[offset+53] = 0x00
@@ -1923,7 +1942,10 @@ func (s *DuckDBStorage) writeIntegerColumnMetadataPattern(data []byte, offset in
 	copy(data[offset+67:offset+69], []byte{0x4c, 0x4c})
 }
 
-func (s *DuckDBStorage) buildTableStorageSubBlock4(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock4(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -1974,7 +1996,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock4(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock5 creates continuation data for sub-block 5.
 // For wide INTEGER tables, this contains continuation metadata at 0xa11.
-func (s *DuckDBStorage) buildTableStorageSubBlock5(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock5(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -1990,7 +2015,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock5(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock6 creates continuation data for sub-block 6.
 // For wide INTEGER tables, this contains continuation metadata at 0x66b.
-func (s *DuckDBStorage) buildTableStorageSubBlock6(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock6(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -2007,7 +2035,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock6(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock7 creates continuation data for sub-block 7.
 // For wide INTEGER tables, this contains continuation metadata at 0x2c5 and 0xf17.
-func (s *DuckDBStorage) buildTableStorageSubBlock7(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock7(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -2027,7 +2058,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock7(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock8 creates continuation data for sub-block 8.
 // For wide INTEGER tables, this contains continuation metadata at 0xb71.
-func (s *DuckDBStorage) buildTableStorageSubBlock8(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock8(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -2044,7 +2078,10 @@ func (s *DuckDBStorage) buildTableStorageSubBlock8(columnCount int, columnTypes 
 
 // buildTableStorageSubBlock9 creates continuation data for sub-block 9.
 // For wide INTEGER tables, this contains continuation metadata at 0x7cb.
-func (s *DuckDBStorage) buildTableStorageSubBlock9(columnCount int, columnTypes []LogicalTypeID) []byte {
+func (s *DuckDBStorage) buildTableStorageSubBlock9(
+	columnCount int,
+	columnTypes []LogicalTypeID,
+) []byte {
 	data := make([]byte, MetadataSubBlockSize)
 
 	if columnCount >= 5 && s.allColumnsAreIntegers(columnTypes) {
@@ -2126,11 +2163,17 @@ func (s *DuckDBStorage) buildVeryWideSubBlock16() []byte {
 
 	// Terminator pattern at 0x6e5: ff ff ff ff ff ff 65 00 01 64 00 01 65 00
 	// (14 bytes including the extra 65 00 at 0x6f1-0x6f2)
-	copy(data[0x6e5:0x6f3], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65, 0x00, 0x01, 0x64, 0x00, 0x01, 0x65, 0x00})
+	copy(
+		data[0x6e5:0x6f3],
+		[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65, 0x00, 0x01, 0x64, 0x00, 0x01, 0x65, 0x00},
+	)
 
 	// Pattern at 0x6fb: ff ff 65 00 01 c8 00 80 10 ff ff ff ff
 	// (13 bytes, CLI has 4 ff bytes at end)
-	copy(data[0x6fb:0x708], []byte{0xff, 0xff, 0x65, 0x00, 0x01, 0xc8, 0x00, 0x80, 0x10, 0xff, 0xff, 0xff, 0xff})
+	copy(
+		data[0x6fb:0x708],
+		[]byte{0xff, 0xff, 0x65, 0x00, 0x01, 0xc8, 0x00, 0x80, 0x10, 0xff, 0xff, 0xff, 0xff},
+	)
 
 	// Terminator at 0xf80: ff ff ff ff ff ff ff ff (8 bytes)
 	copy(data[0xf80:0xf88], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
@@ -2170,7 +2213,10 @@ func (s *DuckDBStorage) buildMultiTableStorageSubBlock1() []byte {
 	data[41] = 0x64
 	data[43] = 0x01
 	data[44] = 0x65
-	copy(data[46:58], []byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65})
+	copy(
+		data[46:58],
+		[]byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65},
+	)
 	data[59] = 0x01
 	data[60] = 0x66
 	data[62] = 0x01
@@ -2196,7 +2242,10 @@ func (s *DuckDBStorage) buildMultiTableStorageSubBlock1() []byte {
 	data[0xc7b] = 0x64
 	data[0xc7d] = 0x01
 	data[0xc7e] = 0x65
-	copy(data[0xc80:0xc8c], []byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65})
+	copy(
+		data[0xc80:0xc8c],
+		[]byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65},
+	)
 	data[0xc8d] = 0x01
 	data[0xc8e] = 0x66
 	data[0xc90] = 0x01
@@ -2303,7 +2352,10 @@ func (s *DuckDBStorage) buildMultiTableStorageSubBlock3() []byte {
 	data[0x55d] = 0x64
 	data[0x55f] = 0x01
 	data[0x560] = 0x65
-	copy(data[0x562:0x56e], []byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65})
+	copy(
+		data[0x562:0x56e],
+		[]byte{0x80, 0x80, 0x80, 0x80, 0x78, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65},
+	)
 	data[0x56f] = 0x01
 	data[0x570] = 0x66
 	data[0x572] = 0x01
@@ -2489,7 +2541,9 @@ func (s *DuckDBStorage) buildMultiTableStorageSubBlock5() []byte {
 // Native DuckDB free list sub-block format (simplified for single block):
 // - uint64: next_ptr (0 = no more sub-blocks)
 // - uint64: free_list_bitmask (directly after next_ptr)
-func (s *DuckDBStorage) writeFreeListWithMetadataManager(metadataBlocks []uint64) (MetaBlockPointer, error) {
+func (s *DuckDBStorage) writeFreeListWithMetadataManager(
+	metadataBlocks []uint64,
+) (MetaBlockPointer, error) {
 	// If no metadata blocks, return invalid pointer
 	if len(metadataBlocks) == 0 {
 		return MetaBlockPointer{BlockID: InvalidBlockID}, nil
@@ -2553,7 +2607,10 @@ func (s *DuckDBStorage) writeFreeListWithMetadataManager(metadataBlocks []uint64
 	// Read the existing block so we can modify the sub-blocks
 	block, err := s.blockManager.ReadBlock(metadataBlockID)
 	if err != nil {
-		return MetaBlockPointer{}, fmt.Errorf("failed to read metadata block for free list: %w", err)
+		return MetaBlockPointer{}, fmt.Errorf(
+			"failed to read metadata block for free list: %w",
+			err,
+		)
 	}
 
 	// Write table storage data to sub-blocks 1, 2, 3, 4
@@ -2585,11 +2642,18 @@ func (s *DuckDBStorage) writeFreeListWithMetadataManager(metadataBlocks []uint64
 
 	// Write the modified block back
 	if err := s.blockManager.WriteBlock(block); err != nil {
-		return MetaBlockPointer{}, fmt.Errorf("failed to write free list to metadata block: %w", err)
+		return MetaBlockPointer{}, fmt.Errorf(
+			"failed to write free list to metadata block: %w",
+			err,
+		)
 	}
 
 	// Return pointer to free list at the calculated sub-block index
-	return MetaBlockPointer{BlockID: metadataBlockID, BlockIndex: uint8(freeListSubBlockIndex), Offset: 0}, nil
+	return MetaBlockPointer{
+		BlockID:    metadataBlockID,
+		BlockIndex: uint8(freeListSubBlockIndex),
+		Offset:     0,
+	}, nil
 }
 
 // Close closes the storage.
@@ -2723,7 +2787,10 @@ func (s *DuckDBStorage) allColumnsAreIntegers(columnTypes []LogicalTypeID) bool 
 // - 2-column table: 2 sub-blocks
 // - 3-column table: 3 sub-blocks
 // - 5-column table: 4 sub-blocks (SB4 for column continuation)
-func (s *DuckDBStorage) getTableStorageSubBlockCount(columnCount int, columns []ColumnDefinition) int {
+func (s *DuckDBStorage) getTableStorageSubBlockCount(
+	columnCount int,
+	columns []ColumnDefinition,
+) int {
 	if columnCount == 0 {
 		return 0
 	}

@@ -38,8 +38,10 @@ func BenchmarkJSONParsing(b *testing.B) {
 			i, i, i, i%2 == 0, i*10,
 		))
 	}
-	largeJSON := fmt.Sprintf(`{"users":[%s],"metadata":{"total":100,"generated":"2024-01-01T00:00:00Z"}}`,
-		strings.Join(users, ","))
+	largeJSON := fmt.Sprintf(
+		`{"users":[%s],"metadata":{"total":100,"generated":"2024-01-01T00:00:00Z"}}`,
+		strings.Join(users, ","),
+	)
 
 	b.Run("SmallJSON/Parse", func(b *testing.B) {
 		b.ResetTimer()
@@ -140,7 +142,7 @@ func BenchmarkJSONParsing(b *testing.B) {
 // createPointWKB creates WKB bytes for a POINT geometry with given coordinates.
 func createPointWKB(x, y float64) []byte {
 	wkb := make([]byte, 21)
-	wkb[0] = 0x01 // Little endian
+	wkb[0] = 0x01                              // Little endian
 	binary.LittleEndian.PutUint32(wkb[1:5], 1) // Point type
 	binary.LittleEndian.PutUint64(wkb[5:13], uint64FromFloat64(x))
 	binary.LittleEndian.PutUint64(wkb[13:21], uint64FromFloat64(y))
@@ -151,7 +153,7 @@ func createPointWKB(x, y float64) []byte {
 func createLineStringWKB(points [][2]float64) []byte {
 	// Header (5 bytes) + num points (4 bytes) + points (16 bytes each)
 	wkb := make([]byte, 9+len(points)*16)
-	wkb[0] = 0x01 // Little endian
+	wkb[0] = 0x01                              // Little endian
 	binary.LittleEndian.PutUint32(wkb[1:5], 2) // LineString type
 	binary.LittleEndian.PutUint32(wkb[5:9], uint32(len(points)))
 
@@ -168,7 +170,7 @@ func createLineStringWKB(points [][2]float64) []byte {
 func createPolygonWKB(ring [][2]float64) []byte {
 	// Header (5 bytes) + num rings (4 bytes) + num points (4 bytes) + points (16 bytes each)
 	wkb := make([]byte, 13+len(ring)*16)
-	wkb[0] = 0x01 // Little endian
+	wkb[0] = 0x01                              // Little endian
 	binary.LittleEndian.PutUint32(wkb[1:5], 3) // Polygon type
 	binary.LittleEndian.PutUint32(wkb[5:9], 1) // 1 ring
 	binary.LittleEndian.PutUint32(wkb[9:13], uint32(len(ring)))

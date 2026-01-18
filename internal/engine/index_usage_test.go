@@ -39,7 +39,11 @@ func TestIndexUsage_SimpleIndexedLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query with equality predicate on indexed column
@@ -69,7 +73,11 @@ func TestIndexUsage_SimpleIndexedLookup_MultipleMatches(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE employees (id INTEGER, name VARCHAR, dept INTEGER)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE employees (id INTEGER, name VARCHAR, dept INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create index on dept (non-unique)
@@ -125,7 +133,11 @@ func TestIndexUsage_SimpleIndexedLookup_NoMatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO products VALUES (1, 'Apple'), (2, 'Banana'), (3, 'Cherry')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO products VALUES (1, 'Apple'), (2, 'Banana'), (3, 'Cherry')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query with non-existent id
@@ -158,7 +170,11 @@ func TestIndexUsage_UniqueIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO users VALUES (1, 'alice@example.com'), (2, 'bob@example.com'), (3, 'charlie@example.com')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO users VALUES (1, 'alice@example.com'), (2, 'bob@example.com'), (3, 'charlie@example.com')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query with equality predicate on unique index column
@@ -228,7 +244,11 @@ func TestIndexUsage_NoMatchingPredicate_MultipleNonIndexedFilters(t *testing.T) 
 	ctx := context.Background()
 
 	// Create table with index only on id
-	_, err = conn.Execute(ctx, "CREATE TABLE orders (id INTEGER, customer VARCHAR, amount INTEGER, status VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE orders (id INTEGER, customer VARCHAR, amount INTEGER, status VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_orders_id ON orders(id)", nil)
 	require.NoError(t, err)
@@ -242,7 +262,11 @@ func TestIndexUsage_NoMatchingPredicate_MultipleNonIndexedFilters(t *testing.T) 
 	require.NoError(t, err)
 
 	// Query on non-indexed columns
-	rows, _, err := conn.Query(ctx, "SELECT * FROM orders WHERE customer = 'Alice' AND status = 'completed'", nil)
+	rows, _, err := conn.Query(
+		ctx,
+		"SELECT * FROM orders WHERE customer = 'Alice' AND status = 'completed'",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(rows), "Should return 2 rows")
 
@@ -350,11 +374,19 @@ func TestIndexUsage_CoveringIndex_CompositeKey(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table
-	_, err = conn.Execute(ctx, "CREATE TABLE events (user_id INTEGER, event_type VARCHAR, timestamp BIGINT, data VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE events (user_id INTEGER, event_type VARCHAR, timestamp BIGINT, data VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create composite index covering user_id, event_type, timestamp
-	_, err = conn.Execute(ctx, "CREATE INDEX idx_events ON events(user_id, event_type, timestamp)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE INDEX idx_events ON events(user_id, event_type, timestamp)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -366,7 +398,11 @@ func TestIndexUsage_CoveringIndex_CompositeKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query selecting only indexed columns
-	rows, _, err := conn.Query(ctx, "SELECT user_id, event_type, timestamp FROM events WHERE user_id = 1 AND event_type = 'login'", nil)
+	rows, _, err := conn.Query(
+		ctx,
+		"SELECT user_id, event_type, timestamp FROM events WHERE user_id = 1 AND event_type = 'login'",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Should return 2 login events for user 1
@@ -398,7 +434,11 @@ func TestIndexUsage_NonCoveringIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query selecting non-indexed columns with predicate on indexed column
@@ -670,7 +710,11 @@ func BenchmarkIndexScan_SmallTable(b *testing.B) {
 
 	// Insert 1000 rows
 	for i := 0; i < 1000; i++ {
-		_, err = conn.Execute(ctx, "INSERT INTO bench_index VALUES ("+intToStr(i)+", 'value_"+intToStr(i)+"')", nil)
+		_, err = conn.Execute(
+			ctx,
+			"INSERT INTO bench_index VALUES ("+intToStr(i)+", 'value_"+intToStr(i)+"')",
+			nil,
+		)
 		if err != nil {
 			b.Fatalf("INSERT failed: %v", err)
 		}
@@ -712,7 +756,11 @@ func BenchmarkSeqScan_SmallTable(b *testing.B) {
 
 	// Insert 1000 rows
 	for i := 0; i < 1000; i++ {
-		_, err = conn.Execute(ctx, "INSERT INTO bench_seq VALUES ("+intToStr(i)+", 'value_"+intToStr(i)+"')", nil)
+		_, err = conn.Execute(
+			ctx,
+			"INSERT INTO bench_seq VALUES ("+intToStr(i)+", 'value_"+intToStr(i)+"')",
+			nil,
+		)
 		if err != nil {
 			b.Fatalf("INSERT failed: %v", err)
 		}
@@ -747,7 +795,11 @@ func BenchmarkIndexScan_MediumTable(b *testing.B) {
 	ctx := context.Background()
 
 	// Setup: Create table with index
-	_, err = conn.Execute(ctx, "CREATE TABLE bench_medium_idx (id INTEGER, category INTEGER, value VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE bench_medium_idx (id INTEGER, category INTEGER, value VARCHAR)",
+		nil,
+	)
 	if err != nil {
 		b.Fatalf("CREATE TABLE failed: %v", err)
 	}
@@ -765,7 +817,13 @@ func BenchmarkIndexScan_MediumTable(b *testing.B) {
 			if i > 0 {
 				insertSQL += ", "
 			}
-			insertSQL += "(" + intToStr(id) + ", " + intToStr(id%10) + ", 'value_" + intToStr(id) + "')"
+			insertSQL += "(" + intToStr(
+				id,
+			) + ", " + intToStr(
+				id%10,
+			) + ", 'value_" + intToStr(
+				id,
+			) + "')"
 		}
 		_, err = conn.Execute(ctx, insertSQL, nil)
 		if err != nil {
@@ -802,7 +860,11 @@ func BenchmarkSeqScan_MediumTable(b *testing.B) {
 	ctx := context.Background()
 
 	// Setup: Create table WITHOUT index
-	_, err = conn.Execute(ctx, "CREATE TABLE bench_medium_seq (id INTEGER, category INTEGER, value VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE bench_medium_seq (id INTEGER, category INTEGER, value VARCHAR)",
+		nil,
+	)
 	if err != nil {
 		b.Fatalf("CREATE TABLE failed: %v", err)
 	}
@@ -816,7 +878,13 @@ func BenchmarkSeqScan_MediumTable(b *testing.B) {
 			if i > 0 {
 				insertSQL += ", "
 			}
-			insertSQL += "(" + intToStr(id) + ", " + intToStr(id%10) + ", 'value_" + intToStr(id) + "')"
+			insertSQL += "(" + intToStr(
+				id,
+			) + ", " + intToStr(
+				id%10,
+			) + ", 'value_" + intToStr(
+				id,
+			) + "')"
 		}
 		_, err = conn.Execute(ctx, insertSQL, nil)
 		if err != nil {
@@ -853,7 +921,11 @@ func BenchmarkCompositeIndexScan(b *testing.B) {
 	ctx := context.Background()
 
 	// Setup: Create table with composite index
-	_, err = conn.Execute(ctx, "CREATE TABLE bench_composite (a INTEGER, b INTEGER, c INTEGER, value VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE bench_composite (a INTEGER, b INTEGER, c INTEGER, value VARCHAR)",
+		nil,
+	)
 	if err != nil {
 		b.Fatalf("CREATE TABLE failed: %v", err)
 	}
@@ -873,7 +945,15 @@ func BenchmarkCompositeIndexScan(b *testing.B) {
 			if i > 0 {
 				insertSQL += ", "
 			}
-			insertSQL += "(" + intToStr(a) + ", " + intToStr(bVal) + ", " + intToStr(id) + ", 'value_" + intToStr(id) + "')"
+			insertSQL += "(" + intToStr(
+				a,
+			) + ", " + intToStr(
+				bVal,
+			) + ", " + intToStr(
+				id,
+			) + ", 'value_" + intToStr(
+				id,
+			) + "')"
 		}
 		_, err = conn.Execute(ctx, insertSQL, nil)
 		if err != nil {
@@ -918,7 +998,11 @@ func TestExplainShowsIndexScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert some data
-	_, err = conn.Execute(ctx, "INSERT INTO explain_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO explain_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Run EXPLAIN query
@@ -976,7 +1060,11 @@ func TestExplainShowsSeqScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert some data
-	_, err = conn.Execute(ctx, "INSERT INTO explain_seq VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO explain_seq VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Run EXPLAIN query
@@ -1033,7 +1121,11 @@ func TestExplainAnalyze(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert some data
-	_, err = conn.Execute(ctx, "INSERT INTO analyze_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO analyze_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Run EXPLAIN ANALYZE query
@@ -1115,7 +1207,11 @@ func TestIndexUsage_MultipleIndexesSameTable(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table with multiple indexes
-	_, err = conn.Execute(ctx, "CREATE TABLE multi_idx (id INTEGER, email VARCHAR, status VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE multi_idx (id INTEGER, email VARCHAR, status VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 	_, err = conn.Execute(ctx, "CREATE INDEX idx_multi_id ON multi_idx(id)", nil)
 	require.NoError(t, err)
@@ -1248,9 +1344,9 @@ func TestTPCHStylePerformance_IndexVsSeqScan(t *testing.T) {
 		insertSQL = "INSERT INTO lineitem VALUES "
 		for i := 0; i < batchSize; i++ {
 			rowNum := batch*batchSize + i
-			orderkey := rowNum / 4    // ~4 line items per order
-			partkey := rowNum % 1000  // 1000 unique parts
-			suppkey := rowNum % 100   // 100 suppliers
+			orderkey := rowNum / 4   // ~4 line items per order
+			partkey := rowNum % 1000 // 1000 unique parts
+			suppkey := rowNum % 100  // 100 suppliers
 			linenumber := (rowNum % 4) + 1
 			quantity := (rowNum%50 + 1)
 			price := float64(quantity) * 10.5
@@ -1268,9 +1364,25 @@ func TestTPCHStylePerformance_IndexVsSeqScan(t *testing.T) {
 			if i > 0 {
 				insertSQL += ", "
 			}
-			insertSQL += "(" + intToStr(orderkey) + ", " + intToStr(partkey) + ", " + intToStr(suppkey) + ", "
-			insertSQL += intToStr(linenumber) + ", " + intToStr(quantity) + ", " + floatToStr(price) + ", "
-			insertSQL += floatToStr(discount) + ", " + floatToStr(tax) + ", '" + returnflag + "', '" + linestatus + "', "
+			insertSQL += "(" + intToStr(
+				orderkey,
+			) + ", " + intToStr(
+				partkey,
+			) + ", " + intToStr(
+				suppkey,
+			) + ", "
+			insertSQL += intToStr(
+				linenumber,
+			) + ", " + intToStr(
+				quantity,
+			) + ", " + floatToStr(
+				price,
+			) + ", "
+			insertSQL += floatToStr(
+				discount,
+			) + ", " + floatToStr(
+				tax,
+			) + ", '" + returnflag + "', '" + linestatus + "', "
 			insertSQL += "'" + shipdate + "', '" + commitdate + "', '" + receiptdate + "', "
 			insertSQL += "'" + shipinstruct + "', '" + shipmode + "', '" + comment + "')"
 		}
@@ -1289,7 +1401,11 @@ func TestTPCHStylePerformance_IndexVsSeqScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create composite index on (l_partkey, l_suppkey) for TPC-H Q9 style queries
-	_, err = conn.Execute(ctx, "CREATE INDEX idx_lineitem_part_supp ON lineitem(l_partkey, l_suppkey)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE INDEX idx_lineitem_part_supp ON lineitem(l_partkey, l_suppkey)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Test 1: Point query on indexed column (l_orderkey = 1250)
@@ -1298,10 +1414,19 @@ func TestTPCHStylePerformance_IndexVsSeqScan(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Query on l_orderkey=1250 returned %d rows", len(rows))
 	// ~4 rows per order key expected
-	assert.True(t, len(rows) > 0 && len(rows) <= 8, "Expected 1-8 rows for order 1250, got %d", len(rows))
+	assert.True(
+		t,
+		len(rows) > 0 && len(rows) <= 8,
+		"Expected 1-8 rows for order 1250, got %d",
+		len(rows),
+	)
 
 	// Verify EXPLAIN shows IndexScan
-	explainRows, _, err := conn.Query(ctx, "EXPLAIN SELECT * FROM lineitem WHERE l_orderkey = 1250", nil)
+	explainRows, _, err := conn.Query(
+		ctx,
+		"EXPLAIN SELECT * FROM lineitem WHERE l_orderkey = 1250",
+		nil,
+	)
 	if err == nil && len(explainRows) > 0 {
 		foundIndex := false
 		for _, row := range explainRows {
@@ -1319,19 +1444,31 @@ func TestTPCHStylePerformance_IndexVsSeqScan(t *testing.T) {
 	}
 
 	// Test 2: Composite key query (l_partkey = 500 AND l_suppkey = 50)
-	rows, _, err = conn.Query(ctx, "SELECT * FROM lineitem WHERE l_partkey = 500 AND l_suppkey = 50", nil)
+	rows, _, err = conn.Query(
+		ctx,
+		"SELECT * FROM lineitem WHERE l_partkey = 500 AND l_suppkey = 50",
+		nil,
+	)
 	require.NoError(t, err)
 	t.Logf("Query on l_partkey=500 AND l_suppkey=50 returned %d rows", len(rows))
 
 	// Test 3: Range query on indexed column
-	rows, _, err = conn.Query(ctx, "SELECT * FROM lineitem WHERE l_orderkey >= 1000 AND l_orderkey < 1010", nil)
+	rows, _, err = conn.Query(
+		ctx,
+		"SELECT * FROM lineitem WHERE l_orderkey >= 1000 AND l_orderkey < 1010",
+		nil,
+	)
 	require.NoError(t, err)
 	t.Logf("Range query on l_orderkey [1000, 1010) returned %d rows", len(rows))
 	// ~4 rows per order key * 10 orders = ~40 rows
 	assert.True(t, len(rows) > 0, "Expected rows for range query")
 
 	// Test 4: Query on non-indexed column (should use seq scan but still work)
-	rows, _, err = conn.Query(ctx, "SELECT * FROM lineitem WHERE l_returnflag = 'R' AND l_linestatus = 'F'", nil)
+	rows, _, err = conn.Query(
+		ctx,
+		"SELECT * FROM lineitem WHERE l_returnflag = 'R' AND l_linestatus = 'F'",
+		nil,
+	)
 	require.NoError(t, err)
 	t.Logf("Query on non-indexed columns returned %d rows", len(rows))
 
@@ -1369,9 +1506,17 @@ func TestTPCHStylePerformance_IndexBenefit(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two tables with identical data - one with index, one without
-	_, err = conn.Execute(ctx, "CREATE TABLE with_index (id INTEGER, value VARCHAR, padding VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE with_index (id INTEGER, value VARCHAR, padding VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = conn.Execute(ctx, "CREATE TABLE without_index (id INTEGER, value VARCHAR, padding VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE without_index (id INTEGER, value VARCHAR, padding VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create index on only the first table
@@ -1417,13 +1562,23 @@ func TestTPCHStylePerformance_IndexBenefit(t *testing.T) {
 
 		// Both should return exactly 1 row with same data
 		require.Equal(t, 1, len(rowsWithIndex), "with_index should return 1 row for id=%d", testID)
-		require.Equal(t, 1, len(rowsWithoutIndex), "without_index should return 1 row for id=%d", testID)
+		require.Equal(
+			t,
+			1,
+			len(rowsWithoutIndex),
+			"without_index should return 1 row for id=%d",
+			testID,
+		)
 		assert.Equal(t, rowsWithIndex[0]["id"], rowsWithoutIndex[0]["id"])
 		assert.Equal(t, rowsWithIndex[0]["value"], rowsWithoutIndex[0]["value"])
 	}
 
 	// Verify EXPLAIN shows different plans
-	explainWithIndex, _, err := conn.Query(ctx, "EXPLAIN SELECT * FROM with_index WHERE id = 5000", nil)
+	explainWithIndex, _, err := conn.Query(
+		ctx,
+		"EXPLAIN SELECT * FROM with_index WHERE id = 5000",
+		nil,
+	)
 	if err == nil && len(explainWithIndex) > 0 {
 		foundIndex := false
 		for _, row := range explainWithIndex {
@@ -1440,7 +1595,11 @@ func TestTPCHStylePerformance_IndexBenefit(t *testing.T) {
 		t.Logf("with_index uses IndexScan: %v", foundIndex)
 	}
 
-	explainWithoutIndex, _, err := conn.Query(ctx, "EXPLAIN SELECT * FROM without_index WHERE id = 5000", nil)
+	explainWithoutIndex, _, err := conn.Query(
+		ctx,
+		"EXPLAIN SELECT * FROM without_index WHERE id = 5000",
+		nil,
+	)
 	if err == nil && len(explainWithoutIndex) > 0 {
 		foundSeq := false
 		for _, row := range explainWithoutIndex {

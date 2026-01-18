@@ -9,15 +9,15 @@ import (
 
 func TestParseCreateSecret(t *testing.T) {
 	tests := []struct {
-		name       string
-		sql        string
-		wantName   string
-		wantType   string
-		wantErr    bool
-		persistent bool
-		orReplace  bool
+		name        string
+		sql         string
+		wantName    string
+		wantType    string
+		wantErr     bool
+		persistent  bool
+		orReplace   bool
 		ifNotExists bool
-		options    map[string]string
+		options     map[string]string
 	}{
 		{
 			name: "Simple S3 secret",
@@ -272,8 +272,8 @@ func TestParseAlterSecret(t *testing.T) {
 func TestSecretStatementType(t *testing.T) {
 	// Test that secret statements return correct statement types
 	tests := []struct {
-		sql        string
-		stmtType   string
+		sql      string
+		stmtType string
 	}{
 		{
 			sql:      "CREATE SECRET s (TYPE S3)",

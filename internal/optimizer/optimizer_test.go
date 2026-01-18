@@ -958,10 +958,10 @@ func (m *mockExprBinaryPredicate) Right() ExprNode            { return m.right }
 func (m *mockExprBinaryPredicate) Operator() BinaryOp         { return m.op }
 
 // PredicateExpr interface
-func (m *mockExprBinaryPredicate) PredicateType() string          { return "BinaryPredicate" }
-func (m *mockExprBinaryPredicate) PredicateLeft() PredicateExpr   { return m.left.(PredicateExpr) }
-func (m *mockExprBinaryPredicate) PredicateRight() PredicateExpr  { return m.right.(PredicateExpr) }
-func (m *mockExprBinaryPredicate) PredicateOperator() BinaryOp    { return m.op }
+func (m *mockExprBinaryPredicate) PredicateType() string         { return "BinaryPredicate" }
+func (m *mockExprBinaryPredicate) PredicateLeft() PredicateExpr  { return m.left.(PredicateExpr) }
+func (m *mockExprBinaryPredicate) PredicateRight() PredicateExpr { return m.right.(PredicateExpr) }
+func (m *mockExprBinaryPredicate) PredicateOperator() BinaryOp   { return m.op }
 
 // mockExprColumnRef implements both ExprNode and ColumnRefPredicateExpr for testing.
 type mockExprColumnRef struct {
@@ -992,9 +992,9 @@ type mockExprBetween struct {
 	notBetween bool
 }
 
-func (m *mockExprBetween) ExprType() string                { return "Between" }
-func (m *mockExprBetween) ExprResultType() dukdb.Type      { return dukdb.TYPE_BOOLEAN }
-func (m *mockExprBetween) PredicateType() string           { return "Between" }
+func (m *mockExprBetween) ExprType() string                    { return "Between" }
+func (m *mockExprBetween) ExprResultType() dukdb.Type          { return dukdb.TYPE_BOOLEAN }
+func (m *mockExprBetween) PredicateType() string               { return "Between" }
 func (m *mockExprBetween) PredicateBetweenExpr() PredicateExpr { return m.expr.(PredicateExpr) }
 func (m *mockExprBetween) PredicateLowBound() PredicateExpr    { return m.low.(PredicateExpr) }
 func (m *mockExprBetween) PredicateHighBound() PredicateExpr   { return m.high.(PredicateExpr) }

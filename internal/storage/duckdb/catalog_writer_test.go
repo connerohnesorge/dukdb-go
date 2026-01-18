@@ -196,7 +196,11 @@ func TestCatalogWriter_Write_EmptyCatalog(t *testing.T) {
 	// This signals to DuckDB that there is no catalog metadata to load
 	mbp, err := writer.Write()
 	assert.NoError(t, err)
-	assert.False(t, mbp.IsValid(), "empty catalog should return invalid MetaBlockPointer for DuckDB compatibility")
+	assert.False(
+		t,
+		mbp.IsValid(),
+		"empty catalog should return invalid MetaBlockPointer for DuckDB compatibility",
+	)
 }
 
 func TestCatalogWriter_Write_WithSchemas(t *testing.T) {
@@ -308,7 +312,10 @@ func TestCatalogWriter_Write_ComplexCatalog(t *testing.T) {
 	catalog.AddTable(orders)
 
 	// Add views
-	activeUsers := NewViewCatalogEntry("active_users", "SELECT * FROM users WHERE status = 'active'")
+	activeUsers := NewViewCatalogEntry(
+		"active_users",
+		"SELECT * FROM users WHERE status = 'active'",
+	)
 	activeUsers.CreateInfo.Schema = "main"
 	catalog.AddView(activeUsers)
 

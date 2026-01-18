@@ -327,7 +327,12 @@ func (r *Reader) readRowsIntoChunk(chunk *storage.DataChunk, startIdx, maxRows i
 }
 
 // processRow processes a single row and adds values to the chunk.
-func (r *Reader) processRow(chunk *storage.DataChunk, row parquet.Row, rowIdx int, schema *parquet.Schema) {
+func (r *Reader) processRow(
+	chunk *storage.DataChunk,
+	row parquet.Row,
+	rowIdx int,
+	schema *parquet.Schema,
+) {
 	fields := schema.Fields()
 
 	for colIdx, schemaIdx := range r.columnIndices {

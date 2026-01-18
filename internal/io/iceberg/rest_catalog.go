@@ -176,7 +176,10 @@ func (c *RESTCatalog) authenticate(ctx context.Context) error {
 	// Parse credentials
 	parts := strings.SplitN(c.opts.Credential, ":", 2)
 	if len(parts) != 2 {
-		return fmt.Errorf("%w: invalid credential format, expected client_id:client_secret", ErrRESTCatalogAuth)
+		return fmt.Errorf(
+			"%w: invalid credential format, expected client_id:client_secret",
+			ErrRESTCatalogAuth,
+		)
 	}
 
 	clientID := parts[0]
@@ -193,7 +196,12 @@ func (c *RESTCatalog) authenticate(ctx context.Context) error {
 		data.Set("scope", c.opts.Scope)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		tokenURL,
+		strings.NewReader(data.Encode()),
+	)
 	if err != nil {
 		return fmt.Errorf("%w: failed to create token request: %w", ErrRESTCatalogAuth, err)
 	}
@@ -217,7 +225,12 @@ func (c *RESTCatalog) authenticate(ctx context.Context) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%w: token request returned %d: %s", ErrRESTCatalogAuth, resp.StatusCode, string(body))
+		return fmt.Errorf(
+			"%w: token request returned %d: %s",
+			ErrRESTCatalogAuth,
+			resp.StatusCode,
+			string(body),
+		)
 	}
 
 	var token OAuth2Token
@@ -297,7 +310,11 @@ func (c *RESTCatalog) GetConfig(ctx context.Context) (map[string]string, error) 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, configURL, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create config request: %w", ErrRESTCatalogRequest, err)
+		return nil, fmt.Errorf(
+			"%w: failed to create config request: %w",
+			ErrRESTCatalogRequest,
+			err,
+		)
 	}
 
 	c.applyHeaders(req)
@@ -318,7 +335,11 @@ func (c *RESTCatalog) GetConfig(ctx context.Context) (map[string]string, error) 
 		Overrides map[string]string `json:"overrides"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("%w: failed to decode config response: %w", ErrRESTCatalogResponse, err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode config response: %w",
+			ErrRESTCatalogResponse,
+			err,
+		)
 	}
 
 	// Merge defaults and overrides
@@ -347,7 +368,11 @@ func (c *RESTCatalog) ListNamespaces(ctx context.Context, parent []string) ([][]
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nsURL, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create namespaces request: %w", ErrRESTCatalogRequest, err)
+		return nil, fmt.Errorf(
+			"%w: failed to create namespaces request: %w",
+			ErrRESTCatalogRequest,
+			err,
+		)
 	}
 
 	c.applyHeaders(req)
@@ -367,7 +392,11 @@ func (c *RESTCatalog) ListNamespaces(ctx context.Context, parent []string) ([][]
 		Namespaces [][]string `json:"namespaces"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("%w: failed to decode namespaces response: %w", ErrRESTCatalogResponse, err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode namespaces response: %w",
+			ErrRESTCatalogResponse,
+			err,
+		)
 	}
 
 	return result.Namespaces, nil
@@ -375,7 +404,10 @@ func (c *RESTCatalog) ListNamespaces(ctx context.Context, parent []string) ([][]
 
 // ListTables lists all tables in the given namespace.
 // GET /v1/namespaces/{namespace}/tables
-func (c *RESTCatalog) ListTables(ctx context.Context, namespace []string) ([]TableIdentifier, error) {
+func (c *RESTCatalog) ListTables(
+	ctx context.Context,
+	namespace []string,
+) ([]TableIdentifier, error) {
 	if err := c.ensureAuthenticated(ctx); err != nil {
 		return nil, err
 	}
@@ -385,7 +417,11 @@ func (c *RESTCatalog) ListTables(ctx context.Context, namespace []string) ([]Tab
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tablesURL, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create tables request: %w", ErrRESTCatalogRequest, err)
+		return nil, fmt.Errorf(
+			"%w: failed to create tables request: %w",
+			ErrRESTCatalogRequest,
+			err,
+		)
 	}
 
 	c.applyHeaders(req)
@@ -405,7 +441,11 @@ func (c *RESTCatalog) ListTables(ctx context.Context, namespace []string) ([]Tab
 		Identifiers []TableIdentifier `json:"identifiers"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("%w: failed to decode tables response: %w", ErrRESTCatalogResponse, err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode tables response: %w",
+			ErrRESTCatalogResponse,
+			err,
+		)
 	}
 
 	return result.Identifiers, nil
@@ -429,17 +469,30 @@ func (t TableIdentifier) String() string {
 
 // LoadTableMetadata loads the metadata for a table.
 // GET /v1/namespaces/{namespace}/tables/{table}
-func (c *RESTCatalog) LoadTableMetadata(ctx context.Context, namespace []string, tableName string) (*TableMetadata, string, error) {
+func (c *RESTCatalog) LoadTableMetadata(
+	ctx context.Context,
+	namespace []string,
+	tableName string,
+) (*TableMetadata, string, error) {
 	if err := c.ensureAuthenticated(ctx); err != nil {
 		return nil, "", err
 	}
 
 	nsPath := encodeNamespace(namespace)
-	tableURL := fmt.Sprintf("%s/v1/namespaces/%s/tables/%s", c.baseURL, nsPath, url.PathEscape(tableName))
+	tableURL := fmt.Sprintf(
+		"%s/v1/namespaces/%s/tables/%s",
+		c.baseURL,
+		nsPath,
+		url.PathEscape(tableName),
+	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tableURL, http.NoBody)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: failed to create table request: %w", ErrRESTCatalogRequest, err)
+		return nil, "", fmt.Errorf(
+			"%w: failed to create table request: %w",
+			ErrRESTCatalogRequest,
+			err,
+		)
 	}
 
 	c.applyHeaders(req)
@@ -461,20 +514,32 @@ func (c *RESTCatalog) LoadTableMetadata(ctx context.Context, namespace []string,
 		Metadata         json.RawMessage `json:"metadata"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, "", fmt.Errorf("%w: failed to decode table response: %w", ErrRESTCatalogResponse, err)
+		return nil, "", fmt.Errorf(
+			"%w: failed to decode table response: %w",
+			ErrRESTCatalogResponse,
+			err,
+		)
 	}
 
 	// Parse the metadata
 	metadata, err := ParseMetadataBytes(result.Metadata)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: failed to parse table metadata: %w", ErrRESTCatalogResponse, err)
+		return nil, "", fmt.Errorf(
+			"%w: failed to parse table metadata: %w",
+			ErrRESTCatalogResponse,
+			err,
+		)
 	}
 
 	return metadata, result.MetadataLocation, nil
 }
 
 // LoadTable loads a table from the catalog and returns a Table object.
-func (c *RESTCatalog) LoadTable(ctx context.Context, namespace []string, tableName string) (*Table, error) {
+func (c *RESTCatalog) LoadTable(
+	ctx context.Context,
+	namespace []string,
+	tableName string,
+) (*Table, error) {
 	metadata, metadataLocation, err := c.LoadTableMetadata(ctx, namespace, tableName)
 	if err != nil {
 		return nil, err
@@ -612,7 +677,12 @@ func (c *RESTCatalog) handleErrorResponse(resp *http.Response) error {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return fmt.Errorf("%w: %s", ErrRESTCatalogAuth, errorResp.Error.Message)
 		default:
-			return fmt.Errorf("%w: %s (code: %d)", ErrRESTCatalogRequest, errorResp.Error.Message, resp.StatusCode)
+			return fmt.Errorf(
+				"%w: %s (code: %d)",
+				ErrRESTCatalogRequest,
+				errorResp.Error.Message,
+				resp.StatusCode,
+			)
 		}
 	}
 
@@ -643,7 +713,9 @@ func encodeNamespace(namespace []string) string {
 
 // ParseCatalogURI parses a catalog URI in the format "iceberg://catalog-uri/namespace/table".
 // Returns the catalog URI, namespace, and table name.
-func ParseCatalogURI(uri string) (catalogURI string, namespace []string, tableName string, err error) {
+func ParseCatalogURI(
+	uri string,
+) (catalogURI string, namespace []string, tableName string, err error) {
 	// Remove iceberg:// prefix
 	if !strings.HasPrefix(uri, "iceberg://") {
 		return "", nil, "", fmt.Errorf("invalid catalog URI: must start with iceberg://")
@@ -664,7 +736,9 @@ func ParseCatalogURI(uri string) (catalogURI string, namespace []string, tableNa
 	// First, try to find the last component as the table name
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) < 2 {
-		return "", nil, "", fmt.Errorf("invalid catalog URI: must have at least namespace and table")
+		return "", nil, "", fmt.Errorf(
+			"invalid catalog URI: must have at least namespace and table",
+		)
 	}
 
 	tableName = pathParts[len(pathParts)-1]
@@ -699,7 +773,11 @@ func (c *RESTCatalog) RefreshToken(ctx context.Context) error {
 
 // CreateNamespace creates a new namespace (if supported by the catalog).
 // POST /v1/namespaces
-func (c *RESTCatalog) CreateNamespace(ctx context.Context, namespace []string, properties map[string]string) error {
+func (c *RESTCatalog) CreateNamespace(
+	ctx context.Context,
+	namespace []string,
+	properties map[string]string,
+) error {
 	if err := c.ensureAuthenticated(ctx); err != nil {
 		return err
 	}
@@ -752,7 +830,11 @@ func (c *RESTCatalog) DropNamespace(ctx context.Context, namespace []string) err
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, nsURL, http.NoBody)
 	if err != nil {
-		return fmt.Errorf("%w: failed to create drop namespace request: %w", ErrRESTCatalogRequest, err)
+		return fmt.Errorf(
+			"%w: failed to create drop namespace request: %w",
+			ErrRESTCatalogRequest,
+			err,
+		)
 	}
 
 	c.applyHeaders(req)

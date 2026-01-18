@@ -72,15 +72,15 @@ func main() {
 	`, salesFile)
 
 	var stats struct {
-		totalOrders      int
-		uniqueCustomers  int
-		uniqueProducts   int
-		uniqueSalesReps  int
-		totalUnits       int
-		totalRevenue     float64
-		avgOrderValue    float64
-		minOrderValue    float64
-		maxOrderValue    float64
+		totalOrders     int
+		uniqueCustomers int
+		uniqueProducts  int
+		uniqueSalesReps int
+		totalUnits      int
+		totalRevenue    float64
+		avgOrderValue   float64
+		minOrderValue   float64
+		maxOrderValue   float64
 	}
 
 	err = db.QueryRow(statsQuery).Scan(
@@ -141,7 +141,14 @@ func main() {
 		var orderCount, unitsSold int
 		var categoryRevenue, avgOrderValue, revenuePercentage float64
 
-		err := rows.Scan(&category, &orderCount, &unitsSold, &categoryRevenue, &avgOrderValue, &revenuePercentage)
+		err := rows.Scan(
+			&category,
+			&orderCount,
+			&unitsSold,
+			&categoryRevenue,
+			&avgOrderValue,
+			&revenuePercentage,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
@@ -182,7 +189,14 @@ func main() {
 		var orders, uniqueCustomers int
 		var revenue, avgOrderValue, revenuePerCustomer float64
 
-		err := rows.Scan(&region, &orders, &uniqueCustomers, &revenue, &avgOrderValue, &revenuePerCustomer)
+		err := rows.Scan(
+			&region,
+			&orders,
+			&uniqueCustomers,
+			&revenue,
+			&avgOrderValue,
+			&revenuePerCustomer,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
@@ -309,7 +323,15 @@ func main() {
 		var timesOrdered, totalQuantity int
 		var totalRevenue, avgPrice float64
 
-		err := rows.Scan(&productID, &productName, &category, &timesOrdered, &totalQuantity, &totalRevenue, &avgPrice)
+		err := rows.Scan(
+			&productID,
+			&productName,
+			&category,
+			&timesOrdered,
+			&totalQuantity,
+			&totalRevenue,
+			&avgPrice,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
@@ -355,13 +377,29 @@ func main() {
 		var orderCount, totalUnits, uniqueProducts, uniqueCategories int
 		var totalSpent, avgOrderValue float64
 
-		err := rows.Scan(&customerID, &orderCount, &totalUnits, &totalSpent, &avgOrderValue, &uniqueProducts, &uniqueCategories)
+		err := rows.Scan(
+			&customerID,
+			&orderCount,
+			&totalUnits,
+			&totalSpent,
+			&avgOrderValue,
+			&uniqueProducts,
+			&uniqueCategories,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
 
-		fmt.Printf("%-5d | %-12d | %-12d | $%-14.2f | $%-14.2f | %-15d | %-15d\n",
-			customerID, orderCount, totalUnits, totalSpent, avgOrderValue, uniqueProducts, uniqueCategories)
+		fmt.Printf(
+			"%-5d | %-12d | %-12d | $%-14.2f | $%-14.2f | %-15d | %-15d\n",
+			customerID,
+			orderCount,
+			totalUnits,
+			totalSpent,
+			avgOrderValue,
+			uniqueProducts,
+			uniqueCategories,
+		)
 	}
 
 	// Example 8: Cross-selling analysis
@@ -493,13 +531,33 @@ func main() {
 		var rScore, fScore, mScore int
 		var rfmScore, customerSegment string
 
-		err := rows.Scan(&customerID, &recency, &frequency, &monetary, &rScore, &fScore, &mScore, &rfmScore, &customerSegment)
+		err := rows.Scan(
+			&customerID,
+			&recency,
+			&frequency,
+			&monetary,
+			&rScore,
+			&fScore,
+			&mScore,
+			&rfmScore,
+			&customerSegment,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
 
-		fmt.Printf("%-5d | %-8d | %-9d | $%-9.2f | %-8d | %-8d | %-8d | %-10s | %-15s\n",
-			customerID, recency, frequency, monetary, rScore, fScore, mScore, rfmScore, customerSegment)
+		fmt.Printf(
+			"%-5d | %-8d | %-9d | $%-9.2f | %-8d | %-8d | %-8d | %-10s | %-15s\n",
+			customerID,
+			recency,
+			frequency,
+			monetary,
+			rScore,
+			fScore,
+			mScore,
+			rfmScore,
+			customerSegment,
+		)
 	}
 
 	// Example 10: Export analysis results

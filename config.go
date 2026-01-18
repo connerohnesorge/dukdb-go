@@ -18,12 +18,12 @@ var validAccessModes = map[string]bool{
 
 // validConfigKeys contains the recognized configuration keys.
 var validConfigKeys = map[string]bool{
-	"access_mode":         true,
-	"threads":             true,
-	"max_memory":          true,
-	"storage_format":      true,
-	"max_files_per_glob":  true,
-	"file_glob_timeout":   true,
+	"access_mode":        true,
+	"threads":            true,
+	"max_memory":         true,
+	"storage_format":     true,
+	"max_files_per_glob": true,
+	"file_glob_timeout":  true,
 }
 
 // minThreads is the minimum number of threads allowed.

@@ -33,11 +33,19 @@ func Example_getTableNames() {
 	fmt.Println("Simple:", tables)
 
 	// JOIN query
-	tables, _ = dukdb.GetTableNames(conn, "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id",
+		false,
+	)
 	fmt.Println("Join:", tables)
 
 	// CTE query
-	tables, _ = dukdb.GetTableNames(conn, "WITH active AS (SELECT * FROM users WHERE active) SELECT * FROM active", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"WITH active AS (SELECT * FROM users WHERE active) SELECT * FROM active",
+		false,
+	)
 	fmt.Println("CTE:", tables)
 
 	// Output:
@@ -63,7 +71,11 @@ func Example_getTableNames_joins() {
 	fmt.Println("LEFT JOIN:", tables)
 
 	// Multiple JOINs
-	tables, _ = dukdb.GetTableNames(conn, "SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id JOIN t3 ON t2.id = t3.t2_id", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id JOIN t3 ON t2.id = t3.t2_id",
+		false,
+	)
 	fmt.Println("Multiple JOINs:", tables)
 
 	// Output:
@@ -81,15 +93,27 @@ func Example_getTableNames_subqueries() {
 	defer func() { _ = conn.Close() }()
 
 	// Subquery in WHERE with IN
-	tables, _ := dukdb.GetTableNames(conn, "SELECT * FROM orders WHERE customer_id IN (SELECT id FROM customers)", false)
+	tables, _ := dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM orders WHERE customer_id IN (SELECT id FROM customers)",
+		false,
+	)
 	fmt.Println("WHERE IN:", tables)
 
 	// Scalar subquery in SELECT
-	tables, _ = dukdb.GetTableNames(conn, "SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) FROM users u", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) FROM users u",
+		false,
+	)
 	fmt.Println("Scalar subquery:", tables)
 
 	// Nested subqueries
-	tables, _ = dukdb.GetTableNames(conn, "SELECT * FROM t1 WHERE id IN (SELECT id FROM t2 WHERE id IN (SELECT id FROM t3))", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM t1 WHERE id IN (SELECT id FROM t2 WHERE id IN (SELECT id FROM t3))",
+		false,
+	)
 	fmt.Println("Nested subqueries:", tables)
 
 	// Output:
@@ -107,15 +131,27 @@ func Example_getTableNames_dml() {
 	defer func() { _ = conn.Close() }()
 
 	// INSERT with SELECT
-	tables, _ := dukdb.GetTableNames(conn, "INSERT INTO archive SELECT * FROM users WHERE deleted = true", false)
+	tables, _ := dukdb.GetTableNames(
+		conn,
+		"INSERT INTO archive SELECT * FROM users WHERE deleted = true",
+		false,
+	)
 	fmt.Println("INSERT SELECT:", tables)
 
 	// UPDATE with FROM
-	tables, _ = dukdb.GetTableNames(conn, "UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"UPDATE users SET x = s.y FROM stats s WHERE users.id = s.id",
+		false,
+	)
 	fmt.Println("UPDATE FROM:", tables)
 
 	// DELETE with subquery
-	tables, _ = dukdb.GetTableNames(conn, "DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"DELETE FROM users WHERE id IN (SELECT user_id FROM deleted)",
+		false,
+	)
 	fmt.Println("DELETE subquery:", tables)
 
 	// Output:
@@ -162,7 +198,11 @@ func Example_getTableNames_setOperations() {
 	fmt.Println("INTERSECT:", tables)
 
 	// Chained UNION
-	tables, _ = dukdb.GetTableNames(conn, "SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c", false)
+	tables, _ = dukdb.GetTableNames(
+		conn,
+		"SELECT * FROM a UNION SELECT * FROM b UNION SELECT * FROM c",
+		false,
+	)
 	fmt.Println("Chained UNION:", tables)
 
 	// Output:

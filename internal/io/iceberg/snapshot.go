@@ -49,7 +49,10 @@ func (s *SnapshotSelector) SnapshotByName(name string) (*Snapshot, error) {
 // SnapshotAsOfTimestamp returns the snapshot that was current at or just before
 // the given timestamp. If inclusive is true, snapshots at exactly the timestamp
 // are included; otherwise, only snapshots strictly before the timestamp are returned.
-func (s *SnapshotSelector) SnapshotAsOfTimestamp(timestamp time.Time, inclusive bool) (*Snapshot, error) {
+func (s *SnapshotSelector) SnapshotAsOfTimestamp(
+	timestamp time.Time,
+	inclusive bool,
+) (*Snapshot, error) {
 	timestampMs := timestamp.UnixMilli()
 
 	return s.SnapshotAsOfTimestampMs(timestampMs, inclusive)
@@ -57,7 +60,10 @@ func (s *SnapshotSelector) SnapshotAsOfTimestamp(timestamp time.Time, inclusive 
 
 // SnapshotAsOfTimestampMs returns the snapshot that was current at or just before
 // the given timestamp in milliseconds.
-func (s *SnapshotSelector) SnapshotAsOfTimestampMs(timestampMs int64, inclusive bool) (*Snapshot, error) {
+func (s *SnapshotSelector) SnapshotAsOfTimestampMs(
+	timestampMs int64,
+	inclusive bool,
+) (*Snapshot, error) {
 	snapshots := s.metadata.Snapshots()
 	if len(snapshots) == 0 {
 		return nil, ErrNoCurrentSnapshot

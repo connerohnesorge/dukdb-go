@@ -18,12 +18,16 @@ func TestReturningClauseIntegration(t *testing.T) {
 	defer db.Close()
 
 	// Create test table
-	_, err = db.Exec(`CREATE TABLE returning_test (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER)`)
+	_, err = db.Exec(
+		`CREATE TABLE returning_test (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	// Test INSERT RETURNING
 	t.Run("INSERT RETURNING", func(t *testing.T) {
-		rows, err := db.Query(`INSERT INTO returning_test (id, name, value) VALUES (1, 'Alice', 100) RETURNING id, name`)
+		rows, err := db.Query(
+			`INSERT INTO returning_test (id, name, value) VALUES (1, 'Alice', 100) RETURNING id, name`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -38,7 +42,9 @@ func TestReturningClauseIntegration(t *testing.T) {
 
 	// Test UPDATE RETURNING
 	t.Run("UPDATE RETURNING", func(t *testing.T) {
-		rows, err := db.Query(`UPDATE returning_test SET value = 200 WHERE id = 1 RETURNING id, value`)
+		rows, err := db.Query(
+			`UPDATE returning_test SET value = 200 WHERE id = 1 RETURNING id, value`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -74,7 +80,9 @@ func TestDistinctOnIntegration(t *testing.T) {
 	defer db.Close()
 
 	// Create and populate test table
-	_, err = db.Exec(`CREATE TABLE distincton_test (category VARCHAR, value INTEGER, created_at INTEGER)`)
+	_, err = db.Exec(
+		`CREATE TABLE distincton_test (category VARCHAR, value INTEGER, created_at INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO distincton_test VALUES
@@ -238,7 +246,9 @@ func TestLateralJoinIntegration(t *testing.T) {
 
 	_, err = db.Exec(`INSERT INTO lateral_main VALUES (1, 2), (2, 1)`)
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO lateral_detail VALUES (1, 10), (1, 20), (1, 30), (2, 100), (2, 200)`)
+	_, err = db.Exec(
+		`INSERT INTO lateral_detail VALUES (1, 10), (1, 20), (1, 30), (2, 100), (2, 200)`,
+	)
 	require.NoError(t, err)
 
 	// Test LATERAL join - for each main row, get top N details based on main.limit_val

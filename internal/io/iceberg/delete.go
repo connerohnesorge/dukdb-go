@@ -24,7 +24,11 @@ type DeleteFileApplier interface {
 	// ApplyDeletes applies delete files to a data chunk, removing deleted rows.
 	// The currentDataFile parameter identifies which data file the chunk came from.
 	// The startRowPosition is the 0-indexed position of the first row in the chunk within the data file.
-	ApplyDeletes(chunk *storage.DataChunk, currentDataFile string, startRowPosition int64) (*storage.DataChunk, error)
+	ApplyDeletes(
+		chunk *storage.DataChunk,
+		currentDataFile string,
+		startRowPosition int64,
+	) (*storage.DataChunk, error)
 
 	// LoadDeleteFiles loads delete files for a data file.
 	LoadDeleteFiles(dataFile *DataFile, deleteFiles []*DataFile) error
@@ -76,7 +80,11 @@ type EqualityDeleteRecord struct {
 type NoOpDeleteApplier struct{}
 
 // ApplyDeletes returns the chunk unchanged.
-func (a *NoOpDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentDataFile string, startRowPosition int64) (*storage.DataChunk, error) {
+func (a *NoOpDeleteApplier) ApplyDeletes(
+	chunk *storage.DataChunk,
+	currentDataFile string,
+	startRowPosition int64,
+) (*storage.DataChunk, error) {
 	return chunk, nil
 }
 
@@ -110,7 +118,10 @@ type PositionalDeleteApplier struct {
 }
 
 // NewPositionalDeleteApplier creates a new PositionalDeleteApplier.
-func NewPositionalDeleteApplier(fs filesystem.FileSystem, tableLocation string) *PositionalDeleteApplier {
+func NewPositionalDeleteApplier(
+	fs filesystem.FileSystem,
+	tableLocation string,
+) *PositionalDeleteApplier {
 	if fs == nil {
 		fs = filesystem.NewLocalFileSystem("")
 	}
@@ -122,7 +133,11 @@ func NewPositionalDeleteApplier(fs filesystem.FileSystem, tableLocation string) 
 }
 
 // ApplyDeletes filters out deleted rows from a chunk based on positional deletes.
-func (a *PositionalDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentDataFile string, startRowPosition int64) (*storage.DataChunk, error) {
+func (a *PositionalDeleteApplier) ApplyDeletes(
+	chunk *storage.DataChunk,
+	currentDataFile string,
+	startRowPosition int64,
+) (*storage.DataChunk, error) {
 	if !a.loaded || len(a.deletedPositions) == 0 {
 		return chunk, nil
 	}
@@ -180,7 +195,10 @@ func (a *PositionalDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, current
 }
 
 // LoadDeleteFiles loads positional delete files for a data file.
-func (a *PositionalDeleteApplier) LoadDeleteFiles(dataFile *DataFile, deleteFiles []*DataFile) error {
+func (a *PositionalDeleteApplier) LoadDeleteFiles(
+	dataFile *DataFile,
+	deleteFiles []*DataFile,
+) error {
 	for _, df := range deleteFiles {
 		// Only process positional delete files
 		if df.Format != FileFormatParquet && df.Format != FileFormatAvro {
@@ -351,7 +369,11 @@ type EqualityDeleteApplier struct {
 }
 
 // NewEqualityDeleteApplier creates a new EqualityDeleteApplier.
-func NewEqualityDeleteApplier(fs filesystem.FileSystem, tableLocation string, columnNames []string) *EqualityDeleteApplier {
+func NewEqualityDeleteApplier(
+	fs filesystem.FileSystem,
+	tableLocation string,
+	columnNames []string,
+) *EqualityDeleteApplier {
 	if fs == nil {
 		fs = filesystem.NewLocalFileSystem("")
 	}
@@ -373,7 +395,11 @@ func NewEqualityDeleteApplier(fs filesystem.FileSystem, tableLocation string, co
 }
 
 // ApplyDeletes filters out deleted rows from a chunk based on equality deletes.
-func (a *EqualityDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentDataFile string, startRowPosition int64) (*storage.DataChunk, error) {
+func (a *EqualityDeleteApplier) ApplyDeletes(
+	chunk *storage.DataChunk,
+	currentDataFile string,
+	startRowPosition int64,
+) (*storage.DataChunk, error) {
 	if !a.loaded || len(a.deleteRecords) == 0 {
 		return chunk, nil
 	}
@@ -403,7 +429,11 @@ func (a *EqualityDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentDa
 }
 
 // rowMatchesDelete checks if a row matches an equality delete record.
-func (a *EqualityDeleteApplier) rowMatchesDelete(chunk *storage.DataChunk, row int, deleteRec EqualityDeleteRecord) bool {
+func (a *EqualityDeleteApplier) rowMatchesDelete(
+	chunk *storage.DataChunk,
+	row int,
+	deleteRec EqualityDeleteRecord,
+) bool {
 	for colName, deleteValue := range deleteRec.Values {
 		colIdx, exists := a.columnIndices[colName]
 		if !exists {
@@ -467,7 +497,10 @@ func (a *EqualityDeleteApplier) loadEqualityDeleteFile(df *DataFile) error {
 }
 
 // loadEqualityDeleteParquet loads equality deletes from a Parquet file.
-func (a *EqualityDeleteApplier) loadEqualityDeleteParquet(filePath string, equalityFieldIDs []int) error {
+func (a *EqualityDeleteApplier) loadEqualityDeleteParquet(
+	filePath string,
+	equalityFieldIDs []int,
+) error {
 	reader, err := parquet.NewReaderFromPath(filePath, &parquet.ReaderOptions{
 		MaxRowsPerChunk: storage.StandardVectorSize,
 	})
@@ -572,7 +605,11 @@ type CompositeDeleteApplier struct {
 }
 
 // NewCompositeDeleteApplier creates a composite delete applier.
-func NewCompositeDeleteApplier(fs filesystem.FileSystem, tableLocation string, columnNames []string) *CompositeDeleteApplier {
+func NewCompositeDeleteApplier(
+	fs filesystem.FileSystem,
+	tableLocation string,
+	columnNames []string,
+) *CompositeDeleteApplier {
 	return &CompositeDeleteApplier{
 		positional: NewPositionalDeleteApplier(fs, tableLocation),
 		equality:   NewEqualityDeleteApplier(fs, tableLocation, columnNames),
@@ -580,7 +617,11 @@ func NewCompositeDeleteApplier(fs filesystem.FileSystem, tableLocation string, c
 }
 
 // ApplyDeletes applies both positional and equality deletes.
-func (a *CompositeDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentDataFile string, startRowPosition int64) (*storage.DataChunk, error) {
+func (a *CompositeDeleteApplier) ApplyDeletes(
+	chunk *storage.DataChunk,
+	currentDataFile string,
+	startRowPosition int64,
+) (*storage.DataChunk, error) {
 	// Apply positional deletes first
 	result, err := a.positional.ApplyDeletes(chunk, currentDataFile, startRowPosition)
 	if err != nil {
@@ -597,7 +638,10 @@ func (a *CompositeDeleteApplier) ApplyDeletes(chunk *storage.DataChunk, currentD
 }
 
 // LoadDeleteFiles loads delete files, routing to appropriate handler.
-func (a *CompositeDeleteApplier) LoadDeleteFiles(dataFile *DataFile, deleteFiles []*DataFile) error {
+func (a *CompositeDeleteApplier) LoadDeleteFiles(
+	dataFile *DataFile,
+	deleteFiles []*DataFile,
+) error {
 	positionalDeletes := make([]*DataFile, 0)
 	equalityDeletes := make([]*DataFile, 0)
 
@@ -664,7 +708,9 @@ func (a *DeleteApplierWithTracking) SetCurrentFile(dataFile string) {
 }
 
 // ApplyDeletes applies deletes and updates position tracking.
-func (a *DeleteApplierWithTracking) ApplyDeletes(chunk *storage.DataChunk) (*storage.DataChunk, error) {
+func (a *DeleteApplierWithTracking) ApplyDeletes(
+	chunk *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	result, err := a.applier.ApplyDeletes(chunk, a.currentDataFile, a.currentStartPosition)
 	if err != nil {
 		return nil, err
@@ -675,7 +721,10 @@ func (a *DeleteApplierWithTracking) ApplyDeletes(chunk *storage.DataChunk) (*sto
 }
 
 // LoadDeleteFiles delegates to underlying applier.
-func (a *DeleteApplierWithTracking) LoadDeleteFiles(dataFile *DataFile, deleteFiles []*DataFile) error {
+func (a *DeleteApplierWithTracking) LoadDeleteFiles(
+	dataFile *DataFile,
+	deleteFiles []*DataFile,
+) error {
 	return a.applier.LoadDeleteFiles(dataFile, deleteFiles)
 }
 
@@ -691,7 +740,13 @@ func (a *DeleteApplierWithTracking) Close() error {
 
 // CreateDeleteApplier creates the appropriate delete applier based on delete files.
 // If there are no delete files, returns a NoOpDeleteApplier for efficiency.
-func CreateDeleteApplier(ctx context.Context, deleteFiles []*DataFile, fs filesystem.FileSystem, tableLocation string, columnNames []string) DeleteFileApplier {
+func CreateDeleteApplier(
+	ctx context.Context,
+	deleteFiles []*DataFile,
+	fs filesystem.FileSystem,
+	tableLocation string,
+	columnNames []string,
+) DeleteFileApplier {
 	if len(deleteFiles) == 0 {
 		return &NoOpDeleteApplier{}
 	}
@@ -775,7 +830,10 @@ func createEmptyChunk(original *storage.DataChunk) *storage.DataChunk {
 }
 
 // filterChunkWithDeletes creates a new chunk without the deleted rows.
-func filterChunkWithDeletes(chunk *storage.DataChunk, deletedIndices map[int]bool) (*storage.DataChunk, error) {
+func filterChunkWithDeletes(
+	chunk *storage.DataChunk,
+	deletedIndices map[int]bool,
+) (*storage.DataChunk, error) {
 	// Count non-deleted rows
 	keepCount := chunk.Count() - len(deletedIndices)
 	if keepCount <= 0 {
@@ -939,7 +997,9 @@ func (a *LegacyDeleteFileApplier) SetCurrentDataFile(path string) {
 }
 
 // ApplyDeletes applies deletes using the stored context.
-func (a *LegacyDeleteFileApplier) ApplyDeletes(chunk *storage.DataChunk) (*storage.DataChunk, error) {
+func (a *LegacyDeleteFileApplier) ApplyDeletes(
+	chunk *storage.DataChunk,
+) (*storage.DataChunk, error) {
 	result, err := a.inner.ApplyDeletes(chunk, a.currentFile, a.currentOffset)
 	if err == nil {
 		a.currentOffset += int64(chunk.Count())
@@ -948,7 +1008,10 @@ func (a *LegacyDeleteFileApplier) ApplyDeletes(chunk *storage.DataChunk) (*stora
 }
 
 // LoadDeleteFiles delegates to inner applier.
-func (a *LegacyDeleteFileApplier) LoadDeleteFiles(dataFile *DataFile, deleteFiles []*DataFile) error {
+func (a *LegacyDeleteFileApplier) LoadDeleteFiles(
+	dataFile *DataFile,
+	deleteFiles []*DataFile,
+) error {
 	return a.inner.LoadDeleteFiles(dataFile, deleteFiles)
 }
 
@@ -989,7 +1052,6 @@ func GetDataFileContentType(df *DataFile) DataFileContentType {
 
 	return DataFileContentData
 }
-
 
 // Compile-time interface checks
 var _ DeleteFileApplier = (*NoOpDeleteApplier)(nil)

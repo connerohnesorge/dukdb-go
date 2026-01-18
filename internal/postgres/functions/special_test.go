@@ -36,7 +36,12 @@ func TestPgTypeof(t *testing.T) {
 		t.Run(tt.duckDBType, func(t *testing.T) {
 			name := f.EvaluateFromDuckDBType(tt.duckDBType)
 			if name != tt.wantName {
-				t.Errorf("EvaluateFromDuckDBType(%q) = %q, want %q", tt.duckDBType, name, tt.wantName)
+				t.Errorf(
+					"EvaluateFromDuckDBType(%q) = %q, want %q",
+					tt.duckDBType,
+					name,
+					tt.wantName,
+				)
 			}
 		})
 	}

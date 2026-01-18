@@ -38,9 +38,9 @@ func (p *EqualityPartitionPredicate) Evaluate(partitionData map[string]any) bool
 
 // RangePartitionPredicate is a partition predicate for range checks.
 type RangePartitionPredicate struct {
-	FieldName string
-	LowerBound any
-	UpperBound any
+	FieldName      string
+	LowerBound     any
+	UpperBound     any
 	LowerInclusive bool
 	UpperInclusive bool
 }

@@ -100,9 +100,9 @@ func TestDecodeTinyInt(t *testing.T) {
 
 func TestDecodeSmallInt(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    int16
-		wantErr  bool
+		name    string
+		value   int16
+		wantErr bool
 	}{
 		{"zero", 0, false},
 		{"positive max", 32767, false},
@@ -455,14 +455,18 @@ func TestDecimalRoundTrip(t *testing.T) {
 
 func TestDecodeVarchar(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    string
-		wantErr  bool
+		name    string
+		value   string
+		wantErr bool
 	}{
 		{"empty", "", false},
 		{"hello", "hello", false},
 		{"unicode", "Hello, 世界! 🌍", false},
-		{"long string", "This is a longer string with more characters for testing purposes.", false},
+		{
+			"long string",
+			"This is a longer string with more characters for testing purposes.",
+			false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -708,8 +712,8 @@ func TestDecodeTime(t *testing.T) {
 
 func TestDecodeTimeNS(t *testing.T) {
 	tests := []struct {
-		name   string
-		nanos  int64
+		name     string
+		nanos    int64
 		expected TimeNS
 	}{
 		{"midnight", 0, TimeNS{0}},
@@ -899,7 +903,24 @@ func TestDecodeUUID(t *testing.T) {
 		},
 		{
 			"typical",
-			[16]byte{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0},
+			[16]byte{
+				0x12,
+				0x34,
+				0x56,
+				0x78,
+				0x9a,
+				0xbc,
+				0xde,
+				0xf0,
+				0x12,
+				0x34,
+				0x56,
+				0x78,
+				0x9a,
+				0xbc,
+				0xde,
+				0xf0,
+			},
 			"12345678-9abc-def0-1234-56789abcdef0",
 		},
 	}
@@ -942,9 +963,9 @@ func TestUUIDRoundTrip(t *testing.T) {
 
 func TestDecodeEnum(t *testing.T) {
 	tests := []struct {
-		name       string
-		values     []string
-		index      uint32
+		name        string
+		values      []string
+		index       uint32
 		expectedStr string
 	}{
 		{"small enum uint8", []string{"a", "b", "c"}, 1, "b"},
@@ -1173,7 +1194,11 @@ func TestUHugeIntToBigInt(t *testing.T) {
 		{"small positive", UHugeInt{12345, 0}, "12345"},
 		{"max uint64 lower", UHugeInt{math.MaxUint64, 0}, "18446744073709551615"},
 		{"with upper bits", UHugeInt{0, 1}, "18446744073709551616"},
-		{"max value", UHugeInt{math.MaxUint64, math.MaxUint64}, "340282366920938463463374607431768211455"},
+		{
+			"max value",
+			UHugeInt{math.MaxUint64, math.MaxUint64},
+			"340282366920938463463374607431768211455",
+		},
 	}
 
 	for _, tt := range tests {

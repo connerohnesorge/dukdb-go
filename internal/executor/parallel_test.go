@@ -139,7 +139,11 @@ func TestParallelExecutorUpdateConfig(t *testing.T) {
 }
 
 // createTestTableDef creates a TableDef for testing with the specified row count.
-func createTestTableDef(name string, rowCount int64, columns ...*catalog.ColumnDef) *catalog.TableDef {
+func createTestTableDef(
+	name string,
+	rowCount int64,
+	columns ...*catalog.ColumnDef,
+) *catalog.TableDef {
 	if len(columns) == 0 {
 		columns = []*catalog.ColumnDef{
 			{Name: "id", Type: dukdb.TYPE_INTEGER},

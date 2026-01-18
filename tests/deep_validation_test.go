@@ -20,11 +20,15 @@ func TestDeepValidation_ReturningClause(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE TABLE ret_test (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER, updated_at INTEGER)`)
+	_, err = db.Exec(
+		`CREATE TABLE ret_test (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER, updated_at INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	t.Run("INSERT RETURNING with expressions", func(t *testing.T) {
-		rows, err := db.Query(`INSERT INTO ret_test (id, name, value, updated_at) VALUES (1, 'Alice', 100, 1000) RETURNING id, name, value * 2 AS double_value`)
+		rows, err := db.Query(
+			`INSERT INTO ret_test (id, name, value, updated_at) VALUES (1, 'Alice', 100, 1000) RETURNING id, name, value * 2 AS double_value`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -40,7 +44,9 @@ func TestDeepValidation_ReturningClause(t *testing.T) {
 	})
 
 	t.Run("INSERT RETURNING *", func(t *testing.T) {
-		rows, err := db.Query(`INSERT INTO ret_test (id, name, value, updated_at) VALUES (2, 'Bob', 200, 2000) RETURNING *`)
+		rows, err := db.Query(
+			`INSERT INTO ret_test (id, name, value, updated_at) VALUES (2, 'Bob', 200, 2000) RETURNING *`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -56,7 +62,9 @@ func TestDeepValidation_ReturningClause(t *testing.T) {
 	})
 
 	t.Run("UPDATE RETURNING old and new values", func(t *testing.T) {
-		rows, err := db.Query(`UPDATE ret_test SET value = value + 50 WHERE id = 1 RETURNING id, name, value`)
+		rows, err := db.Query(
+			`UPDATE ret_test SET value = value + 50 WHERE id = 1 RETURNING id, name, value`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -72,7 +80,9 @@ func TestDeepValidation_ReturningClause(t *testing.T) {
 
 	t.Run("DELETE RETURNING deleted rows", func(t *testing.T) {
 		// First add a row to delete
-		_, err := db.Exec(`INSERT INTO ret_test (id, name, value, updated_at) VALUES (3, 'Charlie', 300, 3000)`)
+		_, err := db.Exec(
+			`INSERT INTO ret_test (id, name, value, updated_at) VALUES (3, 'Charlie', 300, 3000)`,
+		)
 		require.NoError(t, err)
 
 		rows, err := db.Query(`DELETE FROM ret_test WHERE id = 3 RETURNING id, name, value`)
@@ -96,7 +106,9 @@ func TestDeepValidation_ReturningClause(t *testing.T) {
 	})
 
 	t.Run("Multi-row INSERT RETURNING", func(t *testing.T) {
-		rows, err := db.Query(`INSERT INTO ret_test (id, name, value, updated_at) VALUES (10, 'X', 10, 10), (11, 'Y', 11, 11), (12, 'Z', 12, 12) RETURNING id, name`)
+		rows, err := db.Query(
+			`INSERT INTO ret_test (id, name, value, updated_at) VALUES (10, 'X', 10, 10), (11, 'Y', 11, 11), (12, 'Z', 12, 12) RETURNING id, name`,
+		)
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -218,17 +230,23 @@ func TestDeepValidation_MergeInto(t *testing.T) {
 	defer db.Close()
 
 	t.Run("MERGE with UPDATE and INSERT", func(t *testing.T) {
-		_, err = db.Exec(`CREATE TABLE target (id INTEGER PRIMARY KEY, value INTEGER, status VARCHAR)`)
+		_, err = db.Exec(
+			`CREATE TABLE target (id INTEGER PRIMARY KEY, value INTEGER, status VARCHAR)`,
+		)
 		require.NoError(t, err)
 		_, err = db.Exec(`CREATE TABLE source (id INTEGER, value INTEGER, status VARCHAR)`)
 		require.NoError(t, err)
 
 		// Initial target data
-		_, err = db.Exec(`INSERT INTO target VALUES (1, 100, 'active'), (2, 200, 'active'), (3, 300, 'inactive')`)
+		_, err = db.Exec(
+			`INSERT INTO target VALUES (1, 100, 'active'), (2, 200, 'active'), (3, 300, 'inactive')`,
+		)
 		require.NoError(t, err)
 
 		// Source data: updates for 1 and 2, new row 4
-		_, err = db.Exec(`INSERT INTO source VALUES (1, 150, 'updated'), (2, 250, 'updated'), (4, 400, 'new')`)
+		_, err = db.Exec(
+			`INSERT INTO source VALUES (1, 150, 'updated'), (2, 250, 'updated'), (4, 400, 'new')`,
+		)
 		require.NoError(t, err)
 
 		// Execute MERGE
@@ -318,7 +336,9 @@ func TestDeepValidation_LateralJoins(t *testing.T) {
 	t.Run("LATERAL with TOP N per group", func(t *testing.T) {
 		_, err = db.Exec(`CREATE TABLE categories (id INTEGER, cat_name VARCHAR, top_n INTEGER)`)
 		require.NoError(t, err)
-		_, err = db.Exec(`CREATE TABLE products (category_id INTEGER, prod_name VARCHAR, price DECIMAL)`)
+		_, err = db.Exec(
+			`CREATE TABLE products (category_id INTEGER, prod_name VARCHAR, price DECIMAL)`,
+		)
 		require.NoError(t, err)
 
 		_, err = db.Exec(`INSERT INTO categories VALUES (1, 'Electronics', 2), (2, 'Books', 3)`)
@@ -370,7 +390,9 @@ func TestDeepValidation_GroupingSets(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE TABLE sales (region VARCHAR, product VARCHAR, year INTEGER, amount INTEGER)`)
+	_, err = db.Exec(
+		`CREATE TABLE sales (region VARCHAR, product VARCHAR, year INTEGER, amount INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO sales VALUES
@@ -453,7 +475,9 @@ func TestDeepValidation_PivotUnpivot(t *testing.T) {
 	defer db.Close()
 
 	t.Run("PIVOT transforms rows to columns", func(t *testing.T) {
-		_, err = db.Exec(`CREATE TABLE quarterly_data (year INTEGER, quarter VARCHAR, revenue INTEGER)`)
+		_, err = db.Exec(
+			`CREATE TABLE quarterly_data (year INTEGER, quarter VARCHAR, revenue INTEGER)`,
+		)
 		require.NoError(t, err)
 
 		_, err = db.Exec(`INSERT INTO quarterly_data VALUES
@@ -482,7 +506,9 @@ func TestDeepValidation_PivotUnpivot(t *testing.T) {
 	})
 
 	t.Run("UNPIVOT transforms columns to rows", func(t *testing.T) {
-		_, err = db.Exec(`CREATE TABLE wide_data (id INTEGER, jan INTEGER, feb INTEGER, mar INTEGER)`)
+		_, err = db.Exec(
+			`CREATE TABLE wide_data (id INTEGER, jan INTEGER, feb INTEGER, mar INTEGER)`,
+		)
 		require.NoError(t, err)
 
 		_, err = db.Exec(`INSERT INTO wide_data VALUES (1, 100, 110, 120), (2, 200, 210, 220)`)
@@ -513,7 +539,9 @@ func TestDeepValidation_DistinctOn(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE TABLE events (category VARCHAR, event_name VARCHAR, event_time INTEGER, priority INTEGER)`)
+	_, err = db.Exec(
+		`CREATE TABLE events (category VARCHAR, event_name VARCHAR, event_time INTEGER, priority INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO events VALUES
@@ -705,7 +733,9 @@ func TestDeepValidation_Sample(t *testing.T) {
 	t.Run("REPEATABLE produces consistent results", func(t *testing.T) {
 		// Run the same query twice with same seed
 		getCount := func() int {
-			rows, err := db.Query(`SELECT * FROM large_table TABLESAMPLE BERNOULLI(20) REPEATABLE(42)`)
+			rows, err := db.Query(
+				`SELECT * FROM large_table TABLESAMPLE BERNOULLI(20) REPEATABLE(42)`,
+			)
 			require.NoError(t, err)
 			defer rows.Close()
 

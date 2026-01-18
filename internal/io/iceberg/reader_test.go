@@ -189,14 +189,22 @@ func TestPartitionFilter(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name:      "IN list match",
-			filter:    PartitionFilterExpr{FieldName: "region", Operator: "IN", Value: []any{"US", "EU"}},
+			name: "IN list match",
+			filter: PartitionFilterExpr{
+				FieldName: "region",
+				Operator:  "IN",
+				Value:     []any{"US", "EU"},
+			},
 			partData:  map[string]any{"region": "US"},
 			wantMatch: true,
 		},
 		{
-			name:      "IN list no match",
-			filter:    PartitionFilterExpr{FieldName: "region", Operator: "IN", Value: []any{"US", "EU"}},
+			name: "IN list no match",
+			filter: PartitionFilterExpr{
+				FieldName: "region",
+				Operator:  "IN",
+				Value:     []any{"US", "EU"},
+			},
 			partData:  map[string]any{"region": "APAC"},
 			wantMatch: false,
 		},
@@ -242,7 +250,13 @@ func TestCreateDeleteApplierLegacy(t *testing.T) {
 	assert.IsType(t, &NoOpDeleteApplier{}, applier)
 
 	// With positional delete files, should return PositionalDeleteApplier
-	applier = CreateDeleteApplier(ctx, []*DataFile{{Path: "delete.parquet", Format: FileFormatParquet}}, nil, "/test", []string{})
+	applier = CreateDeleteApplier(
+		ctx,
+		[]*DataFile{{Path: "delete.parquet", Format: FileFormatParquet}},
+		nil,
+		"/test",
+		[]string{},
+	)
 	assert.IsType(t, &PositionalDeleteApplier{}, applier)
 }
 

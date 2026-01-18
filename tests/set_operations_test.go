@@ -132,10 +132,10 @@ func TestSTIntersection(t *testing.T) {
 	defer db.Close()
 
 	tests := []struct {
-		name        string
-		query       string
-		expectNil   bool
-		validate    func(t *testing.T, result string)
+		name      string
+		query     string
+		expectNil bool
+		validate  func(t *testing.T, result string)
 	}{
 		{
 			name:  "overlapping polygons intersection",
@@ -172,7 +172,12 @@ func TestSTIntersection(t *testing.T) {
 			if tt.expectNil {
 				// We're using CASE WHEN ... IS NULL, so result should be 'NULL'
 				require.True(t, result.Valid)
-				assert.Equal(t, "NULL", result.String, "expected NULL result for empty intersection")
+				assert.Equal(
+					t,
+					"NULL",
+					result.String,
+					"expected NULL result for empty intersection",
+				)
 				return
 			}
 
@@ -364,9 +369,13 @@ func TestSetOperationsWithTable(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert parcels
-	_, err = db.Exec(`INSERT INTO parcels VALUES (1, 'Parcel A', ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))`)
+	_, err = db.Exec(
+		`INSERT INTO parcels VALUES (1, 'Parcel A', ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))`,
+	)
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO parcels VALUES (2, 'Parcel B', ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))`)
+	_, err = db.Exec(
+		`INSERT INTO parcels VALUES (2, 'Parcel B', ST_GeomFromText('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))`,
+	)
 	require.NoError(t, err)
 
 	// Test intersection of two parcels

@@ -8,10 +8,10 @@ import (
 
 // windowFunctionInfo holds metadata about a window function.
 type windowFunctionInfo struct {
-	FuncType    WindowFunctionType
-	MinArgs     int
-	MaxArgs     int
-	ReturnType  dukdb.Type // Fixed return type (TYPE_ANY means inferred from first arg)
+	FuncType            WindowFunctionType
+	MinArgs             int
+	MaxArgs             int
+	ReturnType          dukdb.Type // Fixed return type (TYPE_ANY means inferred from first arg)
 	SupportsIgnoreNulls bool
 }
 
@@ -660,7 +660,12 @@ func inferFunctionResultType(
 		return dukdb.TYPE_BOOLEAN
 
 	// Geometry functions
-	case "ST_GEOMFROMTEXT", "ST_GEOMETRYFROMTEXT", "ST_POINT", "ST_MAKELINE", "ST_SETSRID", "ST_ENVELOPE":
+	case "ST_GEOMFROMTEXT",
+		"ST_GEOMETRYFROMTEXT",
+		"ST_POINT",
+		"ST_MAKELINE",
+		"ST_SETSRID",
+		"ST_ENVELOPE":
 		return dukdb.TYPE_GEOMETRY
 	case "ST_ASTEXT", "ST_ASWKT", "ST_GEOMETRYTYPE":
 		return dukdb.TYPE_VARCHAR
@@ -844,7 +849,12 @@ func getFunctionArgTypes(
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR}
 		}
-	case "LEVENSHTEIN", "DAMERAU_LEVENSHTEIN", "HAMMING", "JACCARD", "JARO_SIMILARITY", "JARO_WINKLER_SIMILARITY":
+	case "LEVENSHTEIN",
+		"DAMERAU_LEVENSHTEIN",
+		"HAMMING",
+		"JACCARD",
+		"JARO_SIMILARITY",
+		"JARO_WINKLER_SIMILARITY":
 		// Two string argument functions
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
@@ -1097,7 +1107,15 @@ func getFunctionArgTypes(
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR}
 		}
-	case "ST_ASTEXT", "ST_ASWKT", "ST_ASBINARY", "ST_ASWKB", "ST_GEOMETRYTYPE", "ST_X", "ST_Y", "ST_Z", "ST_SRID":
+	case "ST_ASTEXT",
+		"ST_ASWKT",
+		"ST_ASBINARY",
+		"ST_ASWKB",
+		"ST_GEOMETRYTYPE",
+		"ST_X",
+		"ST_Y",
+		"ST_Z",
+		"ST_SRID":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
 		}

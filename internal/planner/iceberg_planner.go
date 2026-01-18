@@ -124,7 +124,9 @@ func (p *IcebergPlanner) tryExtractPartitionFilter(expr binder.BoundExpr) (Parti
 }
 
 // tryExtractBinaryPartitionFilter attempts to extract a partition filter from a binary expression.
-func (p *IcebergPlanner) tryExtractBinaryPartitionFilter(expr *binder.BoundBinaryExpr) (PartitionFilter, bool) {
+func (p *IcebergPlanner) tryExtractBinaryPartitionFilter(
+	expr *binder.BoundBinaryExpr,
+) (PartitionFilter, bool) {
 	// Check if this is a comparison operator
 	op := p.binaryOpToFilterOp(expr.Op)
 	if op == "" {
@@ -156,7 +158,9 @@ func (p *IcebergPlanner) tryExtractBinaryPartitionFilter(expr *binder.BoundBinar
 }
 
 // tryExtractInListPartitionFilter attempts to extract a partition filter from an IN list expression.
-func (p *IcebergPlanner) tryExtractInListPartitionFilter(expr *binder.BoundInListExpr) (PartitionFilter, bool) {
+func (p *IcebergPlanner) tryExtractInListPartitionFilter(
+	expr *binder.BoundInListExpr,
+) (PartitionFilter, bool) {
 	// Check if the expression is a column reference
 	colRef, ok := expr.Expr.(*binder.BoundColumnRef)
 	if !ok {
@@ -187,7 +191,9 @@ func (p *IcebergPlanner) tryExtractInListPartitionFilter(expr *binder.BoundInLis
 }
 
 // tryExtractUnaryPartitionFilter attempts to extract a partition filter from a unary expression.
-func (p *IcebergPlanner) tryExtractUnaryPartitionFilter(expr *binder.BoundUnaryExpr) (PartitionFilter, bool) {
+func (p *IcebergPlanner) tryExtractUnaryPartitionFilter(
+	expr *binder.BoundUnaryExpr,
+) (PartitionFilter, bool) {
 	// Check for IS NULL or IS NOT NULL on a column
 	if expr.Op == parser.OpIsNull || expr.Op == parser.OpIsNotNull {
 		colRef, ok := expr.Expr.(*binder.BoundColumnRef)
@@ -293,7 +299,10 @@ func (p *IcebergPlanner) ExtractColumnProjection(
 }
 
 // collectColumnReferences recursively collects column references from an expression.
-func (p *IcebergPlanner) collectColumnReferences(expr binder.BoundExpr, columns map[string]struct{}) {
+func (p *IcebergPlanner) collectColumnReferences(
+	expr binder.BoundExpr,
+	columns map[string]struct{},
+) {
 	if expr == nil {
 		return
 	}

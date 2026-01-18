@@ -23,7 +23,12 @@ func TestChecksumBlock(t *testing.T) {
 
 	t.Run("single byte", func(t *testing.T) {
 		checksum := checksumBlock([]byte{0x42})
-		assert.NotEqual(t, checksumInitial, checksum, "single byte should produce different checksum than initial")
+		assert.NotEqual(
+			t,
+			checksumInitial,
+			checksum,
+			"single byte should produce different checksum than initial",
+		)
 	})
 
 	t.Run("exactly 8 bytes", func(t *testing.T) {
@@ -34,7 +39,12 @@ func TestChecksumBlock(t *testing.T) {
 		value := binary.LittleEndian.Uint64(data)
 		expected := checksumInitial ^ (value * checksumMultiplier)
 
-		assert.Equal(t, expected, checksum, "8-byte data should XOR multiplication hash with initial")
+		assert.Equal(
+			t,
+			expected,
+			checksum,
+			"8-byte data should XOR multiplication hash with initial",
+		)
 	})
 
 	t.Run("16 bytes", func(t *testing.T) {
@@ -74,7 +84,12 @@ func TestChecksumBlock(t *testing.T) {
 		data2 := []byte("Hello, DukDB!!")
 		checksum1 := checksumBlock(data1)
 		checksum2 := checksumBlock(data2)
-		assert.NotEqual(t, checksum1, checksum2, "different data should produce different checksums")
+		assert.NotEqual(
+			t,
+			checksum1,
+			checksum2,
+			"different data should produce different checksums",
+		)
 	})
 }
 

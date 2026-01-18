@@ -106,13 +106,33 @@ func TestGroupByExecution(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES (1, 'North', 'Widget', 100)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO sales VALUES (1, 'North', 'Widget', 100)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES (2, 'North', 'Gadget', 200)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO sales VALUES (2, 'North', 'Gadget', 200)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES (3, 'South', 'Widget', 150)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO sales VALUES (3, 'South', 'Widget', 150)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES (4, 'South', 'Gadget', 250)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO sales VALUES (4, 'South', 'Gadget', 250)`,
+	)
 	require.NoError(t, err)
 
 	// Test GROUP BY region
@@ -127,7 +147,12 @@ func TestGroupByWithMultipleColumns(t *testing.T) {
 	exec, cat, _ := setupAdvancedSQLTestExecutor()
 
 	// Create and populate table
-	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE sales (region VARCHAR, product VARCHAR, amount INTEGER)`)
+	_, err := executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE sales (region VARCHAR, product VARCHAR, amount INTEGER)`,
+	)
 	require.NoError(t, err)
 	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES ('North', 'Widget', 100)`)
 	require.NoError(t, err)
@@ -150,7 +175,12 @@ func TestGroupByWithHaving(t *testing.T) {
 	exec, cat, _ := setupAdvancedSQLTestExecutor()
 
 	// Create and populate table
-	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE sales (region VARCHAR, amount INTEGER)`)
+	_, err := executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE sales (region VARCHAR, amount INTEGER)`,
+	)
 	require.NoError(t, err)
 	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO sales VALUES ('North', 100)`)
 	require.NoError(t, err)
@@ -241,7 +271,12 @@ func TestJoinExecution(t *testing.T) {
 	// Create tables
 	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE users (id INTEGER, name VARCHAR)`)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE orders (id INTEGER, user_id INTEGER, amount INTEGER)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE orders (id INTEGER, user_id INTEGER, amount INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	// Insert test data
@@ -273,7 +308,12 @@ func TestLeftJoinExecution(t *testing.T) {
 	// Create tables
 	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE users (id INTEGER, name VARCHAR)`)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `CREATE TABLE orders (id INTEGER, user_id INTEGER, amount INTEGER)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE orders (id INTEGER, user_id INTEGER, amount INTEGER)`,
+	)
 	require.NoError(t, err)
 
 	// Insert test data - Bob has no orders
@@ -364,7 +404,12 @@ func TestUpdateExecution(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test UPDATE with WHERE
-	result, err := executeAdvancedQuery(t, exec, cat, `UPDATE users SET name = 'Charlie' WHERE id = 1`)
+	result, err := executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`UPDATE users SET name = 'Charlie' WHERE id = 1`,
+	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), result.RowsAffected)
 
@@ -443,13 +488,33 @@ func TestComplexSelectWithMultipleClauses(t *testing.T) {
 		CREATE TABLE products (id INTEGER, name VARCHAR, category VARCHAR, price INTEGER)
 	`)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO products VALUES (1, 'Widget A', 'Electronics', 100)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (1, 'Widget A', 'Electronics', 100)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO products VALUES (2, 'Widget B', 'Electronics', 200)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (2, 'Widget B', 'Electronics', 200)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO products VALUES (3, 'Gadget A', 'Electronics', 150)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (3, 'Gadget A', 'Electronics', 150)`,
+	)
 	require.NoError(t, err)
-	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO products VALUES (4, 'Widget C', 'Home', 300)`)
+	_, err = executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`INSERT INTO products VALUES (4, 'Widget C', 'Home', 300)`,
+	)
 	require.NoError(t, err)
 
 	// Test complex SELECT with WHERE, GROUP BY, LIMIT
@@ -516,7 +581,12 @@ func TestAggregateWithDistinct(t *testing.T) {
 	exec, cat, _ := setupAdvancedSQLTestExecutor()
 
 	// Create and populate table with duplicates
-	_, err := executeAdvancedQuery(t, exec, cat, `CREATE TABLE items (category VARCHAR, value INTEGER)`)
+	_, err := executeAdvancedQuery(
+		t,
+		exec,
+		cat,
+		`CREATE TABLE items (category VARCHAR, value INTEGER)`,
+	)
 	require.NoError(t, err)
 	_, err = executeAdvancedQuery(t, exec, cat, `INSERT INTO items VALUES ('A', 10)`)
 	require.NoError(t, err)

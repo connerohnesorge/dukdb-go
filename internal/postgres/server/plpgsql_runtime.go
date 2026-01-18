@@ -80,7 +80,11 @@ func NewPLpgSQLScope(parent *PLpgSQLScope) *PLpgSQLScope {
 }
 
 // Declare declares a new variable in this scope.
-func (s *PLpgSQLScope) Declare(name, dataType string, value interface{}, constant, notNull bool) error {
+func (s *PLpgSQLScope) Declare(
+	name, dataType string,
+	value interface{},
+	constant, notNull bool,
+) error {
 	lowerName := strings.ToLower(name)
 	if _, exists := s.variables[lowerName]; exists {
 		return fmt.Errorf("variable \"%s\" already exists in this scope", name)
@@ -195,7 +199,11 @@ type PLpgSQLDiagnostics struct {
 
 // BackendConnInterface is the interface for database connections.
 type BackendConnInterface interface {
-	Query(ctx context.Context, query string, args []driver.NamedValue) ([]map[string]interface{}, []string, error)
+	Query(
+		ctx context.Context,
+		query string,
+		args []driver.NamedValue,
+	) ([]map[string]interface{}, []string, error)
 	Execute(ctx context.Context, query string, args []driver.NamedValue) (int64, error)
 }
 
@@ -213,7 +221,12 @@ func NewPLpgSQLExecutor(manager *PLpgSQLManager) *PLpgSQLExecutor {
 }
 
 // ExecuteFunction executes a stored function.
-func (e *PLpgSQLExecutor) ExecuteFunction(ctx context.Context, conn BackendConnInterface, fn *StoredFunction, args []interface{}) (interface{}, error) {
+func (e *PLpgSQLExecutor) ExecuteFunction(
+	ctx context.Context,
+	conn BackendConnInterface,
+	fn *StoredFunction,
+	args []interface{},
+) (interface{}, error) {
 	// Parse the function body
 	parser := NewPLpgSQLParser(fn.Body)
 	block, err := parser.Parse()
@@ -264,7 +277,12 @@ func (e *PLpgSQLExecutor) ExecuteFunction(ctx context.Context, conn BackendConnI
 }
 
 // ExecuteProcedure executes a stored procedure.
-func (e *PLpgSQLExecutor) ExecuteProcedure(ctx context.Context, conn BackendConnInterface, proc *StoredProcedure, args []interface{}) error {
+func (e *PLpgSQLExecutor) ExecuteProcedure(
+	ctx context.Context,
+	conn BackendConnInterface,
+	proc *StoredProcedure,
+	args []interface{},
+) error {
 	// Parse the procedure body
 	parser := NewPLpgSQLParser(proc.Body)
 	block, err := parser.Parse()
@@ -437,7 +455,10 @@ func (e *PLpgSQLExecutor) executeStatement(execCtx *PLpgSQLExecContext, stmt PLp
 }
 
 // executeAssign executes an assignment statement.
-func (e *PLpgSQLExecutor) executeAssign(execCtx *PLpgSQLExecContext, stmt *PLpgSQLAssignStmt) error {
+func (e *PLpgSQLExecutor) executeAssign(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLAssignStmt,
+) error {
 	value, err := e.evaluateExpr(execCtx, stmt.Expr)
 	if err != nil {
 		return err
@@ -446,7 +467,10 @@ func (e *PLpgSQLExecutor) executeAssign(execCtx *PLpgSQLExecContext, stmt *PLpgS
 }
 
 // executeReturn executes a RETURN statement.
-func (e *PLpgSQLExecutor) executeReturn(execCtx *PLpgSQLExecContext, stmt *PLpgSQLReturnStmt) error {
+func (e *PLpgSQLExecutor) executeReturn(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLReturnStmt,
+) error {
 	if stmt.IsReturnNext {
 		// RETURN NEXT for set-returning functions
 		if stmt.Expr != nil {
@@ -502,7 +526,10 @@ func (e *PLpgSQLExecutor) executeRaise(execCtx *PLpgSQLExecContext, stmt *PLpgSQ
 	switch stmt.Level {
 	case RaiseLevelDebug, RaiseLevelLog, RaiseLevelInfo, RaiseLevelNotice, RaiseLevelWarning:
 		// Store message for later delivery
-		execCtx.raiseMessages = append(execCtx.raiseMessages, fmt.Sprintf("%s: %s", stmt.Level.String(), message))
+		execCtx.raiseMessages = append(
+			execCtx.raiseMessages,
+			fmt.Sprintf("%s: %s", stmt.Level.String(), message),
+		)
 		return nil
 	case RaiseLevelException:
 		// Raise an exception
@@ -835,7 +862,10 @@ func (e *PLpgSQLExecutor) executeFor(execCtx *PLpgSQLExecContext, stmt *PLpgSQLF
 }
 
 // executeForQuery executes a query FOR loop statement.
-func (e *PLpgSQLExecutor) executeForQuery(execCtx *PLpgSQLExecContext, stmt *PLpgSQLForQueryStmt) error {
+func (e *PLpgSQLExecutor) executeForQuery(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLForQueryStmt,
+) error {
 	// Register label
 	if stmt.Label != "" {
 		execCtx.labels[strings.ToLower(stmt.Label)] = true
@@ -903,7 +933,10 @@ func (e *PLpgSQLExecutor) executeForQuery(execCtx *PLpgSQLExecContext, stmt *PLp
 }
 
 // executeForeach executes a FOREACH loop statement.
-func (e *PLpgSQLExecutor) executeForeach(execCtx *PLpgSQLExecContext, stmt *PLpgSQLForeachStmt) error {
+func (e *PLpgSQLExecutor) executeForeach(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLForeachStmt,
+) error {
 	// Evaluate array expression
 	arrayVal, err := e.evaluateExpr(execCtx, stmt.ArrayExpr)
 	if err != nil {
@@ -990,7 +1023,10 @@ func (e *PLpgSQLExecutor) executeExit(execCtx *PLpgSQLExecContext, stmt *PLpgSQL
 }
 
 // executeContinue executes a CONTINUE statement.
-func (e *PLpgSQLExecutor) executeContinue(execCtx *PLpgSQLExecContext, stmt *PLpgSQLContinueStmt) error {
+func (e *PLpgSQLExecutor) executeContinue(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLContinueStmt,
+) error {
 	// Check condition if present
 	if stmt.Condition != nil {
 		cond, err := e.evaluateCondition(execCtx, stmt.Condition)
@@ -1007,7 +1043,10 @@ func (e *PLpgSQLExecutor) executeContinue(execCtx *PLpgSQLExecContext, stmt *PLp
 }
 
 // executePerform executes a PERFORM statement.
-func (e *PLpgSQLExecutor) executePerform(execCtx *PLpgSQLExecContext, stmt *PLpgSQLPerformStmt) error {
+func (e *PLpgSQLExecutor) executePerform(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLPerformStmt,
+) error {
 	// Execute as SELECT and discard results
 	query := "SELECT " + stmt.Query
 	rows, _, err := e.executeQuery(execCtx, query)
@@ -1020,7 +1059,10 @@ func (e *PLpgSQLExecutor) executePerform(execCtx *PLpgSQLExecContext, stmt *PLpg
 }
 
 // executeExecute executes an EXECUTE statement (dynamic SQL).
-func (e *PLpgSQLExecutor) executeExecute(execCtx *PLpgSQLExecContext, stmt *PLpgSQLExecuteStmt) error {
+func (e *PLpgSQLExecutor) executeExecute(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLExecuteStmt,
+) error {
 	// Evaluate query expression
 	queryVal, err := e.evaluateExpr(execCtx, stmt.QueryExpr)
 	if err != nil {
@@ -1088,7 +1130,10 @@ func (e *PLpgSQLExecutor) executeExecute(execCtx *PLpgSQLExecContext, stmt *PLpg
 }
 
 // executeGetDiagnostics executes a GET DIAGNOSTICS statement.
-func (e *PLpgSQLExecutor) executeGetDiagnostics(execCtx *PLpgSQLExecContext, stmt *PLpgSQLGetDiagnosticsStmt) error {
+func (e *PLpgSQLExecutor) executeGetDiagnostics(
+	execCtx *PLpgSQLExecContext,
+	stmt *PLpgSQLGetDiagnosticsStmt,
+) error {
 	for _, item := range stmt.Items {
 		var value interface{}
 
@@ -1235,7 +1280,10 @@ func (e *PLpgSQLExecutor) executeCall(execCtx *PLpgSQLExecContext, stmt *PLpgSQL
 }
 
 // evaluateExpr evaluates a PL/pgSQL expression.
-func (e *PLpgSQLExecutor) evaluateExpr(execCtx *PLpgSQLExecContext, expr *PLpgSQLExpr) (interface{}, error) {
+func (e *PLpgSQLExecutor) evaluateExpr(
+	execCtx *PLpgSQLExecContext,
+	expr *PLpgSQLExpr,
+) (interface{}, error) {
 	if expr == nil {
 		return nil, nil
 	}
@@ -1283,7 +1331,10 @@ func (e *PLpgSQLExecutor) evaluateExpr(execCtx *PLpgSQLExecContext, expr *PLpgSQ
 }
 
 // evaluateCondition evaluates a condition expression to a boolean.
-func (e *PLpgSQLExecutor) evaluateCondition(execCtx *PLpgSQLExecContext, expr *PLpgSQLExpr) (bool, error) {
+func (e *PLpgSQLExecutor) evaluateCondition(
+	execCtx *PLpgSQLExecContext,
+	expr *PLpgSQLExpr,
+) (bool, error) {
 	val, err := e.evaluateExpr(execCtx, expr)
 	if err != nil {
 		return false, err
@@ -1292,13 +1343,19 @@ func (e *PLpgSQLExecutor) evaluateCondition(execCtx *PLpgSQLExecContext, expr *P
 }
 
 // executeQuery executes a SQL query and returns rows and column names.
-func (e *PLpgSQLExecutor) executeQuery(execCtx *PLpgSQLExecContext, query string) ([]map[string]interface{}, []string, error) {
+func (e *PLpgSQLExecutor) executeQuery(
+	execCtx *PLpgSQLExecContext,
+	query string,
+) ([]map[string]interface{}, []string, error) {
 	query = e.substituteVariables(execCtx, query)
 	return execCtx.conn.Query(execCtx.ctx, query, nil)
 }
 
 // executeNonQuery executes a SQL statement that doesn't return rows.
-func (e *PLpgSQLExecutor) executeNonQuery(execCtx *PLpgSQLExecContext, query string) (int64, error) {
+func (e *PLpgSQLExecutor) executeNonQuery(
+	execCtx *PLpgSQLExecContext,
+	query string,
+) (int64, error) {
 	query = e.substituteVariables(execCtx, query)
 	return execCtx.conn.Execute(execCtx.ctx, query, nil)
 }

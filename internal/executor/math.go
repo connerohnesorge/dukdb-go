@@ -31,7 +31,9 @@ var (
 	ErrMathDomainAcosh = errors.New("ACOSH domain error: input must be >= 1")
 
 	// ErrMathDomainFactorial is returned when FACTORIAL is called with a negative number or overflow.
-	ErrMathDomainFactorial = errors.New("FACTORIAL domain error: input must be non-negative and <= 20")
+	ErrMathDomainFactorial = errors.New(
+		"FACTORIAL domain error: input must be non-negative and <= 20",
+	)
 )
 
 // toFloat64 converts a value to float64 for math operations.

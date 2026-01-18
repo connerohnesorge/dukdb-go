@@ -347,9 +347,9 @@ func TestIntegration_ErrorHandling_ErrorMessagePreservation(t *testing.T) {
 	exec, cat := setupMathTestExecutor()
 
 	testCases := []struct {
-		name            string
-		query           string
-		expectedSubstr  string
+		name           string
+		query          string
+		expectedSubstr string
 	}{
 		{
 			name:           "SQRT error message preserved",

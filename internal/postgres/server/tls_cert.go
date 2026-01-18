@@ -46,7 +46,10 @@ func (c *TLSConfig) generateCertificate() (tls.Certificate, error) {
 		return tls.Certificate{}, fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), serialNumberBitLength))
+	serialNumber, err := rand.Int(
+		rand.Reader,
+		new(big.Int).Lsh(big.NewInt(1), serialNumberBitLength),
+	)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to generate serial number: %w", err)
 	}
@@ -114,7 +117,13 @@ func createAndParseCert(
 	template *x509.Certificate,
 	privateKey *ecdsa.PrivateKey,
 ) (tls.Certificate, error) {
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	certDER, err := x509.CreateCertificate(
+		rand.Reader,
+		template,
+		template,
+		&privateKey.PublicKey,
+		privateKey,
+	)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to create certificate: %w", err)
 	}

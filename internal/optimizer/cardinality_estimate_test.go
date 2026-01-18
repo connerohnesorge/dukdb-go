@@ -87,7 +87,7 @@ func TestCardinalityEstSmallTableScans(t *testing.T) {
 	testCases := []struct {
 		name           string
 		query          string
-		expectedActual int64 // Known actual row count
+		expectedActual int64   // Known actual row count
 		tolerance      float64 // 2.0 means within 2x
 		desc           string
 	}{
@@ -201,17 +201,17 @@ func TestCardinalityEstJoinEstimates(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name           string
-		query          string
-		tolerance      float64
-		desc           string
+		name      string
+		query     string
+		tolerance float64
+		desc      string
 	}{
 		{
 			name: "simple_join",
 			query: `SELECT * FROM orders o
 					JOIN customers c ON o.customer_id = c.customer_id`,
 			tolerance: 2.0,
-			desc: "Simple equi-join estimate",
+			desc:      "Simple equi-join estimate",
 		},
 		{
 			name: "join_with_filter",
@@ -219,7 +219,7 @@ func TestCardinalityEstJoinEstimates(t *testing.T) {
 					JOIN customers c ON o.customer_id = c.customer_id
 					WHERE o.amount > 5000`,
 			tolerance: 2.0,
-			desc: "Join with selective filter",
+			desc:      "Join with selective filter",
 		},
 		{
 			name: "multi_table_join",
@@ -227,7 +227,7 @@ func TestCardinalityEstJoinEstimates(t *testing.T) {
 					JOIN order_items oi ON o.order_id = oi.order_id
 					JOIN products p ON oi.product_id = p.product_id`,
 			tolerance: 2.0,
-			desc: "Three-table join cardinality",
+			desc:      "Three-table join cardinality",
 		},
 		{
 			name: "join_aggregate",
@@ -236,7 +236,7 @@ func TestCardinalityEstJoinEstimates(t *testing.T) {
 					JOIN orders o ON c.customer_id = o.customer_id
 					GROUP BY c.country`,
 			tolerance: 2.0,
-			desc: "Join followed by aggregate",
+			desc:      "Join followed by aggregate",
 		},
 	}
 
@@ -463,7 +463,10 @@ func TestCardinalityEstSubqueryEstimates(t *testing.T) {
 
 // Helper: RunExplainAnalyze runs EXPLAIN ANALYZE and returns estimates
 // This would be implemented to actually execute EXPLAIN ANALYZE
-func (s *CardinalityEstimationSuite) RunExplainAnalyze(ctx context.Context, query string) (*CardinalityEstimateResult, error) {
+func (s *CardinalityEstimationSuite) RunExplainAnalyze(
+	ctx context.Context,
+	query string,
+) (*CardinalityEstimateResult, error) {
 	// Placeholder: Would execute EXPLAIN ANALYZE and parse results
 	return &CardinalityEstimateResult{}, nil
 }

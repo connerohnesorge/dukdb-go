@@ -215,7 +215,12 @@ func TestS3URLHadoopAliasesEquivalence(t *testing.T) {
 				parsed, err := Parse(urlStr)
 				require.NoError(t, err)
 
-				assert.Equal(t, p.bucket, parsed.Bucket(), "Bucket should be identical across schemes")
+				assert.Equal(
+					t,
+					p.bucket,
+					parsed.Bucket(),
+					"Bucket should be identical across schemes",
+				)
 				assert.Equal(t, p.key, parsed.Key(), "Key should be identical across schemes")
 				assert.True(t, parsed.IsS3(), "All S3 schemes should return true for IsS3()")
 			})
@@ -742,7 +747,12 @@ func TestS3URLRoundTripPreservesSemantics(t *testing.T) {
 			assert.Equal(t, parsed1.Key(), parsed2.Key(), "Key not preserved")
 			assert.Equal(t, parsed1.Region(), parsed2.Region(), "Region not preserved")
 			assert.Equal(t, parsed1.IsS3(), parsed2.IsS3(), "IsS3() not preserved")
-			assert.Equal(t, parsed1.IsVirtualHostStyle(), parsed2.IsVirtualHostStyle(), "IsVirtualHostStyle() not preserved")
+			assert.Equal(
+				t,
+				parsed1.IsVirtualHostStyle(),
+				parsed2.IsVirtualHostStyle(),
+				"IsVirtualHostStyle() not preserved",
+			)
 		})
 	}
 }
@@ -1090,7 +1100,13 @@ func TestS3URLDuckDBCompatibility(t *testing.T) {
 			assert.Equal(t, tt.key, parsed.Key(), "Key mismatch for: %s", tt.description)
 
 			if tt.region != "" {
-				assert.Equal(t, tt.region, parsed.Region(), "Region mismatch for: %s", tt.description)
+				assert.Equal(
+					t,
+					tt.region,
+					parsed.Region(),
+					"Region mismatch for: %s",
+					tt.description,
+				)
 			}
 
 			assert.True(t, parsed.IsS3(), "Should be recognized as S3: %s", tt.description)

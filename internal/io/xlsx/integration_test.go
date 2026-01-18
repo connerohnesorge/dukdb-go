@@ -466,7 +466,12 @@ func TestIntegration_WriterDataTypes(t *testing.T) {
 	require.NoError(t, writer.SetSchema(columns))
 
 	// Set types
-	types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE, dukdb.TYPE_BOOLEAN}
+	types := []dukdb.Type{
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_BOOLEAN,
+	}
 	require.NoError(t, writer.SetTypes(types))
 
 	// Create a simple data chunk manually

@@ -186,11 +186,11 @@ func TestParseExplain(t *testing.T) {
 
 func TestParseVacuum(t *testing.T) {
 	tests := []struct {
-		name      string
-		sql       string
-		wantTable string
+		name       string
+		sql        string
+		wantTable  string
 		wantSchema string
-		wantErr   bool
+		wantErr    bool
 	}{
 		{
 			name:      "VACUUM entire database",

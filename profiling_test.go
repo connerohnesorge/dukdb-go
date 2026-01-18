@@ -434,5 +434,3 @@ func TestProfilingContext_DeterministicTiming(
 		info.Children[2].Metrics["OPERATOR_TIMING"],
 	)
 }
-
-

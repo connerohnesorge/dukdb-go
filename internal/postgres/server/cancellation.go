@@ -87,7 +87,9 @@ func NewCancellationManager(server *Server) *CancellationManager {
 
 // GenerateCancelKey generates and stores a new cancel key for a session.
 // Returns the process ID and secret key to be sent to the client.
-func (cm *CancellationManager) GenerateCancelKey(sessionID uint64) (processID int32, secretKey int32) {
+func (cm *CancellationManager) GenerateCancelKey(
+	sessionID uint64,
+) (processID int32, secretKey int32) {
 	// Generate a random secret key
 	var secretBytes [4]byte
 	if _, err := rand.Read(secretBytes[:]); err != nil {
@@ -157,7 +159,12 @@ func (cm *CancellationManager) GetCancelKey(sessionID uint64) (*CancelKey, bool)
 // StartQuery registers a new running query for a session.
 // Returns a context that will be cancelled if a cancel request is received
 // or if the statement timeout is exceeded.
-func (cm *CancellationManager) StartQuery(parentCtx context.Context, sessionID uint64, query string, statementTimeout time.Duration) (context.Context, context.CancelFunc) {
+func (cm *CancellationManager) StartQuery(
+	parentCtx context.Context,
+	sessionID uint64,
+	query string,
+	statementTimeout time.Duration,
+) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(parentCtx)
 
 	qc := &QueryContext{
@@ -237,7 +244,10 @@ func (cm *CancellationManager) CancelQuery(sessionID uint64) error {
 
 // HandleCancelRequest processes a cancel request from the PostgreSQL protocol.
 // This is called when a client sends a CancelRequest message.
-func (cm *CancellationManager) HandleCancelRequest(ctx context.Context, processID, secretKey int32) error {
+func (cm *CancellationManager) HandleCancelRequest(
+	ctx context.Context,
+	processID, secretKey int32,
+) error {
 	// Validate the cancel key
 	sessionID, err := cm.ValidateCancelKey(processID, secretKey)
 	if err != nil {
@@ -269,7 +279,9 @@ func (cm *CancellationManager) IsQueryRunning(sessionID uint64) bool {
 }
 
 // GetRunningQueryInfo returns information about a running query.
-func (cm *CancellationManager) GetRunningQueryInfo(sessionID uint64) (query string, duration time.Duration, exists bool) {
+func (cm *CancellationManager) GetRunningQueryInfo(
+	sessionID uint64,
+) (query string, duration time.Duration, exists bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 

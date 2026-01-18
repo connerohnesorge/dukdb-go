@@ -11,16 +11,16 @@
 // gap should be minimal for basic operations.
 //
 // Optimization Opportunities (Task 14.7):
-// 1. Type conversion overhead: The toFloat64/toInt64 helper functions use type
-//    switches which have some overhead. For hot paths, direct type assertions
-//    could be faster.
-// 2. NULL checking: Every function checks for NULL which adds overhead. For
-//    bulk operations where NULL is guaranteed not to be present, specialized
-//    non-NULL paths could be added.
-// 3. Memory allocations: Some functions allocate new values; using sync.Pool
-//    or pre-allocated buffers could reduce GC pressure.
-// 4. Vectorized operations: For bulk operations on columns, SIMD operations
-//    via packages like gonum could provide significant speedups.
+//  1. Type conversion overhead: The toFloat64/toInt64 helper functions use type
+//     switches which have some overhead. For hot paths, direct type assertions
+//     could be faster.
+//  2. NULL checking: Every function checks for NULL which adds overhead. For
+//     bulk operations where NULL is guaranteed not to be present, specialized
+//     non-NULL paths could be added.
+//  3. Memory allocations: Some functions allocate new values; using sync.Pool
+//     or pre-allocated buffers could reduce GC pressure.
+//  4. Vectorized operations: For bulk operations on columns, SIMD operations
+//     via packages like gonum could provide significant speedups.
 package executor
 
 import (

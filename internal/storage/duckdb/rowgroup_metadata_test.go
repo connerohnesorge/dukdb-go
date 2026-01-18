@@ -102,7 +102,12 @@ func TestRowGroupMetadataStructure(t *testing.T) {
 	// Verify row group fields
 	assert.Equal(t, uint64(0), rg.RowStart, "First row group should start at row 0")
 	assert.Equal(t, uint64(3), rg.TupleCount, "Row group should contain 3 rows")
-	assert.Equal(t, 2, len(rg.DataPointers), "Row group should have 2 data pointers (one per column)")
+	assert.Equal(
+		t,
+		2,
+		len(rg.DataPointers),
+		"Row group should have 2 data pointers (one per column)",
+	)
 
 	// Verify data pointers are valid (not InvalidBlockID)
 	for i, dp := range rg.DataPointers {
@@ -118,34 +123,34 @@ func TestRowGroupMetadataFormat(t *testing.T) {
 	skipIfNoDuckDBCLI(t)
 
 	testCases := []struct {
-		name        string
-		createSQL   string
-		insertSQL   string
-		expectedRGs int    // Expected number of row groups
+		name         string
+		createSQL    string
+		insertSQL    string
+		expectedRGs  int    // Expected number of row groups
 		expectedRows uint64 // Expected total rows
 		expectedCols int    // Expected columns
 	}{
 		{
-			name:        "Single row, single column",
-			createSQL:   "CREATE TABLE t1 (x INTEGER)",
-			insertSQL:   "INSERT INTO t1 VALUES (42)",
-			expectedRGs: 1,
+			name:         "Single row, single column",
+			createSQL:    "CREATE TABLE t1 (x INTEGER)",
+			insertSQL:    "INSERT INTO t1 VALUES (42)",
+			expectedRGs:  1,
 			expectedRows: 1,
 			expectedCols: 1,
 		},
 		{
-			name:        "Multiple rows, two columns",
-			createSQL:   "CREATE TABLE t2 (id INTEGER, val VARCHAR)",
-			insertSQL:   "INSERT INTO t2 VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')",
-			expectedRGs: 1,
+			name:         "Multiple rows, two columns",
+			createSQL:    "CREATE TABLE t2 (id INTEGER, val VARCHAR)",
+			insertSQL:    "INSERT INTO t2 VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')",
+			expectedRGs:  1,
 			expectedRows: 5,
 			expectedCols: 2,
 		},
 		{
-			name:        "Three columns with mixed types",
-			createSQL:   "CREATE TABLE t3 (a BIGINT, b VARCHAR, c DOUBLE)",
-			insertSQL:   "INSERT INTO t3 VALUES (100, 'test', 3.14), (200, 'data', 2.71)",
-			expectedRGs: 1,
+			name:         "Three columns with mixed types",
+			createSQL:    "CREATE TABLE t3 (a BIGINT, b VARCHAR, c DOUBLE)",
+			insertSQL:    "INSERT INTO t3 VALUES (100, 'test', 3.14), (200, 'data', 2.71)",
+			expectedRGs:  1,
 			expectedRows: 2,
 			expectedCols: 3,
 		},
@@ -324,7 +329,6 @@ func TestRowGroupMetadataCompareWithGoWriter(t *testing.T) {
 	// Close the writer to flush data
 	err = writer.Close()
 	require.NoError(t, err)
-
 
 	// Now open the file and verify the row group structure
 	storage, err := OpenDuckDBStorage(dbPath, &Config{ReadOnly: true})

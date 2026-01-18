@@ -161,6 +161,6 @@ const (
 	OptionProjectID          = "project_id"
 
 	// HTTP options
-	OptionBearerToken = "bearer_token"
+	OptionBearerToken  = "bearer_token"
 	OptionExtraHeaders = "extra_http_headers"
 )

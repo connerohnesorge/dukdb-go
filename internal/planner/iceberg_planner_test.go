@@ -226,8 +226,10 @@ func TestIcebergPlannerExtractPartitionFilters(t *testing.T) {
 		// UPPER(name) = 'ALICE' - function call can't be pushed
 		filter := &binder.BoundBinaryExpr{
 			Left: &binder.BoundFunctionCall{
-				Name:    "UPPER",
-				Args:    []binder.BoundExpr{&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR}},
+				Name: "UPPER",
+				Args: []binder.BoundExpr{
+					&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR},
+				},
 				ResType: dukdb.TYPE_VARCHAR,
 			},
 			Op:    parser.OpEq,
@@ -251,8 +253,10 @@ func TestIcebergPlannerExtractPartitionFilters(t *testing.T) {
 		}
 		nonPushableFilter := &binder.BoundBinaryExpr{
 			Left: &binder.BoundFunctionCall{
-				Name:    "UPPER",
-				Args:    []binder.BoundExpr{&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR}},
+				Name: "UPPER",
+				Args: []binder.BoundExpr{
+					&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR},
+				},
 				ResType: dukdb.TYPE_VARCHAR,
 			},
 			Op:    parser.OpEq,
@@ -343,8 +347,10 @@ func TestIcebergPlannerExtractColumnProjection(t *testing.T) {
 		columns := []*binder.BoundSelectColumn{
 			{
 				Expr: &binder.BoundFunctionCall{
-					Name:    "UPPER",
-					Args:    []binder.BoundExpr{&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR}},
+					Name: "UPPER",
+					Args: []binder.BoundExpr{
+						&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR},
+					},
 					ResType: dukdb.TYPE_VARCHAR,
 				},
 				Alias: "upper_name",
@@ -528,8 +534,10 @@ func TestPhysicalIcebergScan(t *testing.T) {
 	t.Run("with residual filter", func(t *testing.T) {
 		residualFilter := &binder.BoundBinaryExpr{
 			Left: &binder.BoundFunctionCall{
-				Name:    "UPPER",
-				Args:    []binder.BoundExpr{&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR}},
+				Name: "UPPER",
+				Args: []binder.BoundExpr{
+					&binder.BoundColumnRef{Column: "name", ColType: dukdb.TYPE_VARCHAR},
+				},
 				ResType: dukdb.TYPE_VARCHAR,
 			},
 			Op:    parser.OpEq,

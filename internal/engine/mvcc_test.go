@@ -115,7 +115,11 @@ func TestMVCCManager_BeginTransaction(t *testing.T) {
 	assert.Equal(t, txn1.StartTS, txn1.ID())
 	assert.Equal(t, uint64(0), txn1.CommitTS, "CommitTS should be 0 for uncommitted transaction")
 	assert.Equal(t, initialTime, txn1.GetStartTime())
-	assert.Empty(t, txn1.ActiveAtStart, "First transaction should have no active transactions at start")
+	assert.Empty(
+		t,
+		txn1.ActiveAtStart,
+		"First transaction should have no active transactions at start",
+	)
 
 	// Begin second transaction - should capture first as active
 	mockClock.Advance(time.Millisecond)
@@ -125,7 +129,12 @@ func TestMVCCManager_BeginTransaction(t *testing.T) {
 	assert.True(t, txn2.IsActive())
 	assert.Equal(t, parser.IsolationLevelRepeatableRead, txn2.GetIsolationLevel())
 	assert.Greater(t, txn2.ID(), txn1.ID())
-	assert.Contains(t, txn2.ActiveAtStart, txn1.ID(), "Txn2 should have Txn1 in its active-at-start set")
+	assert.Contains(
+		t,
+		txn2.ActiveAtStart,
+		txn1.ID(),
+		"Txn2 should have Txn1 in its active-at-start set",
+	)
 }
 
 // TestMVCCManager_BeginTransaction_AllIsolationLevels tests beginning transactions with all isolation levels.

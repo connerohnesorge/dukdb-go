@@ -316,7 +316,11 @@ func detectFormat(path string, options map[string]any) fileio.Format {
 // createFileReader creates the appropriate file reader based on format.
 //
 //nolint:exhaustive // FormatUnknown is handled by default case.
-func createFileReader(path string, format fileio.Format, options map[string]any) (fileio.FileReader, error) {
+func createFileReader(
+	path string,
+	format fileio.Format,
+	options map[string]any,
+) (fileio.FileReader, error) {
 	switch format {
 	case fileio.FormatCSV:
 		opts := csvio.DefaultReaderOptions()
@@ -361,7 +365,11 @@ func createFileReader(path string, format fileio.Format, options map[string]any)
 // createFileWriter creates the appropriate file writer based on format.
 //
 //nolint:exhaustive // FormatUnknown is handled by default case.
-func createFileWriter(path string, format fileio.Format, options map[string]any) (fileio.FileWriter, error) {
+func createFileWriter(
+	path string,
+	format fileio.Format,
+	options map[string]any,
+) (fileio.FileWriter, error) {
 	switch format {
 	case fileio.FormatCSV:
 		opts := csvio.DefaultWriterOptions()

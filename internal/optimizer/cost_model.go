@@ -26,13 +26,13 @@ type CostConstants struct {
 // model with adjustments for dukdb-go's architecture.
 //
 // Key differences from PostgreSQL disk-based defaults:
-// - RandomPageCost is set to 1.1 (vs 4.0 for disk) since in-memory random
-//   access is nearly as fast as sequential access
-// - This makes index scans more viable for selective queries
+//   - RandomPageCost is set to 1.1 (vs 4.0 for disk) since in-memory random
+//     access is nearly as fast as sequential access
+//   - This makes index scans more viable for selective queries
 func DefaultCostConstants() CostConstants {
 	return CostConstants{
 		SeqPageCost:     1.0,
-		RandomPageCost:  1.1,  // Low for in-memory (PostgreSQL disk default is 4.0)
+		RandomPageCost:  1.1, // Low for in-memory (PostgreSQL disk default is 4.0)
 		CPUTupleCost:    0.01,
 		CPUOperatorCost: 0.0025,
 		HashBuildCost:   0.02,
@@ -768,7 +768,10 @@ func (m *CostModel) costFilter(child PlanCost, inputRows float64) PlanCost {
 }
 
 // costFilterWithSelectivity calculates the cost of a filter operation with known selectivity.
-func (m *CostModel) costFilterWithSelectivity(child PlanCost, inputRows, selectivity float64) PlanCost {
+func (m *CostModel) costFilterWithSelectivity(
+	child PlanCost,
+	inputRows, selectivity float64,
+) PlanCost {
 	if inputRows < 1 {
 		inputRows = 1
 	}
@@ -889,7 +892,10 @@ func costNestedLoopJoin(outer, inner PlanCost, outerRows, outputRows float64) Pl
 }
 
 // costNestedLoopJoin is a method wrapper for the package-level function.
-func (m *CostModel) costNestedLoopJoin(outer, inner PlanCost, outerRows, outputRows float64) PlanCost {
+func (m *CostModel) costNestedLoopJoin(
+	outer, inner PlanCost,
+	outerRows, outputRows float64,
+) PlanCost {
 	return costNestedLoopJoin(outer, inner, outerRows, outputRows)
 }
 
@@ -1159,7 +1165,7 @@ func (m *CostModel) costWindowFromChildren(plan PhysicalPlanNode) PlanCost {
 	return PlanCost{
 		StartupCost: sortCost.StartupCost,
 		TotalCost:   sortCost.TotalCost + windowCost,
-		OutputRows:  childCost.OutputRows,                  // Window doesn't change row count
+		OutputRows:  childCost.OutputRows,               // Window doesn't change row count
 		OutputWidth: childCost.OutputWidth + widthInt64, // Add column for window result
 	}
 }
@@ -1203,7 +1209,10 @@ func (m *CostModel) GetCardinalityLearner() *CardinalityLearner {
 //   - actualCardinality: Actual number of rows produced by operator during execution
 //
 // The learner will use this to compute corrections that improve future cost estimates.
-func (m *CostModel) RecordObservation(operatorSig string, estimatedCardinality, actualCardinality int64) {
+func (m *CostModel) RecordObservation(
+	operatorSig string,
+	estimatedCardinality, actualCardinality int64,
+) {
 	if m.learner != nil {
 		m.learner.RecordObservation(operatorSig, estimatedCardinality, actualCardinality)
 	}
@@ -1219,7 +1228,10 @@ func (m *CostModel) RecordObservation(operatorSig string, estimatedCardinality, 
 // Returns:
 // - The corrected cardinality (adjusted by learning if observations exist)
 // - The correction factor applied (for debugging/monitoring)
-func (m *CostModel) GetCorrectedCardinality(operatorSig string, baseCardinality int64) (int64, float64) {
+func (m *CostModel) GetCorrectedCardinality(
+	operatorSig string,
+	baseCardinality int64,
+) (int64, float64) {
 	if m.learner == nil {
 		return baseCardinality, 1.0
 	}

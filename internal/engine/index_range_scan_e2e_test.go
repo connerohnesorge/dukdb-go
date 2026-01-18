@@ -507,4 +507,3 @@ func findIndexScan(plan planner.PhysicalPlan) *planner.PhysicalIndexScan {
 
 	return nil
 }
-

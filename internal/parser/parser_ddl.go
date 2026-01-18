@@ -237,8 +237,9 @@ func (p *parser) parseDropIndex() (*DropIndexStmt, error) {
 
 // parseCreateSequence parses a CREATE SEQUENCE statement.
 // Syntax: CREATE SEQUENCE [IF NOT EXISTS] [schema.]sequence
-//         [START WITH n] [INCREMENT BY n] [MINVALUE n | NO MINVALUE]
-//         [MAXVALUE n | NO MAXVALUE] [CYCLE | NO CYCLE]
+//
+//	[START WITH n] [INCREMENT BY n] [MINVALUE n | NO MINVALUE]
+//	[MAXVALUE n | NO MAXVALUE] [CYCLE | NO CYCLE]
 func (p *parser) parseCreateSequence() (*CreateSequenceStmt, error) {
 	if err := p.expectKeyword("SEQUENCE"); err != nil {
 		return nil, err
@@ -468,10 +469,11 @@ func (p *parser) parseDropSchema() (*DropSchemaStmt, error) {
 
 // parseAlterTable parses an ALTER TABLE statement.
 // Syntax: ALTER TABLE [IF EXISTS] [schema.]table
-//         RENAME TO new_table
-//         | RENAME COLUMN old_name TO new_name
-//         | DROP COLUMN column_name
-//         | ADD COLUMN column_def
+//
+//	RENAME TO new_table
+//	| RENAME COLUMN old_name TO new_name
+//	| DROP COLUMN column_name
+//	| ADD COLUMN column_def
 func (p *parser) parseAlterTable() (*AlterTableStmt, error) {
 	if err := p.expectKeyword("TABLE"); err != nil {
 		return nil, err

@@ -437,7 +437,7 @@ func TestNewReader_EmptyFieldsAndNullHandling(t *testing.T) {
 		assert.Equal(t, 2, chunk.Count())
 
 		assert.Equal(t, int32(10), chunk.GetValue(0, 0))
-		assert.Nil(t, chunk.GetValue(0, 1)) // "NULL" matches NullStr -> NULL
+		assert.Nil(t, chunk.GetValue(0, 1))          // "NULL" matches NullStr -> NULL
 		assert.Equal(t, "100", chunk.GetValue(0, 2)) // VARCHAR type
 
 		assert.Equal(t, int32(20), chunk.GetValue(1, 0))

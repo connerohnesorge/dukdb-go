@@ -58,9 +58,9 @@ func BenchmarkStringSplit_BySeparatorCount(b *testing.B) {
 func BenchmarkStringSplit_BySeparatorLength(b *testing.B) {
 	size := 1000
 	separators := []string{
-		",",            // 1 character
-		"---",          // 3 characters
-		"<separator>",  // 11 characters
+		",",             // 1 character
+		"---",           // 3 characters
+		"<separator>",   // 11 characters
 		"||DELIMITER||", // 13 characters
 	}
 
@@ -304,8 +304,13 @@ func TestMemoryScaling(t *testing.T) {
 			allocBytes := memAfter.TotalAlloc - memBefore.TotalAlloc
 
 			expectedMatrixSize := uint64(size+1) * uint64(size+1) * 8 // int64 = 8 bytes
-			t.Logf("LEVENSHTEIN size=%d: alloc_bytes=%d, expected_matrix=%d, ratio=%.2f",
-				size, allocBytes, expectedMatrixSize, float64(allocBytes)/float64(expectedMatrixSize))
+			t.Logf(
+				"LEVENSHTEIN size=%d: alloc_bytes=%d, expected_matrix=%d, ratio=%.2f",
+				size,
+				allocBytes,
+				expectedMatrixSize,
+				float64(allocBytes)/float64(expectedMatrixSize),
+			)
 		}
 	})
 }

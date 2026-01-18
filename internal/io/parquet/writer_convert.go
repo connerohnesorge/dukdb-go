@@ -164,7 +164,13 @@ func convertTimestampNanos(value any) any {
 // Only the time-of-day component is used; the date is ignored.
 func convertTimeValue(value any) any {
 	if t, ok := value.(time.Time); ok {
-		seconds := int64(t.Hour())*secondsPerHour + int64(t.Minute())*secondsPerMinute + int64(t.Second())
+		seconds := int64(
+			t.Hour(),
+		)*secondsPerHour + int64(
+			t.Minute(),
+		)*secondsPerMinute + int64(
+			t.Second(),
+		)
 
 		return seconds*microsecondsPerSecond + int64(t.Nanosecond())/nanosecondsPerMicrosecond
 	}

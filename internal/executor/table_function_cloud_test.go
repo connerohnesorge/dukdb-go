@@ -78,9 +78,9 @@ func TestTableFunctionNDJSONWithHTTP(t *testing.T) {
 // TestTableFunctionIsCloudURL tests the cloud URL detection.
 func TestTableFunctionIsCloudURL(t *testing.T) {
 	tests := []struct {
-		url      string
-		isCloud  bool
-		isLocal  bool
+		url     string
+		isCloud bool
+		isLocal bool
 	}{
 		// Cloud URLs
 		{"s3://bucket/path/file.csv", true, false},

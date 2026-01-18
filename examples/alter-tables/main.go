@@ -51,8 +51,14 @@ func main() {
 	}
 
 	for _, emp := range employees {
-		_, err = db.Exec("INSERT INTO employees (id, first_name, last_name, department, salary) VALUES (?, ?, ?, ?, ?)",
-			emp.id, emp.firstName, emp.lastName, emp.department, emp.salary)
+		_, err = db.Exec(
+			"INSERT INTO employees (id, first_name, last_name, department, salary) VALUES (?, ?, ?, ?, ?)",
+			emp.id,
+			emp.firstName,
+			emp.lastName,
+			emp.department,
+			emp.salary,
+		)
 		if err != nil {
 			log.Printf("Failed to insert employee %s: %v", emp.firstName, err)
 		}
@@ -333,7 +339,9 @@ func displayTableStructure(db *sql.DB, tableName string) {
 
 // Helper function to display employees
 func displayEmployees(db *sql.DB) {
-	rows, err := db.Query("SELECT id, first_name, last_name, department, salary FROM employees ORDER BY id")
+	rows, err := db.Query(
+		"SELECT id, first_name, last_name, department, salary FROM employees ORDER BY id",
+	)
 	if err != nil {
 		log.Printf("Failed to query employees: %v", err)
 		return
@@ -374,8 +382,12 @@ func displayEmployeesWithNewColumns(db *sql.DB, tableName string) {
 	}
 	defer rows.Close()
 
-	fmt.Println("\nID | Name              | Department  | Salary    | Email                  | Hire Date  | Active |")
-	fmt.Println("---|-------------------|-------------|-----------|------------------------|------------|--------|")
+	fmt.Println(
+		"\nID | Name              | Department  | Salary    | Email                  | Hire Date  | Active |",
+	)
+	fmt.Println(
+		"---|-------------------|-------------|-----------|------------------------|------------|--------|",
+	)
 
 	for rows.Next() {
 		var id int

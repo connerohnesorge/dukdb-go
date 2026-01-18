@@ -167,7 +167,13 @@ func TestWALEntry_DeleteRoundTrip(t *testing.T) {
 			// Create entry
 			var original *DeleteEntry
 			if tt.deletedData != nil {
-				original = NewDeleteEntryWithData(tt.txnID, tt.schema, tt.table, tt.rowIDs, tt.deletedData)
+				original = NewDeleteEntryWithData(
+					tt.txnID,
+					tt.schema,
+					tt.table,
+					tt.rowIDs,
+					tt.deletedData,
+				)
 			} else {
 				original = NewDeleteEntry(tt.txnID, tt.schema, tt.table, tt.rowIDs)
 			}
@@ -526,8 +532,12 @@ func TestWALEntry_CompleteRoundTrip(t *testing.T) {
 			eType: EntryTxnCommit,
 		},
 		{
-			name:  "create_table",
-			entry: &CreateTableEntry{Schema: "main", Name: "users", Columns: []ColumnDef{{Name: "id", Type: dukdb.TYPE_BIGINT}}},
+			name: "create_table",
+			entry: &CreateTableEntry{
+				Schema:  "main",
+				Name:    "users",
+				Columns: []ColumnDef{{Name: "id", Type: dukdb.TYPE_BIGINT}},
+			},
 			eType: EntryCreateTable,
 		},
 		{
@@ -655,7 +665,12 @@ func TestWALEntry_ChecksumValidation(t *testing.T) {
 	corruptedChecksum := header.CalculateChecksum(corruptedPayload)
 
 	// Verify checksums are different
-	assert.NotEqual(t, correctChecksum, corruptedChecksum, "corrupted payload should have different checksum")
+	assert.NotEqual(
+		t,
+		correctChecksum,
+		corruptedChecksum,
+		"corrupted payload should have different checksum",
+	)
 }
 
 // TestWALEntry_SequenceNumbers tests that sequence numbers are preserved.

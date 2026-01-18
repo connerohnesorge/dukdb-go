@@ -286,9 +286,9 @@ func TestSerializeDeserializeMultipleColumns(t *testing.T) {
 // TestSerializeDeserializeNullHandling tests NULL flag handling.
 func TestSerializeDeserializeNullHandling(t *testing.T) {
 	tests := []struct {
-		name             string
-		nullFraction     float64
-		expectedHasNull  bool
+		name              string
+		nullFraction      float64
+		expectedHasNull   bool
 		expectedHasNoNull bool
 	}{
 		{"no_nulls", 0.0, false, true},

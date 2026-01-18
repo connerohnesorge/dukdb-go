@@ -325,19 +325,36 @@ func splitStatements(query string) []string {
 }
 
 // executeQueryWithTypes executes a query with known parameter types for proper conversion.
-func (h *Handler) executeQueryWithTypes(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter, paramTypes []uint32) error {
+func (h *Handler) executeQueryWithTypes(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	parameters []wire.Parameter,
+	paramTypes []uint32,
+) error {
 	return h.executeQueryInternal(ctx, query, writer, parameters, paramTypes)
 }
 
 // executeQuery executes a query and writes results to the DataWriter.
 // This is a convenience method that calls executeQueryInternal with no type information.
-func (h *Handler) executeQuery(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter) error {
+func (h *Handler) executeQuery(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	parameters []wire.Parameter,
+) error {
 	return h.executeQueryInternal(ctx, query, writer, parameters, nil)
 }
 
 // executeQueryInternal executes a query and writes results to the DataWriter.
 // If paramTypes is provided, it's used for proper type conversion of parameters.
-func (h *Handler) executeQueryInternal(ctx context.Context, query string, writer wire.DataWriter, parameters []wire.Parameter, paramTypes []uint32) error {
+func (h *Handler) executeQueryInternal(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	parameters []wire.Parameter,
+	paramTypes []uint32,
+) error {
 	// Get session from context for transaction state management
 	session, _ := SessionFromContext(ctx)
 
@@ -452,7 +469,12 @@ func (h *Handler) executeQueryInternal(ctx context.Context, query string, writer
 
 	if session != nil && h.server != nil && h.server.cancellationManager != nil {
 		statementTimeout := session.GetStatementTimeout()
-		queryCtx, queryCancel = h.server.cancellationManager.StartQuery(ctx, session.ID(), query, statementTimeout)
+		queryCtx, queryCancel = h.server.cancellationManager.StartQuery(
+			ctx,
+			session.ID(),
+			query,
+			statementTimeout,
+		)
 		session.SetCurrentQueryCancel(queryCancel)
 		defer func() {
 			if queryCancel != nil {
@@ -523,7 +545,12 @@ func (h *Handler) isAllowedInAbortedTransaction(upperQuery string) bool {
 
 // handleSpecialCommand handles SET, SHOW, DISCARD, RESET, PREPARE, EXECUTE, and DEALLOCATE commands.
 // Returns (true, error) if the command was handled, (false, nil) if not.
-func (h *Handler) handleSpecialCommand(ctx context.Context, upperQuery, originalQuery string, writer wire.DataWriter, session *Session) (bool, error) {
+func (h *Handler) handleSpecialCommand(
+	ctx context.Context,
+	upperQuery, originalQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) (bool, error) {
 	// Handle SET command
 	if strings.HasPrefix(upperQuery, "SET ") {
 		return true, h.handleSetCommand(ctx, originalQuery, writer, session)
@@ -578,7 +605,12 @@ func (h *Handler) handleSpecialCommand(ctx context.Context, upperQuery, original
 }
 
 // handleSetCommand handles the SET command.
-func (h *Handler) handleSetCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleSetCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Parse SET variable = value or SET variable TO value
 	upperQuery := strings.ToUpper(query)
 
@@ -617,13 +649,19 @@ func (h *Handler) handleSetCommand(ctx context.Context, query string, writer wir
 		case "statement_timeout":
 			timeout, err := parseTimeoutValue(varValue)
 			if err != nil {
-				return NewPgError(CodeInvalidTextRepresentation, "invalid value for parameter \"statement_timeout\": \""+varValue+"\"")
+				return NewPgError(
+					CodeInvalidTextRepresentation,
+					"invalid value for parameter \"statement_timeout\": \""+varValue+"\"",
+				)
 			}
 			session.SetStatementTimeout(timeout)
 		case "lock_timeout":
 			timeout, err := parseTimeoutValue(varValue)
 			if err != nil {
-				return NewPgError(CodeInvalidTextRepresentation, "invalid value for parameter \"lock_timeout\": \""+varValue+"\"")
+				return NewPgError(
+					CodeInvalidTextRepresentation,
+					"invalid value for parameter \"lock_timeout\": \""+varValue+"\"",
+				)
 			}
 			session.SetLockTimeout(timeout)
 		}
@@ -642,7 +680,12 @@ func (h *Handler) handleSetCommand(ctx context.Context, query string, writer wir
 }
 
 // handleShowCommand handles the SHOW command.
-func (h *Handler) handleShowCommand(ctx context.Context, upperQuery, originalQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleShowCommand(
+	ctx context.Context,
+	upperQuery, originalQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Extract variable name
 	varName := strings.TrimSpace(strings.TrimPrefix(originalQuery, "SHOW "))
 	varName = strings.TrimSpace(strings.TrimPrefix(varName, "show "))
@@ -757,7 +800,12 @@ func (h *Handler) getBuiltinVariable(varName string, session *Session) string {
 }
 
 // handleDiscardCommand handles the DISCARD command.
-func (h *Handler) handleDiscardCommand(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleDiscardCommand(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// DISCARD ALL - reset session state
 	// DISCARD PLANS - discard prepared statements
 	// DISCARD SEQUENCES - reset sequence state
@@ -803,7 +851,12 @@ func (h *Handler) handleDiscardCommand(ctx context.Context, upperQuery string, w
 }
 
 // handleResetCommand handles the RESET command.
-func (h *Handler) handleResetCommand(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleResetCommand(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// RESET variable - reset to default value
 	// RESET ALL - reset all variables
 
@@ -823,9 +876,15 @@ func (h *Handler) handleResetCommand(ctx context.Context, upperQuery string, wri
 
 // handleTransactionCommand handles BEGIN, COMMIT, ROLLBACK, SAVEPOINT, and RELEASE commands.
 // Returns (true, error) if the command was handled, (false, nil) if not.
-func (h *Handler) handleTransactionCommand(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) (bool, error) {
+func (h *Handler) handleTransactionCommand(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) (bool, error) {
 	// Handle BEGIN/START TRANSACTION
-	if strings.HasPrefix(upperQuery, "BEGIN") || strings.HasPrefix(upperQuery, "START TRANSACTION") {
+	if strings.HasPrefix(upperQuery, "BEGIN") ||
+		strings.HasPrefix(upperQuery, "START TRANSACTION") {
 		return true, h.handleBeginTransaction(ctx, upperQuery, writer, session)
 	}
 
@@ -853,7 +912,12 @@ func (h *Handler) handleTransactionCommand(ctx context.Context, upperQuery strin
 }
 
 // handleBeginTransaction handles BEGIN and START TRANSACTION commands.
-func (h *Handler) handleBeginTransaction(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleBeginTransaction(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session != nil {
 		if session.InTransaction() {
 			// PostgreSQL allows BEGIN inside a transaction but issues a warning
@@ -908,7 +972,11 @@ func (h *Handler) parseTransactionOptions(upperQuery string, session *Session) {
 }
 
 // handleCommitTransaction handles COMMIT and END commands.
-func (h *Handler) handleCommitTransaction(ctx context.Context, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleCommitTransaction(
+	ctx context.Context,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session != nil {
 		if !session.InTransaction() {
 			// PostgreSQL returns COMMIT even when there's no transaction
@@ -942,7 +1010,12 @@ func (h *Handler) handleCommitTransaction(ctx context.Context, writer wire.DataW
 }
 
 // handleRollbackTransaction handles ROLLBACK commands.
-func (h *Handler) handleRollbackTransaction(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleRollbackTransaction(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Check for ROLLBACK TO SAVEPOINT
 	if strings.Contains(upperQuery, "TO ") {
 		return h.handleRollbackToSavepoint(ctx, upperQuery, writer, session)
@@ -965,7 +1038,12 @@ func (h *Handler) handleRollbackTransaction(ctx context.Context, upperQuery stri
 }
 
 // handleSavepoint handles SAVEPOINT commands.
-func (h *Handler) handleSavepoint(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleSavepoint(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Extract savepoint name
 	savepointName := strings.TrimSpace(strings.TrimPrefix(upperQuery, "SAVEPOINT "))
 
@@ -980,7 +1058,12 @@ func (h *Handler) handleSavepoint(ctx context.Context, upperQuery string, writer
 }
 
 // handleReleaseSavepoint handles RELEASE SAVEPOINT commands.
-func (h *Handler) handleReleaseSavepoint(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleReleaseSavepoint(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Extract savepoint name (handle both "RELEASE SAVEPOINT name" and "RELEASE name")
 	rest := strings.TrimSpace(strings.TrimPrefix(upperQuery, "RELEASE "))
 	savepointName := strings.TrimSpace(strings.TrimPrefix(rest, "SAVEPOINT "))
@@ -996,7 +1079,12 @@ func (h *Handler) handleReleaseSavepoint(ctx context.Context, upperQuery string,
 }
 
 // handleRollbackToSavepoint handles ROLLBACK TO SAVEPOINT commands.
-func (h *Handler) handleRollbackToSavepoint(ctx context.Context, upperQuery string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleRollbackToSavepoint(
+	ctx context.Context,
+	upperQuery string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	// Extract savepoint name (handle both "ROLLBACK TO SAVEPOINT name" and "ROLLBACK TO name")
 	idx := strings.Index(upperQuery, "TO ")
 	if idx == -1 {
@@ -1023,7 +1111,12 @@ func (h *Handler) handleRollbackToSavepoint(ctx context.Context, upperQuery stri
 
 // executeSelectQuery executes a SELECT-like query and writes results.
 // Implements streaming to avoid loading all rows into memory.
-func (h *Handler) executeSelectQuery(ctx context.Context, query string, writer wire.DataWriter, args []driver.NamedValue) error {
+func (h *Handler) executeSelectQuery(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	args []driver.NamedValue,
+) error {
 	// Execute the query using the engine connection
 	rows, columns, err := h.server.conn.Query(ctx, query, args)
 	if err != nil {
@@ -1051,7 +1144,12 @@ func (h *Handler) executeSelectQuery(ctx context.Context, query string, writer w
 }
 
 // executeNonSelectQuery executes a non-SELECT query (INSERT, UPDATE, DELETE, etc.).
-func (h *Handler) executeNonSelectQuery(ctx context.Context, query string, writer wire.DataWriter, args []driver.NamedValue) error {
+func (h *Handler) executeNonSelectQuery(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	args []driver.NamedValue,
+) error {
 	// Execute the query using the engine connection
 	rowsAffected, err := h.server.conn.Execute(ctx, query, args)
 	if err != nil {
@@ -1536,7 +1634,10 @@ func (h *Handler) getQueryColumns(ctx context.Context, query string) wire.Column
 
 // convertParameters converts wire.Parameter to driver.NamedValue with proper type binding.
 // It uses parameter type information from the context if available.
-func (h *Handler) convertParameters(ctx context.Context, parameters []wire.Parameter) []driver.NamedValue {
+func (h *Handler) convertParameters(
+	ctx context.Context,
+	parameters []wire.Parameter,
+) []driver.NamedValue {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -1570,7 +1671,10 @@ func (h *Handler) convertParameters(ctx context.Context, parameters []wire.Param
 
 // convertParametersWithTypes converts wire.Parameter to driver.NamedValue using
 // the specified parameter types for proper type conversion.
-func (h *Handler) convertParametersWithTypes(parameters []wire.Parameter, paramTypes []uint32) ([]driver.NamedValue, error) {
+func (h *Handler) convertParametersWithTypes(
+	parameters []wire.Parameter,
+	paramTypes []uint32,
+) ([]driver.NamedValue, error) {
 	if len(parameters) == 0 {
 		return nil, nil
 	}
@@ -1652,7 +1756,12 @@ func itoa64(n int64) string {
 
 // handlePrepareCommand handles the SQL PREPARE statement.
 // Format: PREPARE name [(type, ...)] AS query
-func (h *Handler) handlePrepareCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handlePrepareCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session == nil {
 		return NewPgError(CodeInternalError, "no session available for PREPARE")
 	}
@@ -1680,7 +1789,12 @@ func (h *Handler) handlePrepareCommand(ctx context.Context, query string, writer
 
 // handleExecuteCommand handles the SQL EXECUTE statement.
 // Format: EXECUTE name [(param, ...)]
-func (h *Handler) handleExecuteCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleExecuteCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session == nil {
 		return NewPgError(CodeInternalError, "no session available for EXECUTE")
 	}
@@ -1694,7 +1808,10 @@ func (h *Handler) handleExecuteCommand(ctx context.Context, query string, writer
 	// Get the prepared statement from the session cache
 	ps, ok := session.PreparedStatements().Get(parsed.Name)
 	if !ok {
-		return NewPgError(CodeUndefinedPStmt, "prepared statement \""+parsed.Name+"\" does not exist")
+		return NewPgError(
+			CodeUndefinedPStmt,
+			"prepared statement \""+parsed.Name+"\" does not exist",
+		)
 	}
 
 	// Execute the prepared statement with parameters
@@ -1703,7 +1820,12 @@ func (h *Handler) handleExecuteCommand(ctx context.Context, query string, writer
 
 // handleDeallocateCommand handles the SQL DEALLOCATE statement.
 // Format: DEALLOCATE [PREPARE] name | DEALLOCATE ALL
-func (h *Handler) handleDeallocateCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleDeallocateCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session == nil {
 		return NewPgError(CodeInternalError, "no session available for DEALLOCATE")
 	}
@@ -1735,7 +1857,12 @@ func (h *Handler) handleDeallocateCommand(ctx context.Context, query string, wri
 
 // handleListenCommand handles the LISTEN command.
 // Format: LISTEN channel_name
-func (h *Handler) handleListenCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleListenCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session == nil {
 		return NewPgError(CodeInternalError, "no session available for LISTEN")
 	}
@@ -1765,7 +1892,12 @@ func (h *Handler) handleListenCommand(ctx context.Context, query string, writer 
 
 // handleUnlistenCommand handles the UNLISTEN command.
 // Format: UNLISTEN channel_name | UNLISTEN *
-func (h *Handler) handleUnlistenCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleUnlistenCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if session == nil {
 		return NewPgError(CodeInternalError, "no session available for UNLISTEN")
 	}
@@ -1796,7 +1928,12 @@ func (h *Handler) handleUnlistenCommand(ctx context.Context, query string, write
 
 // handleNotifyCommand handles the NOTIFY command.
 // Format: NOTIFY channel_name [, 'payload']
-func (h *Handler) handleNotifyCommand(ctx context.Context, query string, writer wire.DataWriter, session *Session) error {
+func (h *Handler) handleNotifyCommand(
+	ctx context.Context,
+	query string,
+	writer wire.DataWriter,
+	session *Session,
+) error {
 	if h.server == nil || h.server.notificationHub == nil {
 		return NewPgError(CodeInternalError, "notification hub not available")
 	}

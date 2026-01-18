@@ -34,7 +34,10 @@ func NewFileSystemProvider(secretMgr secret.Manager) *FileSystemProvider {
 
 // GetFileSystem returns a FileSystem for the given URL.
 // If the URL is a cloud URL, it looks up secrets for authentication.
-func (p *FileSystemProvider) GetFileSystem(ctx context.Context, rawURL string) (filesystem.FileSystem, error) {
+func (p *FileSystemProvider) GetFileSystem(
+	ctx context.Context,
+	rawURL string,
+) (filesystem.FileSystem, error) {
 	// Parse the URL to determine scheme
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
@@ -239,7 +242,10 @@ type fileWithStat interface {
 
 // openFileWithStat opens a file and returns it with stat capability.
 // This is used when we need to get file size (e.g., for Parquet).
-func (p *FileSystemProvider) openFileWithStat(ctx context.Context, rawURL string) (fileWithStat, error) {
+func (p *FileSystemProvider) openFileWithStat(
+	ctx context.Context,
+	rawURL string,
+) (fileWithStat, error) {
 	fs, err := p.GetFileSystem(ctx, rawURL)
 	if err != nil {
 		return nil, err
@@ -262,7 +268,10 @@ func (p *FileSystemProvider) openFileWithStat(ctx context.Context, rawURL string
 }
 
 // createFileForWriting creates a file at a cloud or local URL for writing.
-func (p *FileSystemProvider) createFileForWriting(ctx context.Context, rawURL string) (io.WriteCloser, error) {
+func (p *FileSystemProvider) createFileForWriting(
+	ctx context.Context,
+	rawURL string,
+) (io.WriteCloser, error) {
 	fs, err := p.GetFileSystem(ctx, rawURL)
 	if err != nil {
 		return nil, err
@@ -486,7 +495,10 @@ func (b *bytesReaderAt) Close() error {
 
 // createParquetReaderFromStream reads the entire stream into memory and creates a Parquet reader.
 // This is a fallback for streams that don't support seeking.
-func createParquetReaderFromStream(reader io.ReadCloser, opts *parquetio.ReaderOptions) (fileio.FileReader, error) {
+func createParquetReaderFromStream(
+	reader io.ReadCloser,
+	opts *parquetio.ReaderOptions,
+) (fileio.FileReader, error) {
 	defer func() { _ = reader.Close() }()
 
 	// Read entire file into memory
@@ -503,7 +515,10 @@ func createParquetReaderFromStream(reader io.ReadCloser, opts *parquetio.ReaderO
 
 // createArrowReaderFromStream reads the entire stream into memory and creates an Arrow reader.
 // This is a fallback for streams that don't support seeking.
-func createArrowReaderFromStream(reader io.ReadCloser, opts *arrowio.ReaderOptions) (fileio.FileReader, error) {
+func createArrowReaderFromStream(
+	reader io.ReadCloser,
+	opts *arrowio.ReaderOptions,
+) (fileio.FileReader, error) {
 	defer func() { _ = reader.Close() }()
 
 	// Read entire file into memory

@@ -115,28 +115,28 @@ func TestSnapshotSelector_SnapshotAsOfTimestamp(t *testing.T) {
 	selector := NewSnapshotSelector(metadata)
 
 	tests := []struct {
-		name              string
-		timestampMs       int64
-		inclusive         bool
+		name               string
+		timestampMs        int64
+		inclusive          bool
 		expectedSnapshotID int64
-		expectError       bool
+		expectError        bool
 	}{
 		{
-			name:              "exact match snapshot 2 (inclusive)",
-			timestampMs:       1672531200000,
-			inclusive:         true,
+			name:               "exact match snapshot 2 (inclusive)",
+			timestampMs:        1672531200000,
+			inclusive:          true,
 			expectedSnapshotID: 2,
 		},
 		{
-			name:              "between snapshot 1 and 2",
-			timestampMs:       1672500000000,
-			inclusive:         true,
+			name:               "between snapshot 1 and 2",
+			timestampMs:        1672500000000,
+			inclusive:          true,
 			expectedSnapshotID: 1,
 		},
 		{
-			name:              "after all snapshots",
-			timestampMs:       1672700000000,
-			inclusive:         true,
+			name:               "after all snapshots",
+			timestampMs:        1672700000000,
+			inclusive:          true,
 			expectedSnapshotID: 3,
 		},
 		{

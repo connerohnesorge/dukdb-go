@@ -741,7 +741,12 @@ func setupStringTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeStringQuery executes a SQL query and returns the result
-func executeStringQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeStringQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -890,7 +895,13 @@ func TestIntegration_STRIP_TRIM_Equivalence(t *testing.T) {
 			require.NoError(t, err)
 			trimVal := getFirstResultValue(t, trimResult)
 
-			assert.Equal(t, trimVal, stripVal, "STRIP and TRIM should produce identical results for %s", str)
+			assert.Equal(
+				t,
+				trimVal,
+				stripVal,
+				"STRIP and TRIM should produce identical results for %s",
+				str,
+			)
 		})
 	}
 }
@@ -921,7 +932,13 @@ func TestIntegration_LSTRIP_LTRIM_Equivalence(t *testing.T) {
 			require.NoError(t, err)
 			ltrimVal := getFirstResultValue(t, ltrimResult)
 
-			assert.Equal(t, ltrimVal, lstripVal, "LSTRIP and LTRIM should produce identical results for %s", str)
+			assert.Equal(
+				t,
+				ltrimVal,
+				lstripVal,
+				"LSTRIP and LTRIM should produce identical results for %s",
+				str,
+			)
 		})
 	}
 }
@@ -952,7 +969,13 @@ func TestIntegration_RSTRIP_RTRIM_Equivalence(t *testing.T) {
 			require.NoError(t, err)
 			rtrimVal := getFirstResultValue(t, rtrimResult)
 
-			assert.Equal(t, rtrimVal, rstripVal, "RSTRIP and RTRIM should produce identical results for %s", str)
+			assert.Equal(
+				t,
+				rtrimVal,
+				rstripVal,
+				"RSTRIP and RTRIM should produce identical results for %s",
+				str,
+			)
 		})
 	}
 }
@@ -1044,8 +1067,16 @@ func TestIntegration_Regex_InWhere(t *testing.T) {
 	}{
 		{"REGEXP_MATCHES basic", "SELECT REGEXP_MATCHES('hello123', '[0-9]+')", true},
 		{"REGEXP_MATCHES no match", "SELECT REGEXP_MATCHES('hello', '[0-9]+')", false},
-		{"REGEXP_MATCHES email pattern", "SELECT REGEXP_MATCHES('test@example.com', '^[a-z]+@[a-z]+\\.[a-z]+$')", true},
-		{"REGEXP_MATCHES word boundary", "SELECT REGEXP_MATCHES('hello world', '\\bworld\\b')", true},
+		{
+			"REGEXP_MATCHES email pattern",
+			"SELECT REGEXP_MATCHES('test@example.com', '^[a-z]+@[a-z]+\\.[a-z]+$')",
+			true,
+		},
+		{
+			"REGEXP_MATCHES word boundary",
+			"SELECT REGEXP_MATCHES('hello world', '\\bworld\\b')",
+			true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1194,7 +1225,11 @@ func TestIntegration_HashFunctions(t *testing.T) {
 		{"MD5 empty", "SELECT MD5('')", "d41d8cd98f00b204e9800998ecf8427e"},
 
 		// SHA256
-		{"SHA256 hello", "SELECT SHA256('hello')", "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"},
+		{
+			"SHA256 hello",
+			"SELECT SHA256('hello')",
+			"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+		},
 
 		// HASH (returns int64, just verify it returns something)
 		{"HASH produces int64", "SELECT HASH('hello') IS NOT NULL", true},
@@ -1384,7 +1419,11 @@ func TestIntegration_NestedFunctions(t *testing.T) {
 		expected any
 	}{
 		// UPPER(REGEXP_REPLACE(...))
-		{"UPPER REGEXP_REPLACE", "SELECT UPPER(REGEXP_REPLACE('hello123world', '[0-9]+', '_'))", "HELLO_WORLD"},
+		{
+			"UPPER REGEXP_REPLACE",
+			"SELECT UPPER(REGEXP_REPLACE('hello123world', '[0-9]+', '_'))",
+			"HELLO_WORLD",
+		},
 
 		// LOWER(REVERSE(...))
 		{"LOWER REVERSE", "SELECT LOWER(REVERSE('HELLO'))", "olleh"},
@@ -1430,16 +1469,32 @@ func TestIntegration_DataCleaning(t *testing.T) {
 		{"Remove digits", "SELECT REGEXP_REPLACE('abc123def456', '[0-9]+', '', 'g')", "abcdef"},
 
 		// Remove special characters
-		{"Remove special chars", "SELECT REGEXP_REPLACE('hello@#$world', '[^a-zA-Z]', '', 'g')", "helloworld"},
+		{
+			"Remove special chars",
+			"SELECT REGEXP_REPLACE('hello@#$world', '[^a-zA-Z]', '', 'g')",
+			"helloworld",
+		},
 
 		// Normalize whitespace (replace multiple spaces with single)
-		{"Normalize spaces", "SELECT REGEXP_REPLACE('hello   world', '\\s+', ' ', 'g')", "hello world"},
+		{
+			"Normalize spaces",
+			"SELECT REGEXP_REPLACE('hello   world', '\\s+', ' ', 'g')",
+			"hello world",
+		},
 
 		// Extract alphanumeric only
-		{"Keep alphanumeric", "SELECT REGEXP_REPLACE('test!@#123', '[^a-zA-Z0-9]', '', 'g')", "test123"},
+		{
+			"Keep alphanumeric",
+			"SELECT REGEXP_REPLACE('test!@#123', '[^a-zA-Z0-9]', '', 'g')",
+			"test123",
+		},
 
 		// Combine TRIM and REGEXP_REPLACE
-		{"TRIM and remove digits", "SELECT TRIM(REGEXP_REPLACE('  abc123  ', '[0-9]', '', 'g'))", "abc"},
+		{
+			"TRIM and remove digits",
+			"SELECT TRIM(REGEXP_REPLACE('  abc123  ', '[0-9]', '', 'g'))",
+			"abc",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1660,14 +1715,27 @@ func TestIntegration_UNION_TypeCompatibility_VARCHAR(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			// Verify all results are strings (VARCHAR type)
 			for i, row := range result.Rows {
 				for col, val := range row {
 					if val != nil {
 						_, ok := val.(string)
-						assert.True(t, ok, "Row %d, column %s should be string, got %T", i, col, val)
+						assert.True(
+							t,
+							ok,
+							"Row %d, column %s should be string, got %T",
+							i,
+							col,
+							val,
+						)
 					}
 				}
 			}
@@ -1730,7 +1798,13 @@ func TestIntegration_UNION_TypeCompatibility_BIGINT(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			// Verify all results are integers (BIGINT type)
 			for i, row := range result.Rows {
@@ -1790,7 +1864,13 @@ func TestIntegration_UNION_TypeCompatibility_BOOLEAN(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			// Verify all results are booleans
 			for i, row := range result.Rows {
@@ -1840,14 +1920,27 @@ func TestIntegration_UNION_TypeCompatibility_DOUBLE(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			// Verify all results are floats (DOUBLE type)
 			for i, row := range result.Rows {
 				for col, val := range row {
 					if val != nil {
 						_, ok := val.(float64)
-						assert.True(t, ok, "Row %d, column %s should be float64, got %T", i, col, val)
+						assert.True(
+							t,
+							ok,
+							"Row %d, column %s should be float64, got %T",
+							i,
+							col,
+							val,
+						)
 					}
 				}
 			}
@@ -1899,7 +1992,13 @@ func TestIntegration_UNION_MixedFunctions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			// Verify type consistency
 			for i, row := range result.Rows {
@@ -1916,7 +2015,15 @@ func TestIntegration_UNION_MixedFunctions(t *testing.T) {
 						case "float64":
 							_, ok = val.(float64)
 						}
-						assert.True(t, ok, "Row %d, column %s should be %s, got %T", i, col, tt.expectedType, val)
+						assert.True(
+							t,
+							ok,
+							"Row %d, column %s should be %s, got %T",
+							i,
+							col,
+							tt.expectedType,
+							val,
+						)
 					}
 				}
 			}
@@ -1954,7 +2061,13 @@ func TestIntegration_UNION_WithLiterals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 		})
 	}
 }
@@ -1999,7 +2112,13 @@ func TestIntegration_UNION_NullHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := executeStringQuery(t, exec, cat, tt.query)
 			require.NoError(t, err, "Query should execute without error")
-			assert.GreaterOrEqual(t, len(result.Rows), tt.minCount, "Expected at least %d rows", tt.minCount)
+			assert.GreaterOrEqual(
+				t,
+				len(result.Rows),
+				tt.minCount,
+				"Expected at least %d rows",
+				tt.minCount,
+			)
 
 			if tt.hasNull {
 				// Check that at least one row has a NULL value
@@ -2134,14 +2253,24 @@ func TestIntegration_STRING_SPLIT_UNNEST_EmptyAndNull(t *testing.T) {
 	exec, cat := setupStringTestExecutor()
 
 	t.Run("Empty string produces single empty element", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT('', ','))")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM UNNEST(STRING_SPLIT('', ','))",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 		assert.Equal(t, "", result.Rows[0]["unnest"])
 	})
 
 	t.Run("Only separator produces two empty elements", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT(',', ','))")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM UNNEST(STRING_SPLIT(',', ','))",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 2)
 		assert.Equal(t, "", result.Rows[0]["unnest"])
@@ -2149,7 +2278,12 @@ func TestIntegration_STRING_SPLIT_UNNEST_EmptyAndNull(t *testing.T) {
 	})
 
 	t.Run("Multiple consecutive separators", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT * FROM UNNEST(STRING_SPLIT('a,,,b', ','))")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM UNNEST(STRING_SPLIT('a,,,b', ','))",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 4) // "a", "", "", "b"
 		assert.Equal(t, "a", result.Rows[0]["unnest"])
@@ -2214,7 +2348,12 @@ func TestIntegration_STRING_SPLIT_UNNEST_WithOtherFunctions(t *testing.T) {
 	exec, cat := setupStringTestExecutor()
 
 	t.Run("COUNT elements from STRING_SPLIT", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT COUNT(*) FROM UNNEST(STRING_SPLIT('a,b,c,d,e', ','))")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT COUNT(*) FROM UNNEST(STRING_SPLIT('a,b,c,d,e', ','))",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 		// Count should be 5
@@ -2269,7 +2408,12 @@ func TestIntegration_UNION_TypeConsistency(t *testing.T) {
 	exec, cat := setupStringTestExecutor()
 
 	t.Run("VARCHAR functions produce string results", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT MD5('hello') UNION SELECT SHA256('world')")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT MD5('hello') UNION SELECT SHA256('world')",
+		)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(result.Rows), 2)
 
@@ -2285,7 +2429,12 @@ func TestIntegration_UNION_TypeConsistency(t *testing.T) {
 	})
 
 	t.Run("BIGINT functions produce int64 results", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT LEVENSHTEIN('abc', 'abd') UNION SELECT HAMMING('xyz', 'xyw')")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT LEVENSHTEIN('abc', 'abd') UNION SELECT HAMMING('xyz', 'xyw')",
+		)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(result.Rows), 1)
 
@@ -2301,7 +2450,12 @@ func TestIntegration_UNION_TypeConsistency(t *testing.T) {
 	})
 
 	t.Run("BOOLEAN functions produce bool results", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT CONTAINS('hello', 'ell') UNION SELECT CONTAINS('world', 'xyz')")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT CONTAINS('hello', 'ell') UNION SELECT CONTAINS('world', 'xyz')",
+		)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(result.Rows), 2)
 
@@ -2317,7 +2471,12 @@ func TestIntegration_UNION_TypeConsistency(t *testing.T) {
 	})
 
 	t.Run("DOUBLE functions produce float64 results", func(t *testing.T) {
-		result, err := executeStringQuery(t, exec, cat, "SELECT JACCARD('abc', 'abd') UNION SELECT JARO_SIMILARITY('hello', 'hallo')")
+		result, err := executeStringQuery(
+			t,
+			exec,
+			cat,
+			"SELECT JACCARD('abc', 'abd') UNION SELECT JARO_SIMILARITY('hello', 'hallo')",
+		)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(result.Rows), 1)
 

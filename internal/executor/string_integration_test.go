@@ -103,7 +103,13 @@ func TestIntegration_ComputedColumns_UPPER(t *testing.T) {
 	require.Len(t, result.Rows, 5)
 
 	// Verify UPPER transformation
-	expectedNames := []string{"ALICE SMITH", "BOB JONES", "CHARLIE BROWN", "DIANA ROSS", "EDWARD KING"}
+	expectedNames := []string{
+		"ALICE SMITH",
+		"BOB JONES",
+		"CHARLIE BROWN",
+		"DIANA ROSS",
+		"EDWARD KING",
+	}
 	for i, row := range result.Rows {
 		upperName, ok := row["upper_name"].(string)
 		require.True(t, ok, "upper_name should be a string")
@@ -122,7 +128,13 @@ func TestIntegration_ComputedColumns_LOWER(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 5)
 
-	expectedNames := []string{"alice smith", "bob jones", "charlie brown", "diana ross", "edward king"}
+	expectedNames := []string{
+		"alice smith",
+		"bob jones",
+		"charlie brown",
+		"diana ross",
+		"edward king",
+	}
 	for i, row := range result.Rows {
 		lowerName, ok := row["lower_name"].(string)
 		require.True(t, ok)
@@ -161,7 +173,13 @@ func TestIntegration_ComputedColumns_TRIM(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 5)
 
-	expectedDescs := []string{"First user", "Second user", "Third user here", "Multiple   spaces", "Last entry"}
+	expectedDescs := []string{
+		"First user",
+		"Second user",
+		"Third user here",
+		"Multiple   spaces",
+		"Last entry",
+	}
 	for i, row := range result.Rows {
 		trimmedDesc, ok := row["trimmed_desc"].(string)
 		require.True(t, ok)
@@ -199,7 +217,13 @@ func TestIntegration_ComputedColumns_REVERSE(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 5)
 
-	expectedReversed := []string{"htimS ecilA", "senoJ boB", "nworB eilrahC", "ssoR anaiD", "gniK drawdE"}
+	expectedReversed := []string{
+		"htimS ecilA",
+		"senoJ boB",
+		"nworB eilrahC",
+		"ssoR anaiD",
+		"gniK drawdE",
+	}
 	for i, row := range result.Rows {
 		reversedName, ok := row["reversed_name"].(string)
 		require.True(t, ok)
@@ -238,7 +262,13 @@ func TestIntegration_ComputedColumns_REGEXP_REPLACE(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 5)
 
-	expectedClean := []string{"alice@example.com", "bob@test.org", "charlie@demo.net", "diana@sample.io", "ed@mail.com"}
+	expectedClean := []string{
+		"alice@example.com",
+		"bob@test.org",
+		"charlie@demo.net",
+		"diana@sample.io",
+		"ed@mail.com",
+	}
 	for i, row := range result.Rows {
 		cleanEmail, ok := row["clean_email"].(string)
 		require.True(t, ok)
@@ -820,7 +850,12 @@ func TestIntegration_RegexJoins_REGEXP_EXTRACT_InJoin(t *testing.T) {
 			ORDER BY l.id
 		`)
 		require.NoError(t, err2)
-		assert.Len(t, result2.Rows, 4, "Should match all log entries to severity levels using CONTAINS")
+		assert.Len(
+			t,
+			result2.Rows,
+			4,
+			"Should match all log entries to severity levels using CONTAINS",
+		)
 	}
 }
 
@@ -905,7 +940,13 @@ func TestIntegration_LogParsing_ApacheAccessLog(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 5)
 
-		expectedPaths := []string{"/index.html", "/api/users", "/images/logo.png", "/error", "/api/data"}
+		expectedPaths := []string{
+			"/index.html",
+			"/api/users",
+			"/images/logo.png",
+			"/error",
+			"/api/data",
+		}
 		for i, row := range result.Rows {
 			path, ok := row["url_path"].(string)
 			require.True(t, ok)

@@ -278,7 +278,12 @@ func TestPhaseD_DELETE_WhereClauseComprehensive(t *testing.T) {
 			"DELETE FROM t114 WHERE 1 = 0",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(0), result.RowsAffected, "Should delete 0 rows when WHERE is always false")
+		assert.Equal(
+			t,
+			int64(0),
+			result.RowsAffected,
+			"Should delete 0 rows when WHERE is always false",
+		)
 
 		// Verify all rows remain
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t114")
@@ -356,7 +361,12 @@ func TestPhaseD_DELETE_WhereClauseComprehensive(t *testing.T) {
 			"DELETE FROM t116 WHERE a > 5 AND b < 10",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(3), result.RowsAffected, "Should delete 3 rows matching a > 5 AND b < 10")
+		assert.Equal(
+			t,
+			int64(3),
+			result.RowsAffected,
+			"Should delete 3 rows matching a > 5 AND b < 10",
+		)
 
 		// Verify correct rows remain
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t116 ORDER BY id")
@@ -422,7 +432,12 @@ func TestPhaseD_DELETE_WhereClauseComprehensive(t *testing.T) {
 			"DELETE FROM t117_main WHERE id IN (SELECT ref_id FROM t117_ref)",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), result.RowsAffected, "Should delete 2 rows matching subquery results")
+		assert.Equal(
+			t,
+			int64(2),
+			result.RowsAffected,
+			"Should delete 2 rows matching subquery results",
+		)
 
 		// Verify correct rows remain
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t117_main ORDER BY id")
@@ -963,17 +978,32 @@ func TestPhaseD_UPDATE_WhereClauseComprehensive(t *testing.T) {
 			"UPDATE t125 SET status = 'updated' WHERE x < 10 OR x > 20",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), result.RowsAffected, "Should update 2 rows (id=1 with x=5, id=5 with x=25)")
+		assert.Equal(
+			t,
+			int64(2),
+			result.RowsAffected,
+			"Should update 2 rows (id=1 with x=5, id=5 with x=25)",
+		)
 
 		// Verify OR clause updates
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t125 ORDER BY id")
 		require.NoError(t, err)
 
-		assert.Equal(t, "updated", result.Rows[0]["status"], "Row id=1 should be updated (x=5 < 10)")
+		assert.Equal(
+			t,
+			"updated",
+			result.Rows[0]["status"],
+			"Row id=1 should be updated (x=5 < 10)",
+		)
 		assert.Equal(t, "inactive", result.Rows[1]["status"], "Row id=2 should not be updated")
 		assert.Equal(t, "active", result.Rows[2]["status"], "Row id=3 should not be updated")
 		assert.Equal(t, "inactive", result.Rows[3]["status"], "Row id=4 should not be updated")
-		assert.Equal(t, "updated", result.Rows[4]["status"], "Row id=5 should be updated (x=25 > 20)")
+		assert.Equal(
+			t,
+			"updated",
+			result.Rows[4]["status"],
+			"Row id=5 should be updated (x=25 > 20)",
+		)
 
 		// Reset table for next test
 		_, err = executeQuery(t, exec, cat, "DROP TABLE t125")
@@ -1004,14 +1034,29 @@ func TestPhaseD_UPDATE_WhereClauseComprehensive(t *testing.T) {
 			"UPDATE t125 SET status = 'updated_not' WHERE NOT (x >= 15)",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), result.RowsAffected, "Should update 2 rows (id=1 and id=2 with x < 15)")
+		assert.Equal(
+			t,
+			int64(2),
+			result.RowsAffected,
+			"Should update 2 rows (id=1 and id=2 with x < 15)",
+		)
 
 		// Verify NOT clause updates
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t125 ORDER BY id")
 		require.NoError(t, err)
 
-		assert.Equal(t, "updated_not", result.Rows[0]["status"], "Row id=1 should be updated (NOT x >= 15)")
-		assert.Equal(t, "updated_not", result.Rows[1]["status"], "Row id=2 should be updated (NOT x >= 15)")
+		assert.Equal(
+			t,
+			"updated_not",
+			result.Rows[0]["status"],
+			"Row id=1 should be updated (NOT x >= 15)",
+		)
+		assert.Equal(
+			t,
+			"updated_not",
+			result.Rows[1]["status"],
+			"Row id=2 should be updated (NOT x >= 15)",
+		)
 		assert.Equal(t, "active", result.Rows[2]["status"], "Row id=3 should not be updated")
 		assert.Equal(t, "active", result.Rows[3]["status"], "Row id=4 should not be updated")
 		assert.Equal(t, "active", result.Rows[4]["status"], "Row id=5 should not be updated")
@@ -1045,17 +1090,47 @@ func TestPhaseD_UPDATE_WhereClauseComprehensive(t *testing.T) {
 			"UPDATE t125 SET status = 'between' WHERE x BETWEEN 10 AND 20",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(3), result.RowsAffected, "Should update 3 rows (id=2,3,4 with x in [10,20])")
+		assert.Equal(
+			t,
+			int64(3),
+			result.RowsAffected,
+			"Should update 3 rows (id=2,3,4 with x in [10,20])",
+		)
 
 		// Verify BETWEEN clause updates
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM t125 ORDER BY id")
 		require.NoError(t, err)
 
-		assert.Equal(t, "active", result.Rows[0]["status"], "Row id=1 should not be updated (x=5 < 10)")
-		assert.Equal(t, "between", result.Rows[1]["status"], "Row id=2 should be updated (x=10 in [10,20])")
-		assert.Equal(t, "between", result.Rows[2]["status"], "Row id=3 should be updated (x=15 in [10,20])")
-		assert.Equal(t, "between", result.Rows[3]["status"], "Row id=4 should be updated (x=20 in [10,20])")
-		assert.Equal(t, "active", result.Rows[4]["status"], "Row id=5 should not be updated (x=25 > 20)")
+		assert.Equal(
+			t,
+			"active",
+			result.Rows[0]["status"],
+			"Row id=1 should not be updated (x=5 < 10)",
+		)
+		assert.Equal(
+			t,
+			"between",
+			result.Rows[1]["status"],
+			"Row id=2 should be updated (x=10 in [10,20])",
+		)
+		assert.Equal(
+			t,
+			"between",
+			result.Rows[2]["status"],
+			"Row id=3 should be updated (x=15 in [10,20])",
+		)
+		assert.Equal(
+			t,
+			"between",
+			result.Rows[3]["status"],
+			"Row id=4 should be updated (x=20 in [10,20])",
+		)
+		assert.Equal(
+			t,
+			"active",
+			result.Rows[4]["status"],
+			"Row id=5 should not be updated (x=25 > 20)",
+		)
 	})
 }
 
@@ -1314,7 +1389,11 @@ func TestPhaseD_INSERT_Batching(t *testing.T) {
 		require.Equal(t, 3, len(result.Rows), "Should have 3 rows")
 
 		// Debug output to check actual types
-		t.Logf("Row 0 computed: type=%T, value=%v", result.Rows[0]["computed"], result.Rows[0]["computed"])
+		t.Logf(
+			"Row 0 computed: type=%T, value=%v",
+			result.Rows[0]["computed"],
+			result.Rows[0]["computed"],
+		)
 
 		// Helper to extract int value regardless of type
 		getInt := func(v any) int64 {
@@ -1397,13 +1476,23 @@ func TestPhaseD_INSERT_Batching(t *testing.T) {
 		assert.Equal(t, "b", result.Rows[3]["nullable_str"])
 
 		// Test filtering with IS NULL
-		result, err = executeQuery(t, exec, cat, "SELECT * FROM t215 WHERE nullable_int IS NULL ORDER BY id")
+		result, err = executeQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM t215 WHERE nullable_int IS NULL ORDER BY id",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(result.Rows), "Should find 2 rows with NULL nullable_int")
 		assert.Equal(t, int32(1), result.Rows[0]["id"])
 		assert.Equal(t, int32(3), result.Rows[1]["id"])
 
-		result, err = executeQuery(t, exec, cat, "SELECT * FROM t215 WHERE nullable_str IS NULL ORDER BY id")
+		result, err = executeQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM t215 WHERE nullable_str IS NULL ORDER BY id",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(result.Rows), "Should find 2 rows with NULL nullable_str")
 		assert.Equal(t, int32(2), result.Rows[0]["id"])
@@ -1796,7 +1885,12 @@ func TestPhaseD_INSERT_SELECT(t *testing.T) {
 		// category = 'A': id 1, 3
 		// value > 50: id 3 (100), 5 (75)
 		// Union: id 1, 3, 5 = 3 rows
-		assert.Equal(t, int64(3), result.RowsAffected, "Should insert 3 rows matching complex WHERE")
+		assert.Equal(
+			t,
+			int64(3),
+			result.RowsAffected,
+			"Should insert 3 rows matching complex WHERE",
+		)
 
 		// Verify rows
 		result, err = executeQuery(t, exec, cat, "SELECT * FROM targetComplex ORDER BY id")
@@ -1855,12 +1949,22 @@ func TestPhaseD_INSERT_SELECT(t *testing.T) {
 		assert.Equal(t, 6, len(result.Rows), "Table should have 6 rows total")
 
 		// Check original rows still exist
-		result, err = executeQuery(t, exec, cat, "SELECT * FROM selfCopy WHERE category = 'original' ORDER BY id")
+		result, err = executeQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM selfCopy WHERE category = 'original' ORDER BY id",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, 3, len(result.Rows), "Should have 3 original rows")
 
 		// Check copied rows exist with transformed values
-		result, err = executeQuery(t, exec, cat, "SELECT * FROM selfCopy WHERE category = 'copied' ORDER BY id")
+		result, err = executeQuery(
+			t,
+			exec,
+			cat,
+			"SELECT * FROM selfCopy WHERE category = 'copied' ORDER BY id",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, 3, len(result.Rows), "Should have 3 copied rows")
 
@@ -1879,12 +1983,42 @@ func TestPhaseD_INSERT_SELECT(t *testing.T) {
 		}
 
 		// Verify transformations
-		assert.Equal(t, int64(11), getInt(result.Rows[0]["id"]), "First copied row should have id=11")
-		assert.Equal(t, int64(20), getInt(result.Rows[0]["value"]), "First copied row value should be 20 (10*2)")
-		assert.Equal(t, int64(12), getInt(result.Rows[1]["id"]), "Second copied row should have id=12")
-		assert.Equal(t, int64(40), getInt(result.Rows[1]["value"]), "Second copied row value should be 40 (20*2)")
-		assert.Equal(t, int64(13), getInt(result.Rows[2]["id"]), "Third copied row should have id=13")
-		assert.Equal(t, int64(60), getInt(result.Rows[2]["value"]), "Third copied row value should be 60 (30*2)")
+		assert.Equal(
+			t,
+			int64(11),
+			getInt(result.Rows[0]["id"]),
+			"First copied row should have id=11",
+		)
+		assert.Equal(
+			t,
+			int64(20),
+			getInt(result.Rows[0]["value"]),
+			"First copied row value should be 20 (10*2)",
+		)
+		assert.Equal(
+			t,
+			int64(12),
+			getInt(result.Rows[1]["id"]),
+			"Second copied row should have id=12",
+		)
+		assert.Equal(
+			t,
+			int64(40),
+			getInt(result.Rows[1]["value"]),
+			"Second copied row value should be 40 (20*2)",
+		)
+		assert.Equal(
+			t,
+			int64(13),
+			getInt(result.Rows[2]["id"]),
+			"Third copied row should have id=13",
+		)
+		assert.Equal(
+			t,
+			int64(60),
+			getInt(result.Rows[2]["value"]),
+			"Third copied row value should be 60 (30*2)",
+		)
 	})
 }
 
@@ -1898,7 +2032,12 @@ func TestWALIntegration_INSERT(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert data - this should create a WAL entry
-	result, err := executeQuery(t, exec, cat, "INSERT INTO wal_insert_test VALUES (1, 'Alice'), (2, 'Bob')")
+	result, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO wal_insert_test VALUES (1, 'Alice'), (2, 'Bob')",
+	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), result.RowsAffected, "Should insert 2 rows")
 
@@ -1958,7 +2097,12 @@ func TestWALIntegration_DELETE(t *testing.T) {
 	_, err := executeQuery(t, exec, cat, "CREATE TABLE wal_delete_test (id INTEGER, name VARCHAR)")
 	require.NoError(t, err)
 
-	_, err = executeQuery(t, exec, cat, "INSERT INTO wal_delete_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+	_, err = executeQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO wal_delete_test VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+	)
 	require.NoError(t, err)
 
 	// Delete data - this should create a WAL entry with deleted row data
@@ -1987,7 +2131,12 @@ func TestWALIntegration_FailedInsertNoWALEntry(t *testing.T) {
 	exec, cat, _ := setupTestExecutorWithWAL(t)
 
 	// Create table with PRIMARY KEY
-	_, err := executeQuery(t, exec, cat, "CREATE TABLE wal_pk_test (id INTEGER PRIMARY KEY, name VARCHAR)")
+	_, err := executeQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE wal_pk_test (id INTEGER PRIMARY KEY, name VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	// Insert initial data

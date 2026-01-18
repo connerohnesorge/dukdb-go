@@ -213,7 +213,11 @@ func TestJSONColumnNullHandling(t *testing.T) {
 		err = db.QueryRow(`SELECT id, data FROM json_null_test WHERE id = 2`).Scan(&id, &data)
 		require.NoError(t, err)
 		assert.Equal(t, 2, id)
-		assert.False(t, data.Valid, "SQL NULL via parameter should result in NullString.Valid = false")
+		assert.False(
+			t,
+			data.Valid,
+			"SQL NULL via parameter should result in NullString.Valid = false",
+		)
 	})
 
 	t.Run("Distinguish SQL NULL from JSON null", func(t *testing.T) {
@@ -436,7 +440,10 @@ func TestJSONColumnTransaction(t *testing.T) {
 		tx, err := db.Begin()
 		require.NoError(t, err)
 
-		_, err = tx.Exec(`INSERT INTO json_tx_test VALUES (2, $1)`, `{"status":"should_be_rolled_back"}`)
+		_, err = tx.Exec(
+			`INSERT INTO json_tx_test VALUES (2, $1)`,
+			`{"status":"should_be_rolled_back"}`,
+		)
 		require.NoError(t, err)
 
 		err = tx.Rollback()
@@ -512,7 +519,10 @@ func TestJSONColumnUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update the JSON data
-	result, err := db.Exec(`UPDATE json_update_test SET data = $1 WHERE id = 1`, `{"version":2,"updated":true}`)
+	result, err := db.Exec(
+		`UPDATE json_update_test SET data = $1 WHERE id = 1`,
+		`{"version":2,"updated":true}`,
+	)
 	require.NoError(t, err)
 
 	rowsAffected, err := result.RowsAffected()

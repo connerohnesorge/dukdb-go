@@ -419,12 +419,24 @@ func (w *Writer) Close() error {
 	// Write manifest files and manifest list
 	var manifestListPath string
 	if len(w.dataFiles) > 0 {
-		manifestPath, err := metadataWriter.WriteManifest(w.ctx, w.dataFiles, w.schema, w.snapshotID, w.sequenceNumber)
+		manifestPath, err := metadataWriter.WriteManifest(
+			w.ctx,
+			w.dataFiles,
+			w.schema,
+			w.snapshotID,
+			w.sequenceNumber,
+		)
 		if err != nil {
 			return fmt.Errorf("iceberg: failed to write manifest: %w", err)
 		}
 
-		manifestListPath, err = metadataWriter.WriteManifestList(w.ctx, manifestPath, w.dataFiles, w.snapshotID, w.sequenceNumber)
+		manifestListPath, err = metadataWriter.WriteManifestList(
+			w.ctx,
+			manifestPath,
+			w.dataFiles,
+			w.snapshotID,
+			w.sequenceNumber,
+		)
 		if err != nil {
 			return fmt.Errorf("iceberg: failed to write manifest list: %w", err)
 		}
@@ -500,23 +512,23 @@ func (w *Writer) buildTableMetadata() (*IcebergTableMetadata, error) {
 	partitionSpecs[0] = partitionSpecToIcebergPartitionSpec(w.partitionSpec)
 
 	metadata := &IcebergTableMetadata{
-		FormatVersion:          int(w.opts.FormatVersion),
-		TableUUID:              w.tableUUID.String(),
-		Location:               w.opts.TableLocation,
-		LastUpdatedMs:          time.Now().UnixMilli(),
-		LastColumnID:           len(w.columns),
-		CurrentSchemaID:        w.schemaID,
-		Schemas:                schemas,
-		DefaultSpecID:          0,
-		PartitionSpecs:         partitionSpecs,
-		LastPartitionID:        w.partitionSpec.NumFields(),
-		Properties:             w.opts.Properties,
-		CurrentSnapshotID:      nil,
-		Snapshots:              make([]IcebergSnapshot, 0),
-		SnapshotLog:            make([]IcebergSnapshotLogEntry, 0),
-		LastSequenceNumber:     w.sequenceNumber,
-		DefaultSortOrderID:     0,
-		SortOrders:             []IcebergSortOrder{{OrderID: 0, Fields: []IcebergSortField{}}},
+		FormatVersion:      int(w.opts.FormatVersion),
+		TableUUID:          w.tableUUID.String(),
+		Location:           w.opts.TableLocation,
+		LastUpdatedMs:      time.Now().UnixMilli(),
+		LastColumnID:       len(w.columns),
+		CurrentSchemaID:    w.schemaID,
+		Schemas:            schemas,
+		DefaultSpecID:      0,
+		PartitionSpecs:     partitionSpecs,
+		LastPartitionID:    w.partitionSpec.NumFields(),
+		Properties:         w.opts.Properties,
+		CurrentSnapshotID:  nil,
+		Snapshots:          make([]IcebergSnapshot, 0),
+		SnapshotLog:        make([]IcebergSnapshotLogEntry, 0),
+		LastSequenceNumber: w.sequenceNumber,
+		DefaultSortOrderID: 0,
+		SortOrders:         []IcebergSortOrder{{OrderID: 0, Fields: []IcebergSortField{}}},
 	}
 
 	return metadata, nil
@@ -525,12 +537,12 @@ func (w *Writer) buildTableMetadata() (*IcebergTableMetadata, error) {
 // buildSnapshotSummary creates the snapshot summary.
 func (w *Writer) buildSnapshotSummary() map[string]string {
 	summary := map[string]string{
-		"operation":           "append",
-		"added-data-files":    fmt.Sprintf("%d", len(w.dataFiles)),
-		"added-records":       fmt.Sprintf("%d", w.totalRowsWritten),
-		"total-records":       fmt.Sprintf("%d", w.totalRowsWritten),
-		"total-data-files":    fmt.Sprintf("%d", len(w.dataFiles)),
-		"total-delete-files":  "0",
+		"operation":              "append",
+		"added-data-files":       fmt.Sprintf("%d", len(w.dataFiles)),
+		"added-records":          fmt.Sprintf("%d", w.totalRowsWritten),
+		"total-records":          fmt.Sprintf("%d", w.totalRowsWritten),
+		"total-data-files":       fmt.Sprintf("%d", len(w.dataFiles)),
+		"total-delete-files":     "0",
 		"total-position-deletes": "0",
 		"total-equality-deletes": "0",
 	}

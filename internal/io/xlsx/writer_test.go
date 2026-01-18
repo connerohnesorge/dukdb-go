@@ -156,7 +156,7 @@ func TestWriter_NullValues(t *testing.T) {
 	types := []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_BIGINT}
 	chunk := storage.NewDataChunkWithCapacity(types, 2)
 
-	chunk.AppendRow([]any{"Alice", nil})      // NULL value
+	chunk.AppendRow([]any{"Alice", nil})    // NULL value
 	chunk.AppendRow([]any{nil, int64(100)}) // NULL name
 
 	err = writer.WriteChunk(chunk)

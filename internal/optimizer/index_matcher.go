@@ -461,7 +461,11 @@ func (m *IndexMatcher) matchCompositeIndex(
 	// Full match means all columns are matched with equality (not range)
 	// Range scan on the last column doesn't count as a full match for unique index optimization
 	isFullMatch := !isRangeScan && matchedCols == len(columns)
-	selectivity := m.estimateCompositeSelectivity(matchedPreds, rangePredicates, indexDef.GetIsUnique() && isFullMatch)
+	selectivity := m.estimateCompositeSelectivity(
+		matchedPreds,
+		rangePredicates,
+		indexDef.GetIsUnique() && isFullMatch,
+	)
 
 	return &IndexMatch{
 		Index:           indexDef,
@@ -481,7 +485,10 @@ func (m *IndexMatcher) matchCompositeIndex(
 //
 // For multiple predicates on the same column (e.g., col > 10 AND col < 20),
 // it extracts the tightest bounds.
-func (m *IndexMatcher) createRangeBoundsFromPredicates(rangePreds []RangePredicate, colIndex int) *RangeScanBounds {
+func (m *IndexMatcher) createRangeBoundsFromPredicates(
+	rangePreds []RangePredicate,
+	colIndex int,
+) *RangeScanBounds {
 	if len(rangePreds) == 0 {
 		return nil
 	}

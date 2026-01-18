@@ -2,8 +2,8 @@ package engine
 
 import (
 	"context"
-	"testing"
 	"fmt"
+	"testing"
 )
 
 // TestDebug_CompositeIndex tests composite index with range predicate on first column.
@@ -24,7 +24,11 @@ func TestDebug_CompositeIndex(t *testing.T) {
 	ctx := context.Background()
 
 	// Create table with composite index
-	_, err = conn.Execute(ctx, "CREATE TABLE products (category INTEGER, price INTEGER, name VARCHAR)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"CREATE TABLE products (category INTEGER, price INTEGER, name VARCHAR)",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("CREATE TABLE failed: %v", err)
 	}
@@ -35,20 +39,24 @@ func TestDebug_CompositeIndex(t *testing.T) {
 	}
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO products VALUES (1, 100, 'A'), (1, 200, 'B'), (2, 150, 'C'), (2, 250, 'D'), (3, 175, 'E'), (3, 300, 'F')", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO products VALUES (1, 100, 'A'), (1, 200, 'B'), (2, 150, 'C'), (2, 250, 'D'), (3, 175, 'E'), (3, 300, 'F')",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("INSERT failed: %v", err)
 	}
 
 	// Test without index
 	fmt.Println("\n=== Test without index ===")
-	
+
 	// Drop index to test seq scan behavior
 	_, err = conn.Execute(ctx, "DROP INDEX idx_products", nil)
 	if err != nil {
 		t.Fatalf("DROP INDEX failed: %v", err)
 	}
-	
+
 	rows, _, err := conn.Query(ctx, "SELECT * FROM products WHERE category >= 2", nil)
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)

@@ -119,8 +119,8 @@ type Table struct {
 	totalRows   int64
 
 	// RowID tracking for DML operations
-	nextRowID  uint64   // Monotonic counter for RowID generation
-	tombstones *Bitmap  // Tracks deleted rows
+	nextRowID  uint64                 // Monotonic counter for RowID generation
+	tombstones *Bitmap                // Tracks deleted rows
 	rowIDMap   map[RowID]*rowLocation // Maps RowID to physical location
 
 	// MVCC version tracking for isolation levels
@@ -452,7 +452,11 @@ func (t *Table) UpdateRow(rowID RowID, values []any) error {
 	rg := t.rowGroups[loc.rowGroupIdx]
 
 	if len(values) != len(rg.columns) {
-		return fmt.Errorf("value count %d does not match column count %d", len(values), len(rg.columns))
+		return fmt.Errorf(
+			"value count %d does not match column count %d",
+			len(values),
+			len(rg.columns),
+		)
 	}
 
 	for colIdx, value := range values {
@@ -683,7 +687,10 @@ func (t *Table) Scan() *TableScanner {
 // ScanWithVisibility creates a scanner that uses MVCC visibility checking.
 // The visibility checker determines which row versions are visible to the transaction.
 // If visibility or txnCtx is nil, the scanner behaves like Scan().
-func (t *Table) ScanWithVisibility(visibility VisibilityChecker, txnCtx TransactionContext) *TableScanner {
+func (t *Table) ScanWithVisibility(
+	visibility VisibilityChecker,
+	txnCtx TransactionContext,
+) *TableScanner {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -901,9 +908,9 @@ type TableScanner struct {
 	lastChunkRowIDs []RowID // RowIDs of rows in the last returned chunk
 
 	// MVCC visibility support
-	rowVersions map[RowID]*VersionInfo  // Snapshot of row version info (nil if visibility not used)
-	visibility  VisibilityChecker       // Visibility checker for MVCC (nil for basic scan)
-	txnCtx      TransactionContext      // Transaction context for visibility checks (nil for basic scan)
+	rowVersions map[RowID]*VersionInfo // Snapshot of row version info (nil if visibility not used)
+	visibility  VisibilityChecker      // Visibility checker for MVCC (nil for basic scan)
+	txnCtx      TransactionContext     // Transaction context for visibility checks (nil for basic scan)
 }
 
 // Next advances to the next chunk and returns it, skipping tombstoned rows.
@@ -1171,9 +1178,9 @@ func (t *Table) ReadVersioned(txn MVCCTransactionContext, rowID RowID) ([]any, e
 
 		// Create a minimal transaction context for visibility check
 		txnCtx := &versionedTxnContext{
-			txnID:            txn.ID(),
-			startTS:          txn.GetStartTS(),
-			commitTS:         txn.GetCommitTS(),
+			txnID:             txn.ID(),
+			startTS:           txn.GetStartTS(),
+			commitTS:          txn.GetCommitTS(),
 			visibilityChecker: checker,
 		}
 

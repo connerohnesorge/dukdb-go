@@ -151,11 +151,11 @@ func TestBindCreateSecret(t *testing.T) {
 
 func TestBindDropSecret(t *testing.T) {
 	tests := []struct {
-		name      string
-		secret    string
-		ifExists  bool
-		wantErr   bool
-		errType   error
+		name     string
+		secret   string
+		ifExists bool
+		wantErr  bool
+		errType  error
 	}{
 		{
 			name:     "Valid drop",

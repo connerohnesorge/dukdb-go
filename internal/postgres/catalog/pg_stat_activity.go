@@ -9,28 +9,28 @@ import (
 // pg_stat_activity columns - PostgreSQL activity monitoring view.
 // Reference: https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW
 var pgStatActivityColumns = []string{
-	"datid",             // OID of the database
-	"datname",           // Name of the database
-	"pid",               // Process ID of this backend
-	"leader_pid",        // Process ID of the parallel group leader (null if not parallel)
-	"usesysid",          // OID of the user
-	"usename",           // Name of the user
-	"application_name",  // Name of the application
-	"client_addr",       // IP address of the client
-	"client_hostname",   // Hostname of the client (if available)
-	"client_port",       // TCP port number of the client
-	"backend_start",     // Time when this process started
-	"xact_start",        // Time when current transaction started
-	"query_start",       // Time when currently active query started
-	"state_change",      // Time when state was last changed
-	"wait_event_type",   // Type of event the backend is waiting for
-	"wait_event",        // Wait event name if waiting
-	"state",             // Current state (active, idle, etc.)
-	"backend_xid",       // Transaction ID of this backend
-	"backend_xmin",      // Minimum active transaction ID
-	"query_id",          // Identifier of the currently executing query
-	"query",             // Text of the currently executing query
-	"backend_type",      // Type of backend (client backend, etc.)
+	"datid",            // OID of the database
+	"datname",          // Name of the database
+	"pid",              // Process ID of this backend
+	"leader_pid",       // Process ID of the parallel group leader (null if not parallel)
+	"usesysid",         // OID of the user
+	"usename",          // Name of the user
+	"application_name", // Name of the application
+	"client_addr",      // IP address of the client
+	"client_hostname",  // Hostname of the client (if available)
+	"client_port",      // TCP port number of the client
+	"backend_start",    // Time when this process started
+	"xact_start",       // Time when current transaction started
+	"query_start",      // Time when currently active query started
+	"state_change",     // Time when state was last changed
+	"wait_event_type",  // Type of event the backend is waiting for
+	"wait_event",       // Wait event name if waiting
+	"state",            // Current state (active, idle, etc.)
+	"backend_xid",      // Transaction ID of this backend
+	"backend_xmin",     // Minimum active transaction ID
+	"query_id",         // Identifier of the currently executing query
+	"query",            // Text of the currently executing query
+	"backend_type",     // Type of backend (client backend, etc.)
 }
 
 // SessionActivityProvider is an interface for getting session activity information.
@@ -104,7 +104,10 @@ type PgStatActivityView struct {
 }
 
 // NewPgStatActivityView creates a new pg_stat_activity view handler.
-func NewPgStatActivityView(provider SessionActivityProvider, databaseName string) *PgStatActivityView {
+func NewPgStatActivityView(
+	provider SessionActivityProvider,
+	databaseName string,
+) *PgStatActivityView {
 	return &PgStatActivityView{
 		provider:     provider,
 		databaseName: databaseName,

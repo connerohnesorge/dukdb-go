@@ -225,7 +225,11 @@ func TestParallelTableScanProjectedColumns(t *testing.T) {
 
 	// With projection
 	scan.SetProjections([]int{2, 0})
-	assert.Equal(t, []dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_INTEGER}, scan.ProjectedColumnTypes())
+	assert.Equal(
+		t,
+		[]dukdb.Type{dukdb.TYPE_DOUBLE, dukdb.TYPE_INTEGER},
+		scan.ProjectedColumnTypes(),
+	)
 	assert.Equal(t, []string{"value", "id"}, scan.ProjectedColumnNames())
 }
 
@@ -873,7 +877,12 @@ func BenchmarkApplyFilter(b *testing.B) {
 }
 
 func BenchmarkApplyProjection(b *testing.B) {
-	columnTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR, dukdb.TYPE_DOUBLE, dukdb.TYPE_BIGINT}
+	columnTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_BIGINT,
+	}
 	chunk := storage.NewDataChunkWithCapacity(columnTypes, storage.StandardVectorSize)
 	for i := 0; i < storage.StandardVectorSize; i++ {
 		chunk.AppendRow([]any{int32(i), "test", float64(i), int64(i)})

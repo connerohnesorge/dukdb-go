@@ -236,7 +236,11 @@ func (s *BinarySerializer) WriteProperty(fieldID uint16, tag string, value inter
 
 // WritePropertyWithDefault writes a property only if value differs from defaultValue.
 // Uses reflect.DeepEqual to compare values.
-func (s *BinarySerializer) WritePropertyWithDefault(fieldID uint16, tag string, value, defaultValue interface{}) {
+func (s *BinarySerializer) WritePropertyWithDefault(
+	fieldID uint16,
+	tag string,
+	value, defaultValue interface{},
+) {
 	if s.err != nil {
 		return
 	}
@@ -283,7 +287,12 @@ func (s *BinarySerializer) WriteObject(fieldID uint16, tag string, fn func()) {
 
 // WriteList writes a list of items. The callback fn is called for each item index.
 // Automatically handles OnPropertyBegin, OnListBegin with count, and fn(i) for each item.
-func (s *BinarySerializer) WriteList(fieldID uint16, tag string, count uint64, fn func(idx uint64)) {
+func (s *BinarySerializer) WriteList(
+	fieldID uint16,
+	tag string,
+	count uint64,
+	fn func(idx uint64),
+) {
 	if s.err != nil {
 		return
 	}
@@ -304,7 +313,12 @@ func (s *BinarySerializer) WriteList(fieldID uint16, tag string, count uint64, f
 }
 
 // WriteObjectList writes a list of objects. Each item is wrapped in object begin/end.
-func (s *BinarySerializer) WriteObjectList(fieldID uint16, tag string, count uint64, fn func(idx uint64)) {
+func (s *BinarySerializer) WriteObjectList(
+	fieldID uint16,
+	tag string,
+	count uint64,
+	fn func(idx uint64),
+) {
 	s.WriteList(fieldID, tag, count, func(idx uint64) {
 		if s.err != nil {
 			return

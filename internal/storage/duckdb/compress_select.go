@@ -801,7 +801,11 @@ type CompressionEstimate struct {
 //   - valueSize: The size in bytes of each value
 //
 // Returns a slice of CompressionEstimate sorted by estimated size (smallest first).
-func EstimateCompressionSizes(data []any, typeID LogicalTypeID, valueSize int) []CompressionEstimate {
+func EstimateCompressionSizes(
+	data []any,
+	typeID LogicalTypeID,
+	valueSize int,
+) []CompressionEstimate {
 	if len(data) == 0 || valueSize <= 0 {
 		return nil
 	}

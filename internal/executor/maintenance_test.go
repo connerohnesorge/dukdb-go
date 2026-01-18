@@ -36,7 +36,12 @@ func setupTestTable(t *testing.T, cat *catalog.Catalog, stor *storage.Storage) {
 }
 
 // executeSQL parses, binds, plans, and executes a SQL statement.
-func executeSQL(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeSQL(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	stmt, err := parser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -322,7 +327,14 @@ func TestExplainWithCostAnnotations(t *testing.T) {
 
 			planText := result.Rows[0]["explain_plan"].(string)
 			for _, expected := range tc.contains {
-				assert.Contains(t, planText, expected, "Expected %q in plan: %s", expected, planText)
+				assert.Contains(
+					t,
+					planText,
+					expected,
+					"Expected %q in plan: %s",
+					expected,
+					planText,
+				)
 			}
 		})
 	}
@@ -364,7 +376,12 @@ func TestExplainCostFormat(t *testing.T) {
 
 	// Verify format: (cost=startup..total rows=N width=N)
 	// Cost should be in format X.XX..Y.YY
-	assert.Regexp(t, `cost=\d+\.\d+\.\.\d+\.\d+`, planText, "Cost should be in format startup..total")
+	assert.Regexp(
+		t,
+		`cost=\d+\.\d+\.\.\d+\.\d+`,
+		planText,
+		"Cost should be in format startup..total",
+	)
 	assert.Regexp(t, `rows=\d+`, planText, "Rows should be a number")
 	assert.Regexp(t, `width=\d+`, planText, "Width should be a number")
 }
@@ -376,7 +393,12 @@ func TestExplainWithJoin(t *testing.T) {
 	// Create two tables
 	_, err := executeSQL(t, exec, cat, "CREATE TABLE customers (id INTEGER, name VARCHAR)")
 	require.NoError(t, err)
-	_, err = executeSQL(t, exec, cat, "CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount DOUBLE)")
+	_, err = executeSQL(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount DOUBLE)",
+	)
 	require.NoError(t, err)
 
 	result, err := executeSQL(t, exec, cat,
@@ -387,8 +409,12 @@ func TestExplainWithJoin(t *testing.T) {
 	planText := result.Rows[0]["explain_plan"].(string)
 
 	// Should contain join operator with cost
-	assert.True(t, strings.Contains(planText, "HashJoin") || strings.Contains(planText, "NestedLoopJoin"),
-		"Plan should contain a join operator: %s", planText)
+	assert.True(
+		t,
+		strings.Contains(planText, "HashJoin") || strings.Contains(planText, "NestedLoopJoin"),
+		"Plan should contain a join operator: %s",
+		planText,
+	)
 	assert.Contains(t, planText, "(cost=", "Join should have cost annotation")
 	assert.Contains(t, planText, "rows=", "Join should have estimated rows")
 
@@ -650,7 +676,12 @@ func TestExplainIndexScanOutput(t *testing.T) {
 	// Check for either IndexScan (index used) or Scan (sequential)
 	containsExpectedFormat := strings.Contains(planText, "IndexScan:") ||
 		strings.Contains(planText, "Scan:")
-	assert.True(t, containsExpectedFormat, "Plan should contain either IndexScan or Scan: %s", planText)
+	assert.True(
+		t,
+		containsExpectedFormat,
+		"Plan should contain either IndexScan or Scan: %s",
+		planText,
+	)
 
 	// If IndexScan is used, verify it shows USING clause
 	if strings.Contains(planText, "IndexScan:") {
@@ -731,7 +762,12 @@ func TestExplainAnalyzeIndexScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert some test data
-	_, err = executeSQL(t, exec, cat, "INSERT INTO analyze_idx_test VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'D'), (5, 'E')")
+	_, err = executeSQL(
+		t,
+		exec,
+		cat,
+		"INSERT INTO analyze_idx_test VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'D'), (5, 'E')",
+	)
 	require.NoError(t, err)
 
 	// Create index
@@ -739,7 +775,12 @@ func TestExplainAnalyzeIndexScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run EXPLAIN ANALYZE
-	result, err := executeSQL(t, exec, cat, "EXPLAIN ANALYZE SELECT * FROM analyze_idx_test WHERE id = 5")
+	result, err := executeSQL(
+		t,
+		exec,
+		cat,
+		"EXPLAIN ANALYZE SELECT * FROM analyze_idx_test WHERE id = 5",
+	)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -977,14 +1018,24 @@ func TestExplainShowsCompositeIndexCond(t *testing.T) {
 	exec, cat, _ := setupTestExecutor()
 
 	// Create table with composite index
-	_, err := executeSQL(t, exec, cat, "CREATE TABLE composite_test (a INTEGER, b INTEGER, c VARCHAR)")
+	_, err := executeSQL(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE composite_test (a INTEGER, b INTEGER, c VARCHAR)",
+	)
 	require.NoError(t, err)
 
 	_, err = executeSQL(t, exec, cat, "CREATE INDEX idx_ab ON composite_test(a, b)")
 	require.NoError(t, err)
 
 	// Run EXPLAIN on a query that uses both columns
-	result, err := executeSQL(t, exec, cat, "EXPLAIN SELECT * FROM composite_test WHERE a = 1 AND b = 2")
+	result, err := executeSQL(
+		t,
+		exec,
+		cat,
+		"EXPLAIN SELECT * FROM composite_test WHERE a = 1 AND b = 2",
+	)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, result.Rows, 1)
@@ -1647,7 +1698,7 @@ func TestExplainFilterExpressionTypes(t *testing.T) {
 		{
 			name: "NOT operator",
 			filter: &binder.BoundUnaryExpr{
-				Op: parser.OpNot,
+				Op:   parser.OpNot,
 				Expr: &binder.BoundColumnRef{Column: "active"},
 			},
 			expected: "(NOT active)",
@@ -1655,7 +1706,7 @@ func TestExplainFilterExpressionTypes(t *testing.T) {
 		{
 			name: "negation operator",
 			filter: &binder.BoundUnaryExpr{
-				Op: parser.OpNeg,
+				Op:   parser.OpNeg,
 				Expr: &binder.BoundLiteral{Value: int64(5)},
 			},
 			expected: "(-5)",

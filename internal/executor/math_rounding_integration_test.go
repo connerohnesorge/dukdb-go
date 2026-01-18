@@ -28,7 +28,12 @@ func setupMathTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeMathQuery executes a SQL query and returns the result
-func executeMathQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeMathQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -324,7 +329,12 @@ func TestIntegration_RoundingFunctions_IntegerVsDouble(t *testing.T) {
 	exec, cat := setupMathTestExecutor()
 
 	// Create a table with integer and double columns
-	_, err := executeMathQuery(t, exec, cat, "CREATE TABLE test_types (int_val INTEGER, dbl_val DOUBLE)")
+	_, err := executeMathQuery(
+		t,
+		exec,
+		cat,
+		"CREATE TABLE test_types (int_val INTEGER, dbl_val DOUBLE)",
+	)
 	require.NoError(t, err)
 
 	_, err = executeMathQuery(t, exec, cat, "INSERT INTO test_types VALUES (5, 5.7)")
@@ -469,7 +479,12 @@ func TestIntegration_RoundingFunctions_InExpressions(t *testing.T) {
 	})
 
 	t.Run("FLOOR in WHERE", func(t *testing.T) {
-		result, err := executeMathQuery(t, exec, cat, "SELECT price FROM prices WHERE FLOOR(price) = 25")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT price FROM prices WHERE FLOOR(price) = 25",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 	})

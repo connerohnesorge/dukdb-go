@@ -56,7 +56,12 @@ func getFirstValue(t *testing.T, exec *Executor, cat *catalog.Catalog, query str
 }
 
 // helper function to get all values from first column
-func getAllFirstColumnValues(t *testing.T, exec *Executor, cat *catalog.Catalog, query string) []interface{} {
+func getAllFirstColumnValues(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	query string,
+) []interface{} {
 	t.Helper()
 	result, err := execTypeInferenceQuery(t, exec, cat, query)
 	require.NoError(t, err)
@@ -416,7 +421,12 @@ func TestCoalesceWithColumnReferences(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert test data
-	_, err = execTypeInferenceQuery(t, exec, cat, "INSERT INTO test_table VALUES (1, NULL, 'hello')")
+	_, err = execTypeInferenceQuery(
+		t,
+		exec,
+		cat,
+		"INSERT INTO test_table VALUES (1, NULL, 'hello')",
+	)
 	require.NoError(t, err)
 	_, err = execTypeInferenceQuery(t, exec, cat, "INSERT INTO test_table VALUES (2, 42, NULL)")
 	require.NoError(t, err)
@@ -425,7 +435,12 @@ func TestCoalesceWithColumnReferences(t *testing.T) {
 
 	// Test COALESCE with nullable integer column
 	t.Run("COALESCE nullable column with default", func(t *testing.T) {
-		results := getAllFirstColumnValues(t, exec, cat, "SELECT COALESCE(nullable_col, 0) FROM test_table ORDER BY id")
+		results := getAllFirstColumnValues(
+			t,
+			exec,
+			cat,
+			"SELECT COALESCE(nullable_col, 0) FROM test_table ORDER BY id",
+		)
 		require.Len(t, results, 3)
 
 		// Convert results to comparable format
@@ -453,7 +468,12 @@ func TestCoalesceWithColumnReferences(t *testing.T) {
 
 	// Test COALESCE with nullable string column
 	t.Run("COALESCE string column with default", func(t *testing.T) {
-		results := getAllFirstColumnValues(t, exec, cat, "SELECT COALESCE(string_col, 'default') FROM test_table ORDER BY id")
+		results := getAllFirstColumnValues(
+			t,
+			exec,
+			cat,
+			"SELECT COALESCE(string_col, 'default') FROM test_table ORDER BY id",
+		)
 		require.Len(t, results, 3)
 
 		assert.Equal(t, "hello", results[0])

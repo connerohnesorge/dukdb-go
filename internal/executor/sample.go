@@ -74,8 +74,9 @@ func (s *Sampler) sampleBernoulli(rows []map[string]any) []map[string]any {
 // Algorithm R (Vitter, 1985):
 // 1. Fill reservoir with first N rows
 // 2. For each subsequent row i (i > N):
-//    - Generate random j in [0, i)
-//    - If j < N, replace reservoir[j] with row[i]
+//   - Generate random j in [0, i)
+//   - If j < N, replace reservoir[j] with row[i]
+//
 // 3. Return reservoir
 func (s *Sampler) sampleReservoir(rows []map[string]any) []map[string]any {
 	n := s.opts.Rows

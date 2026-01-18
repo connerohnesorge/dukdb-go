@@ -272,11 +272,11 @@ func TestIntegration_GAMMA_Function(t *testing.T) {
 		query    string
 		expected float64
 	}{
-		{"gamma(1)", "SELECT GAMMA(1)", 1.0},        // 0! = 1
-		{"gamma(2)", "SELECT GAMMA(2)", 1.0},        // 1! = 1
-		{"gamma(3)", "SELECT GAMMA(3)", 2.0},        // 2! = 2
-		{"gamma(4)", "SELECT GAMMA(4)", 6.0},        // 3! = 6
-		{"gamma(5)", "SELECT GAMMA(5)", 24.0},       // 4! = 24
+		{"gamma(1)", "SELECT GAMMA(1)", 1.0},                 // 0! = 1
+		{"gamma(2)", "SELECT GAMMA(2)", 1.0},                 // 1! = 1
+		{"gamma(3)", "SELECT GAMMA(3)", 2.0},                 // 2! = 2
+		{"gamma(4)", "SELECT GAMMA(4)", 6.0},                 // 3! = 6
+		{"gamma(5)", "SELECT GAMMA(5)", 24.0},                // 4! = 24
 		{"gamma(0.5)", "SELECT GAMMA(0.5)", math.Gamma(0.5)}, // sqrt(pi)
 	}
 
@@ -519,7 +519,12 @@ func TestIntegration_ScientificFunctions_WithTable(t *testing.T) {
 
 	t.Run("Combined functions with columns", func(t *testing.T) {
 		// Calculate hypotenuse for each row
-		result, err := executeMathQuery(t, exec, cat, "SELECT SQRT(POW(x, 2) + POW(y, 2)) FROM numbers")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT SQRT(POW(x, 2) + POW(y, 2)) FROM numbers",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 
@@ -555,7 +560,12 @@ func TestIntegration_ScientificFunctions_WithTable(t *testing.T) {
 	})
 
 	t.Run("LOG functions with columns", func(t *testing.T) {
-		result, err := executeMathQuery(t, exec, cat, "SELECT LN(x), LOG10(x), LOG2(x) FROM numbers")
+		result, err := executeMathQuery(
+			t,
+			exec,
+			cat,
+			"SELECT LN(x), LOG10(x), LOG2(x) FROM numbers",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 	})

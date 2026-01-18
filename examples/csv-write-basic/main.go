@@ -143,7 +143,7 @@ func main() {
 			log.Fatal("Failed to scan row:", err)
 		}
 
-		fmt.Printf("%s: %d employees, Avg: $%.2f, Min: $%.2f, Max: $%.2f\n", 
+		fmt.Printf("%s: %d employees, Avg: $%.2f, Min: $%.2f, Max: $%.2f\n",
 			dept, count, avgSal, minSal, maxSal)
 	}
 

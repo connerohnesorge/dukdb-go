@@ -68,12 +68,12 @@ func TestDuckDBSecretSyntaxCompatibility(t *testing.T) {
 			description: "CREATE SECRET scoped_secret (TYPE S3, SCOPE 's3://my-bucket/path/')",
 		},
 		{
-			name:        "CREATE SECRET with all S3 options",
-			secretName:  "full_s3_secret",
-			secretType:  "S3",
-			provider:    "CONFIG",
-			scope:       "",
-			persistent:  false,
+			name:       "CREATE SECRET with all S3 options",
+			secretName: "full_s3_secret",
+			secretType: "S3",
+			provider:   "CONFIG",
+			scope:      "",
+			persistent: false,
 			options: map[string]string{
 				"key_id":        "AKIAIOSFODNN7EXAMPLE",
 				"secret":        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -326,7 +326,11 @@ func TestDuckDBSecretOptions(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		assert.Equal(t, `{"type": "service_account", "project_id": "my-project"}`, secret.GetOption(OptionServiceAccountJSON))
+		assert.Equal(
+			t,
+			`{"type": "service_account", "project_id": "my-project"}`,
+			secret.GetOption(OptionServiceAccountJSON),
+		)
 		assert.Equal(t, "my-project-id", secret.GetOption(OptionProjectID))
 	})
 
@@ -354,7 +358,11 @@ func TestDuckDBSecretOptions(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "mystorageaccount", secret.GetOption(OptionAccountName))
 		assert.Equal(t, "base64encodedkey==", secret.GetOption(OptionAccountKey))
-		assert.Equal(t, "DefaultEndpointsProtocol=https;AccountName=...", secret.GetOption(OptionConnectionString))
+		assert.Equal(
+			t,
+			"DefaultEndpointsProtocol=https;AccountName=...",
+			secret.GetOption(OptionConnectionString),
+		)
 		assert.Equal(t, "00000000-0000-0000-0000-000000000000", secret.GetOption(OptionTenantID))
 		assert.Equal(t, "11111111-1111-1111-1111-111111111111", secret.GetOption(OptionClientID))
 		assert.Equal(t, "my-client-secret", secret.GetOption(OptionClientSecret))
@@ -378,8 +386,16 @@ func TestDuckDBSecretOptions(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		assert.Equal(t, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", secret.GetOption(OptionBearerToken))
-		assert.Equal(t, `{"Authorization": "Bearer token", "X-Custom": "value"}`, secret.GetOption(OptionExtraHeaders))
+		assert.Equal(
+			t,
+			"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+			secret.GetOption(OptionBearerToken),
+		)
+		assert.Equal(
+			t,
+			`{"Authorization": "Bearer token", "X-Custom": "value"}`,
+			secret.GetOption(OptionExtraHeaders),
+		)
 	})
 }
 
@@ -940,7 +956,12 @@ func TestDuckDBAlterSecretCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new_key", secret.GetOption("key_id"))
 	assert.Equal(t, "new_secret", secret.GetOption("secret"))
-	assert.Equal(t, "us-east-1", secret.GetOption("region"), "Unmodified options should be preserved")
+	assert.Equal(
+		t,
+		"us-east-1",
+		secret.GetOption("region"),
+		"Unmodified options should be preserved",
+	)
 }
 
 // TestDuckDBWhichSecretCompatibility tests that which_secret lookup behavior

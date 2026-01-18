@@ -95,15 +95,23 @@ func TestDebugMapMetadataParsing(t *testing.T) {
 			t.Logf("    SegmentState.HasValidityMask: %v", dp.SegmentState.HasValidityMask)
 
 			if dp.ValidityPointer != nil {
-				t.Logf("    ValidityPointer: TupleCount=%d, Block.ID=%d, Block.Offset=%d",
-					dp.ValidityPointer.TupleCount, dp.ValidityPointer.Block.BlockID, dp.ValidityPointer.Block.Offset)
+				t.Logf(
+					"    ValidityPointer: TupleCount=%d, Block.ID=%d, Block.Offset=%d",
+					dp.ValidityPointer.TupleCount,
+					dp.ValidityPointer.Block.BlockID,
+					dp.ValidityPointer.Block.Offset,
+				)
 			} else {
 				t.Logf("    ValidityPointer: nil (BUG! MAP column should have ValidityPointer for NULL rows)")
 			}
 
 			if dp.ChildPointer != nil {
-				t.Logf("    ChildPointer: TupleCount=%d, Block.ID=%d, Block.Offset=%d",
-					dp.ChildPointer.TupleCount, dp.ChildPointer.Block.BlockID, dp.ChildPointer.Block.Offset)
+				t.Logf(
+					"    ChildPointer: TupleCount=%d, Block.ID=%d, Block.Offset=%d",
+					dp.ChildPointer.TupleCount,
+					dp.ChildPointer.Block.BlockID,
+					dp.ChildPointer.Block.Offset,
+				)
 			} else {
 				t.Logf("    ChildPointer: nil (BUG! MAP column should have ChildPointer for STRUCT(key,value) child)")
 			}
@@ -115,7 +123,11 @@ func TestDebugMapMetadataParsing(t *testing.T) {
 }
 
 // ReadColumnDataPointerDebug is a debug version that logs the parsing process
-func ReadColumnDataPointerDebug(t *testing.T, bm *BlockManager, mbp MetaBlockPointer) (*DataPointer, error) {
+func ReadColumnDataPointerDebug(
+	t *testing.T,
+	bm *BlockManager,
+	mbp MetaBlockPointer,
+) (*DataPointer, error) {
 	// Create a metadata reader at the ColumnData location
 	encodedPointer := mbp.Encode()
 	reader, err := NewMetadataReaderWithOffset(bm, encodedPointer, mbp.Offset)
@@ -176,7 +188,12 @@ func ReadColumnDataPointerDebug(t *testing.T, bm *BlockManager, mbp MetaBlockPoi
 		t.Logf("    DEBUG: PeekField error: %v, offset=%d", err, reader.offset())
 		return dp, nil
 	}
-	t.Logf("    DEBUG: Next field after DataPointers is %d (0x%04x) at offset %d", fieldID, fieldID, reader.offset())
+	t.Logf(
+		"    DEBUG: Next field after DataPointers is %d (0x%04x) at offset %d",
+		fieldID,
+		fieldID,
+		reader.offset(),
+	)
 
 	// Skip terminators
 	terminatorCount := 0
@@ -185,13 +202,27 @@ func ReadColumnDataPointerDebug(t *testing.T, bm *BlockManager, mbp MetaBlockPoi
 		terminatorCount++
 		fieldID, err = reader.PeekField()
 		if err != nil {
-			t.Logf("    DEBUG: After skipping %d terminators, PeekField error: %v", terminatorCount, err)
+			t.Logf(
+				"    DEBUG: After skipping %d terminators, PeekField error: %v",
+				terminatorCount,
+				err,
+			)
 			return dp, nil
 		}
-		t.Logf("    DEBUG: Skipped terminator %d, next field is %d at offset %d", terminatorCount, fieldID, reader.offset())
+		t.Logf(
+			"    DEBUG: Skipped terminator %d, next field is %d at offset %d",
+			terminatorCount,
+			fieldID,
+			reader.offset(),
+		)
 	}
 
-	t.Logf("    DEBUG: After skipping %d terminators, field is %d at offset %d", terminatorCount, fieldID, reader.offset())
+	t.Logf(
+		"    DEBUG: After skipping %d terminators, field is %d at offset %d",
+		terminatorCount,
+		fieldID,
+		reader.offset(),
+	)
 
 	// Check for Field 101 (validity)
 	if fieldID == 101 {
@@ -383,7 +414,9 @@ func TestCompareListVsMapMetadata(t *testing.T) {
 						t.Errorf("MAP column missing ChildPointer - this is the bug!")
 					}
 					if tc.typeID == TypeList && dp.ChildPointer == nil && rg.TupleCount > 0 {
-						t.Logf("LIST column has no ChildPointer (might be OK for small inline data)")
+						t.Logf(
+							"LIST column has no ChildPointer (might be OK for small inline data)",
+						)
 					}
 				}
 			}

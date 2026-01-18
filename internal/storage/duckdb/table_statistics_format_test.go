@@ -130,7 +130,8 @@ func TestExtractTableStatisticsFormat(t *testing.T) {
 	// Read field IDs and values
 	for offset < len(statsBytes)-1 {
 		// Check for terminator
-		if offset+1 < len(statsBytes) && statsBytes[offset] == 0xFF && statsBytes[offset+1] == 0xFF {
+		if offset+1 < len(statsBytes) && statsBytes[offset] == 0xFF &&
+			statsBytes[offset+1] == 0xFF {
 			t.Logf("\nFound terminator at offset %d: 0xFF 0xFF", offset)
 			offset += 2
 
@@ -174,7 +175,12 @@ func TestExtractTableStatisticsFormat(t *testing.T) {
 					break
 				}
 				isPresent := statsBytes[offset]
-				t.Logf("    Element %d: nullable byte = 0x%02X (present=%v)", i, isPresent, isPresent != 0)
+				t.Logf(
+					"    Element %d: nullable byte = 0x%02X (present=%v)",
+					i,
+					isPresent,
+					isPresent != 0,
+				)
 				offset++
 
 				if isPresent != 0 {
@@ -462,10 +468,10 @@ func TestCompareTableStatisticsSizes(t *testing.T) {
 	}
 
 	type testCase struct {
-		name       string
-		sql        string
-		colCount   int
-		skip       bool
+		name     string
+		sql      string
+		colCount int
+		skip     bool
 	}
 
 	testCases := []testCase{

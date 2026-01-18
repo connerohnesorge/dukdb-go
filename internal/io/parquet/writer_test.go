@@ -363,7 +363,12 @@ func TestWriter_RoundTrip_Simple(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write data
-	types := []dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_VARCHAR, dukdb.TYPE_DOUBLE, dukdb.TYPE_BOOLEAN}
+	types := []dukdb.Type{
+		dukdb.TYPE_BIGINT,
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_BOOLEAN,
+	}
 	chunk := storage.NewDataChunkWithCapacity(types, 10)
 
 	chunk.SetValue(0, 0, int64(1))
@@ -705,7 +710,12 @@ func TestWriter_VerifyWithGenericReader(t *testing.T) {
 	writer, err := NewWriter(buf, &WriterOptions{Codec: "SNAPPY"})
 	require.NoError(t, err)
 
-	types := []dukdb.Type{dukdb.TYPE_BIGINT, dukdb.TYPE_VARCHAR, dukdb.TYPE_DOUBLE, dukdb.TYPE_BOOLEAN}
+	types := []dukdb.Type{
+		dukdb.TYPE_BIGINT,
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_BOOLEAN,
+	}
 	chunk := storage.NewDataChunkWithCapacity(types, 10)
 
 	chunk.SetValue(0, 0, int64(1))

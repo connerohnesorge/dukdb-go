@@ -44,9 +44,17 @@ func TestAllIsolationLevelsConcurrentBehavior(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE isolation_test (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE isolation_test (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO isolation_test VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO isolation_test VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -716,8 +724,15 @@ func TestPerformanceIsolationLevelOverhead(t *testing.T) {
 
 	// Insert some test data
 	for i := 0; i < 100; i++ {
-		_, err = engineConn.Execute(context.Background(),
-			"INSERT INTO perf_test VALUES ("+string(rune('0'+i%10))+", "+string(rune('0'+i%10))+")", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"INSERT INTO perf_test VALUES ("+string(
+				rune('0'+i%10),
+			)+", "+string(
+				rune('0'+i%10),
+			)+")",
+			nil,
+		)
 		require.NoError(t, err)
 	}
 
@@ -811,7 +826,12 @@ func TestConcurrentTransactionScalability(t *testing.T) {
 	elapsed := time.Since(start)
 	avgDuration := elapsed / numTransactions
 
-	t.Logf("Completed %d transactions in %v (avg %v per transaction)", numTransactions, elapsed, avgDuration)
+	t.Logf(
+		"Completed %d transactions in %v (avg %v per transaction)",
+		numTransactions,
+		elapsed,
+		avgDuration,
+	)
 
 	// Sanity check: should complete in reasonable time
 	assert.Less(t, elapsed, 10*time.Second,
@@ -1245,8 +1265,15 @@ func TestMultipleStatementsInTransaction(t *testing.T) {
 
 			// Multiple INSERTs
 			for i := 1; i <= 5; i++ {
-				_, err = engineConn.Execute(context.Background(),
-					"INSERT INTO multi_stmt VALUES ("+string(rune('0'+i))+", 'name', "+string(rune('0'+i))+")", nil)
+				_, err = engineConn.Execute(
+					context.Background(),
+					"INSERT INTO multi_stmt VALUES ("+string(
+						rune('0'+i),
+					)+", 'name', "+string(
+						rune('0'+i),
+					)+")",
+					nil,
+				)
 				require.NoError(t, err)
 			}
 

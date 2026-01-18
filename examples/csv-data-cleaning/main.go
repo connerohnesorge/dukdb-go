@@ -52,7 +52,8 @@ func main() {
 
 	// Count total rows
 	var totalRows int
-	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM read_csv_auto('%s')", messyFile)).Scan(&totalRows)
+	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM read_csv_auto('%s')", messyFile)).
+		Scan(&totalRows)
 	if err != nil {
 		log.Fatal("Failed to count rows:", err)
 	}
@@ -62,7 +63,12 @@ func main() {
 	columns := []string{"id", "name", "email", "phone", "age", "salary", "join_date", "department"}
 	for _, col := range columns {
 		var nullCount int
-		query := fmt.Sprintf("SELECT COUNT(*) FROM read_csv_auto('%s') WHERE %s IS NULL OR TRIM(%s) = ''", messyFile, col, col)
+		query := fmt.Sprintf(
+			"SELECT COUNT(*) FROM read_csv_auto('%s') WHERE %s IS NULL OR TRIM(%s) = ''",
+			messyFile,
+			col,
+			col,
+		)
 		err = db.QueryRow(query).Scan(&nullCount)
 		if err != nil {
 			log.Printf("Warning: Failed to check nulls in %s: %v", col, err)
@@ -99,7 +105,12 @@ func main() {
 		if err != nil {
 			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("  Name: '%s' | Email: '%s' | Dept: '%s'\n", cleanedName, cleanedEmail, cleanedDept)
+		fmt.Printf(
+			"  Name: '%s' | Email: '%s' | Dept: '%s'\n",
+			cleanedName,
+			cleanedEmail,
+			cleanedDept,
+		)
 	}
 
 	// Example 4: Standardize case
@@ -115,29 +126,29 @@ func main() {
 // 		WHERE name IS NOT NULL
 // 		LIMIT 5
 // 	`, messyFile)
-// 
-// 	rows, err = db.Query(query)
-// 	if err != nil {
-// 		log.Fatal("Failed to query data:", err)
-// 	}
-// 	defer rows.Close()
-// 
-// 	fmt.Println("Case standardization examples:")
-// 	for rows.Next() {
-// 		var name, upper, lower, proper string
-// 		err := rows.Scan(&name, &upper, &lower, &proper)
-// 		if err != nil {
-// 			log.Fatal("Failed to scan row:", err)
-// 		}
-// 		fmt.Printf("  Original: '%s'\n", name)
-// 		fmt.Printf("    UPPER: '%s'\n", upper)
-// 		fmt.Printf("    LOWER: '%s'\n", lower)
-// 		fmt.Printf("    INITCAP: '%s'\n", proper)
-// 	}
-// 
-// 	// Example 5: Validate and clean email addresses
-// 	fmt.Println("\n5. Email Validation and Cleaning:")
-// 
+	//
+	// 	rows, err = db.Query(query)
+	// 	if err != nil {
+	// 		log.Fatal("Failed to query data:", err)
+	// 	}
+	// 	defer rows.Close()
+	//
+	// 	fmt.Println("Case standardization examples:")
+	// 	for rows.Next() {
+	// 		var name, upper, lower, proper string
+	// 		err := rows.Scan(&name, &upper, &lower, &proper)
+	// 		if err != nil {
+	// 			log.Fatal("Failed to scan row:", err)
+	// 		}
+	// 		fmt.Printf("  Original: '%s'\n", name)
+	// 		fmt.Printf("    UPPER: '%s'\n", upper)
+	// 		fmt.Printf("    LOWER: '%s'\n", lower)
+	// 		fmt.Printf("    INITCAP: '%s'\n", proper)
+	// 	}
+	//
+	// 	// Example 5: Validate and clean email addresses
+	// 	fmt.Println("\n5. Email Validation and Cleaning:")
+	//
 	query = fmt.Sprintf(`
 		SELECT
 			email,
@@ -317,7 +328,7 @@ func main() {
 // 			WHERE id IS NOT NULL
 // 		) TO '%s' WITH (HEADER true)
 // 	`, messyFile, cleanedFile)
-// 
+	//
 	_, err = db.Exec(createQuery)
 	if err != nil {
 		log.Fatal("Failed to create cleaned dataset:", err)
@@ -328,7 +339,8 @@ func main() {
 
 	// Verify cleaned data
 	var cleanedCount int
-	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM read_csv_auto('%s')", cleanedFile)).Scan(&cleanedCount)
+	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM read_csv_auto('%s')", cleanedFile)).
+		Scan(&cleanedCount)
 	if err != nil {
 		log.Fatal("Failed to count cleaned rows:", err)
 	}
@@ -368,7 +380,14 @@ func main() {
 	for rows.Next() {
 		var dataset string
 		var total, missingNames, invalidEmails, invalidAges, invalidDates int
-		err := rows.Scan(&dataset, &total, &missingNames, &invalidEmails, &invalidAges, &invalidDates)
+		err := rows.Scan(
+			&dataset,
+			&total,
+			&missingNames,
+			&invalidEmails,
+			&invalidAges,
+			&invalidDates,
+		)
 		if err != nil {
 			log.Fatal("Failed to scan report row:", err)
 		}
@@ -382,7 +401,7 @@ func main() {
 	fmt.Println("- Standardized case formatting")
 	fmt.Println("- Validated email formats")
 	fmt.Println("- Standardized phone numbers")
-		fmt.Println("- Validated and converted data types")
+	fmt.Println("- Validated and converted data types")
 	fmt.Println("- Validated date formats")
 	fmt.Println("- Removed records with NULL IDs")
 	fmt.Println("- Generated clean output dataset")

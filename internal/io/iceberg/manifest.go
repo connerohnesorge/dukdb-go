@@ -51,34 +51,37 @@ type ManifestListEntry struct {
 
 // ManifestDataEntry represents a data file entry in a manifest file.
 type ManifestDataEntry struct {
-	Status        int32                  `avro:"status"`
-	SnapshotID    *int64                 `avro:"snapshot_id"`
-	SequenceNum   *int64                 `avro:"sequence_number"`
-	FileSequence  *int64                 `avro:"file_sequence_number"`
-	DataFile      ManifestDataFile       `avro:"data_file"`
+	Status       int32            `avro:"status"`
+	SnapshotID   *int64           `avro:"snapshot_id"`
+	SequenceNum  *int64           `avro:"sequence_number"`
+	FileSequence *int64           `avro:"file_sequence_number"`
+	DataFile     ManifestDataFile `avro:"data_file"`
 }
 
 // ManifestDataFile represents the data_file field in a manifest entry.
 type ManifestDataFile struct {
-	ContentType      int32              `avro:"content"`
-	FilePath         string             `avro:"file_path"`
-	FileFormat       string             `avro:"file_format"`
-	RecordCount      int64              `avro:"record_count"`
-	FileSizeBytes    int64              `avro:"file_size_in_bytes"`
-	ColumnSizes      map[int32]int64    `avro:"column_sizes"`
-	ValueCounts      map[int32]int64    `avro:"value_counts"`
-	NullCounts       map[int32]int64    `avro:"null_value_counts"`
-	NaNCounts        map[int32]int64    `avro:"nan_value_counts"`
-	LowerBounds      map[int32][]byte   `avro:"lower_bounds"`
-	UpperBounds      map[int32][]byte   `avro:"upper_bounds"`
-	SplitOffsets     []int64            `avro:"split_offsets"`
-	SortOrderID      *int32             `avro:"sort_order_id"`
-	PartitionData    map[string]any     `avro:"partition"`
-	EqualityFieldIDs []int32            `avro:"equality_ids"`
+	ContentType      int32            `avro:"content"`
+	FilePath         string           `avro:"file_path"`
+	FileFormat       string           `avro:"file_format"`
+	RecordCount      int64            `avro:"record_count"`
+	FileSizeBytes    int64            `avro:"file_size_in_bytes"`
+	ColumnSizes      map[int32]int64  `avro:"column_sizes"`
+	ValueCounts      map[int32]int64  `avro:"value_counts"`
+	NullCounts       map[int32]int64  `avro:"null_value_counts"`
+	NaNCounts        map[int32]int64  `avro:"nan_value_counts"`
+	LowerBounds      map[int32][]byte `avro:"lower_bounds"`
+	UpperBounds      map[int32][]byte `avro:"upper_bounds"`
+	SplitOffsets     []int64          `avro:"split_offsets"`
+	SortOrderID      *int32           `avro:"sort_order_id"`
+	PartitionData    map[string]any   `avro:"partition"`
+	EqualityFieldIDs []int32          `avro:"equality_ids"`
 }
 
 // ReadManifestList reads the manifest list for a snapshot and returns all manifest files.
-func (r *ManifestReader) ReadManifestList(ctx context.Context, snapshot *Snapshot) ([]*ManifestFile, error) {
+func (r *ManifestReader) ReadManifestList(
+	ctx context.Context,
+	snapshot *Snapshot,
+) ([]*ManifestFile, error) {
 	if snapshot == nil {
 		return nil, ErrNoCurrentSnapshot
 	}
@@ -93,14 +96,22 @@ func (r *ManifestReader) ReadManifestList(ctx context.Context, snapshot *Snapsho
 	// Read the AVRO file
 	reader, err := ocf.NewDecoder(file)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create AVRO decoder: %w", ErrManifestListReadFailed, err)
+		return nil, fmt.Errorf(
+			"%w: failed to create AVRO decoder: %w",
+			ErrManifestListReadFailed,
+			err,
+		)
 	}
 
 	var manifests []*ManifestFile
 	for reader.HasNext() {
 		var entry ManifestListEntry
 		if err := reader.Decode(&entry); err != nil {
-			return nil, fmt.Errorf("%w: failed to decode manifest list entry: %w", ErrManifestListReadFailed, err)
+			return nil, fmt.Errorf(
+				"%w: failed to decode manifest list entry: %w",
+				ErrManifestListReadFailed,
+				err,
+			)
 		}
 
 		manifests = append(manifests, &ManifestFile{
@@ -131,7 +142,10 @@ func (r *ManifestReader) openFile(path string) (io.ReadCloser, error) {
 }
 
 // ReadDataFiles reads all data file entries from a manifest file.
-func (r *ManifestReader) ReadDataFiles(ctx context.Context, manifest *ManifestFile) ([]*DataFile, error) {
+func (r *ManifestReader) ReadDataFiles(
+	ctx context.Context,
+	manifest *ManifestFile,
+) ([]*DataFile, error) {
 	if manifest == nil {
 		return nil, fmt.Errorf("%w: manifest is nil", ErrManifestReadFailed)
 	}
@@ -156,7 +170,10 @@ func (r *ManifestReader) ReadDataFiles(ctx context.Context, manifest *ManifestFi
 
 // ReadAllDataFiles reads all data files from all manifests in a snapshot.
 // This is a convenience method that combines ReadManifestList and ReadDataFiles.
-func (r *ManifestReader) ReadAllDataFiles(ctx context.Context, snapshot *Snapshot) ([]*DataFile, error) {
+func (r *ManifestReader) ReadAllDataFiles(
+	ctx context.Context,
+	snapshot *Snapshot,
+) ([]*DataFile, error) {
 	manifests, err := r.ReadManifestList(ctx, snapshot)
 	if err != nil {
 		return nil, err
@@ -182,7 +199,10 @@ func (r *ManifestReader) ReadAllDataFiles(ctx context.Context, snapshot *Snapsho
 }
 
 // ReadDataManifests reads only data manifests (not delete manifests) from a snapshot.
-func (r *ManifestReader) ReadDataManifests(ctx context.Context, snapshot *Snapshot) ([]*ManifestFile, error) {
+func (r *ManifestReader) ReadDataManifests(
+	ctx context.Context,
+	snapshot *Snapshot,
+) ([]*ManifestFile, error) {
 	manifests, err := r.ReadManifestList(ctx, snapshot)
 	if err != nil {
 		return nil, err
@@ -199,7 +219,10 @@ func (r *ManifestReader) ReadDataManifests(ctx context.Context, snapshot *Snapsh
 }
 
 // ReadDeleteManifests reads only delete manifests from a snapshot.
-func (r *ManifestReader) ReadDeleteManifests(ctx context.Context, snapshot *Snapshot) ([]*ManifestFile, error) {
+func (r *ManifestReader) ReadDeleteManifests(
+	ctx context.Context,
+	snapshot *Snapshot,
+) ([]*ManifestFile, error) {
 	manifests, err := r.ReadManifestList(ctx, snapshot)
 	if err != nil {
 		return nil, err
@@ -254,7 +277,10 @@ func (s EntryStatus) String() string {
 }
 
 // ReadManifestEntries reads all entries from a manifest file, including status information.
-func (r *ManifestReader) ReadManifestEntries(ctx context.Context, manifest *ManifestFile) ([]ManifestEntry, error) {
+func (r *ManifestReader) ReadManifestEntries(
+	ctx context.Context,
+	manifest *ManifestFile,
+) ([]ManifestEntry, error) {
 	if manifest == nil {
 		return nil, fmt.Errorf("%w: manifest is nil", ErrManifestReadFailed)
 	}
@@ -275,7 +301,11 @@ func (r *ManifestReader) ReadManifestEntries(ctx context.Context, manifest *Mani
 	for reader.HasNext() {
 		var rawEntry ManifestDataEntry
 		if err := reader.Decode(&rawEntry); err != nil {
-			return nil, fmt.Errorf("%w: failed to decode manifest entry: %w", ErrManifestReadFailed, err)
+			return nil, fmt.Errorf(
+				"%w: failed to decode manifest entry: %w",
+				ErrManifestReadFailed,
+				err,
+			)
 		}
 
 		df := &DataFile{
@@ -435,14 +465,22 @@ func ReadManifestListFromFile(path string) ([]*ManifestFile, error) {
 	// This is a simplified version - real implementation would use the schema from the file
 	reader, err := ocf.NewDecoder(file)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create AVRO decoder: %w", ErrManifestListReadFailed, err)
+		return nil, fmt.Errorf(
+			"%w: failed to create AVRO decoder: %w",
+			ErrManifestListReadFailed,
+			err,
+		)
 	}
 
 	var manifests []*ManifestFile
 	for reader.HasNext() {
 		var entry ManifestListEntry
 		if err := reader.Decode(&entry); err != nil {
-			return nil, fmt.Errorf("%w: failed to decode manifest list entry: %w", ErrManifestListReadFailed, err)
+			return nil, fmt.Errorf(
+				"%w: failed to decode manifest list entry: %w",
+				ErrManifestListReadFailed,
+				err,
+			)
 		}
 
 		manifests = append(manifests, &ManifestFile{

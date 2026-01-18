@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"time"
 
 	_ "github.com/dukdb/dukdb-go"
 )
@@ -177,7 +176,7 @@ func demonstrateCompleteETL(db *sql.DB) {
 			var count int
 			var revenue, avg float64
 			rows.Scan(&date, &region, &count, &revenue, &avg)
-			fmt.Printf("   - %s %s: %d sales, $%.2f total, $%.2f avg\n", 
+			fmt.Printf("   - %s %s: %d sales, $%.2f total, $%.2f avg\n",
 				date, region, count, revenue, avg)
 		}
 	}

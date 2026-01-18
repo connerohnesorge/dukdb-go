@@ -482,7 +482,16 @@ func TestRowGroupWriterDifferentTypes(t *testing.T) {
 	// Add rows with different types
 	rows := [][]any{
 		{true, int8(1), int16(100), int32(1000), int64(10000), float32(1.1), float64(1.11), "row1"},
-		{false, int8(-1), int16(-100), int32(-1000), int64(-10000), float32(-1.1), float64(-1.11), "row2"},
+		{
+			false,
+			int8(-1),
+			int16(-100),
+			int32(-1000),
+			int64(-10000),
+			float32(-1.1),
+			float64(-1.11),
+			"row2",
+		},
 		{nil, nil, nil, nil, nil, nil, nil, nil}, // All NULLs
 	}
 

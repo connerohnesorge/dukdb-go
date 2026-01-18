@@ -8,32 +8,32 @@ import (
 // pg_attribute columns - PostgreSQL column/attribute catalog
 // Reference: https://www.postgresql.org/docs/current/catalog-pg-attribute.html
 var pgAttributeColumns = []string{
-	"attrelid",      // OID of the table this column belongs to
-	"attname",       // Column name
-	"atttypid",      // Data type OID
-	"attstattarget", // Statistics target
-	"attlen",        // Copy of pg_type.typlen
-	"attnum",        // Column number (1-indexed, 0 for system columns)
-	"attndims",      // Number of dimensions for array types
-	"attcacheoff",   // Always -1 in storage
-	"atttypmod",     // Type modifier (e.g., varchar(n))
-	"attbyval",      // Passed by value
-	"attalign",      // Alignment requirement
-	"attstorage",    // Storage strategy
+	"attrelid",       // OID of the table this column belongs to
+	"attname",        // Column name
+	"atttypid",       // Data type OID
+	"attstattarget",  // Statistics target
+	"attlen",         // Copy of pg_type.typlen
+	"attnum",         // Column number (1-indexed, 0 for system columns)
+	"attndims",       // Number of dimensions for array types
+	"attcacheoff",    // Always -1 in storage
+	"atttypmod",      // Type modifier (e.g., varchar(n))
+	"attbyval",       // Passed by value
+	"attalign",       // Alignment requirement
+	"attstorage",     // Storage strategy
 	"attcompression", // Compression method
-	"attnotnull",    // NOT NULL constraint
-	"atthasdef",     // Has a default value
-	"atthasmissing", // Has missing value
-	"attidentity",   // Identity column type
-	"attgenerated",  // Generated column type
-	"attisdropped",  // Column is dropped
-	"attislocal",    // Defined locally
-	"attinhcount",   // Number of inheritance ancestors
-	"attcollation",  // Collation OID
-	"attacl",        // Access privileges
-	"attoptions",    // Options
-	"attfdwoptions", // Foreign data wrapper options
-	"attmissingval", // Missing value
+	"attnotnull",     // NOT NULL constraint
+	"atthasdef",      // Has a default value
+	"atthasmissing",  // Has missing value
+	"attidentity",    // Identity column type
+	"attgenerated",   // Generated column type
+	"attisdropped",   // Column is dropped
+	"attislocal",     // Defined locally
+	"attinhcount",    // Number of inheritance ancestors
+	"attcollation",   // Collation OID
+	"attacl",         // Access privileges
+	"attoptions",     // Options
+	"attfdwoptions",  // Foreign data wrapper options
+	"attmissingval",  // Missing value
 }
 
 // queryPgAttribute returns data for pg_catalog.pg_attribute.

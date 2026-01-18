@@ -2984,7 +2984,11 @@ func wrapLiteralValue(v any) *binder.BoundLiteral {
 // Returns true if the index covers all columns that need to be retrieved.
 // Note: Current HashIndex only stores RowIDs, so true index-only scan
 // is not yet possible. This is for future optimization.
-func isIndexOnlyScan(indexDef *catalog.IndexDef, projections []int, tableDef *catalog.TableDef) bool {
+func isIndexOnlyScan(
+	indexDef *catalog.IndexDef,
+	projections []int,
+	tableDef *catalog.TableDef,
+) bool {
 	// If projecting all columns (nil projections means SELECT *),
 	// we can only do index-only if index has all columns
 	if projections == nil {

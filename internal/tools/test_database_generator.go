@@ -1,6 +1,6 @@
 // Package tools provides utility tools for testing and development.
 //
-// Test Database Generator
+// # Test Database Generator
 //
 // Task 9.13: Creates test databases with TPC-H-like schemas for benchmarking.
 // This tool can generate databases of various sizes and distributions for
@@ -209,7 +209,16 @@ func (g *TestDatabaseGenerator) LoadTestData(scaleFactor float64) error {
 
 // RunANALYZE runs ANALYZE on all tables to collect statistics
 func (g *TestDatabaseGenerator) RunANALYZE() error {
-	tables := []string{"region", "nation", "customer", "orders", "lineitem", "part", "supplier", "partsupp"}
+	tables := []string{
+		"region",
+		"nation",
+		"customer",
+		"orders",
+		"lineitem",
+		"part",
+		"supplier",
+		"partsupp",
+	}
 
 	for _, table := range tables {
 		if err := g.executeSQL(fmt.Sprintf("ANALYZE TABLE %s", table)); err != nil {

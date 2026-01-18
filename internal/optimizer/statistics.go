@@ -11,16 +11,16 @@ import (
 
 // Type width constants in bytes for cost estimation.
 const (
-	widthByte     int32 = 1
-	widthInt16    int32 = 2
-	widthInt32    int32 = 4
-	widthInt64    int32 = 8
-	widthInt128   int32 = 16
-	widthVarchar  int32 = 32
-	widthList     int32 = 40
-	widthComplex  int32 = 64
-	widthDefault  int32 = 8
-	bytesPerRow   int64 = 100
+	widthByte    int32 = 1
+	widthInt16   int32 = 2
+	widthInt32   int32 = 4
+	widthInt64   int32 = 8
+	widthInt128  int32 = 16
+	widthVarchar int32 = 32
+	widthList    int32 = 40
+	widthComplex int32 = 64
+	widthDefault int32 = 8
+	bytesPerRow  int64 = 100
 )
 
 // TableStatistics captures table-level statistics for cost-based optimization.

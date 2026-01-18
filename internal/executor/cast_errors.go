@@ -140,7 +140,11 @@ func castValueWithValidation(v any, targetType dukdb.Type) (any, error) {
 		return castToDate(v)
 	case dukdb.TYPE_TIME, dukdb.TYPE_TIME_TZ:
 		return castToTime(v)
-	case dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_TZ:
+	case dukdb.TYPE_TIMESTAMP,
+		dukdb.TYPE_TIMESTAMP_S,
+		dukdb.TYPE_TIMESTAMP_MS,
+		dukdb.TYPE_TIMESTAMP_NS,
+		dukdb.TYPE_TIMESTAMP_TZ:
 		return castToTimestamp(v)
 	case dukdb.TYPE_UUID:
 		return castToUUID(v)
@@ -609,7 +613,9 @@ func parseIntervalString(s string) (Interval, error) {
 	}
 
 	// Parse PostgreSQL verbose format
-	re := regexp.MustCompile(`(-?\d+)\s*(years?|mons?|months?|days?|hours?|hrs?|mins?|minutes?|secs?|seconds?|milliseconds?|microseconds?)`)
+	re := regexp.MustCompile(
+		`(-?\d+)\s*(years?|mons?|months?|days?|hours?|hrs?|mins?|minutes?|secs?|seconds?|milliseconds?|microseconds?)`,
+	)
 	matches := re.FindAllStringSubmatch(s, -1)
 
 	if len(matches) == 0 {

@@ -297,7 +297,12 @@ func TestCompressConstant_RoundTrip_LargeCount(t *testing.T) {
 
 	compressed, ok := CompressConstant(original, valueSize)
 	require.True(t, ok)
-	assert.Equal(t, valueSize, len(compressed), "compressed should be single value regardless of count")
+	assert.Equal(
+		t,
+		valueSize,
+		len(compressed),
+		"compressed should be single value regardless of count",
+	)
 
 	decompressed, err := DecompressConstant(compressed, valueSize, count)
 	require.NoError(t, err)
@@ -1238,7 +1243,11 @@ func TestCompressDictionary_FewUniqueValues_Int32NotBeneficial(t *testing.T) {
 	// Compressed: 4 (dictSize) + 12 (3 values * 4) + 8 (indexCount) + 400 (indices * 4) = 424 bytes
 	// Original: 400 bytes
 	// 424 > 400, so it's not beneficial
-	assert.False(t, ok, "int32 dictionary compression not beneficial when indices are same size as values")
+	assert.False(
+		t,
+		ok,
+		"int32 dictionary compression not beneficial when indices are same size as values",
+	)
 	assert.Nil(t, compressed)
 }
 
@@ -1370,9 +1379,60 @@ func TestCompressDictionary_LargeValues(t *testing.T) {
 
 	// Only 3 unique values
 	values := [][]byte{
-		{0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF},
-		{0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00},
-		{0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0},
+		{
+			0x00,
+			0x11,
+			0x22,
+			0x33,
+			0x44,
+			0x55,
+			0x66,
+			0x77,
+			0x88,
+			0x99,
+			0xAA,
+			0xBB,
+			0xCC,
+			0xDD,
+			0xEE,
+			0xFF,
+		},
+		{
+			0xFF,
+			0xEE,
+			0xDD,
+			0xCC,
+			0xBB,
+			0xAA,
+			0x99,
+			0x88,
+			0x77,
+			0x66,
+			0x55,
+			0x44,
+			0x33,
+			0x22,
+			0x11,
+			0x00,
+		},
+		{
+			0x12,
+			0x34,
+			0x56,
+			0x78,
+			0x9A,
+			0xBC,
+			0xDE,
+			0xF0,
+			0x12,
+			0x34,
+			0x56,
+			0x78,
+			0x9A,
+			0xBC,
+			0xDE,
+			0xF0,
+		},
 	}
 
 	for i := 0; i < count; i++ {
@@ -1443,8 +1503,42 @@ func TestCompressDictionary_RoundTrip_LargeValues(t *testing.T) {
 	original := make([]byte, count*valueSize)
 
 	// 2 unique 16-byte values
-	value1 := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
-	value2 := []byte{0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00}
+	value1 := []byte{
+		0x00,
+		0x11,
+		0x22,
+		0x33,
+		0x44,
+		0x55,
+		0x66,
+		0x77,
+		0x88,
+		0x99,
+		0xAA,
+		0xBB,
+		0xCC,
+		0xDD,
+		0xEE,
+		0xFF,
+	}
+	value2 := []byte{
+		0xFF,
+		0xEE,
+		0xDD,
+		0xCC,
+		0xBB,
+		0xAA,
+		0x99,
+		0x88,
+		0x77,
+		0x66,
+		0x55,
+		0x44,
+		0x33,
+		0x22,
+		0x11,
+		0x00,
+	}
 
 	for i := 0; i < count; i++ {
 		if i%2 == 0 {
@@ -1793,7 +1887,12 @@ func TestCompressBitPackingFromUint64_SmallRange(t *testing.T) {
 	assert.Less(t, len(compressed), 8000) // Much smaller than original
 	// Verify header
 	assert.Equal(t, uint8(2), compressed[0], "bitWidth should be 2 for values 0-3")
-	assert.Equal(t, uint64(1000), binary.LittleEndian.Uint64(compressed[1:9]), "count should be 1000")
+	assert.Equal(
+		t,
+		uint64(1000),
+		binary.LittleEndian.Uint64(compressed[1:9]),
+		"count should be 1000",
+	)
 }
 
 func TestCompressBitPackingFromUint64_AllZeros(t *testing.T) {
@@ -1880,7 +1979,13 @@ func TestCompressBitPackingFromUint64_VariousBitWidths(t *testing.T) {
 			compressed, ok := CompressBitPackingFromUint64(values)
 
 			require.True(t, ok, "should compress")
-			assert.Equal(t, tc.expectedBits, compressed[0], "bitWidth should be %d", tc.expectedBits)
+			assert.Equal(
+				t,
+				tc.expectedBits,
+				compressed[0],
+				"bitWidth should be %d",
+				tc.expectedBits,
+			)
 		})
 	}
 }
@@ -2325,30 +2430,37 @@ func TestBitsNeededForValue(t *testing.T) {
 		value    uint64
 		expected uint8
 	}{
-		{0, 1},                           // 0 needs at least 1 bit
-		{1, 1},                           // 1 needs 1 bit
-		{2, 2},                           // 2 (10) needs 2 bits
-		{3, 2},                           // 3 (11) needs 2 bits
-		{4, 3},                           // 4 (100) needs 3 bits
-		{7, 3},                           // 7 (111) needs 3 bits
-		{8, 4},                           // 8 (1000) needs 4 bits
-		{15, 4},                          // 15 (1111) needs 4 bits
-		{16, 5},                          // 16 needs 5 bits
-		{255, 8},                         // 255 needs 8 bits
-		{256, 9},                         // 256 needs 9 bits
-		{65535, 16},                      // 16-bit max
-		{65536, 17},                      // 17 bits
-		{0xFFFFFFFF, 32},                 // 32-bit max
-		{0x100000000, 33},                // 33 bits
-		{0xFFFFFFFFFFFFFFFF, 64},         // 64-bit max
-		{0x8000000000000000, 64},         // High bit set
-		{0x4000000000000000, 63},         // Second-highest bit
+		{0, 1},                   // 0 needs at least 1 bit
+		{1, 1},                   // 1 needs 1 bit
+		{2, 2},                   // 2 (10) needs 2 bits
+		{3, 2},                   // 3 (11) needs 2 bits
+		{4, 3},                   // 4 (100) needs 3 bits
+		{7, 3},                   // 7 (111) needs 3 bits
+		{8, 4},                   // 8 (1000) needs 4 bits
+		{15, 4},                  // 15 (1111) needs 4 bits
+		{16, 5},                  // 16 needs 5 bits
+		{255, 8},                 // 255 needs 8 bits
+		{256, 9},                 // 256 needs 9 bits
+		{65535, 16},              // 16-bit max
+		{65536, 17},              // 17 bits
+		{0xFFFFFFFF, 32},         // 32-bit max
+		{0x100000000, 33},        // 33 bits
+		{0xFFFFFFFFFFFFFFFF, 64}, // 64-bit max
+		{0x8000000000000000, 64}, // High bit set
+		{0x4000000000000000, 63}, // Second-highest bit
 	}
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("value_%d", tc.value), func(t *testing.T) {
 			result := bitsNeededForValue(tc.value)
-			assert.Equal(t, tc.expected, result, "bitsNeededForValue(%d) should be %d", tc.value, tc.expected)
+			assert.Equal(
+				t,
+				tc.expected,
+				result,
+				"bitsNeededForValue(%d) should be %d",
+				tc.value,
+				tc.expected,
+			)
 		})
 	}
 }

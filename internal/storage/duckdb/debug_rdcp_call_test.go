@@ -47,37 +47,42 @@ func TestDebugReadColumnDataPointer(t *testing.T) {
 	if len(rowGroups) > 0 {
 		// Let me trace through ReadColumnDataPointer manually to see where parsing fails
 		mbp := rowGroups[0].DataPointers[1] // VARCHAR column
-		t.Logf("VARCHAR column MBP: BlockID=%d, BlockIndex=%d, Offset=%d", mbp.BlockID, mbp.BlockIndex, mbp.Offset)
-		
+		t.Logf(
+			"VARCHAR column MBP: BlockID=%d, BlockIndex=%d, Offset=%d",
+			mbp.BlockID,
+			mbp.BlockIndex,
+			mbp.Offset,
+		)
+
 		// Create reader like ReadColumnDataPointer does
 		encodedPointer := mbp.Encode()
 		reader, err := NewMetadataReaderWithOffset(storage.blockManager, encodedPointer, mbp.Offset)
 		if err != nil {
 			t.Fatalf("Failed to create reader: %v", err)
 		}
-		
+
 		// Read Field 100
 		err = reader.OnPropertyBegin(100)
 		if err != nil {
 			t.Fatalf("OnPropertyBegin(100) failed: %v", err)
 		}
-		
+
 		count, err := reader.ReadVarint()
 		if err != nil {
 			t.Fatalf("ReadVarint count failed: %v", err)
 		}
 		t.Logf("data_pointers count: %d", count)
-		
+
 		// Read DataPointer
 		dp, err := readDataPointer(reader)
 		if err != nil {
 			t.Fatalf("readDataPointer failed: %v", err)
 		}
-		t.Logf("DataPointer: TupleCount=%d, BlockID=%d, Compression=%s", 
+		t.Logf("DataPointer: TupleCount=%d, BlockID=%d, Compression=%s",
 			dp.TupleCount, dp.Block.BlockID, dp.Compression.String())
 		t.Logf("Statistics: HasStats=%v, HasNull=%v, StatData len=%d",
 			dp.Statistics.HasStats, dp.Statistics.HasNull, len(dp.Statistics.StatData))
-		
+
 		// Now check what field comes next
 		nextField, err := reader.PeekField()
 		if err != nil {

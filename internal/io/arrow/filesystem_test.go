@@ -261,7 +261,7 @@ func TestExtractPath(t *testing.T) {
 	}{
 		{"/local/path", "/local/path"},
 		{"file:///local/path", "/local/path"},
-		{"s3://bucket/key", "s3://bucket/key"},      // Cloud URLs are passed through
+		{"s3://bucket/key", "s3://bucket/key"},       // Cloud URLs are passed through
 		{"gs://bucket/object", "gs://bucket/object"}, // Cloud URLs are passed through
 	}
 
@@ -609,7 +609,11 @@ func TestCloudStorage_URLParsing(t *testing.T) {
 		// Azure
 		{"az://container/file.arrow", "az", "az://container/file.arrow"},
 		{"azure://container/file.arrow", "azure", "azure://container/file.arrow"},
-		{"abfs://container@account.dfs.core.windows.net/file.arrow", "abfs", "abfs://container@account.dfs.core.windows.net/file.arrow"},
+		{
+			"abfs://container@account.dfs.core.windows.net/file.arrow",
+			"abfs",
+			"abfs://container@account.dfs.core.windows.net/file.arrow",
+		},
 
 		// HTTP
 		{"http://example.com/file.arrow", "http", "http://example.com/file.arrow"},
@@ -654,7 +658,9 @@ func TestCloudStorage_ContextCancellation(t *testing.T) {
 	// This should fail quickly due to context cancellation
 	_, err := NewReaderFromURLWithContext(ctx, "s3://bucket/key/file.arrow", nil)
 	if err == nil {
-		t.Log("Surprisingly, no error returned for cancelled context - filesystem may not check context")
+		t.Log(
+			"Surprisingly, no error returned for cancelled context - filesystem may not check context",
+		)
 	} else {
 		// Error is expected
 		t.Logf("Got expected error for cancelled context: %v", err)

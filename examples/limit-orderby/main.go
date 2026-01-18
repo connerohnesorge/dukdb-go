@@ -67,10 +67,18 @@ func main() {
 	}
 
 	for _, sale := range salesData {
-		_, err = db.Exec(`INSERT INTO sales (id, product_name, category, price, quantity, sale_date, region, salesperson)
+		_, err = db.Exec(
+			`INSERT INTO sales (id, product_name, category, price, quantity, sale_date, region, salesperson)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			sale.id, sale.product, sale.category, sale.price, sale.quantity,
-			sale.saleDate, sale.region, sale.salesperson)
+			sale.id,
+			sale.product,
+			sale.category,
+			sale.price,
+			sale.quantity,
+			sale.saleDate,
+			sale.region,
+			sale.salesperson,
+		)
 		if err != nil {
 			log.Printf("Failed to insert sale %s: %v", sale.product, err)
 		}

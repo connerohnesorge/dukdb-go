@@ -1,7 +1,6 @@
 package duckdb
 
 import (
-	
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,7 @@ import (
 func TestDuckDBCLIInterop(t *testing.T) {
 	tmpDir := t.TempDir()
 	ourPath := filepath.Join(tmpDir, "ours.duckdb")
-	
+
 	// Create our file with a simple table
 	storage, err := CreateDuckDBStorage(ourPath, nil)
 	if err != nil {

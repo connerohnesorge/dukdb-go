@@ -124,38 +124,39 @@ func (pg *PgCatalog) queryPgType(filters []Filter) *QueryResult {
 		}
 
 		row := map[string]any{
-			"oid":            int64(t.oid),
-			"typname":        t.typname,
-			"typnamespace":   pgCatalogNamespaceOID,
-			"typowner":       int64(10), // Superuser
-			"typlen":         t.typlen,
-			"typbyval":       t.typbyval,
-			"typtype":        t.typtype,
-			"typcategory":    t.typcategory,
-			"typispreferred": t.typcategory == "S" && t.typname == "text", // text is preferred string
-			"typisdefined":   true,
-			"typdelim":       ",",
-			"typrelid":       int64(0),
-			"typsubscript":   int64(0),
-			"typelem":        typelem,
-			"typarray":       int64(t.typarray),
-			"typinput":       int64(0), // Would need function OIDs
-			"typoutput":      int64(0),
-			"typreceive":     int64(0),
-			"typsend":        int64(0),
-			"typmodin":       int64(0),
-			"typmodout":      int64(0),
-			"typanalyze":     int64(0),
-			"typalign":       t.typalign,
-			"typstorage":     t.typstorage,
-			"typnotnull":     false,
-			"typbasetype":    int64(0),
-			"typtypmod":      int64(-1),
-			"typndims":       int64(0),
-			"typcollation":   int64(0),
-			"typdefaultbin":  nil,
-			"typdefault":     nil,
-			"typacl":         nil,
+			"oid":          int64(t.oid),
+			"typname":      t.typname,
+			"typnamespace": pgCatalogNamespaceOID,
+			"typowner":     int64(10), // Superuser
+			"typlen":       t.typlen,
+			"typbyval":     t.typbyval,
+			"typtype":      t.typtype,
+			"typcategory":  t.typcategory,
+			"typispreferred": t.typcategory == "S" &&
+				t.typname == "text", // text is preferred string
+			"typisdefined":  true,
+			"typdelim":      ",",
+			"typrelid":      int64(0),
+			"typsubscript":  int64(0),
+			"typelem":       typelem,
+			"typarray":      int64(t.typarray),
+			"typinput":      int64(0), // Would need function OIDs
+			"typoutput":     int64(0),
+			"typreceive":    int64(0),
+			"typsend":       int64(0),
+			"typmodin":      int64(0),
+			"typmodout":     int64(0),
+			"typanalyze":    int64(0),
+			"typalign":      t.typalign,
+			"typstorage":    t.typstorage,
+			"typnotnull":    false,
+			"typbasetype":   int64(0),
+			"typtypmod":     int64(-1),
+			"typndims":      int64(0),
+			"typcollation":  int64(0),
+			"typdefaultbin": nil,
+			"typdefault":    nil,
+			"typacl":        nil,
 		}
 
 		if matchesFilters(row, filters) {

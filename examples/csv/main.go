@@ -23,7 +23,7 @@ func main() {
 	runReadCSVAutoExample(db)
 	runReadCSVOptionsExample(db)
 	runWriteCSVExample(db)
-	
+
 	fmt.Println("\n✓ All CSV examples completed successfully!")
 }
 
@@ -35,7 +35,7 @@ func runReadCSVExample(db *sql.DB) {
 		return
 	}
 	defer rows.Close()
-	
+
 	var count int
 	for rows.Next() {
 		count++
@@ -79,7 +79,7 @@ func runWriteCSVExample(db *sql.DB) {
 		fmt.Println("   Create tables and use COPY to export CSV")
 		return
 	}
-	
+
 	// Export to CSV
 	_, err = db.Exec("COPY sample TO 'output.csv' (HEADER, DELIMITER ',')")
 	if err != nil {
@@ -87,6 +87,6 @@ func runWriteCSVExample(db *sql.DB) {
 		return
 	}
 	fmt.Println("   Exported table to CSV")
-	
+
 	db.Exec("DROP TABLE sample")
 }

@@ -35,8 +35,12 @@ func createORMTestCatalog() *mockCatalog {
 	accountsCols := []*catalog.ColumnDef{
 		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER).WithNullable(false),
 		catalog.NewColumnDef("name", dukdb.TYPE_VARCHAR).WithNullable(false),
-		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).WithNullable(true).WithDefault("CURRENT_TIMESTAMP"),
-		catalog.NewColumnDef("is_active", dukdb.TYPE_BOOLEAN).WithNullable(false).WithDefault("true"),
+		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).
+			WithNullable(true).
+			WithDefault("CURRENT_TIMESTAMP"),
+		catalog.NewColumnDef("is_active", dukdb.TYPE_BOOLEAN).
+			WithNullable(false).
+			WithDefault("true"),
 	}
 	accountsTable := catalog.NewTableDef("accounts", accountsCols)
 	_ = accountsTable.SetPrimaryKey([]string{"id"})
@@ -51,7 +55,9 @@ func createORMTestCatalog() *mockCatalog {
 		catalog.NewColumnDef("first_name", dukdb.TYPE_VARCHAR).WithNullable(true),
 		catalog.NewColumnDef("last_name", dukdb.TYPE_VARCHAR).WithNullable(true),
 		catalog.NewColumnDef("role", dukdb.TYPE_VARCHAR).WithNullable(false).WithDefault("'user'"),
-		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).WithNullable(true).WithDefault("CURRENT_TIMESTAMP"),
+		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).
+			WithNullable(true).
+			WithDefault("CURRENT_TIMESTAMP"),
 		catalog.NewColumnDef("updated_at", dukdb.TYPE_TIMESTAMP).WithNullable(true),
 		catalog.NewColumnDef("deleted_at", dukdb.TYPE_TIMESTAMP).WithNullable(true),
 	}
@@ -66,7 +72,9 @@ func createORMTestCatalog() *mockCatalog {
 		catalog.NewColumnDef("title", dukdb.TYPE_VARCHAR).WithNullable(false),
 		catalog.NewColumnDef("slug", dukdb.TYPE_VARCHAR).WithNullable(false),
 		catalog.NewColumnDef("content", dukdb.TYPE_VARCHAR).WithNullable(true),
-		catalog.NewColumnDef("published", dukdb.TYPE_BOOLEAN).WithNullable(false).WithDefault("false"),
+		catalog.NewColumnDef("published", dukdb.TYPE_BOOLEAN).
+			WithNullable(false).
+			WithDefault("false"),
 		catalog.NewColumnDef("view_count", dukdb.TYPE_INTEGER).WithNullable(false).WithDefault("0"),
 		catalog.NewColumnDef("created_at", dukdb.TYPE_TIMESTAMP).WithNullable(true),
 		catalog.NewColumnDef("updated_at", dukdb.TYPE_TIMESTAMP).WithNullable(true),
@@ -112,24 +120,51 @@ func createORMTestCatalog() *mockCatalog {
 		"SELECT id, email, first_name, last_name FROM users WHERE deleted_at IS NULL")
 	_ = mock.catalog.CreateView(activeUsersView)
 
-	publishedPostsView := catalog.NewViewDef("published_posts", "main",
-		"SELECT p.id, p.title, p.slug, u.email AS author_email FROM posts p JOIN users u ON p.author_id = u.id WHERE p.published = true")
+	publishedPostsView := catalog.NewViewDef(
+		"published_posts",
+		"main",
+		"SELECT p.id, p.title, p.slug, u.email AS author_email FROM posts p JOIN users u ON p.author_id = u.id WHERE p.published = true",
+	)
 	_ = mock.catalog.CreateView(publishedPostsView)
 
 	// Create indexes
-	usersEmailIdx := catalog.NewIndexDef("users_email_idx", "main", "users", []string{"email"}, true)
+	usersEmailIdx := catalog.NewIndexDef(
+		"users_email_idx",
+		"main",
+		"users",
+		[]string{"email"},
+		true,
+	)
 	_ = mock.catalog.CreateIndex(usersEmailIdx)
 
-	usersAccountIdx := catalog.NewIndexDef("users_account_id_idx", "main", "users", []string{"account_id"}, false)
+	usersAccountIdx := catalog.NewIndexDef(
+		"users_account_id_idx",
+		"main",
+		"users",
+		[]string{"account_id"},
+		false,
+	)
 	_ = mock.catalog.CreateIndex(usersAccountIdx)
 
 	postsSlugIdx := catalog.NewIndexDef("posts_slug_idx", "main", "posts", []string{"slug"}, true)
 	_ = mock.catalog.CreateIndex(postsSlugIdx)
 
-	postsAuthorIdx := catalog.NewIndexDef("posts_author_id_idx", "main", "posts", []string{"author_id"}, false)
+	postsAuthorIdx := catalog.NewIndexDef(
+		"posts_author_id_idx",
+		"main",
+		"posts",
+		[]string{"author_id"},
+		false,
+	)
 	_ = mock.catalog.CreateIndex(postsAuthorIdx)
 
-	commentsPostIdx := catalog.NewIndexDef("comments_post_id_idx", "main", "comments", []string{"post_id"}, false)
+	commentsPostIdx := catalog.NewIndexDef(
+		"comments_post_id_idx",
+		"main",
+		"comments",
+		[]string{"post_id"},
+		false,
+	)
 	_ = mock.catalog.CreateIndex(commentsPostIdx)
 
 	tagsSlugIdx := catalog.NewIndexDef("tags_slug_idx", "main", "tags", []string{"slug"}, true)
@@ -183,11 +218,23 @@ func TestPrismaIntrospectionQueries(t *testing.T) {
 			foundColumns[tableName+"."+columnName] = true
 
 			// Verify data_type is present
-			assert.NotEmpty(t, row["data_type"], "data_type should be present for %s.%s", tableName, columnName)
+			assert.NotEmpty(
+				t,
+				row["data_type"],
+				"data_type should be present for %s.%s",
+				tableName,
+				columnName,
+			)
 			// Verify is_nullable is YES or NO
 			isNullable := row["is_nullable"].(string)
-			assert.True(t, isNullable == pgNullableYes || isNullable == pgNullableNo,
-				"is_nullable should be YES or NO for %s.%s, got %s", tableName, columnName, isNullable)
+			assert.True(
+				t,
+				isNullable == pgNullableYes || isNullable == pgNullableNo,
+				"is_nullable should be YES or NO for %s.%s, got %s",
+				tableName,
+				columnName,
+				isNullable,
+			)
 		}
 
 		// Verify key columns exist
@@ -217,7 +264,12 @@ func TestPrismaIntrospectionQueries(t *testing.T) {
 			}
 		}
 
-		assert.Equal(t, 6, primaryKeys, "should have 6 primary keys (accounts, users, posts, comments, tags, post_tags)")
+		assert.Equal(
+			t,
+			6,
+			primaryKeys,
+			"should have 6 primary keys (accounts, users, posts, comments, tags, post_tags)",
+		)
 		assert.GreaterOrEqual(t, uniqueConstraints, 3, "should have at least 3 unique constraints")
 	})
 
@@ -490,7 +542,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	is := NewInformationSchema(mock, "dukdb")
 
 	t.Run("integer column metadata", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -501,7 +555,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	})
 
 	t.Run("bigint column metadata", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'id'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'id'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -511,7 +567,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	})
 
 	t.Run("boolean column metadata", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'published'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'published'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -521,7 +579,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	})
 
 	t.Run("timestamp column metadata", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'created_at'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'created_at'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -533,7 +593,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	})
 
 	t.Run("varchar column metadata", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -544,7 +606,9 @@ func TestColumnMetadataAccuracy(t *testing.T) {
 	})
 
 	t.Run("column with default value", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'view_count'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'view_count'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -739,7 +803,9 @@ func TestSequenceMetadata(t *testing.T) {
 	})
 
 	t.Run("sequence data type is bigint", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.sequences WHERE sequence_name = 'users_id_seq'")
+		result := is.Query(
+			"SELECT * FROM information_schema.sequences WHERE sequence_name = 'users_id_seq'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -773,7 +839,9 @@ func TestViewMetadata(t *testing.T) {
 	})
 
 	t.Run("view definition is present", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.views WHERE table_name = 'active_users'")
+		result := is.Query(
+			"SELECT * FROM information_schema.views WHERE table_name = 'active_users'",
+		)
 		require.NotNil(t, result)
 		require.Len(t, result.Rows, 1)
 
@@ -806,13 +874,17 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("filter returns empty for non-existent table", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.tables WHERE table_name = 'nonexistent_table'")
+		result := is.Query(
+			"SELECT * FROM information_schema.tables WHERE table_name = 'nonexistent_table'",
+		)
 		require.NotNil(t, result)
 		assert.Empty(t, result.Rows)
 	})
 
 	t.Run("filter returns empty for non-existent schema", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_schema = 'nonexistent_schema'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_schema = 'nonexistent_schema'",
+		)
 		require.NotNil(t, result)
 		assert.Empty(t, result.Rows)
 	})
@@ -821,7 +893,9 @@ func TestErrorCases(t *testing.T) {
 		emptyMock := newMockCatalog()
 		emptyIS := NewInformationSchema(emptyMock, "dukdb")
 
-		result := emptyIS.Query("SELECT * FROM information_schema.tables WHERE table_schema = 'main'")
+		result := emptyIS.Query(
+			"SELECT * FROM information_schema.tables WHERE table_schema = 'main'",
+		)
 		require.NotNil(t, result)
 		assert.Empty(t, result.Rows)
 	})
@@ -839,7 +913,9 @@ func TestMixedQueries(t *testing.T) {
 
 	t.Run("filter tables by schema and type", func(t *testing.T) {
 		// Query all base tables in main schema
-		result := is.Query("SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'BASE TABLE'")
+		result := is.Query(
+			"SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'BASE TABLE'",
+		)
 		require.NotNil(t, result)
 
 		// Should have all 6 base tables
@@ -847,7 +923,9 @@ func TestMixedQueries(t *testing.T) {
 	})
 
 	t.Run("filter views by schema and type", func(t *testing.T) {
-		result := is.Query("SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'VIEW'")
+		result := is.Query(
+			"SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'VIEW'",
+		)
 		require.NotNil(t, result)
 
 		// Should have 2 views
@@ -856,7 +934,9 @@ func TestMixedQueries(t *testing.T) {
 
 	t.Run("filter columns by nullable", func(t *testing.T) {
 		// Get all nullable columns from users table
-		result := is.Query("SELECT * FROM information_schema.columns WHERE table_name = 'users' AND is_nullable = 'YES'")
+		result := is.Query(
+			"SELECT * FROM information_schema.columns WHERE table_name = 'users' AND is_nullable = 'YES'",
+		)
 		require.NotNil(t, result)
 
 		// users has first_name, last_name, created_at, updated_at, deleted_at as nullable
@@ -1006,7 +1086,9 @@ func TestCombinedCatalogViews(t *testing.T) {
 
 	t.Run("table count matches between views", func(t *testing.T) {
 		// Get tables from information_schema
-		isResult := is.Query("SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'BASE TABLE'")
+		isResult := is.Query(
+			"SELECT * FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'BASE TABLE'",
+		)
 		require.NotNil(t, isResult)
 
 		// Get tables from pg_catalog
@@ -1032,7 +1114,9 @@ func TestCombinedCatalogViews(t *testing.T) {
 
 	t.Run("constraint count matches between views", func(t *testing.T) {
 		// Get constraints from information_schema
-		isResult := is.Query("SELECT * FROM information_schema.table_constraints WHERE table_schema = 'main'")
+		isResult := is.Query(
+			"SELECT * FROM information_schema.table_constraints WHERE table_schema = 'main'",
+		)
 		require.NotNil(t, isResult)
 
 		// Get constraints from pg_catalog

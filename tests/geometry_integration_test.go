@@ -259,7 +259,8 @@ func TestGeometryWKBRoundtrip(t *testing.T) {
 			require.NoError(t, err)
 
 			var retrievedData []byte
-			err = db.QueryRow(`SELECT geom FROM geom_roundtrip WHERE id = $1`, id).Scan(&retrievedData)
+			err = db.QueryRow(`SELECT geom FROM geom_roundtrip WHERE id = $1`, id).
+				Scan(&retrievedData)
 			require.NoError(t, err)
 
 			// Verify exact binary match
@@ -549,7 +550,12 @@ func TestGeometryTypeVerification(t *testing.T) {
 	}{
 		{"Point", createPointWKB(1.0, 2.0), 1, "Point"},
 		{"LineString", createLineStringWKB([][2]float64{{0, 0}, {1, 1}}), 2, "LineString"},
-		{"Polygon", createPolygonWKB([][2]float64{{0, 0}, {0, 1}, {1, 1}, {1, 0}, {0, 0}}), 3, "Polygon"},
+		{
+			"Polygon",
+			createPolygonWKB([][2]float64{{0, 0}, {0, 1}, {1, 1}, {1, 0}, {0, 0}}),
+			3,
+			"Polygon",
+		},
 	}
 
 	for i, tc := range testCases {

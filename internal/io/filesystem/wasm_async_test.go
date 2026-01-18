@@ -270,7 +270,11 @@ func TestWASMHTTPClientCreation(t *testing.T) {
 	}
 
 	if client.defaultHeaders["User-Agent"] != DefaultHTTPUserAgent {
-		t.Errorf("expected User-Agent %s, got %s", DefaultHTTPUserAgent, client.defaultHeaders["User-Agent"])
+		t.Errorf(
+			"expected User-Agent %s, got %s",
+			DefaultHTTPUserAgent,
+			client.defaultHeaders["User-Agent"],
+		)
 	}
 }
 
@@ -419,7 +423,11 @@ func TestWrapAsPromiseError(t *testing.T) {
 	}
 
 	if errorMsg != context.DeadlineExceeded.Error() {
-		t.Errorf("expected error message '%s', got '%s'", context.DeadlineExceeded.Error(), errorMsg)
+		t.Errorf(
+			"expected error message '%s', got '%s'",
+			context.DeadlineExceeded.Error(),
+			errorMsg,
+		)
 	}
 }
 

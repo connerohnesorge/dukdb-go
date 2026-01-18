@@ -274,7 +274,6 @@ func (r *Reader) readNextArrayObject() (map[string]any, error) {
 	return obj, nil
 }
 
-
 // addObjectToChunk adds a JSON object to the DataChunk at the specified index.
 func (r *Reader) addObjectToChunk(chunk *storage.DataChunk, obj map[string]any, rowIdx int) error {
 	for colIdx, colName := range r.columns {
@@ -354,8 +353,6 @@ func (r *Reader) ensureInitialized() error {
 
 	return r.initializeSchema()
 }
-
-
 
 // initializeSchema reads sample objects and sets up column names and types.
 func (r *Reader) initializeSchema() error {

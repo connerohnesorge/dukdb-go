@@ -40,7 +40,11 @@ func IsCatalogQuery(query string) bool {
 
 // ExecuteCatalogQuery executes a query against information_schema or pg_catalog
 // and writes results to the DataWriter.
-func (ch *CatalogHandler) ExecuteCatalogQuery(_ context.Context, query string, writer wire.DataWriter) error {
+func (ch *CatalogHandler) ExecuteCatalogQuery(
+	_ context.Context,
+	query string,
+	writer wire.DataWriter,
+) error {
 	var result *pgcatalog.QueryResult
 
 	if pgcatalog.IsInformationSchemaQuery(query) {
@@ -99,22 +103,30 @@ func (a *catalogProviderAdapter) ListTablesInSchema(schemaName string) []*intern
 }
 
 // GetTableInSchema returns a table from a specific schema.
-func (a *catalogProviderAdapter) GetTableInSchema(schemaName, tableName string) (*internalcatalog.TableDef, bool) {
+func (a *catalogProviderAdapter) GetTableInSchema(
+	schemaName, tableName string,
+) (*internalcatalog.TableDef, bool) {
 	return a.catalog.GetTableInSchema(schemaName, tableName)
 }
 
 // GetViewInSchema returns a view from a specific schema.
-func (a *catalogProviderAdapter) GetViewInSchema(schemaName, viewName string) (*internalcatalog.ViewDef, bool) {
+func (a *catalogProviderAdapter) GetViewInSchema(
+	schemaName, viewName string,
+) (*internalcatalog.ViewDef, bool) {
 	return a.catalog.GetViewInSchema(schemaName, viewName)
 }
 
 // GetIndexesForTable returns all indexes for a table.
-func (a *catalogProviderAdapter) GetIndexesForTable(schemaName, tableName string) []*internalcatalog.IndexDef {
+func (a *catalogProviderAdapter) GetIndexesForTable(
+	schemaName, tableName string,
+) []*internalcatalog.IndexDef {
 	return a.catalog.GetIndexesForTable(schemaName, tableName)
 }
 
 // GetSequenceInSchema returns a sequence from a specific schema.
-func (a *catalogProviderAdapter) GetSequenceInSchema(schemaName, sequenceName string) (*internalcatalog.SequenceDef, bool) {
+func (a *catalogProviderAdapter) GetSequenceInSchema(
+	schemaName, sequenceName string,
+) (*internalcatalog.SequenceDef, bool) {
 	return a.catalog.GetSequenceInSchema(schemaName, sequenceName)
 }
 
@@ -124,7 +136,9 @@ var (
 	pgGetUserByIdRe = regexp.MustCompile(`(?i)(?:pg_catalog\.)?pg_get_userbyid\s*\(\s*\d+\s*\)`)
 
 	// Matches: pg_encoding_to_char(int) or pg_catalog.pg_encoding_to_char(int)
-	pgEncodingToCharRe = regexp.MustCompile(`(?i)(?:pg_catalog\.)?pg_encoding_to_char\s*\(\s*\d+\s*\)`)
+	pgEncodingToCharRe = regexp.MustCompile(
+		`(?i)(?:pg_catalog\.)?pg_encoding_to_char\s*\(\s*\d+\s*\)`,
+	)
 
 	// Matches: current_database()
 	currentDatabaseRe = regexp.MustCompile(`(?i)current_database\s*\(\s*\)`)

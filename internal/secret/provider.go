@@ -98,7 +98,10 @@ func NewConfigProviderFromSecret(s *Secret) *ConfigProvider {
 // Retrieve returns the static credentials.
 func (p *ConfigProvider) Retrieve(_ context.Context) (*Credentials, error) {
 	if !p.credentials.IsValid() {
-		return nil, fmt.Errorf("%w: access key ID or secret access key not configured", ErrNoCredentials)
+		return nil, fmt.Errorf(
+			"%w: access key ID or secret access key not configured",
+			ErrNoCredentials,
+		)
 	}
 
 	// Return a copy to prevent external modification
@@ -135,7 +138,12 @@ func (*EnvProvider) Retrieve(_ context.Context) (*Credentials, error) {
 	secretAccessKey := os.Getenv(EnvSecretAccessKey)
 
 	if accessKeyID == "" || secretAccessKey == "" {
-		return nil, fmt.Errorf("%w: %s or %s not set", ErrNoCredentials, EnvAccessKeyID, EnvSecretAccessKey)
+		return nil, fmt.Errorf(
+			"%w: %s or %s not set",
+			ErrNoCredentials,
+			EnvAccessKeyID,
+			EnvSecretAccessKey,
+		)
 	}
 
 	region := os.Getenv(EnvRegion)
@@ -213,12 +221,14 @@ func NewSharedConfigProvider(opts ...SharedConfigOption) *SharedConfigProvider {
 	}
 
 	// Check for AWS_SHARED_CREDENTIALS_FILE environment variable
-	if envCredsFile := os.Getenv("AWS_SHARED_CREDENTIALS_FILE"); envCredsFile != "" && p.credentialsFile == filepath.Join(awsDir, "credentials") {
+	if envCredsFile := os.Getenv("AWS_SHARED_CREDENTIALS_FILE"); envCredsFile != "" &&
+		p.credentialsFile == filepath.Join(awsDir, "credentials") {
 		p.credentialsFile = envCredsFile
 	}
 
 	// Check for AWS_CONFIG_FILE environment variable
-	if envConfigFile := os.Getenv("AWS_CONFIG_FILE"); envConfigFile != "" && p.configFile == filepath.Join(awsDir, "config") {
+	if envConfigFile := os.Getenv("AWS_CONFIG_FILE"); envConfigFile != "" &&
+		p.configFile == filepath.Join(awsDir, "config") {
 		p.configFile = envConfigFile
 	}
 
@@ -264,7 +274,11 @@ func (p *SharedConfigProvider) Retrieve(_ context.Context) (*Credentials, error)
 	}
 
 	if !creds.IsValid() {
-		return nil, fmt.Errorf("%w: no credentials found in profile %q", ErrNoCredentials, p.profile)
+		return nil, fmt.Errorf(
+			"%w: no credentials found in profile %q",
+			ErrNoCredentials,
+			p.profile,
+		)
 	}
 
 	return creds, nil
@@ -507,7 +521,10 @@ type imdsCredentialsResponse struct {
 }
 
 // getCredentials retrieves credentials for the specified IAM role.
-func (p *IMDSv2Provider) getCredentials(ctx context.Context, token, roleName string) (*Credentials, error) {
+func (p *IMDSv2Provider) getCredentials(
+	ctx context.Context,
+	token, roleName string,
+) (*Credentials, error) {
 	url := p.endpoint + IMDSCredentialsPath + roleName
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)

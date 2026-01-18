@@ -28,7 +28,12 @@ func setupUtilityTestExecutor() (*Executor, *catalog.Catalog) {
 }
 
 // executeUtilityQuery executes a SQL query and returns the result
-func executeUtilityQuery(t *testing.T, exec *Executor, cat *catalog.Catalog, sql string) (*ExecutionResult, error) {
+func executeUtilityQuery(
+	t *testing.T,
+	exec *Executor,
+	cat *catalog.Catalog,
+	sql string,
+) (*ExecutionResult, error) {
 	t.Helper()
 
 	stmt, err := parser.Parse(sql)
@@ -241,7 +246,14 @@ func TestUtilityIntegration_GCD_LCM_Relationship(t *testing.T) {
 			lcm := getUtilityFirstValue(lcmResult.Rows[0]).(int64)
 
 			// Verify: a * b = gcd * lcm
-			assert.Equal(t, tt.a*tt.b, gcd*lcm, "GCD * LCM should equal a * b for a=%d, b=%d", tt.a, tt.b)
+			assert.Equal(
+				t,
+				tt.a*tt.b,
+				gcd*lcm,
+				"GCD * LCM should equal a * b for a=%d, b=%d",
+				tt.a,
+				tt.b,
+			)
 		})
 	}
 }
@@ -478,7 +490,12 @@ func TestUtilityIntegration_With_Table(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GCD with column values", func(t *testing.T) {
-		result, err := executeUtilityQuery(t, exec, cat, "SELECT a, b, GCD(a, b) AS gcd_result FROM utility_numbers ORDER BY a")
+		result, err := executeUtilityQuery(
+			t,
+			exec,
+			cat,
+			"SELECT a, b, GCD(a, b) AS gcd_result FROM utility_numbers ORDER BY a",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 
@@ -499,7 +516,12 @@ func TestUtilityIntegration_With_Table(t *testing.T) {
 	})
 
 	t.Run("SIGN with column values", func(t *testing.T) {
-		result, err := executeUtilityQuery(t, exec, cat, "SELECT val, SIGN(val) AS sign_result FROM utility_numbers ORDER BY val")
+		result, err := executeUtilityQuery(
+			t,
+			exec,
+			cat,
+			"SELECT val, SIGN(val) AS sign_result FROM utility_numbers ORDER BY val",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 
@@ -521,7 +543,12 @@ func TestUtilityIntegration_With_Table(t *testing.T) {
 	})
 
 	t.Run("ISFINITE with column values", func(t *testing.T) {
-		result, err := executeUtilityQuery(t, exec, cat, "SELECT val, ISFINITE(val) AS is_finite FROM utility_numbers ORDER BY val")
+		result, err := executeUtilityQuery(
+			t,
+			exec,
+			cat,
+			"SELECT val, ISFINITE(val) AS is_finite FROM utility_numbers ORDER BY val",
+		)
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 3)
 

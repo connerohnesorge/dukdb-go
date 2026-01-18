@@ -21,9 +21,9 @@ type BoundColumnRef interface {
 
 // ColumnBindingInfo contains information about how a column is bound in an expression.
 type ColumnBindingInfo struct {
-	TableIdx  int
-	ColumnIdx int
-	TableName string
+	TableIdx   int
+	ColumnIdx  int
+	TableName  string
 	ColumnName string
 }
 
@@ -37,9 +37,10 @@ type ColumnBindingInfo struct {
 // - Filters are pushed to the lowest level where all referenced columns are available
 // - Column binding availability determines pushability
 // - Join types affect how filters can be pushed:
-//   * INNER JOIN: Push aggressively to both sides independently
-//   * LEFT/RIGHT/FULL OUTER JOIN: Preserve filter placement above join (maintains NULL semantics)
-//   * SEMI/ANTI JOIN: Special handling for subquery filters
+//   - INNER JOIN: Push aggressively to both sides independently
+//   - LEFT/RIGHT/FULL OUTER JOIN: Preserve filter placement above join (maintains NULL semantics)
+//   - SEMI/ANTI JOIN: Special handling for subquery filters
+//
 // - AND predicates: Split and push independently
 // - OR predicates: Kept together (cannot be split safely)
 //
@@ -63,8 +64,9 @@ func NewFilterPushdown() *FilterPushdown {
 // This is a utility function for analyzing which columns a filter depends on.
 //
 // Example usage in filter pushdown decision:
-//   cols := fp.ExtractColumnBindingsFromExpression(filter.Condition)
-//   // If all columns in 'cols' are available in a child operator, can push
+//
+//	cols := fp.ExtractColumnBindingsFromExpression(filter.Condition)
+//	// If all columns in 'cols' are available in a child operator, can push
 //
 // Note: This is a generic implementation that works with types containing column information.
 // Callers need to provide a function to extract column bindings from specific expression types.
@@ -90,12 +92,14 @@ func (fp *FilterPushdown) ExtractColumnBindingsFromExpression(
 // - If expression is a single predicate, return as-is
 //
 // Example:
-//   Input:  (a > 5 AND b < 10 AND c = 3)
-//   Output: [a > 5, b < 10, c = 3]
+//
+//	Input:  (a > 5 AND b < 10 AND c = 3)
+//	Output: [a > 5, b < 10, c = 3]
 //
 // Example (with OR):
-//   Input:  ((a > 5 OR b < 10) AND c = 3)
-//   Output: [(a > 5 OR b < 10), c = 3]  # OR kept together
+//
+//	Input:  ((a > 5 OR b < 10) AND c = 3)
+//	Output: [(a > 5 OR b < 10), c = 3]  # OR kept together
 //
 // Reference: DuckDB filter_pushdown.cpp line 202-230
 //
@@ -127,8 +131,9 @@ func (fp *FilterPushdown) SplitANDConjuncts(
 // - This matches DuckDB's approach for stable plan generation
 //
 // Example:
-//   Input:  [a > 5, b < 10, c = 3]
-//   Output: ((a > 5 AND b < 10) AND c = 3)
+//
+//	Input:  [a > 5, b < 10, c = 3]
+//	Output: ((a > 5 AND b < 10) AND c = 3)
 //
 // Note: Caller provides combiner function to create AND expressions in their representation.
 func (fp *FilterPushdown) CombineWithAND(
@@ -163,11 +168,12 @@ func (fp *FilterPushdown) CombineWithAND(
 // keep the filter above the operator to preserve correctness.
 //
 // Example usage:
-//   filterCols := fp.ExtractColumnBindingsFromExpression(filter, colExtractor)
-//   childCols := extractTableIndices(child.OutputColumns())
-//   if fp.CanPushFilterToChild(filterCols, childCols) {
-//       // Safe to push
-//   }
+//
+//	filterCols := fp.ExtractColumnBindingsFromExpression(filter, colExtractor)
+//	childCols := extractTableIndices(child.OutputColumns())
+//	if fp.CanPushFilterToChild(filterCols, childCols) {
+//	    // Safe to push
+//	}
 func (fp *FilterPushdown) CanPushFilterToChild(filterCols, childCols map[int]bool) bool {
 	// Check if all filter columns are available in child
 	for colIdx := range filterCols {
@@ -229,11 +235,12 @@ func (fp *FilterPushdown) AnalyzeFilterPlacementForInnerJoin(
 // - Filters on both columns: must keep above (join semantics)
 //
 // NULL Semantics Example:
-//   SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id
-//   WHERE t2.val > 10
 //
-//   WRONG (pushdown): Filter before join would eliminate t1 rows with no t2 match
-//   CORRECT: Keep filter above join - t1 rows with NULL t2.val row must be preserved
+//	SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id
+//	WHERE t2.val > 10
+//
+//	WRONG (pushdown): Filter before join would eliminate t1 rows with no t2 match
+//	CORRECT: Keep filter above join - t1 rows with NULL t2.val row must be preserved
 //
 // Reference: DuckDB filter_pushdown.cpp lines 175-182
 func (fp *FilterPushdown) AnalyzeFilterPlacementForLeftJoin(
@@ -283,11 +290,12 @@ func (fp *FilterPushdown) AnalyzeFilterPlacementForRightJoin(
 // Pushing a filter would eliminate rows that should be in the result.
 //
 // Example of why this is unsafe:
-//   SELECT * FROM t1 FULL JOIN t2 ON t1.id = t2.id
-//   WHERE t1.x > 5
 //
-//   If we push the filter to t1, we'd exclude t2 rows with NULL t1 columns.
-//   But those rows SHOULD be in the result (they match the join condition).
+//	SELECT * FROM t1 FULL JOIN t2 ON t1.id = t2.id
+//	WHERE t1.x > 5
+//
+//	If we push the filter to t1, we'd exclude t2 rows with NULL t1 columns.
+//	But those rows SHOULD be in the result (they match the join condition).
 //
 // Correctness property: All filters must be evaluated AFTER the join.
 func (fp *FilterPushdown) AnalyzeFilterPlacementForFullJoin(filterCols map[int]bool) string {

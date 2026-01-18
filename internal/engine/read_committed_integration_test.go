@@ -52,15 +52,27 @@ func TestReadCommittedDirtyReadPrevention(t *testing.T) {
 	engineConn1 := conn1.(*EngineConn)
 
 	// Create a test table
-	_, err = engineConn1.Execute(context.Background(), "CREATE TABLE test_dirty_read (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"CREATE TABLE test_dirty_read (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert initial data and commit it
-	_, err = engineConn1.Execute(context.Background(), "INSERT INTO test_dirty_read VALUES (1, 'Alice')", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"INSERT INTO test_dirty_read VALUES (1, 'Alice')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with READ COMMITTED
-	_, err = engineConn1.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn1.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify T1 is in READ COMMITTED mode
@@ -100,19 +112,35 @@ func TestReadCommittedSeesCommittedData(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_committed (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_committed (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert data (auto-committed in implicit transaction mode)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_committed VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_committed VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin explicit transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query should see the committed data
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_committed WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_committed WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Should see the committed row")
 	assert.EqualValues(t, 100, rows[0]["value"], "Should see committed value")
@@ -141,17 +169,33 @@ func TestReadCommittedNonRepeatableReadAllowed(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_nonrepeatable (id INTEGER PRIMARY KEY, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_nonrepeatable (id INTEGER PRIMARY KEY, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_nonrepeatable VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_nonrepeatable VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: First read - should see value 100
-	rows, _, err := engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	firstValue := rows[0]["value"]
@@ -162,19 +206,36 @@ func TestReadCommittedNonRepeatableReadAllowed(t *testing.T) {
 	require.NoError(t, err)
 
 	// T2: Update the row (this simulates another transaction's update and commit)
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_nonrepeatable SET value = 200 WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_nonrepeatable SET value = 200 WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1 (continued): Begin new transaction with READ COMMITTED for second read
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Second read - should see value 200 (non-repeatable read)
-	rows, _, err = engineConn.Query(context.Background(), "SELECT value FROM test_nonrepeatable WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT value FROM test_nonrepeatable WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	secondValue := rows[0]["value"]
-	assert.EqualValues(t, 200, secondValue, "Second read should see updated value 200 (non-repeatable read)")
+	assert.EqualValues(
+		t,
+		200,
+		secondValue,
+		"Second read should see updated value 200 (non-repeatable read)",
+	)
 
 	// Verify non-repeatable read occurred
 	assert.NotEqual(t, firstValue, secondValue, "Non-repeatable read should show different values")
@@ -204,7 +265,11 @@ func TestReadCommittedPhantomReadAllowed(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Setup: Create table and insert initial data (x > 5 rows)
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_phantom (id INTEGER, x INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_phantom (id INTEGER, x INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom VALUES (1, 6)", nil)
 	require.NoError(t, err)
@@ -214,11 +279,19 @@ func TestReadCommittedPhantomReadAllowed(t *testing.T) {
 	require.NoError(t, err)
 
 	// T1: Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: First query - should see 3 rows where x > 5
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_phantom WHERE x > 5", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	firstCount := len(rows)
 	assert.Equal(t, 3, firstCount, "First query should return 3 rows where x > 5")
@@ -228,15 +301,27 @@ func TestReadCommittedPhantomReadAllowed(t *testing.T) {
 	require.NoError(t, err)
 
 	// T2: Insert a new row with x = 10 (this commits immediately in implicit transaction)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_phantom VALUES (4, 10)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_phantom VALUES (4, 10)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1 (continued): Begin new transaction with READ COMMITTED for second query
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Second query - should see 4 rows (phantom row appeared)
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_phantom WHERE x > 5", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_phantom WHERE x > 5",
+		nil,
+	)
 	require.NoError(t, err)
 	secondCount := len(rows)
 	assert.Equal(t, 4, secondCount, "Second query should return 4 rows (phantom read)")
@@ -263,17 +348,33 @@ func TestReadCommittedStatementLevelSnapshot(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_stmt_snapshot (id INTEGER, version INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_stmt_snapshot (id INTEGER, version INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_stmt_snapshot VALUES (1, 1)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_stmt_snapshot VALUES (1, 1)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: First statement sees version 1
-	rows, _, err := engineConn.Query(context.Background(), "SELECT version FROM test_stmt_snapshot WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT version FROM test_stmt_snapshot WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.EqualValues(t, 1, rows[0]["version"], "First statement should see version 1")
@@ -286,14 +387,22 @@ func TestReadCommittedStatementLevelSnapshot(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// T1: Second statement should get a new statement time
-	rows, _, err = engineConn.Query(context.Background(), "SELECT version FROM test_stmt_snapshot WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT version FROM test_stmt_snapshot WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 
 	// Second statement time should be >= first
 	secondStatementTime := engineConn.txn.GetStatementTime()
-	assert.True(t, secondStatementTime.After(firstStatementTime) || secondStatementTime.Equal(firstStatementTime),
-		"Second statement time should be >= first statement time")
+	assert.True(
+		t,
+		secondStatementTime.After(firstStatementTime) ||
+			secondStatementTime.Equal(firstStatementTime),
+		"Second statement time should be >= first statement time",
+	)
 
 	// Cleanup
 	_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
@@ -313,29 +422,53 @@ func TestReadCommittedOwnChangesVisible(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_own_changes (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_own_changes (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin T1 with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Insert a row (not yet committed at transaction level, but visible to self)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_own_changes VALUES (1, 'Test')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_own_changes VALUES (1, 'Test')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see own insert
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_own_changes WHERE id = 1", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own uncommitted insert")
 	assert.Equal(t, "Test", rows[0]["name"], "Should see correct value")
 
 	// T1: Update the row
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_own_changes SET name = 'Updated' WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_own_changes SET name = 'Updated' WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// T1: Query should see the update
-	rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_own_changes WHERE id = 1", nil)
+	rows, _, err = engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_own_changes WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "Transaction should see its own update")
 	assert.Equal(t, "Updated", rows[0]["name"], "Should see updated value")
@@ -363,7 +496,11 @@ func TestReadCommittedIsolationLevelConfiguration(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	t.Run("explicit BEGIN with READ COMMITTED", func(t *testing.T) {
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 
 		assert.True(t, engineConn.inTxn)
@@ -381,11 +518,19 @@ func TestReadCommittedIsolationLevelConfiguration(t *testing.T) {
 
 	t.Run("SET default then BEGIN", func(t *testing.T) {
 		// Set default isolation level
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'READ COMMITTED'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'READ COMMITTED'",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// SHOW default_transaction_isolation
-		rows, _, err := engineConn.Query(context.Background(), "SHOW default_transaction_isolation", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SHOW default_transaction_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.Equal(t, "READ COMMITTED", rows[0]["default_transaction_isolation"])
@@ -401,17 +546,29 @@ func TestReadCommittedIsolationLevelConfiguration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Reset default
-		_, err = engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'SERIALIZABLE'", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'SERIALIZABLE'",
+			nil,
+		)
 		require.NoError(t, err)
 	})
 
 	t.Run("explicit isolation level overrides default", func(t *testing.T) {
 		// Set default to SERIALIZABLE
-		_, err := engineConn.Execute(context.Background(), "SET default_transaction_isolation = 'SERIALIZABLE'", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"SET default_transaction_isolation = 'SERIALIZABLE'",
+			nil,
+		)
 		require.NoError(t, err)
 
 		// BEGIN with explicit READ COMMITTED should override
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 
 		assert.Equal(t, "READ COMMITTED", engineConn.currentIsolationLevel.String(),
@@ -435,19 +592,35 @@ func TestReadCommittedWithDifferentIsolationLevels(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_mixed_isolation (id INTEGER, data VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_mixed_isolation (id INTEGER, data VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_mixed_isolation VALUES (1, 'initial')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_mixed_isolation VALUES (1, 'initial')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Test that switching between isolation levels works correctly
 	t.Run("switch from READ COMMITTED to SERIALIZABLE", func(t *testing.T) {
 		// First transaction with READ COMMITTED
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "READ COMMITTED", engineConn.currentIsolationLevel.String())
 
-		rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_mixed_isolation", nil)
+		rows, _, err := engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_mixed_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -455,11 +628,19 @@ func TestReadCommittedWithDifferentIsolationLevels(t *testing.T) {
 		require.NoError(t, err)
 
 		// Second transaction with SERIALIZABLE
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "SERIALIZABLE", engineConn.currentIsolationLevel.String())
 
-		rows, _, err = engineConn.Query(context.Background(), "SELECT * FROM test_mixed_isolation", nil)
+		rows, _, err = engineConn.Query(
+			context.Background(),
+			"SELECT * FROM test_mixed_isolation",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Len(t, rows, 1)
 
@@ -469,14 +650,22 @@ func TestReadCommittedWithDifferentIsolationLevels(t *testing.T) {
 
 	t.Run("switch from READ COMMITTED to READ UNCOMMITTED", func(t *testing.T) {
 		// Transaction with READ COMMITTED
-		_, err := engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+		_, err := engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "READ COMMITTED", engineConn.currentIsolationLevel.String())
 		_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
 		require.NoError(t, err)
 
 		// Transaction with READ UNCOMMITTED
-		_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED", nil)
+		_, err = engineConn.Execute(
+			context.Background(),
+			"BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+			nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, "READ UNCOMMITTED", engineConn.currentIsolationLevel.String())
 		_, err = engineConn.Execute(context.Background(), "COMMIT", nil)
@@ -497,15 +686,31 @@ func TestReadCommittedDeleteVisibility(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_delete_vis (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_delete_vis (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_delete_vis VALUES (1, 'Alice')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_delete_vis VALUES (1, 'Alice')",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_delete_vis VALUES (2, 'Bob')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_delete_vis VALUES (2, 'Bob')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify initial state
@@ -514,7 +719,11 @@ func TestReadCommittedDeleteVisibility(t *testing.T) {
 	assert.Len(t, rows, 2, "Should see both rows initially")
 
 	// Delete one row within the transaction
-	_, err = engineConn.Execute(context.Background(), "DELETE FROM test_delete_vis WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"DELETE FROM test_delete_vis WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Query should not see the deleted row
@@ -546,23 +755,47 @@ func TestReadCommittedRollbackBehavior(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table with initial data
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_rollback (id INTEGER, value INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_rollback (id INTEGER, value INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback VALUES (1, 100)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback VALUES (1, 100)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Make changes
-	_, err = engineConn.Execute(context.Background(), "UPDATE test_rollback SET value = 200 WHERE id = 1", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"UPDATE test_rollback SET value = 200 WHERE id = 1",
+		nil,
+	)
 	require.NoError(t, err)
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_rollback VALUES (2, 300)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_rollback VALUES (2, 300)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify changes are visible within transaction
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_rollback ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_rollback ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows in transaction")
 
@@ -590,15 +823,27 @@ func TestReadCommittedWithSavepoints(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_savepoint_rc (id INTEGER, name VARCHAR)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_savepoint_rc (id INTEGER, name VARCHAR)",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Begin transaction with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Insert first row
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_rc VALUES (1, 'First')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_rc VALUES (1, 'First')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Create savepoint
@@ -606,11 +851,19 @@ func TestReadCommittedWithSavepoints(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert second row after savepoint
-	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_savepoint_rc VALUES (2, 'Second')", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"INSERT INTO test_savepoint_rc VALUES (2, 'Second')",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Verify both rows visible
-	rows, _, err := engineConn.Query(context.Background(), "SELECT * FROM test_savepoint_rc ORDER BY id", nil)
+	rows, _, err := engineConn.Query(
+		context.Background(),
+		"SELECT * FROM test_savepoint_rc ORDER BY id",
+		nil,
+	)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should see both rows before rollback to savepoint")
 
@@ -647,13 +900,21 @@ func TestReadCommittedMultipleStatements(t *testing.T) {
 	engineConn := conn.(*EngineConn)
 
 	// Create table
-	_, err = engineConn.Execute(context.Background(), "CREATE TABLE test_multi_stmt (counter INTEGER)", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"CREATE TABLE test_multi_stmt (counter INTEGER)",
+		nil,
+	)
 	require.NoError(t, err)
 	_, err = engineConn.Execute(context.Background(), "INSERT INTO test_multi_stmt VALUES (1)", nil)
 	require.NoError(t, err)
 
 	// Begin with READ COMMITTED
-	_, err = engineConn.Execute(context.Background(), "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED", nil)
+	_, err = engineConn.Execute(
+		context.Background(),
+		"BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		nil,
+	)
 	require.NoError(t, err)
 
 	// Execute multiple statements and verify each updates statement time
@@ -671,8 +932,12 @@ func TestReadCommittedMultipleStatements(t *testing.T) {
 		assert.False(t, currentStatementTime.IsZero(), "Statement time should be set")
 
 		if !prevStatementTime.IsZero() {
-			assert.True(t, currentStatementTime.After(prevStatementTime) || currentStatementTime.Equal(prevStatementTime),
-				"Each statement should have a >= statement time than previous")
+			assert.True(
+				t,
+				currentStatementTime.After(prevStatementTime) ||
+					currentStatementTime.Equal(prevStatementTime),
+				"Each statement should have a >= statement time than previous",
+			)
 		}
 		prevStatementTime = currentStatementTime
 	}

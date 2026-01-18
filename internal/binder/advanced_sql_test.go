@@ -252,7 +252,10 @@ func TestBoundMergeStmtStructure(t *testing.T) {
 			{
 				Type: BoundMergeActionUpdate,
 				Update: []*BoundSetClause{
-					{ColumnIdx: 1, Value: &BoundColumnRef{Column: "value", ColType: dukdb.TYPE_INTEGER}},
+					{
+						ColumnIdx: 1,
+						Value:     &BoundColumnRef{Column: "value", ColType: dukdb.TYPE_INTEGER},
+					},
 				},
 			},
 		},

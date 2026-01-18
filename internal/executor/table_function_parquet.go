@@ -180,7 +180,8 @@ func (e *Executor) executeReadParquet(
 	}
 
 	// Single file path - use optimized single file reader
-	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex && !isParquetHivePartitioningEnabled(multiOpts) {
+	if len(paths) == 1 && !multiOpts.Filename && !multiOpts.FileRowNumber && !multiOpts.FileIndex &&
+		!isParquetHivePartitioningEnabled(multiOpts) {
 		return e.executeReadParquetSingleFile(ctx, paths[0], opts, plan)
 	}
 
@@ -189,7 +190,11 @@ func (e *Executor) executeReadParquet(
 }
 
 // resolveParquetFilePaths resolves a path or glob pattern to a list of file paths.
-func (e *Executor) resolveParquetFilePaths(ctx context.Context, pathOrPattern string, multiOpts *ParquetMultiFileOptions) ([]string, error) {
+func (e *Executor) resolveParquetFilePaths(
+	ctx context.Context,
+	pathOrPattern string,
+	multiOpts *ParquetMultiFileOptions,
+) ([]string, error) {
 	// Check if it's a glob pattern
 	if fileio.IsGlobPattern(pathOrPattern) {
 		return e.expandParquetGlobPattern(ctx, pathOrPattern, multiOpts)
@@ -220,7 +225,11 @@ func (e *Executor) resolveParquetFilePaths(ctx context.Context, pathOrPattern st
 }
 
 // expandParquetGlobPattern expands a glob pattern to a list of file paths.
-func (e *Executor) expandParquetGlobPattern(ctx context.Context, pattern string, multiOpts *ParquetMultiFileOptions) ([]string, error) {
+func (e *Executor) expandParquetGlobPattern(
+	ctx context.Context,
+	pattern string,
+	multiOpts *ParquetMultiFileOptions,
+) ([]string, error) {
 	var fs filesystem.FileSystem
 	if filesystem.IsCloudURL(pattern) {
 		provider := NewFileSystemProvider(e.getSecretManager())
@@ -549,7 +558,11 @@ func (e *Executor) executeReadParquetMultiFile(
 }
 
 // sniffParquetSchema reads the schema from a Parquet file without reading all data.
-func (e *Executor) sniffParquetSchema(ctx context.Context, path string, opts *parquet.ReaderOptions) (fileio.FileSchema, error) {
+func (e *Executor) sniffParquetSchema(
+	ctx context.Context,
+	path string,
+	opts *parquet.ReaderOptions,
+) (fileio.FileSchema, error) {
 	var reader *parquet.Reader
 	var err error
 
@@ -595,7 +608,11 @@ func (e *Executor) sniffParquetSchema(ctx context.Context, path string, opts *pa
 }
 
 // readParquetFileChunks reads all chunks from a Parquet file.
-func (e *Executor) readParquetFileChunks(ctx context.Context, path string, opts *parquet.ReaderOptions) ([]*storage.DataChunk, error) {
+func (e *Executor) readParquetFileChunks(
+	ctx context.Context,
+	path string,
+	opts *parquet.ReaderOptions,
+) ([]*storage.DataChunk, error) {
 	var reader *parquet.Reader
 	var err error
 

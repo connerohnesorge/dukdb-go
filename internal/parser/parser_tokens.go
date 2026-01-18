@@ -18,12 +18,12 @@ const (
 	tokenParameter
 
 	// Bitwise operator tokens
-	tokenAmpersand   // & (bitwise AND)
-	tokenPipe        // | (bitwise OR) - distinct from || (string concatenation)
-	tokenCaret       // ^ (bitwise XOR)
-	tokenTilde       // ~ (bitwise NOT)
-	tokenShiftLeft   // << (left shift)
-	tokenShiftRight  // >> (right shift)
+	tokenAmpersand  // & (bitwise AND)
+	tokenPipe       // | (bitwise OR) - distinct from || (string concatenation)
+	tokenCaret      // ^ (bitwise XOR)
+	tokenTilde      // ~ (bitwise NOT)
+	tokenShiftLeft  // << (left shift)
+	tokenShiftRight // >> (right shift)
 
 	// Array literal tokens
 	tokenLBracket // [ (left square bracket)

@@ -30,7 +30,10 @@ func getTestdataDir(t *testing.T) string {
 
 	// Check if testdata exists
 	if _, err := os.Stat(testdataDir); os.IsNotExist(err) {
-		t.Skipf("testdata directory not found at %s - run generate_fixtures.py to create", testdataDir)
+		t.Skipf(
+			"testdata directory not found at %s - run generate_fixtures.py to create",
+			testdataDir,
+		)
 	}
 
 	return testdataDir

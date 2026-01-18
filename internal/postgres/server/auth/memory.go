@@ -7,9 +7,9 @@ import (
 // MemoryProvider implements UserProvider and CredentialStore using an in-memory map.
 // This is useful for testing and simple configurations.
 type MemoryProvider struct {
-	mu              sync.RWMutex
-	users           map[string]*User
-	passwords       map[string]string          // username -> plaintext password
+	mu               sync.RWMutex
+	users            map[string]*User
+	passwords        map[string]string            // username -> plaintext password
 	scramCredentials map[string]*SCRAMCredentials // username -> SCRAM credentials
 }
 
@@ -230,7 +230,10 @@ func (p *MemoryProvider) Clear() {
 
 // WithDefaultUser adds a default user and returns the provider.
 // This is useful for chaining during initialization.
-func (p *MemoryProvider) WithDefaultUser(username, password string, superuser bool) *MemoryProvider {
+func (p *MemoryProvider) WithDefaultUser(
+	username, password string,
+	superuser bool,
+) *MemoryProvider {
 	_ = p.AddUser(&User{
 		Username:  username,
 		Superuser: superuser,

@@ -2,8 +2,8 @@ package engine
 
 import (
 	"context"
-	"testing"
 	"fmt"
+	"testing"
 )
 
 // TestDebug_RangeFlowNew traces the entire range query flow with updated ART.
@@ -30,7 +30,11 @@ func TestDebug_RangeFlowNew(t *testing.T) {
 	}
 
 	// Insert test data
-	_, err = conn.Execute(ctx, "INSERT INTO flow_test VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)", nil)
+	_, err = conn.Execute(
+		ctx,
+		"INSERT INTO flow_test VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("INSERT failed: %v", err)
 	}
@@ -62,7 +66,7 @@ func TestDebug_RangeFlowNew(t *testing.T) {
 	for _, row := range rows {
 		fmt.Printf("  %v\n", row)
 	}
-	
+
 	// Verify BETWEEN still works
 	fmt.Println("\n=== Test WITH index: BETWEEN 20 AND 40 ===")
 	rows, _, err = conn.Query(ctx, "SELECT * FROM flow_test WHERE value BETWEEN 20 AND 40", nil)

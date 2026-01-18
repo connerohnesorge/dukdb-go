@@ -298,7 +298,12 @@ func TestCastToUUID(t *testing.T) {
 		// Invalid conversions
 		{"invalid string", "abc", true, SQLStateInvalidTextRepresentation},
 		{"invalid format", "550e8400-e29b-41d4-a716", true, SQLStateInvalidTextRepresentation},
-		{"too long", "550e8400-e29b-41d4-a716-446655440000-extra", true, SQLStateInvalidTextRepresentation},
+		{
+			"too long",
+			"550e8400-e29b-41d4-a716-446655440000-extra",
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
 	}
 
 	for _, tc := range tests {
@@ -327,20 +332,50 @@ func TestCastValueWithValidation(t *testing.T) {
 	}{
 		// Integer casts
 		{"string to int - valid", "42", dukdb.TYPE_INTEGER, false, ""},
-		{"string to int - invalid", "abc", dukdb.TYPE_INTEGER, true, SQLStateInvalidTextRepresentation},
-		{"string to int - overflow", "999999999999", dukdb.TYPE_INTEGER, true, SQLStateNumericValueOutOfRange},
+		{
+			"string to int - invalid",
+			"abc",
+			dukdb.TYPE_INTEGER,
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
+		{
+			"string to int - overflow",
+			"999999999999",
+			dukdb.TYPE_INTEGER,
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
 
 		// SmallInt casts
 		{"string to smallint - valid", "42", dukdb.TYPE_SMALLINT, false, ""},
-		{"string to smallint - overflow", "999999", dukdb.TYPE_SMALLINT, true, SQLStateNumericValueOutOfRange},
+		{
+			"string to smallint - overflow",
+			"999999",
+			dukdb.TYPE_SMALLINT,
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
 
 		// Boolean casts
 		{"string to bool - valid", "true", dukdb.TYPE_BOOLEAN, false, ""},
-		{"string to bool - invalid", "abc", dukdb.TYPE_BOOLEAN, true, SQLStateInvalidTextRepresentation},
+		{
+			"string to bool - invalid",
+			"abc",
+			dukdb.TYPE_BOOLEAN,
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
 
 		// Double casts
 		{"string to double - valid", "3.14", dukdb.TYPE_DOUBLE, false, ""},
-		{"string to double - invalid", "abc", dukdb.TYPE_DOUBLE, true, SQLStateInvalidTextRepresentation},
+		{
+			"string to double - invalid",
+			"abc",
+			dukdb.TYPE_DOUBLE,
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
 
 		// Date casts
 		{"string to date - valid", "2023-01-15", dukdb.TYPE_DATE, false, ""},
@@ -348,11 +383,29 @@ func TestCastValueWithValidation(t *testing.T) {
 
 		// Timestamp casts
 		{"string to timestamp - valid", "2023-01-15 10:30:45", dukdb.TYPE_TIMESTAMP, false, ""},
-		{"string to timestamp - invalid", "abc", dukdb.TYPE_TIMESTAMP, true, SQLStateInvalidDatetimeFormat},
+		{
+			"string to timestamp - invalid",
+			"abc",
+			dukdb.TYPE_TIMESTAMP,
+			true,
+			SQLStateInvalidDatetimeFormat,
+		},
 
 		// UUID casts
-		{"string to uuid - valid", "550e8400-e29b-41d4-a716-446655440000", dukdb.TYPE_UUID, false, ""},
-		{"string to uuid - invalid", "abc", dukdb.TYPE_UUID, true, SQLStateInvalidTextRepresentation},
+		{
+			"string to uuid - valid",
+			"550e8400-e29b-41d4-a716-446655440000",
+			dukdb.TYPE_UUID,
+			false,
+			"",
+		},
+		{
+			"string to uuid - invalid",
+			"abc",
+			dukdb.TYPE_UUID,
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
 	}
 
 	for _, tc := range tests {
@@ -376,17 +429,17 @@ func TestCastErrorMessage(t *testing.T) {
 	msg := err.Error()
 
 	// Check that the error message contains expected components
-	assert.Contains(t, msg, "22P02")                   // SQLSTATE code
-	assert.Contains(t, msg, "invalid input syntax")   // PostgreSQL error message style
-	assert.Contains(t, msg, "integer")                // Type name
-	assert.Contains(t, msg, "abc")                    // The invalid value
+	assert.Contains(t, msg, "22P02")                // SQLSTATE code
+	assert.Contains(t, msg, "invalid input syntax") // PostgreSQL error message style
+	assert.Contains(t, msg, "integer")              // Type name
+	assert.Contains(t, msg, "abc")                  // The invalid value
 
 	// Test overflow error
 	err = NewNumericOutOfRangeError("smallint", int64(999999))
 	msg = err.Error()
-	assert.Contains(t, msg, "22003")                  // SQLSTATE code
-	assert.Contains(t, msg, "out of range")           // PostgreSQL error message style
-	assert.Contains(t, msg, "smallint")               // Type name
+	assert.Contains(t, msg, "22003")        // SQLSTATE code
+	assert.Contains(t, msg, "out of range") // PostgreSQL error message style
+	assert.Contains(t, msg, "smallint")     // Type name
 }
 
 func TestIntervalParsing(t *testing.T) {
@@ -450,24 +503,96 @@ func TestUnsignedIntegerCasts(t *testing.T) {
 		errCode   string
 	}{
 		// UTinyInt (0-255)
-		{"utinyint valid", int64(100), func(v any) (any, error) { return castToUTinyInt(v) }, false, ""},
-		{"utinyint overflow", int64(256), func(v any) (any, error) { return castToUTinyInt(v) }, true, SQLStateNumericValueOutOfRange},
-		{"utinyint negative", int64(-1), func(v any) (any, error) { return castToUTinyInt(v) }, true, SQLStateNumericValueOutOfRange},
+		{
+			"utinyint valid",
+			int64(100),
+			func(v any) (any, error) { return castToUTinyInt(v) },
+			false,
+			"",
+		},
+		{
+			"utinyint overflow",
+			int64(256),
+			func(v any) (any, error) { return castToUTinyInt(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
+		{
+			"utinyint negative",
+			int64(-1),
+			func(v any) (any, error) { return castToUTinyInt(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
 
 		// USmallInt (0-65535)
-		{"usmallint valid", int64(1000), func(v any) (any, error) { return castToUSmallInt(v) }, false, ""},
-		{"usmallint overflow", int64(65536), func(v any) (any, error) { return castToUSmallInt(v) }, true, SQLStateNumericValueOutOfRange},
-		{"usmallint negative", int64(-1), func(v any) (any, error) { return castToUSmallInt(v) }, true, SQLStateNumericValueOutOfRange},
+		{
+			"usmallint valid",
+			int64(1000),
+			func(v any) (any, error) { return castToUSmallInt(v) },
+			false,
+			"",
+		},
+		{
+			"usmallint overflow",
+			int64(65536),
+			func(v any) (any, error) { return castToUSmallInt(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
+		{
+			"usmallint negative",
+			int64(-1),
+			func(v any) (any, error) { return castToUSmallInt(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
 
 		// UInteger (0-4294967295)
-		{"uinteger valid", int64(1000000), func(v any) (any, error) { return castToUInteger(v) }, false, ""},
-		{"uinteger overflow", int64(4294967296), func(v any) (any, error) { return castToUInteger(v) }, true, SQLStateNumericValueOutOfRange},
-		{"uinteger negative", int64(-1), func(v any) (any, error) { return castToUInteger(v) }, true, SQLStateNumericValueOutOfRange},
+		{
+			"uinteger valid",
+			int64(1000000),
+			func(v any) (any, error) { return castToUInteger(v) },
+			false,
+			"",
+		},
+		{
+			"uinteger overflow",
+			int64(4294967296),
+			func(v any) (any, error) { return castToUInteger(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
+		{
+			"uinteger negative",
+			int64(-1),
+			func(v any) (any, error) { return castToUInteger(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
 
 		// UBigInt (0-18446744073709551615)
-		{"ubigint valid", uint64(1000000000000), func(v any) (any, error) { return castToUBigInt(v) }, false, ""},
-		{"ubigint from negative", int64(-1), func(v any) (any, error) { return castToUBigInt(v) }, true, SQLStateNumericValueOutOfRange},
-		{"ubigint invalid string", "abc", func(v any) (any, error) { return castToUBigInt(v) }, true, SQLStateInvalidTextRepresentation},
+		{
+			"ubigint valid",
+			uint64(1000000000000),
+			func(v any) (any, error) { return castToUBigInt(v) },
+			false,
+			"",
+		},
+		{
+			"ubigint from negative",
+			int64(-1),
+			func(v any) (any, error) { return castToUBigInt(v) },
+			true,
+			SQLStateNumericValueOutOfRange,
+		},
+		{
+			"ubigint invalid string",
+			"abc",
+			func(v any) (any, error) { return castToUBigInt(v) },
+			true,
+			SQLStateInvalidTextRepresentation,
+		},
 	}
 
 	for _, tc := range tests {

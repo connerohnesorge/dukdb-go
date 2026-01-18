@@ -771,8 +771,15 @@ func TestEvalMakeTimestamp(t *testing.T) {
 			expected: int64(1718454645000000), // Microseconds for 2024-06-15 12:30:45 UTC
 		},
 		{
-			name:      "valid timestamp - with fractional seconds",
-			args:      []any{int32(2024), int32(6), int32(15), int32(12), int32(30), float64(45.123456)},
+			name: "valid timestamp - with fractional seconds",
+			args: []any{
+				int32(2024),
+				int32(6),
+				int32(15),
+				int32(12),
+				int32(30),
+				float64(45.123456),
+			},
 			expected:  int64(1718454645123456), // Microseconds with fraction
 			tolerance: 1,                       // Allow 1 microsecond tolerance for floating point precision
 		},
@@ -832,8 +839,15 @@ func TestEvalMakeTimestamp(t *testing.T) {
 			hasError: true,
 		},
 		{
-			name:      "valid timestamp - boundary hour 23",
-			args:      []any{int32(2024), int32(6), int32(15), int32(23), int32(59), float64(59.999999)},
+			name: "valid timestamp - boundary hour 23",
+			args: []any{
+				int32(2024),
+				int32(6),
+				int32(15),
+				int32(23),
+				int32(59),
+				float64(59.999999),
+			},
 			expected:  int64(1718495999999999), // Last microsecond of the day
 			tolerance: 1,                       // Allow 1 microsecond tolerance
 		},
@@ -996,7 +1010,9 @@ func TestDateConstructionRoundTrip(t *testing.T) {
 
 	t.Run("MAKE_TIMESTAMP -> YEAR, MONTH, DAY, HOUR, MINUTE, SECOND", func(t *testing.T) {
 		// Construct a timestamp
-		ts, err := evalMakeTimestamp([]any{int32(2024), int32(6), int32(15), int32(14), int32(30), float64(45.5)})
+		ts, err := evalMakeTimestamp(
+			[]any{int32(2024), int32(6), int32(15), int32(14), int32(30), float64(45.5)},
+		)
 		require.NoError(t, err)
 		require.NotNil(t, ts)
 
@@ -1198,7 +1214,14 @@ func TestDatePartWithDifferentPartNames(t *testing.T) {
 			t.Run(pa.primary+"/"+alias, func(t *testing.T) {
 				result, err := evalDatePart([]any{alias, timestamp})
 				require.NoError(t, err, "alias %s should work", alias)
-				assert.Equal(t, expectedResult, result, "alias %s should return same value as %s", alias, pa.primary)
+				assert.Equal(
+					t,
+					expectedResult,
+					result,
+					"alias %s should return same value as %s",
+					alias,
+					pa.primary,
+				)
 			})
 		}
 	}

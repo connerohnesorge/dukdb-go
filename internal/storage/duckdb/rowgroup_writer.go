@@ -369,7 +369,11 @@ func (w *RowGroupWriter) CurrentRowStart() uint64 {
 
 // encodeColumnData converts a slice of any values to raw bytes with validity tracking.
 // Returns the encoded bytes, validity mask, and any error.
-func encodeColumnData(data []any, typeID LogicalTypeID, mods *TypeModifiers) ([]byte, *ValidityMask, error) {
+func encodeColumnData(
+	data []any,
+	typeID LogicalTypeID,
+	mods *TypeModifiers,
+) ([]byte, *ValidityMask, error) {
 	if len(data) == 0 {
 		return []byte{}, nil, nil
 	}
@@ -401,8 +405,12 @@ func encodeColumnData(data []any, typeID LogicalTypeID, mods *TypeModifiers) ([]
 		if !isVariableSize {
 			// Fixed size - ensure correct size
 			if len(encoded) != valueSize {
-				return nil, nil, fmt.Errorf("unexpected encoded size at index %d: got %d, expected %d",
-					i, len(encoded), valueSize)
+				return nil, nil, fmt.Errorf(
+					"unexpected encoded size at index %d: got %d, expected %d",
+					i,
+					len(encoded),
+					valueSize,
+				)
 			}
 		}
 

@@ -56,7 +56,11 @@ func NewMetadataBlockReader(bm *BlockManager, startBlockID uint64) (*MetadataBlo
 	segmentOffset := int(ptr.BlockIndex) * metadataSegmentSize
 
 	if segmentOffset < 0 || segmentOffset+nextPtrSize > len(block.Data) {
-		return nil, fmt.Errorf("segment %d offset out of range in block %d", ptr.BlockIndex, ptr.BlockID)
+		return nil, fmt.Errorf(
+			"segment %d offset out of range in block %d",
+			ptr.BlockIndex,
+			ptr.BlockID,
+		)
 	}
 
 	// Read next block pointer from the segment header
@@ -140,7 +144,9 @@ func (r *MetadataBlockReader) loadNextBlock() error {
 	}
 
 	// Read next block pointer from the segment header
-	r.nextBlockID = binary.LittleEndian.Uint64(block.Data[segmentOffset : segmentOffset+nextPtrSize])
+	r.nextBlockID = binary.LittleEndian.Uint64(
+		block.Data[segmentOffset : segmentOffset+nextPtrSize],
+	)
 
 	// Data starts after the 8-byte next_ptr header
 	dataStart := segmentOffset + nextPtrSize
@@ -387,7 +393,11 @@ func NewMetadataReader(bm *BlockManager, startBlockID uint64) (*MetadataReader, 
 // and seeking to the specified offset.
 // The offset is relative to the start of the sub-block (INCLUDING the 8-byte header).
 // So an offset of 8 means the first byte of content, offset of 10 means 2 bytes into content.
-func NewMetadataReaderWithOffset(bm *BlockManager, startBlockID uint64, offset uint64) (*MetadataReader, error) {
+func NewMetadataReaderWithOffset(
+	bm *BlockManager,
+	startBlockID uint64,
+	offset uint64,
+) (*MetadataReader, error) {
 	// Create the block reader that handles block chaining
 	blockReader, err := NewMetadataBlockReader(bm, startBlockID)
 	if err != nil {
@@ -436,7 +446,6 @@ func (r *MetadataReader) data() []byte {
 func (r *MetadataReader) remaining() int {
 	return len(r.blockReader.data) - r.blockReader.offset
 }
-
 
 // ReadFieldID reads a uint16 field ID, consuming any buffered field first.
 func (r *MetadataReader) ReadFieldID() (uint16, error) {
@@ -620,7 +629,11 @@ func (r *MetadataReader) SkipToField(targetFieldID uint16) error {
 		scanned++
 	}
 
-	return fmt.Errorf("exceeded maximum scan bytes (%d) while looking for field %d", maxBytes, targetFieldID)
+	return fmt.Errorf(
+		"exceeded maximum scan bytes (%d) while looking for field %d",
+		maxBytes,
+		targetFieldID,
+	)
 }
 
 // OnPropertyBegin starts reading a property with the given field ID.
@@ -1333,7 +1346,10 @@ func (r *MetadataReader) readLogicalType() (LogicalTypeID, TypeModifiers, error)
 	// Check for optional type_info (field 101)
 	present, err := r.OnOptionalPropertyBegin(ddbPropLogicalTypeInfo)
 	if err != nil {
-		return typeID, mods, fmt.Errorf("readLogicalType: OnOptionalPropertyBegin(101) failed: %w", err)
+		return typeID, mods, fmt.Errorf(
+			"readLogicalType: OnOptionalPropertyBegin(101) failed: %w",
+			err,
+		)
 	}
 
 	if present {
@@ -1356,7 +1372,12 @@ func (r *MetadataReader) readLogicalType() (LogicalTypeID, TypeModifiers, error)
 		return typeID, mods, err
 	}
 	if term != ddbFieldTerminator {
-		return typeID, mods, fmt.Errorf("expected LogicalType terminator, got %d (typeID=%d, present101=%v)", term, typeID, present)
+		return typeID, mods, fmt.Errorf(
+			"expected LogicalType terminator, got %d (typeID=%d, present101=%v)",
+			term,
+			typeID,
+			present,
+		)
 	}
 
 	return typeID, mods, nil
@@ -2827,11 +2848,12 @@ func skipToTerminator(reader *MetadataReader) error {
 // - Field 102: stats_type (varint - type discriminator, not nested)
 // - Field 103: type_specific_stats (nested - contains min/max for numeric types)
 //   - Field 200: min_value (nested NumericValueUnion)
-//     - Field 100: has_value (bool)
-//     - Field 101: value (varint)
+//   - Field 100: has_value (bool)
+//   - Field 101: value (varint)
 //   - Field 201: max_value (nested NumericValueUnion)
-//     - Field 100: has_value (bool)
-//     - Field 101: value (varint)
+//   - Field 100: has_value (bool)
+//   - Field 101: value (varint)
+//
 // - Terminator 0xFFFF
 //
 // For CONSTANT compression, the type_specific_stats contains the constant value as min (and max).
@@ -2897,9 +2919,11 @@ func readStatisticsInto(reader *MetadataReader, stats *BaseStatistics) error {
 // - Field 200: min_value (nested NumericValueUnion)
 //   - Field 100: has_value (bool)
 //   - Field 101: value (varint)
+//
 // - Field 201: max_value (nested NumericValueUnion)
 //   - Field 100: has_value (bool)
 //   - Field 101: value (varint)
+//
 // - Terminator 0xFFFF
 //
 // For CONSTANT compression, min and max are the same (the constant value).
@@ -2932,7 +2956,9 @@ func readTypeSpecificStats(reader *MetadataReader) ([]byte, error) {
 			if err != nil {
 				return result, fmt.Errorf("failed to read max_value: %w", err)
 			}
-		case 202, 203, 204: // String stats fields: has_unicode, max_string_length, has_overflow_strings
+		case 202,
+			203,
+			204: // String stats fields: has_unicode, max_string_length, has_overflow_strings
 			// These are simple varint values, just skip them
 			if _, err := reader.ReadVarint(); err != nil {
 				return result, fmt.Errorf("failed to skip string stats field %d: %w", fieldID, err)
@@ -3248,10 +3274,12 @@ func readSegmentStateInto(reader *MetadataReader, state *ColumnSegmentState) err
 //   - Field 106: null_count (uint64)
 //   - Field 107: distinct_count (uint64)
 //   - Field 108: stat_data_len (uint32) + stat_data bytes
+//
 // - Field 109: has_validity_mask (bool)
 // - If has_validity_mask:
 //   - Field 110: validity_block_id (uint64)
 //   - Field 111: validity_offset (uint32)
+//
 // - Field 112: state_data_len (uint32) + state_data bytes
 // - Terminator 0xFFFF
 func ReadDataPointerFromMetadata(bm *BlockManager, mbp MetaBlockPointer) (*DataPointer, error) {
@@ -3459,7 +3487,12 @@ func ReadDataPointerFromMetadata(bm *BlockManager, mbp MetaBlockPointer) (*DataP
 // - Field 104: has_metadata_blocks (bool) - optional
 // - Field 105: extra_metadata_blocks (vector<idx_t>) - optional
 // - Terminator 0xFFFF
-func ReadRowGroupsFromTablePointer(bm *BlockManager, tablePointer MetaBlockPointer, totalRows uint64, columnCount int) ([]*RowGroupPointer, error) {
+func ReadRowGroupsFromTablePointer(
+	bm *BlockManager,
+	tablePointer MetaBlockPointer,
+	totalRows uint64,
+	columnCount int,
+) ([]*RowGroupPointer, error) {
 	// Check if the table has any data
 	if tablePointer.BlockID == InvalidBlockID || totalRows == 0 {
 		return nil, nil
@@ -3517,7 +3550,11 @@ func ReadRowGroupsFromTablePointer(bm *BlockManager, tablePointer MetaBlockPoint
 
 		// Read Field 102: data_pointers (vector<MetaBlockPointer>)
 		if err := reader.OnPropertyBegin(102); err != nil {
-			return nil, fmt.Errorf("expected field 102 for data_pointers in row group %d: %w", i, err)
+			return nil, fmt.Errorf(
+				"expected field 102 for data_pointers in row group %d: %w",
+				i,
+				err,
+			)
 		}
 		// Read the count of data pointers
 		dataPointerCount, err := reader.ReadVarint()
@@ -3528,24 +3565,42 @@ func ReadRowGroupsFromTablePointer(bm *BlockManager, tablePointer MetaBlockPoint
 		for j := uint64(0); j < dataPointerCount; j++ {
 			ptr, readErr := reader.readMetaBlockPointer()
 			if readErr != nil {
-				return nil, fmt.Errorf("failed to read column %d segment pointer in row group %d: %w", j, i, readErr)
+				return nil, fmt.Errorf(
+					"failed to read column %d segment pointer in row group %d: %w",
+					j,
+					i,
+					readErr,
+				)
 			}
 			dataPointers[j] = ptr
 		}
 
 		// Read Field 103: delete_pointers (vector<MetaBlockPointer>)
 		if err := reader.OnPropertyBegin(103); err != nil {
-			return nil, fmt.Errorf("expected field 103 for delete_pointers in row group %d: %w", i, err)
+			return nil, fmt.Errorf(
+				"expected field 103 for delete_pointers in row group %d: %w",
+				i,
+				err,
+			)
 		}
 		// Read the count of delete pointers
 		deletePointerCount, err := reader.ReadVarint()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read delete_pointers count in row group %d: %w", i, err)
+			return nil, fmt.Errorf(
+				"failed to read delete_pointers count in row group %d: %w",
+				i,
+				err,
+			)
 		}
 		// Skip delete pointers (we don't use them)
 		for j := uint64(0); j < deletePointerCount; j++ {
 			if _, readErr := reader.readMetaBlockPointer(); readErr != nil {
-				return nil, fmt.Errorf("failed to skip delete pointer %d in row group %d: %w", j, i, readErr)
+				return nil, fmt.Errorf(
+					"failed to skip delete pointer %d in row group %d: %w",
+					j,
+					i,
+					readErr,
+				)
 			}
 		}
 
@@ -3554,7 +3609,11 @@ func ReadRowGroupsFromTablePointer(bm *BlockManager, tablePointer MetaBlockPoint
 		for {
 			fieldID, err := reader.PeekField()
 			if err != nil {
-				return nil, fmt.Errorf("failed to peek field after delete_pointers in row group %d: %w", i, err)
+				return nil, fmt.Errorf(
+					"failed to peek field after delete_pointers in row group %d: %w",
+					i,
+					err,
+				)
 			}
 			if fieldID == ddbFieldTerminator {
 				reader.ConsumeField() // Consume the terminator
@@ -3709,8 +3768,8 @@ func (r *MetadataReader) skipTableStatistics() error {
 // Each segment is 4088 bytes total: 8-byte pointer + 4080 bytes of data.
 // This function concatenates just the data portions (skipping pointers) to produce clean logical data.
 func buildCleanMetadataData(rawBlockData []byte) []byte {
-	const segmentSize = 4088 // Total size of each metadata segment
-	const ptrSize = 8        // Size of the next-pointer at the start of each segment
+	const segmentSize = 4088                     // Total size of each metadata segment
+	const ptrSize = 8                            // Size of the next-pointer at the start of each segment
 	const dataPerSegment = segmentSize - ptrSize // 4080 bytes of actual data per segment
 
 	// Calculate number of complete segments
@@ -3891,8 +3950,13 @@ func (r *MetadataReader) skipAnyFieldValue() error {
 			// Check if data after val bytes looks like fields
 			checkOffset := r.blockReader.offset + int(val)
 			if checkOffset < len(r.blockReader.data)-1 {
-				potentialFieldID := uint16(r.blockReader.data[checkOffset]) | uint16(r.blockReader.data[checkOffset+1])<<8
-				if potentialFieldID == ddbFieldTerminator || (potentialFieldID >= 100 && potentialFieldID < 300) {
+				potentialFieldID := uint16(
+					r.blockReader.data[checkOffset],
+				) | uint16(
+					r.blockReader.data[checkOffset+1],
+				)<<8
+				if potentialFieldID == ddbFieldTerminator ||
+					(potentialFieldID >= 100 && potentialFieldID < 300) {
 					// This was a length-prefixed raw data block, skip it
 					r.blockReader.offset += int(val)
 					return nil

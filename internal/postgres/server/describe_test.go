@@ -253,7 +253,12 @@ func TestPreparedStatementMetadata(t *testing.T) {
 	}
 
 	assert.Equal(t, "test_stmt", stmt.Name, "Statement name should be stored")
-	assert.Equal(t, "SELECT id, name FROM users WHERE id = $1", stmt.Query, "Query should be stored")
+	assert.Equal(
+		t,
+		"SELECT id, name FROM users WHERE id = $1",
+		stmt.Query,
+		"Query should be stored",
+	)
 	assert.Equal(t, []uint32{OidInt4}, stmt.ParamTypes, "Parameter types should be stored")
 }
 
@@ -274,7 +279,12 @@ func TestPortalMetadata(t *testing.T) {
 
 	assert.Equal(t, "test_portal", portal.Name, "Portal name should be stored")
 	assert.NotNil(t, portal.Statement, "Portal should reference a statement")
-	assert.Equal(t, stmt.Query, portal.Statement.Query, "Portal should have access to statement query")
+	assert.Equal(
+		t,
+		stmt.Query,
+		portal.Statement.Query,
+		"Portal should have access to statement query",
+	)
 }
 
 // TestColumnDescriptionBuilder tests the ColumnBuilder for creating
@@ -305,13 +315,13 @@ func TestTypeSizeMapping(t *testing.T) {
 		{OidInt8, 8},
 		{OidFloat4, 4},
 		{OidFloat8, 8},
-		{OidText, -1},     // Variable length
-		{OidVarchar, -1},  // Variable length
-		{OidNumeric, -1},  // Variable length
-		{OidJSON, -1},     // Variable length
-		{OidJSONB, -1},    // Variable length
-		{OidBytea, -1},    // Variable length
-		{OidUnknown, -1},  // Unknown defaults to variable
+		{OidText, -1},    // Variable length
+		{OidVarchar, -1}, // Variable length
+		{OidNumeric, -1}, // Variable length
+		{OidJSON, -1},    // Variable length
+		{OidJSONB, -1},   // Variable length
+		{OidBytea, -1},   // Variable length
+		{OidUnknown, -1}, // Unknown defaults to variable
 	}
 
 	for _, tt := range tests {
@@ -334,7 +344,9 @@ func TestEmptyStatementDescribe(t *testing.T) {
 // specifies explicit parameter types.
 func TestDescribeStatementWithExplicitTypes(t *testing.T) {
 	// Parse: PREPARE test_plan (integer, text) AS SELECT * FROM users WHERE id = $1 AND name = $2
-	parsed, err := ParsePrepareStatement("PREPARE test_plan (integer, text) AS SELECT * FROM users WHERE id = $1 AND name = $2")
+	parsed, err := ParsePrepareStatement(
+		"PREPARE test_plan (integer, text) AS SELECT * FROM users WHERE id = $1 AND name = $2",
+	)
 	assert.NoError(t, err)
 
 	// Convert type names to OIDs
@@ -415,8 +427,14 @@ func TestEnhancedParameterInferenceWithCasts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			params := EnhancedParameterInference(tt.query)
 			if len(params) > tt.position {
-				assert.Equal(t, tt.expected, params[tt.position],
-					"Parameter type at position %d should match for query: %s", tt.position, tt.query)
+				assert.Equal(
+					t,
+					tt.expected,
+					params[tt.position],
+					"Parameter type at position %d should match for query: %s",
+					tt.position,
+					tt.query,
+				)
 			} else {
 				t.Errorf("Not enough parameters inferred: got %d, want at least %d",
 					len(params), tt.position+1)
@@ -464,8 +482,14 @@ func TestEnhancedParameterInferenceWithColumnPatterns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			params := EnhancedParameterInference(tt.query)
 			if len(params) > tt.position {
-				assert.Equal(t, tt.expected, params[tt.position],
-					"Parameter type at position %d should match for query: %s", tt.position, tt.query)
+				assert.Equal(
+					t,
+					tt.expected,
+					params[tt.position],
+					"Parameter type at position %d should match for query: %s",
+					tt.position,
+					tt.query,
+				)
 			} else {
 				t.Errorf("Not enough parameters inferred: got %d, want at least %d",
 					len(params), tt.position+1)
@@ -489,7 +513,7 @@ func TestStatementDescription(t *testing.T) {
 // TestPortalDescription tests the PortalDescription structure.
 func TestPortalDescription(t *testing.T) {
 	desc := &PortalDescription{
-		Columns:     nil, // Would be populated from query analysis
+		Columns:     nil,           // Would be populated from query analysis
 		FormatCodes: []int16{0, 1}, // text, binary
 	}
 

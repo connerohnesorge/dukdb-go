@@ -551,7 +551,11 @@ func TestConflict_ReadSetOnlyNoWriteConflict(t *testing.T) {
 
 	// T1 commits - should succeed (read set only, no overlap with T2's writes)
 	err = conflictDetector.CheckConflicts(t1ID, []uint64{t2ID})
-	assert.NoError(t, err, "T1 with only reads should not conflict with T2's writes to different rows")
+	assert.NoError(
+		t,
+		err,
+		"T1 with only reads should not conflict with T2's writes to different rows",
+	)
 
 	mockClock.Advance(time.Millisecond)
 	err = mvccMgr.Commit(t1)

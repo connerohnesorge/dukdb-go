@@ -3,23 +3,23 @@ package catalog
 // pg_database columns - PostgreSQL database catalog
 // Reference: https://www.postgresql.org/docs/current/catalog-pg-database.html
 var pgDatabaseColumns = []string{
-	"oid",             // Row identifier
-	"datname",         // Database name
-	"datdba",          // Owner of the database
-	"encoding",        // Character encoding for this database
-	"datlocprovider",  // Locale provider (c, i, or empty)
-	"datistemplate",   // If true, then this database can be cloned
-	"datallowconn",    // If false then no one can connect
-	"datconnlimit",    // Maximum concurrent connections (-1 = no limit)
-	"datfrozenxid",    // All rows with xmax < this are frozen
-	"datminmxid",      // All rows with xmax < this are frozen
-	"dattablespace",   // Default tablespace OID
-	"datcollate",      // LC_COLLATE for this database
-	"datctype",        // LC_CTYPE for this database
-	"daticulocale",    // ICU locale if datlocprovider is i
-	"daticurules",     // ICU collation rules
-	"datcollversion",  // Collation version
-	"datacl",          // Access privileges
+	"oid",            // Row identifier
+	"datname",        // Database name
+	"datdba",         // Owner of the database
+	"encoding",       // Character encoding for this database
+	"datlocprovider", // Locale provider (c, i, or empty)
+	"datistemplate",  // If true, then this database can be cloned
+	"datallowconn",   // If false then no one can connect
+	"datconnlimit",   // Maximum concurrent connections (-1 = no limit)
+	"datfrozenxid",   // All rows with xmax < this are frozen
+	"datminmxid",     // All rows with xmax < this are frozen
+	"dattablespace",  // Default tablespace OID
+	"datcollate",     // LC_COLLATE for this database
+	"datctype",       // LC_CTYPE for this database
+	"daticulocale",   // ICU locale if datlocprovider is i
+	"daticurules",    // ICU collation rules
+	"datcollversion", // Collation version
+	"datacl",         // Access privileges
 }
 
 // queryPgDatabase returns data for pg_catalog.pg_database.

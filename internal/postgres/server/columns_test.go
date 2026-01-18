@@ -191,9 +191,9 @@ func TestColumnBuilder_DefaultValues(t *testing.T) {
 	col := NewColumnBuilder("minimal").Build()
 
 	assert.Equal(t, "minimal", col.Name)
-	assert.Equal(t, int32(0), col.Table)       // 0 = not from table
-	assert.Equal(t, int16(0), col.AttrNo)      // 0 = not from table
-	assert.Equal(t, types.OID_TEXT, col.Oid)   // Default to TEXT
-	assert.Equal(t, int16(-1), col.Width)      // TEXT is variable length
+	assert.Equal(t, int32(0), col.Table)         // 0 = not from table
+	assert.Equal(t, int16(0), col.AttrNo)        // 0 = not from table
+	assert.Equal(t, types.OID_TEXT, col.Oid)     // Default to TEXT
+	assert.Equal(t, int16(-1), col.Width)        // TEXT is variable length
 	assert.Equal(t, int32(-1), col.TypeModifier) // No modifier
 }

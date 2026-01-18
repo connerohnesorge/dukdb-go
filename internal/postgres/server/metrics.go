@@ -184,7 +184,13 @@ func (mc *MetricsCollector) StartQuery(sessionID uint64, query string) {
 }
 
 // EndQuery records the end of a query execution.
-func (mc *MetricsCollector) EndQuery(sessionID uint64, query string, duration time.Duration, rowsAffected int64, err error) {
+func (mc *MetricsCollector) EndQuery(
+	sessionID uint64,
+	query string,
+	duration time.Duration,
+	rowsAffected int64,
+	err error,
+) {
 	if !mc.enabled.Load() {
 		return
 	}
@@ -282,7 +288,9 @@ func (mc *MetricsCollector) recordStatementStats(query string, duration time.Dur
 	stats.MeanTime = stats.TotalTime / float64(stats.Calls)
 	if stats.Calls > 1 {
 		// Calculate stddev using Welford's algorithm
-		variance := (stats.sumSquares - (stats.TotalTime*stats.TotalTime)/float64(stats.Calls)) / float64(stats.Calls)
+		variance := (stats.sumSquares - (stats.TotalTime*stats.TotalTime)/float64(stats.Calls)) / float64(
+			stats.Calls,
+		)
 		if variance > 0 {
 			stats.StddevTime = sqrt(variance)
 		}

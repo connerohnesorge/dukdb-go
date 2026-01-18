@@ -97,7 +97,13 @@ func NewWorkerWithLimit(id int, arenaBlockSize int, memLimit *MemoryLimit, numWo
 
 // Run processes morsels from the source through the pipeline.
 // It runs until the morsel channel is closed or the context is cancelled.
-func (w *Worker) Run(ctx context.Context, morselChan <-chan Morsel, pipeline *ParallelPipeline, resultChan chan<- *storage.DataChunk, errChan chan<- error) {
+func (w *Worker) Run(
+	ctx context.Context,
+	morselChan <-chan Morsel,
+	pipeline *ParallelPipeline,
+	resultChan chan<- *storage.DataChunk,
+	errChan chan<- error,
+) {
 	w.running.Store(true)
 	defer w.running.Store(false)
 
@@ -290,7 +296,10 @@ func (p *ThreadPool) Execute(ctx context.Context, pipeline *ParallelPipeline) er
 
 // ExecuteWithResults runs a pipeline and returns results through a channel.
 // The returned channel will be closed when execution completes.
-func (p *ThreadPool) ExecuteWithResults(ctx context.Context, pipeline *ParallelPipeline) (<-chan *storage.DataChunk, <-chan error) {
+func (p *ThreadPool) ExecuteWithResults(
+	ctx context.Context,
+	pipeline *ParallelPipeline,
+) (<-chan *storage.DataChunk, <-chan error) {
 	resultChan := make(chan *storage.DataChunk, p.NumWorkers*DefaultWorkChannelMultiplier)
 	errChanOut := make(chan error, 1)
 

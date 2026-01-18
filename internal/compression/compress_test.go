@@ -105,7 +105,12 @@ func TestNoneCodec_Decompress(t *testing.T) {
 			original := make([]byte, len(tt.input))
 			copy(original, tt.input)
 			decompressed[0] ^= 0xFF
-			assert.Equal(t, original, tt.input, "Input should be independent of decompressed output")
+			assert.Equal(
+				t,
+				original,
+				tt.input,
+				"Input should be independent of decompressed output",
+			)
 		})
 	}
 }
@@ -121,7 +126,27 @@ func TestNoneCodec_RoundTrip(t *testing.T) {
 		{"SingleByte", []byte{42}},
 		{"Sequence", []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}},
 		{"Repeated", []byte{0xFF, 0xFF, 0xFF, 0xFF}},
-		{"Binary", []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}},
+		{
+			"Binary",
+			[]byte{
+				0x00,
+				0x11,
+				0x22,
+				0x33,
+				0x44,
+				0x55,
+				0x66,
+				0x77,
+				0x88,
+				0x99,
+				0xAA,
+				0xBB,
+				0xCC,
+				0xDD,
+				0xEE,
+				0xFF,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -436,7 +461,13 @@ func TestSelectCompressionWithData_SmallData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			data := make([]byte, tt.dataSize)
 			got := SelectCompressionWithData(tt.typeID, data)
-			assert.Equal(t, tt.want, got, "Small data (%d bytes) should not be compressed", tt.dataSize)
+			assert.Equal(
+				t,
+				tt.want,
+				got,
+				"Small data (%d bytes) should not be compressed",
+				tt.dataSize,
+			)
 		})
 	}
 }
@@ -460,7 +491,13 @@ func TestSelectCompressionWithData_LargeData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			data := make([]byte, tt.dataSize)
 			got := SelectCompressionWithData(tt.typeID, data)
-			assert.Equal(t, tt.want, got, "Large data (%d bytes) should use type-based compression", tt.dataSize)
+			assert.Equal(
+				t,
+				tt.want,
+				got,
+				"Large data (%d bytes) should use type-based compression",
+				tt.dataSize,
+			)
 		})
 	}
 }
@@ -504,7 +541,12 @@ func TestSelectCompressionWithData_ComplexTypesAlwaysNone(t *testing.T) {
 			t.Run(fmt.Sprintf("%d-size%d", typeID, size), func(t *testing.T) {
 				data := make([]byte, size)
 				got := SelectCompressionWithData(typeID, data)
-				assert.Equal(t, CompressionNone, got, "Complex types should always use no compression")
+				assert.Equal(
+					t,
+					CompressionNone,
+					got,
+					"Complex types should always use no compression",
+				)
 			})
 		}
 	}
@@ -513,7 +555,7 @@ func TestSelectCompressionWithData_ComplexTypesAlwaysNone(t *testing.T) {
 func TestSelectCompression_AllTypeCategories(t *testing.T) {
 	// Comprehensive test covering all compression strategies
 	categories := map[string]struct {
-		types      []LogicalTypeID
+		types       []LogicalTypeID
 		compression CompressionType
 	}{
 		"BitPack": {

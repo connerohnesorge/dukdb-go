@@ -28,11 +28,11 @@ func TestEnumerateJoinMethods_EquiJoin(t *testing.T) {
 
 	// Standard equi-join scenario
 	alternatives := enumerator.EnumerateJoinMethods(
-		1000, 500,   // left and right cardinality
-		50, 30,      // left and right width
-		true,        // has equi-join
-		nil, nil,    // not sorted
-		nil,         // join keys
+		1000, 500, // left and right cardinality
+		50, 30, // left and right width
+		true,     // has equi-join
+		nil, nil, // not sorted
+		nil, // join keys
 	)
 
 	// Should have hash join alternatives and NLJ alternatives
@@ -69,11 +69,11 @@ func TestEnumerateJoinMethods_NoEquiJoin(t *testing.T) {
 
 	// Non-equi join (no hash join possible)
 	alternatives := enumerator.EnumerateJoinMethods(
-		100, 50,     // small tables
-		20, 10,      // widths
-		false,       // no equi-join
-		nil, nil,    // not sorted
-		nil,         // no join keys
+		100, 50, // small tables
+		20, 10, // widths
+		false,    // no equi-join
+		nil, nil, // not sorted
+		nil, // no join keys
 	)
 
 	require.NotEmpty(t, alternatives)
@@ -97,9 +97,9 @@ func TestEnumerateJoinMethods_SortMergeJoin(t *testing.T) {
 	alternatives := enumerator.EnumerateJoinMethods(
 		1000, 500,
 		50, 30,
-		true,                   // has equi-join
-		[]string{"id"},         // left sorted
-		[]string{"id"},         // right sorted
+		true,           // has equi-join
+		[]string{"id"}, // left sorted
+		[]string{"id"}, // right sorted
 		joinKeys,
 	)
 
@@ -127,9 +127,9 @@ func TestEnumerateJoinMethods_BuildSideSelection(t *testing.T) {
 
 	// Left side much smaller than right
 	alternatives := enumerator.EnumerateJoinMethods(
-		100, 10000,  // left small, right large
-		20, 50,      // widths
-		true,        // has equi-join
+		100, 10000, // left small, right large
+		20, 50, // widths
+		true, // has equi-join
 		nil, nil,
 		nil,
 	)
@@ -160,9 +160,9 @@ func TestEnumerateJoinMethods_SmallInner(t *testing.T) {
 
 	// Inner side below NLJ threshold
 	alternatives := enumerator.EnumerateJoinMethods(
-		1000, 50,    // right < NestedLoopThreshold
+		1000, 50, // right < NestedLoopThreshold
 		50, 20,
-		true,        // has equi-join
+		true, // has equi-join
 		nil, nil,
 		nil,
 	)
@@ -241,8 +241,8 @@ func TestEnumerateAccessMethods_IndexScan(t *testing.T) {
 	alternatives := enumerator.EnumerateAccessMethods(
 		"orders",
 		"main",
-		0.05,                   // low selectivity (5%)
-		true,                   // has index
+		0.05, // low selectivity (5%)
+		true, // has index
 		[]string{"customer_id"},
 	)
 
@@ -277,8 +277,8 @@ func TestEnumerateAccessMethods_HighSelectivity(t *testing.T) {
 	alternatives := enumerator.EnumerateAccessMethods(
 		"orders",
 		"main",
-		0.5,                    // high selectivity (50%)
-		true,                   // has index
+		0.5,  // high selectivity (50%)
+		true, // has index
 		[]string{"customer_id"},
 	)
 
@@ -522,7 +522,12 @@ func TestSelectBuildSideForHashJoin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := enumerator.SelectBuildSideForHashJoin(tt.leftCard, tt.rightCard, tt.leftWidth, tt.rightWidth)
+			result := enumerator.SelectBuildSideForHashJoin(
+				tt.leftCard,
+				tt.rightCard,
+				tt.leftWidth,
+				tt.rightWidth,
+			)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -536,9 +541,9 @@ func TestEnumerateJoinMethods_CostRanking(t *testing.T) {
 
 	// Large tables - hash join should generally be cheaper than NLJ
 	alternatives := enumerator.EnumerateJoinMethods(
-		10000, 5000,  // large tables
+		10000, 5000, // large tables
 		50, 30,
-		true,         // has equi-join
+		true, // has equi-join
 		nil, nil,
 		nil,
 	)
@@ -579,8 +584,8 @@ func TestIndexScanVsSeqScan_LowSelectivity(t *testing.T) {
 	alternatives := enumerator.EnumerateAccessMethods(
 		"orders",
 		"main",
-		0.01,                   // 1% selectivity
-		true,                   // has index
+		0.01, // 1% selectivity
+		true, // has index
 		[]string{"customer_id"},
 	)
 
@@ -616,7 +621,7 @@ func TestEnumerateJoinMethods_ZeroCardinality(t *testing.T) {
 
 	// Edge case: zero cardinality (should be treated as 1)
 	alternatives := enumerator.EnumerateJoinMethods(
-		0, 0,        // zero cardinality
+		0, 0, // zero cardinality
 		50, 30,
 		true,
 		nil, nil,

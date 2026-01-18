@@ -251,7 +251,10 @@ func (vc *VersionChain) GetHead() *VersionedRow {
 //	if visible != nil {
 //	    // Use visible.Data
 //	}
-func (vc *VersionChain) FindVisibleVersion(checker VisibilityChecker, txnCtx TransactionContext) *VersionedRow {
+func (vc *VersionChain) FindVisibleVersion(
+	checker VisibilityChecker,
+	txnCtx TransactionContext,
+) *VersionedRow {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
 

@@ -115,11 +115,36 @@ func TestPromoteType(t *testing.T) {
 		{"INT yields to NULL", dukdb.TYPE_INTEGER, dukdb.TYPE_SQLNULL, dukdb.TYPE_INTEGER},
 		{"INT to FLOAT promotes to FLOAT", dukdb.TYPE_INTEGER, dukdb.TYPE_FLOAT, dukdb.TYPE_FLOAT},
 		{"FLOAT to INT promotes to FLOAT", dukdb.TYPE_FLOAT, dukdb.TYPE_INTEGER, dukdb.TYPE_FLOAT},
-		{"INT to DOUBLE promotes to DOUBLE", dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE},
-		{"FLOAT to DOUBLE promotes to DOUBLE", dukdb.TYPE_FLOAT, dukdb.TYPE_DOUBLE, dukdb.TYPE_DOUBLE},
-		{"SMALLINT to BIGINT promotes to BIGINT", dukdb.TYPE_SMALLINT, dukdb.TYPE_BIGINT, dukdb.TYPE_BIGINT},
-		{"VARCHAR mixed with INT yields VARCHAR", dukdb.TYPE_VARCHAR, dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
-		{"INT mixed with VARCHAR yields VARCHAR", dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR},
+		{
+			"INT to DOUBLE promotes to DOUBLE",
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_DOUBLE,
+			dukdb.TYPE_DOUBLE,
+		},
+		{
+			"FLOAT to DOUBLE promotes to DOUBLE",
+			dukdb.TYPE_FLOAT,
+			dukdb.TYPE_DOUBLE,
+			dukdb.TYPE_DOUBLE,
+		},
+		{
+			"SMALLINT to BIGINT promotes to BIGINT",
+			dukdb.TYPE_SMALLINT,
+			dukdb.TYPE_BIGINT,
+			dukdb.TYPE_BIGINT,
+		},
+		{
+			"VARCHAR mixed with INT yields VARCHAR",
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+		{
+			"INT mixed with VARCHAR yields VARCHAR",
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+			dukdb.TYPE_VARCHAR,
+		},
 	}
 
 	for _, tt := range tests {
@@ -138,9 +163,24 @@ func TestTimestampTypePromotion(t *testing.T) {
 		t2       dukdb.Type
 		expected dukdb.Type
 	}{
-		{"TIMESTAMP_S to TIMESTAMP promotes to TIMESTAMP", dukdb.TYPE_TIMESTAMP_S, dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP},
-		{"TIMESTAMP to TIMESTAMP_NS promotes to TIMESTAMP_NS", dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP_NS, dukdb.TYPE_TIMESTAMP_NS},
-		{"TIMESTAMP_MS to TIMESTAMP_TZ promotes to TIMESTAMP_TZ", dukdb.TYPE_TIMESTAMP_MS, dukdb.TYPE_TIMESTAMP_TZ, dukdb.TYPE_TIMESTAMP_TZ},
+		{
+			"TIMESTAMP_S to TIMESTAMP promotes to TIMESTAMP",
+			dukdb.TYPE_TIMESTAMP_S,
+			dukdb.TYPE_TIMESTAMP,
+			dukdb.TYPE_TIMESTAMP,
+		},
+		{
+			"TIMESTAMP to TIMESTAMP_NS promotes to TIMESTAMP_NS",
+			dukdb.TYPE_TIMESTAMP,
+			dukdb.TYPE_TIMESTAMP_NS,
+			dukdb.TYPE_TIMESTAMP_NS,
+		},
+		{
+			"TIMESTAMP_MS to TIMESTAMP_TZ promotes to TIMESTAMP_TZ",
+			dukdb.TYPE_TIMESTAMP_MS,
+			dukdb.TYPE_TIMESTAMP_TZ,
+			dukdb.TYPE_TIMESTAMP_TZ,
+		},
 		{"same TIMESTAMP types", dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP},
 	}
 
@@ -155,10 +195,10 @@ func TestTimestampTypePromotion(t *testing.T) {
 // TestInferCaseResultType tests CASE expression type inference.
 func TestInferCaseResultType(t *testing.T) {
 	tests := []struct {
-		name       string
-		whenTypes  []dukdb.Type
-		elseType   *dukdb.Type
-		expected   dukdb.Type
+		name      string
+		whenTypes []dukdb.Type
+		elseType  *dukdb.Type
+		expected  dukdb.Type
 	}{
 		{
 			name:      "no branches, no else",
@@ -687,7 +727,16 @@ func TestRoundingFunctionsTypePreservation(t *testing.T) {
 		dukdb.TYPE_DOUBLE,
 	}
 
-	roundingFuncs := []string{"ROUND", "ROUND_EVEN", "CEIL", "CEILING", "FLOOR", "TRUNC", "TRUNCATE", "EVEN"}
+	roundingFuncs := []string{
+		"ROUND",
+		"ROUND_EVEN",
+		"CEIL",
+		"CEILING",
+		"FLOOR",
+		"TRUNC",
+		"TRUNCATE",
+		"EVEN",
+	}
 
 	// Test that integer types are preserved
 	for _, funcName := range roundingFuncs {
@@ -706,7 +755,14 @@ func TestRoundingFunctionsTypePreservation(t *testing.T) {
 			t.Run(funcName+"_float_to_double_"+floatType.String(), func(t *testing.T) {
 				args := []BoundExpr{&BoundLiteral{ValType: floatType}}
 				result := inferFunctionResultType(funcName, args)
-				assert.Equal(t, dukdb.TYPE_DOUBLE, result, "%s with %s should return DOUBLE", funcName, floatType)
+				assert.Equal(
+					t,
+					dukdb.TYPE_DOUBLE,
+					result,
+					"%s with %s should return DOUBLE",
+					funcName,
+					floatType,
+				)
 			})
 		}
 	}
@@ -966,7 +1022,13 @@ func TestInferStringFunctionReturnType_LIST(t *testing.T) {
 			}
 			result := inferFunctionResultType(funcName, args)
 			// LIST types are represented as TYPE_ANY since there's no dedicated LIST type constant
-			assert.Equal(t, dukdb.TYPE_ANY, result, "%s should return TYPE_ANY (representing LIST)", funcName)
+			assert.Equal(
+				t,
+				dukdb.TYPE_ANY,
+				result,
+				"%s should return TYPE_ANY (representing LIST)",
+				funcName,
+			)
 		})
 	}
 }

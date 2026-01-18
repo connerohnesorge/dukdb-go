@@ -63,7 +63,7 @@ func demonstrateReadParquet(db *sql.DB) {
 			var name, category string
 			var value float64
 			rows.Scan(&id, &name, &value, &category)
-			fmt.Printf("   - %s (id=%d, value=%.2f, category=%s)\n", 
+			fmt.Printf("   - %s (id=%d, value=%.2f, category=%s)\n",
 				name, id, value, category)
 		}
 	}

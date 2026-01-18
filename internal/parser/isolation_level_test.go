@@ -13,7 +13,12 @@ import (
 func TestIsolationLevelConstants(t *testing.T) {
 	// Verify constants are defined with expected ordering
 	// IsolationLevelSerializable is the default (zero value)
-	assert.Equal(t, IsolationLevel(0), IsolationLevelSerializable, "IsolationLevelSerializable should be zero value (default)")
+	assert.Equal(
+		t,
+		IsolationLevel(0),
+		IsolationLevelSerializable,
+		"IsolationLevelSerializable should be zero value (default)",
+	)
 	assert.Equal(t, IsolationLevel(1), IsolationLevelRepeatableRead)
 	assert.Equal(t, IsolationLevel(2), IsolationLevelReadCommitted)
 	assert.Equal(t, IsolationLevel(3), IsolationLevelReadUncommitted)

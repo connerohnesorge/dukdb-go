@@ -95,7 +95,10 @@ func (e *Executor) pragmaDatabaseSize(ctx *ExecutionContext) (*ExecutionResult, 
 }
 
 // pragmaTableInfo returns table column information.
-func (e *Executor) pragmaTableInfo(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaTableInfo(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if len(plan.Args) == 0 {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -146,7 +149,10 @@ func (e *Executor) pragmaTableInfo(ctx *ExecutionContext, plan *planner.Physical
 }
 
 // pragmaStorageInfo returns storage information for a table.
-func (e *Executor) pragmaStorageInfo(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaStorageInfo(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if len(plan.Args) == 0 {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -271,7 +277,10 @@ func (e *Executor) pragmaCollations(ctx *ExecutionContext) (*ExecutionResult, er
 }
 
 // pragmaShow returns configuration values.
-func (e *Executor) pragmaShow(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaShow(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if len(plan.Args) == 0 {
 		// Show all settings
 		return &ExecutionResult{
@@ -312,7 +321,10 @@ func (e *Executor) pragmaShow(ctx *ExecutionContext, plan *planner.PhysicalPragm
 
 // Configuration pragma stubs - these would store/retrieve actual config in a real implementation
 
-func (e *Executor) pragmaMemoryLimit(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaMemoryLimit(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if plan.Value != nil {
 		// SET mode - acknowledge but no-op for now
 		return &ExecutionResult{
@@ -327,7 +339,10 @@ func (e *Executor) pragmaMemoryLimit(ctx *ExecutionContext, plan *planner.Physic
 	}, nil
 }
 
-func (e *Executor) pragmaThreads(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaThreads(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if plan.Value != nil {
 		// SET mode - update the global parallel configuration
 		valueStr, err := evalExprToString(ctx, plan.Value)
@@ -361,7 +376,10 @@ func (e *Executor) pragmaThreads(ctx *ExecutionContext, plan *planner.PhysicalPr
 	}, nil
 }
 
-func (e *Executor) pragmaTempDirectory(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaTempDirectory(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if plan.Value != nil {
 		return &ExecutionResult{
 			Columns: []string{"success"},
@@ -390,7 +408,10 @@ func (e *Executor) pragmaDisableProfiling(ctx *ExecutionContext) (*ExecutionResu
 	}, nil
 }
 
-func (e *Executor) pragmaProfilingMode(ctx *ExecutionContext, plan *planner.PhysicalPragma) (*ExecutionResult, error) {
+func (e *Executor) pragmaProfilingMode(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
 	if plan.Value != nil {
 		return &ExecutionResult{
 			Columns: []string{"success"},
@@ -949,7 +970,11 @@ func (a *physicalPlanAdapter) ScanPageCount() float64 {
 }
 
 // formatPhysicalPlanWithCost formats a physical plan with cost annotations.
-func formatPhysicalPlanWithCost(plan planner.PhysicalPlan, indent int, costModel *optimizer.CostModel) string {
+func formatPhysicalPlanWithCost(
+	plan planner.PhysicalPlan,
+	indent int,
+	costModel *optimizer.CostModel,
+) string {
 	prefix := strings.Repeat("  ", indent)
 	var sb strings.Builder
 

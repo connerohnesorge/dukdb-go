@@ -133,7 +133,7 @@ func demonstrateCrossSchemaQueries(db *sql.DB) {
 		FROM analytics.daily_metrics
 	`).Scan(&orders, &revenue, &campaigns)
 	if err == nil {
-		fmt.Printf("   ✓ Daily metrics: %d orders, $%.2f revenue, %d campaigns\n", 
+		fmt.Printf("   ✓ Daily metrics: %d orders, $%.2f revenue, %d campaigns\n",
 			orders, revenue, campaigns)
 	}
 }

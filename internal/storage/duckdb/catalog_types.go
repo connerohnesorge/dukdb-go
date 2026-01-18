@@ -38,13 +38,13 @@ const (
 
 // ColumnDefinition property IDs for BinarySerializer format.
 const (
-	PropColumnDefName         uint16 = 100 // Column name
-	PropColumnDefType         uint16 = 101 // LogicalType (nested object)
-	PropColumnDefExpression   uint16 = 102 // Generated column expression (optional)
-	PropColumnDefCategory     uint16 = 103 // Column category enum
-	PropColumnDefCompression  uint16 = 104 // Compression type (optional)
-	PropColumnDefComment      uint16 = 105 // Column comment (optional)
-	PropColumnDefTags         uint16 = 106 // Column tags (optional)
+	PropColumnDefName        uint16 = 100 // Column name
+	PropColumnDefType        uint16 = 101 // LogicalType (nested object)
+	PropColumnDefExpression  uint16 = 102 // Generated column expression (optional)
+	PropColumnDefCategory    uint16 = 103 // Column category enum
+	PropColumnDefCompression uint16 = 104 // Compression type (optional)
+	PropColumnDefComment     uint16 = 105 // Column comment (optional)
+	PropColumnDefTags        uint16 = 106 // Column tags (optional)
 )
 
 // LogicalType property IDs for BinarySerializer format.
@@ -65,26 +65,26 @@ const (
 type PhysicalTypeID uint8
 
 const (
-	PhysicalTypeBool      PhysicalTypeID = 1   // BOOL
-	PhysicalTypeInt8      PhysicalTypeID = 2   // INT8
-	PhysicalTypeInt16     PhysicalTypeID = 3   // INT16
-	PhysicalTypeInt32     PhysicalTypeID = 4   // INT32
-	PhysicalTypeInt64     PhysicalTypeID = 5   // INT64
-	PhysicalTypeUInt8     PhysicalTypeID = 6   // UINT8
-	PhysicalTypeUInt16    PhysicalTypeID = 7   // UINT16
-	PhysicalTypeUInt32    PhysicalTypeID = 8   // UINT32
-	PhysicalTypeUInt64    PhysicalTypeID = 9   // UINT64
-	PhysicalTypeInt128    PhysicalTypeID = 10  // INT128
-	PhysicalTypeUInt128   PhysicalTypeID = 11  // UINT128
-	PhysicalTypeFloat     PhysicalTypeID = 12  // FLOAT
-	PhysicalTypeDouble    PhysicalTypeID = 13  // DOUBLE
-	PhysicalTypeInterval  PhysicalTypeID = 14  // INTERVAL
-	PhysicalTypeVarchar   PhysicalTypeID = 15  // VARCHAR
-	PhysicalTypeBit       PhysicalTypeID = 16  // BIT
-	PhysicalTypeStruct    PhysicalTypeID = 17  // STRUCT
-	PhysicalTypeList      PhysicalTypeID = 18  // LIST
-	PhysicalTypeArray     PhysicalTypeID = 19  // ARRAY
-	PhysicalTypeInvalid   PhysicalTypeID = 255 // INVALID
+	PhysicalTypeBool     PhysicalTypeID = 1   // BOOL
+	PhysicalTypeInt8     PhysicalTypeID = 2   // INT8
+	PhysicalTypeInt16    PhysicalTypeID = 3   // INT16
+	PhysicalTypeInt32    PhysicalTypeID = 4   // INT32
+	PhysicalTypeInt64    PhysicalTypeID = 5   // INT64
+	PhysicalTypeUInt8    PhysicalTypeID = 6   // UINT8
+	PhysicalTypeUInt16   PhysicalTypeID = 7   // UINT16
+	PhysicalTypeUInt32   PhysicalTypeID = 8   // UINT32
+	PhysicalTypeUInt64   PhysicalTypeID = 9   // UINT64
+	PhysicalTypeInt128   PhysicalTypeID = 10  // INT128
+	PhysicalTypeUInt128  PhysicalTypeID = 11  // UINT128
+	PhysicalTypeFloat    PhysicalTypeID = 12  // FLOAT
+	PhysicalTypeDouble   PhysicalTypeID = 13  // DOUBLE
+	PhysicalTypeInterval PhysicalTypeID = 14  // INTERVAL
+	PhysicalTypeVarchar  PhysicalTypeID = 15  // VARCHAR
+	PhysicalTypeBit      PhysicalTypeID = 16  // BIT
+	PhysicalTypeStruct   PhysicalTypeID = 17  // STRUCT
+	PhysicalTypeList     PhysicalTypeID = 18  // LIST
+	PhysicalTypeArray    PhysicalTypeID = 19  // ARRAY
+	PhysicalTypeInvalid  PhysicalTypeID = 255 // INVALID
 )
 
 // physicalTypeNames maps PhysicalTypeID values to their string names.
@@ -149,7 +149,13 @@ func GetPhysicalType(logicalType LogicalTypeID) PhysicalTypeID {
 		return PhysicalTypeFloat
 	case TypeDouble:
 		return PhysicalTypeDouble
-	case TypeDate, TypeTime, TypeTimestamp, TypeTimestampS, TypeTimestampMS, TypeTimestampNS, TypeTimestampTZ:
+	case TypeDate,
+		TypeTime,
+		TypeTimestamp,
+		TypeTimestampS,
+		TypeTimestampMS,
+		TypeTimestampNS,
+		TypeTimestampTZ:
 		return PhysicalTypeInt64
 	case TypeInterval:
 		return PhysicalTypeInterval

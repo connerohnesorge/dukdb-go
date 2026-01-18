@@ -28,7 +28,12 @@ type IndexCorruptionError struct {
 }
 
 func (e *IndexCorruptionError) Error() string {
-	return fmt.Sprintf("index %q on table %q is corrupted: %s", e.IndexName, e.TableName, e.Description)
+	return fmt.Sprintf(
+		"index %q on table %q is corrupted: %s",
+		e.IndexName,
+		e.TableName,
+		e.Description,
+	)
 }
 
 func (e *IndexCorruptionError) Unwrap() error {
@@ -174,7 +179,11 @@ func (idx *HashIndex) Insert(key []any, rowID RowID) error {
 	defer idx.mu.Unlock()
 
 	if len(key) != len(idx.Columns) {
-		return fmt.Errorf("key length %d does not match column count %d", len(key), len(idx.Columns))
+		return fmt.Errorf(
+			"key length %d does not match column count %d",
+			len(key),
+			len(idx.Columns),
+		)
 	}
 
 	hashKey := makeHashKey(key)
@@ -196,7 +205,11 @@ func (idx *HashIndex) Delete(key []any, rowID RowID) error {
 	defer idx.mu.Unlock()
 
 	if len(key) != len(idx.Columns) {
-		return fmt.Errorf("key length %d does not match column count %d", len(key), len(idx.Columns))
+		return fmt.Errorf(
+			"key length %d does not match column count %d",
+			len(key),
+			len(idx.Columns),
+		)
 	}
 
 	hashKey := makeHashKey(key)
@@ -298,9 +311,12 @@ func (idx *HashIndex) ValidateAgainstTable(table *Table) error {
 
 	if len(staleRowIDs) > 0 {
 		return &IndexCorruptionError{
-			IndexName:   idx.Name,
-			TableName:   idx.TableName,
-			Description: fmt.Sprintf("index contains %d stale RowID(s) pointing to non-existent or deleted rows", len(staleRowIDs)),
+			IndexName: idx.Name,
+			TableName: idx.TableName,
+			Description: fmt.Sprintf(
+				"index contains %d stale RowID(s) pointing to non-existent or deleted rows",
+				len(staleRowIDs),
+			),
 			StaleRowIDs: staleRowIDs,
 		}
 	}
@@ -323,7 +339,11 @@ func (idx *HashIndex) ValidateAgainstTable(table *Table) error {
 //
 // This method provides a defensive lookup that handles potential index corruption
 // gracefully by filtering out invalid RowIDs.
-func (idx *HashIndex) LookupWithValidation(key []any, table *Table, reportCorruption bool) ([]RowID, error) {
+func (idx *HashIndex) LookupWithValidation(
+	key []any,
+	table *Table,
+	reportCorruption bool,
+) ([]RowID, error) {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 

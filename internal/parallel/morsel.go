@@ -77,7 +77,11 @@ func NewMorselGeneratorWithConfig(config MorselConfig) *MorselGenerator {
 
 // GenerateMorsels creates morsels from table row count.
 // It partitions the table into morsels based on row group boundaries and size limits.
-func (g *MorselGenerator) GenerateMorsels(tableID uint64, totalRows uint64, rowGroupSize int) []Morsel {
+func (g *MorselGenerator) GenerateMorsels(
+	tableID uint64,
+	totalRows uint64,
+	rowGroupSize int,
+) []Morsel {
 	if totalRows == 0 {
 		return nil
 	}
@@ -207,14 +211,14 @@ type RowGroupInfo struct {
 // WorkDistributor handles morsel distribution to workers with optional work stealing.
 // It maintains per-worker queues and a global queue for work stealing.
 type WorkDistributor struct {
-	morsels           []Morsel
-	queues            []chan Morsel // Per-worker queues
-	globalQueue       chan Morsel   // For work stealing fallback
+	morsels            []Morsel
+	queues             []chan Morsel // Per-worker queues
+	globalQueue        chan Morsel   // For work stealing fallback
 	enableWorkStealing bool
-	numWorkers        int
-	distributed       atomic.Bool
-	closed            atomic.Bool
-	mu                sync.RWMutex
+	numWorkers         int
+	distributed        atomic.Bool
+	closed             atomic.Bool
+	mu                 sync.RWMutex
 }
 
 // NewWorkDistributor creates a new work distributor.
@@ -227,7 +231,11 @@ func NewWorkDistributor(numWorkers int, enableWorkStealing bool) *WorkDistributo
 // NewWorkDistributorWithCapacity creates a work distributor with a specified capacity hint.
 // If capacity is 0, a default queue size is used.
 // The capacity should be at least as large as the expected number of morsels.
-func NewWorkDistributorWithCapacity(numWorkers int, enableWorkStealing bool, capacity int) *WorkDistributor {
+func NewWorkDistributorWithCapacity(
+	numWorkers int,
+	enableWorkStealing bool,
+	capacity int,
+) *WorkDistributor {
 	if numWorkers <= 0 {
 		numWorkers = 1
 	}

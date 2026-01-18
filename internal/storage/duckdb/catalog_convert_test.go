@@ -453,7 +453,12 @@ func TestConvertCatalogRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a view
-	view := catalog.NewViewDefWithDependencies("user_names", "main", "SELECT name FROM users", []string{"users"})
+	view := catalog.NewViewDefWithDependencies(
+		"user_names",
+		"main",
+		"SELECT name FROM users",
+		[]string{"users"},
+	)
 	err = cat.CreateView(view)
 	require.NoError(t, err)
 

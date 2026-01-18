@@ -39,23 +39,23 @@ const (
 	CodeSQLStatementNotYetComplete = "03000"
 
 	// Class 08 - Connection Exception
-	CodeConnectionException          = "08000"
-	CodeConnectionDoesNotExist       = "08003"
-	CodeConnectionFailure            = "08006"
-	CodeSQLClientUnableToEstablishSQLConnection = "08001"
+	CodeConnectionException                           = "08000"
+	CodeConnectionDoesNotExist                        = "08003"
+	CodeConnectionFailure                             = "08006"
+	CodeSQLClientUnableToEstablishSQLConnection       = "08001"
 	CodeSQLServerRejectedEstablishmentOfSQLConnection = "08004"
 
 	// Class 0A - Feature Not Supported
 	CodeFeatureNotSupported = "0A000"
 
 	// Class 22 - Data Exception
-	CodeDataException                  = "22000"
-	CodeNumericValueOutOfRange         = "22003"
-	CodeInvalidTextRepresentation      = "22P02"
-	CodeInvalidDatetimeFormat          = "22007"
-	CodeDivisionByZero                 = "22012"
-	CodeStringDataRightTruncation      = "22001"
-	CodeNullValueNotAllowed            = "22004"
+	CodeDataException             = "22000"
+	CodeNumericValueOutOfRange    = "22003"
+	CodeInvalidTextRepresentation = "22P02"
+	CodeInvalidDatetimeFormat     = "22007"
+	CodeDivisionByZero            = "22012"
+	CodeStringDataRightTruncation = "22001"
+	CodeNullValueNotAllowed       = "22004"
 
 	// Class 23 - Integrity Constraint Violation
 	CodeIntegrityConstraintViolation = "23000"
@@ -65,13 +65,13 @@ const (
 	CodeCheckViolation               = "23514"
 
 	// Class 25 - Invalid Transaction State
-	CodeInvalidTransactionState          = "25000"
-	CodeActiveSQLTransaction             = "25001"
-	CodeBranchTransactionAlreadyActive   = "25002"
-	CodeInappropriateAccessModeForBranchTransaction = "25003"
+	CodeInvalidTransactionState                         = "25000"
+	CodeActiveSQLTransaction                            = "25001"
+	CodeBranchTransactionAlreadyActive                  = "25002"
+	CodeInappropriateAccessModeForBranchTransaction     = "25003"
 	CodeInappropriateIsolationLevelForBranchTransaction = "25004"
-	CodeNoActiveSQLTransaction           = "25P01"
-	CodeReadOnlySQLTransaction           = "25006"
+	CodeNoActiveSQLTransaction                          = "25P01"
+	CodeReadOnlySQLTransaction                          = "25006"
 
 	// Class 28 - Invalid Authorization Specification
 	CodeInvalidAuthorizationSpecification = "28000"
@@ -87,55 +87,55 @@ const (
 	CodeInvalidSchemaName = "3F000"
 
 	// Class 40 - Transaction Rollback
-	CodeTransactionRollback           = "40000"
-	CodeSerializationFailure          = "40001"
+	CodeTransactionRollback                     = "40000"
+	CodeSerializationFailure                    = "40001"
 	CodeTransactionIntegrityConstraintViolation = "40002"
-	CodeStatementCompletionUnknown    = "40003"
-	CodeDeadlockDetected              = "40P01"
+	CodeStatementCompletionUnknown              = "40003"
+	CodeDeadlockDetected                        = "40P01"
 
 	// Class 42 - Syntax Error or Access Rule Violation
-	CodeSyntaxErrorOrAccessRuleViolation = "42000"
-	CodeSyntaxError                      = "42601"
-	CodeInsufficientPrivilege            = "42501"
-	CodeCannotCoerce                     = "42846"
-	CodeGroupingError                    = "42803"
-	CodeWindowingError                   = "42P20"
-	CodeInvalidRecursion                 = "42P19"
-	CodeInvalidForeignKey                = "42830"
-	CodeInvalidName                      = "42602"
-	CodeNameTooLong                      = "42622"
-	CodeReservedName                     = "42939"
-	CodeDatatypeMismatch                 = "42804"
-	CodeIndeterminateDatatype            = "42P18"
-	CodeWrongObjectType                  = "42809"
-	CodeUndefinedColumn                  = "42703"
-	CodeUndefinedFunction                = "42883"
-	CodeUndefinedTable                   = "42P01"
-	CodeUndefinedParameter               = "42P02"
-	CodeUndefinedObject                  = "42704"
-	CodeUndefinedPStmt                   = "26000" // Invalid SQL statement name (prepared statement)
-	CodeDuplicateColumn                  = "42701"
-	CodeDuplicateCursor                  = "42P03"
-	CodeDuplicateDatabase                = "42P04"
-	CodeDuplicateFunction                = "42723"
-	CodeDuplicatePreparedStatement       = "42P05"
-	CodeDuplicateSchema                  = "42P06"
-	CodeDuplicateTable                   = "42P07"
-	CodeDuplicateAlias                   = "42712"
-	CodeDuplicateObject                  = "42710"
-	CodeAmbiguousColumn                  = "42702"
-	CodeAmbiguousFunction                = "42725"
-	CodeAmbiguousParameter               = "42P08"
-	CodeAmbiguousAlias                   = "42P09"
-	CodeInvalidColumnReference           = "42P10"
-	CodeInvalidColumnDefinition          = "42611"
-	CodeInvalidCursorDefinition          = "42P11"
-	CodeInvalidDatabaseDefinition        = "42P12"
-	CodeInvalidFunctionDefinition        = "42P13"
+	CodeSyntaxErrorOrAccessRuleViolation   = "42000"
+	CodeSyntaxError                        = "42601"
+	CodeInsufficientPrivilege              = "42501"
+	CodeCannotCoerce                       = "42846"
+	CodeGroupingError                      = "42803"
+	CodeWindowingError                     = "42P20"
+	CodeInvalidRecursion                   = "42P19"
+	CodeInvalidForeignKey                  = "42830"
+	CodeInvalidName                        = "42602"
+	CodeNameTooLong                        = "42622"
+	CodeReservedName                       = "42939"
+	CodeDatatypeMismatch                   = "42804"
+	CodeIndeterminateDatatype              = "42P18"
+	CodeWrongObjectType                    = "42809"
+	CodeUndefinedColumn                    = "42703"
+	CodeUndefinedFunction                  = "42883"
+	CodeUndefinedTable                     = "42P01"
+	CodeUndefinedParameter                 = "42P02"
+	CodeUndefinedObject                    = "42704"
+	CodeUndefinedPStmt                     = "26000" // Invalid SQL statement name (prepared statement)
+	CodeDuplicateColumn                    = "42701"
+	CodeDuplicateCursor                    = "42P03"
+	CodeDuplicateDatabase                  = "42P04"
+	CodeDuplicateFunction                  = "42723"
+	CodeDuplicatePreparedStatement         = "42P05"
+	CodeDuplicateSchema                    = "42P06"
+	CodeDuplicateTable                     = "42P07"
+	CodeDuplicateAlias                     = "42712"
+	CodeDuplicateObject                    = "42710"
+	CodeAmbiguousColumn                    = "42702"
+	CodeAmbiguousFunction                  = "42725"
+	CodeAmbiguousParameter                 = "42P08"
+	CodeAmbiguousAlias                     = "42P09"
+	CodeInvalidColumnReference             = "42P10"
+	CodeInvalidColumnDefinition            = "42611"
+	CodeInvalidCursorDefinition            = "42P11"
+	CodeInvalidDatabaseDefinition          = "42P12"
+	CodeInvalidFunctionDefinition          = "42P13"
 	CodeInvalidPreparedStatementDefinition = "42P14"
-	CodeInvalidSchemaDefinition          = "42P15"
-	CodeInvalidTableDefinition           = "42P16"
-	CodeInvalidObjectDefinition          = "42P17"
+	CodeInvalidSchemaDefinition            = "42P15"
+	CodeInvalidTableDefinition             = "42P16"
+	CodeInvalidObjectDefinition            = "42P17"
 
 	// Class 53 - Insufficient Resources
 	CodeInsufficientResources = "53000"
@@ -160,8 +160,8 @@ const (
 	CodeCrashShutdown        = "57P02"
 
 	// Class 58 - System Error
-	CodeSystemError  = "58000"
-	CodeIOError      = "58030"
+	CodeSystemError = "58000"
+	CodeIOError     = "58030"
 
 	// Class XX - Internal Error
 	CodeInternalError = "XX000"
@@ -340,16 +340,27 @@ func ErrUniqueViolation(constraintName, detail string) *PgError {
 
 // ErrForeignKeyViolation creates a foreign key violation error.
 func ErrForeignKeyViolation(constraintName, detail string) *PgError {
-	return NewPgError(CodeForeignKeyViolation,
-		fmt.Sprintf("insert or update on table violates foreign key constraint \"%s\"", constraintName)).
+	return NewPgError(
+		CodeForeignKeyViolation,
+		fmt.Sprintf(
+			"insert or update on table violates foreign key constraint \"%s\"",
+			constraintName,
+		),
+	).
 		WithDetail(detail).
 		WithConstraint(constraintName)
 }
 
 // ErrNotNullViolation creates a NOT NULL constraint violation error.
 func ErrNotNullViolation(columnName, tableName string) *PgError {
-	return NewPgError(CodeNotNullViolation,
-		fmt.Sprintf("null value in column \"%s\" of relation \"%s\" violates not-null constraint", columnName, tableName)).
+	return NewPgError(
+		CodeNotNullViolation,
+		fmt.Sprintf(
+			"null value in column \"%s\" of relation \"%s\" violates not-null constraint",
+			columnName,
+			tableName,
+		),
+	).
 		WithColumn(columnName).
 		WithTable(tableName)
 }
@@ -396,7 +407,10 @@ func ErrActiveSQLTransaction() *PgError {
 
 // ErrReadOnlySQLTransaction creates a read-only transaction error.
 func ErrReadOnlySQLTransaction() *PgError {
-	return NewPgError(CodeReadOnlySQLTransaction, "cannot execute statement in a read-only transaction")
+	return NewPgError(
+		CodeReadOnlySQLTransaction,
+		"cannot execute statement in a read-only transaction",
+	)
 }
 
 // ErrConnectionFailure creates a connection failure error.
@@ -537,7 +551,11 @@ type ErrorMappingRule struct {
 // Rules are checked in order; first match wins.
 var errorMappingRules = []ErrorMappingRule{
 	// Syntax errors
-	{Pattern: regexp.MustCompile(`(?i)syntax error at or near ['"']?(\w+)['"']?`), Code: CodeSyntaxError, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)syntax error at or near ['"']?(\w+)['"']?`),
+		Code:         CodeSyntaxError,
+		ExtractNames: true,
+	},
 	{Pattern: regexp.MustCompile(`(?i)syntax error`), Code: CodeSyntaxError},
 	{Pattern: regexp.MustCompile(`(?i)unexpected token`), Code: CodeSyntaxError},
 	{Pattern: regexp.MustCompile(`(?i)expected .* but found`), Code: CodeSyntaxError},
@@ -545,74 +563,261 @@ var errorMappingRules = []ErrorMappingRule{
 	{Pattern: regexp.MustCompile(`(?i)parse error`), Code: CodeSyntaxError},
 
 	// Undefined objects
-	{Pattern: regexp.MustCompile(`(?i)table ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedTable, ExtractNames: true, HintTemplate: "Check the table name for typos or verify the table exists."},
-	{Pattern: regexp.MustCompile(`(?i)relation ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedTable, ExtractNames: true, HintTemplate: "Check the relation name for typos or verify it exists."},
-	{Pattern: regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedColumn, ExtractNames: true, HintTemplate: "Check the column name for typos or use SELECT * to see available columns."},
-	{Pattern: regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? of relation ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedColumn, ExtractNames: true, DetailTemplate: "Column \"$1\" is not present in table \"$2\"."},
-	{Pattern: regexp.MustCompile(`(?i)function ['"']?(\w+)['"']?\s*\(([^)]*)\)\s*does not exist`), Code: CodeUndefinedFunction, ExtractNames: true, HintTemplate: "No function matches the given name and argument types. You might need to add explicit type casts."},
-	{Pattern: regexp.MustCompile(`(?i)schema ['"']?(\w+)['"']? does not exist`), Code: CodeInvalidSchemaName, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)database ['"']?(\w+)['"']? does not exist`), Code: CodeInvalidCatalogName, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)index ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedObject, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)sequence ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedObject, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)view ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedTable, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)type ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedObject, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)prepared statement ['"']?(\w+)['"']? does not exist`), Code: CodeUndefinedPStmt, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)cursor ['"']?(\w+)['"']? does not exist`), Code: CodeInvalidCursorName, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)table ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedTable,
+		ExtractNames: true,
+		HintTemplate: "Check the table name for typos or verify the table exists.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)relation ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedTable,
+		ExtractNames: true,
+		HintTemplate: "Check the relation name for typos or verify it exists.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedColumn,
+		ExtractNames: true,
+		HintTemplate: "Check the column name for typos or use SELECT * to see available columns.",
+	},
+	{
+		Pattern: regexp.MustCompile(
+			`(?i)column ['"']?(\w+)['"']? of relation ['"']?(\w+)['"']? does not exist`,
+		),
+		Code:           CodeUndefinedColumn,
+		ExtractNames:   true,
+		DetailTemplate: "Column \"$1\" is not present in table \"$2\".",
+	},
+	{
+		Pattern: regexp.MustCompile(
+			`(?i)function ['"']?(\w+)['"']?\s*\(([^)]*)\)\s*does not exist`,
+		),
+		Code:         CodeUndefinedFunction,
+		ExtractNames: true,
+		HintTemplate: "No function matches the given name and argument types. You might need to add explicit type casts.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)schema ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeInvalidSchemaName,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)database ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeInvalidCatalogName,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)index ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedObject,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)sequence ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedObject,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)view ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedTable,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)type ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedObject,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)prepared statement ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeUndefinedPStmt,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)cursor ['"']?(\w+)['"']? does not exist`),
+		Code:         CodeInvalidCursorName,
+		ExtractNames: true,
+	},
 
 	// Duplicate objects
-	{Pattern: regexp.MustCompile(`(?i)table ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateTable, ExtractNames: true, HintTemplate: "Use CREATE TABLE IF NOT EXISTS or DROP TABLE first."},
-	{Pattern: regexp.MustCompile(`(?i)relation ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateTable, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)index ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateObject, ExtractNames: true, HintTemplate: "Use CREATE INDEX IF NOT EXISTS or DROP INDEX first."},
-	{Pattern: regexp.MustCompile(`(?i)schema ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateSchema, ExtractNames: true, HintTemplate: "Use CREATE SCHEMA IF NOT EXISTS or DROP SCHEMA first."},
-	{Pattern: regexp.MustCompile(`(?i)database ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateDatabase, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateColumn, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)function ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateFunction, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)sequence ['"']?(\w+)['"']? already exists`), Code: CodeDuplicateObject, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)table ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateTable,
+		ExtractNames: true,
+		HintTemplate: "Use CREATE TABLE IF NOT EXISTS or DROP TABLE first.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)relation ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateTable,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)index ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateObject,
+		ExtractNames: true,
+		HintTemplate: "Use CREATE INDEX IF NOT EXISTS or DROP INDEX first.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)schema ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateSchema,
+		ExtractNames: true,
+		HintTemplate: "Use CREATE SCHEMA IF NOT EXISTS or DROP SCHEMA first.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)database ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateDatabase,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateColumn,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)function ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateFunction,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)sequence ['"']?(\w+)['"']? already exists`),
+		Code:         CodeDuplicateObject,
+		ExtractNames: true,
+	},
 
 	// Constraint violations
-	{Pattern: regexp.MustCompile(`(?i)duplicate key.*violates unique constraint ['"']?(\w+)['"']?`), Code: CodeUniqueViolation, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)unique constraint ['"']?(\w+)['"']? violated`), Code: CodeUniqueViolation, ExtractNames: true},
+	{
+		Pattern: regexp.MustCompile(
+			`(?i)duplicate key.*violates unique constraint ['"']?(\w+)['"']?`,
+		),
+		Code:         CodeUniqueViolation,
+		ExtractNames: true,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)unique constraint ['"']?(\w+)['"']? violated`),
+		Code:         CodeUniqueViolation,
+		ExtractNames: true,
+	},
 	{Pattern: regexp.MustCompile(`(?i)unique constraint violation`), Code: CodeUniqueViolation},
-	{Pattern: regexp.MustCompile(`(?i)foreign key constraint ['"']?(\w+)['"']? violated`), Code: CodeForeignKeyViolation, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)violates foreign key constraint`), Code: CodeForeignKeyViolation},
-	{Pattern: regexp.MustCompile(`(?i)check constraint ['"']?(\w+)['"']? violated`), Code: CodeCheckViolation, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)foreign key constraint ['"']?(\w+)['"']? violated`),
+		Code:         CodeForeignKeyViolation,
+		ExtractNames: true,
+	},
+	{
+		Pattern: regexp.MustCompile(`(?i)violates foreign key constraint`),
+		Code:    CodeForeignKeyViolation,
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)check constraint ['"']?(\w+)['"']? violated`),
+		Code:         CodeCheckViolation,
+		ExtractNames: true,
+	},
 	{Pattern: regexp.MustCompile(`(?i)violates check constraint`), Code: CodeCheckViolation},
-	{Pattern: regexp.MustCompile(`(?i)not[- ]?null constraint.*column ['"']?(\w+)['"']?`), Code: CodeNotNullViolation, ExtractNames: true},
-	{Pattern: regexp.MustCompile(`(?i)null value in column ['"']?(\w+)['"']?.*not[- ]?null`), Code: CodeNotNullViolation, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)not[- ]?null constraint.*column ['"']?(\w+)['"']?`),
+		Code:         CodeNotNullViolation,
+		ExtractNames: true,
+	},
+	{
+		Pattern: regexp.MustCompile(
+			`(?i)null value in column ['"']?(\w+)['"']?.*not[- ]?null`,
+		),
+		Code:         CodeNotNullViolation,
+		ExtractNames: true,
+	},
 	{Pattern: regexp.MustCompile(`(?i)null value not allowed`), Code: CodeNotNullViolation},
 
 	// Data type errors
-	{Pattern: regexp.MustCompile(`(?i)invalid input syntax for (?:type )?(\w+):\s*['"']?([^'"]*)['"']?`), Code: CodeInvalidTextRepresentation, ExtractNames: true, HintTemplate: "Verify the value format matches the expected type \"$1\"."},
-	{Pattern: regexp.MustCompile(`(?i)cannot cast.*from (\w+) to (\w+)`), Code: CodeCannotCoerce, ExtractNames: true, HintTemplate: "Use an explicit CAST expression or convert the data."},
+	{
+		Pattern: regexp.MustCompile(
+			`(?i)invalid input syntax for (?:type )?(\w+):\s*['"']?([^'"]*)['"']?`,
+		),
+		Code:         CodeInvalidTextRepresentation,
+		ExtractNames: true,
+		HintTemplate: "Verify the value format matches the expected type \"$1\".",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)cannot cast.*from (\w+) to (\w+)`),
+		Code:         CodeCannotCoerce,
+		ExtractNames: true,
+		HintTemplate: "Use an explicit CAST expression or convert the data.",
+	},
 	{Pattern: regexp.MustCompile(`(?i)type mismatch`), Code: CodeDatatypeMismatch},
 	{Pattern: regexp.MustCompile(`(?i)cannot coerce`), Code: CodeCannotCoerce},
-	{Pattern: regexp.MustCompile(`(?i)numeric value out of range`), Code: CodeNumericValueOutOfRange, HintTemplate: "Check that the value fits within the target type's range."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)numeric value out of range`),
+		Code:         CodeNumericValueOutOfRange,
+		HintTemplate: "Check that the value fits within the target type's range.",
+	},
 	{Pattern: regexp.MustCompile(`(?i)integer out of range`), Code: CodeNumericValueOutOfRange},
 	{Pattern: regexp.MustCompile(`(?i)value out of range`), Code: CodeNumericValueOutOfRange},
 	{Pattern: regexp.MustCompile(`(?i)overflow`), Code: CodeNumericValueOutOfRange},
-	{Pattern: regexp.MustCompile(`(?i)invalid date`), Code: CodeInvalidDatetimeFormat, HintTemplate: "Use ISO 8601 format: YYYY-MM-DD."},
-	{Pattern: regexp.MustCompile(`(?i)invalid time`), Code: CodeInvalidDatetimeFormat, HintTemplate: "Use ISO 8601 format: HH:MM:SS."},
-	{Pattern: regexp.MustCompile(`(?i)invalid timestamp`), Code: CodeInvalidDatetimeFormat, HintTemplate: "Use ISO 8601 format: YYYY-MM-DD HH:MM:SS."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)invalid date`),
+		Code:         CodeInvalidDatetimeFormat,
+		HintTemplate: "Use ISO 8601 format: YYYY-MM-DD.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)invalid time`),
+		Code:         CodeInvalidDatetimeFormat,
+		HintTemplate: "Use ISO 8601 format: HH:MM:SS.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)invalid timestamp`),
+		Code:         CodeInvalidDatetimeFormat,
+		HintTemplate: "Use ISO 8601 format: YYYY-MM-DD HH:MM:SS.",
+	},
 	{Pattern: regexp.MustCompile(`(?i)invalid interval`), Code: CodeInvalidDatetimeFormat},
 
 	// Arithmetic errors
-	{Pattern: regexp.MustCompile(`(?i)division by zero`), Code: CodeDivisionByZero, HintTemplate: "Add a check to avoid dividing by zero."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)division by zero`),
+		Code:         CodeDivisionByZero,
+		HintTemplate: "Add a check to avoid dividing by zero.",
+	},
 
 	// Transaction errors
-	{Pattern: regexp.MustCompile(`(?i)could not serialize access`), Code: CodeSerializationFailure, HintTemplate: "Retry the transaction."},
-	{Pattern: regexp.MustCompile(`(?i)serialization failure`), Code: CodeSerializationFailure, HintTemplate: "Retry the transaction."},
-	{Pattern: regexp.MustCompile(`(?i)deadlock detected`), Code: CodeDeadlockDetected, HintTemplate: "Retry the transaction. Consider reducing transaction size or reordering operations."},
-	{Pattern: regexp.MustCompile(`(?i)no transaction in progress`), Code: CodeNoActiveSQLTransaction},
-	{Pattern: regexp.MustCompile(`(?i)already.*transaction in progress`), Code: CodeActiveSQLTransaction},
-	{Pattern: regexp.MustCompile(`(?i)read[- ]?only transaction`), Code: CodeReadOnlySQLTransaction},
+	{
+		Pattern:      regexp.MustCompile(`(?i)could not serialize access`),
+		Code:         CodeSerializationFailure,
+		HintTemplate: "Retry the transaction.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)serialization failure`),
+		Code:         CodeSerializationFailure,
+		HintTemplate: "Retry the transaction.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)deadlock detected`),
+		Code:         CodeDeadlockDetected,
+		HintTemplate: "Retry the transaction. Consider reducing transaction size or reordering operations.",
+	},
+	{
+		Pattern: regexp.MustCompile(`(?i)no transaction in progress`),
+		Code:    CodeNoActiveSQLTransaction,
+	},
+	{
+		Pattern: regexp.MustCompile(`(?i)already.*transaction in progress`),
+		Code:    CodeActiveSQLTransaction,
+	},
+	{
+		Pattern: regexp.MustCompile(`(?i)read[- ]?only transaction`),
+		Code:    CodeReadOnlySQLTransaction,
+	},
 	{Pattern: regexp.MustCompile(`(?i)transaction aborted`), Code: CodeTransactionRollback},
 
 	// Connection errors
 	{Pattern: regexp.MustCompile(`(?i)connection.*closed`), Code: CodeConnectionFailure},
 	{Pattern: regexp.MustCompile(`(?i)connection.*lost`), Code: CodeConnectionFailure},
-	{Pattern: regexp.MustCompile(`(?i)connection.*refused`), Code: CodeSQLClientUnableToEstablishSQLConnection},
+	{
+		Pattern: regexp.MustCompile(`(?i)connection.*refused`),
+		Code:    CodeSQLClientUnableToEstablishSQLConnection,
+	},
 	{Pattern: regexp.MustCompile(`(?i)connection.*timeout`), Code: CodeConnectionFailure},
-	{Pattern: regexp.MustCompile(`(?i)too many connections`), Code: CodeTooManyConnections, HintTemplate: "Wait for existing connections to close or increase max_connections."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)too many connections`),
+		Code:         CodeTooManyConnections,
+		HintTemplate: "Wait for existing connections to close or increase max_connections.",
+	},
 
 	// Permission errors
 	{Pattern: regexp.MustCompile(`(?i)permission denied`), Code: CodeInsufficientPrivilege},
@@ -620,7 +825,11 @@ var errorMappingRules = []ErrorMappingRule{
 	{Pattern: regexp.MustCompile(`(?i)not authorized`), Code: CodeInsufficientPrivilege},
 
 	// Resource errors
-	{Pattern: regexp.MustCompile(`(?i)out of memory`), Code: CodeOutOfMemory, HintTemplate: "Reduce query complexity or add more memory."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)out of memory`),
+		Code:         CodeOutOfMemory,
+		HintTemplate: "Reduce query complexity or add more memory.",
+	},
 	{Pattern: regexp.MustCompile(`(?i)memory limit exceeded`), Code: CodeOutOfMemory},
 	{Pattern: regexp.MustCompile(`(?i)disk full`), Code: CodeDiskFull},
 	{Pattern: regexp.MustCompile(`(?i)no space left`), Code: CodeDiskFull},
@@ -637,12 +846,25 @@ var errorMappingRules = []ErrorMappingRule{
 	{Pattern: regexp.MustCompile(`(?i)lock timeout`), Code: CodeQueryCanceled},
 
 	// Ambiguous references
-	{Pattern: regexp.MustCompile(`(?i)ambiguous column ['"']?(\w+)['"']?`), Code: CodeAmbiguousColumn, ExtractNames: true, HintTemplate: "Qualify the column name with a table alias."},
-	{Pattern: regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? is ambiguous`), Code: CodeAmbiguousColumn, ExtractNames: true},
+	{
+		Pattern:      regexp.MustCompile(`(?i)ambiguous column ['"']?(\w+)['"']?`),
+		Code:         CodeAmbiguousColumn,
+		ExtractNames: true,
+		HintTemplate: "Qualify the column name with a table alias.",
+	},
+	{
+		Pattern:      regexp.MustCompile(`(?i)column ['"']?(\w+)['"']? is ambiguous`),
+		Code:         CodeAmbiguousColumn,
+		ExtractNames: true,
+	},
 	{Pattern: regexp.MustCompile(`(?i)ambiguous function`), Code: CodeAmbiguousFunction},
 
 	// Grouping errors
-	{Pattern: regexp.MustCompile(`(?i)must appear in.*GROUP BY`), Code: CodeGroupingError, HintTemplate: "Add the column to GROUP BY or use an aggregate function."},
+	{
+		Pattern:      regexp.MustCompile(`(?i)must appear in.*GROUP BY`),
+		Code:         CodeGroupingError,
+		HintTemplate: "Add the column to GROUP BY or use an aggregate function.",
+	},
 	{Pattern: regexp.MustCompile(`(?i)not.*in.*aggregate`), Code: CodeGroupingError},
 
 	// I/O errors
@@ -805,36 +1027,100 @@ type ErrorHint struct {
 // commonErrorHints provides helpful hints for common error patterns.
 var commonErrorHints = []ErrorHint{
 	// Table/Relation errors
-	{Code: CodeUndefinedTable, Pattern: "does not exist", Hint: "Check the table name for typos. Use \\dt to list available tables."},
+	{
+		Code:    CodeUndefinedTable,
+		Pattern: "does not exist",
+		Hint:    "Check the table name for typos. Use \\dt to list available tables.",
+	},
 
 	// Column errors
-	{Code: CodeUndefinedColumn, Pattern: "does not exist", Hint: "Check the column name for typos. Use \\d tablename to see available columns."},
-	{Code: CodeAmbiguousColumn, Pattern: "ambiguous", Hint: "Qualify the column with a table alias, e.g., t.column_name."},
+	{
+		Code:    CodeUndefinedColumn,
+		Pattern: "does not exist",
+		Hint:    "Check the column name for typos. Use \\d tablename to see available columns.",
+	},
+	{
+		Code:    CodeAmbiguousColumn,
+		Pattern: "ambiguous",
+		Hint:    "Qualify the column with a table alias, e.g., t.column_name.",
+	},
 
 	// Function errors
-	{Code: CodeUndefinedFunction, Pattern: "does not exist", Hint: "Check the function name and argument types. You might need explicit type casts."},
+	{
+		Code:    CodeUndefinedFunction,
+		Pattern: "does not exist",
+		Hint:    "Check the function name and argument types. You might need explicit type casts.",
+	},
 
 	// Constraint errors
-	{Code: CodeUniqueViolation, Pattern: "unique constraint", Hint: "The value already exists. Use a different value or use ON CONFLICT for upsert."},
-	{Code: CodeForeignKeyViolation, Pattern: "foreign key", Hint: "Ensure the referenced row exists in the parent table."},
-	{Code: CodeNotNullViolation, Pattern: "not-null", Hint: "Provide a value for the required column or alter the column to allow NULL."},
-	{Code: CodeCheckViolation, Pattern: "check constraint", Hint: "The value does not satisfy the check constraint. Review the constraint definition."},
+	{
+		Code:    CodeUniqueViolation,
+		Pattern: "unique constraint",
+		Hint:    "The value already exists. Use a different value or use ON CONFLICT for upsert.",
+	},
+	{
+		Code:    CodeForeignKeyViolation,
+		Pattern: "foreign key",
+		Hint:    "Ensure the referenced row exists in the parent table.",
+	},
+	{
+		Code:    CodeNotNullViolation,
+		Pattern: "not-null",
+		Hint:    "Provide a value for the required column or alter the column to allow NULL.",
+	},
+	{
+		Code:    CodeCheckViolation,
+		Pattern: "check constraint",
+		Hint:    "The value does not satisfy the check constraint. Review the constraint definition.",
+	},
 
 	// Type errors
-	{Code: CodeInvalidTextRepresentation, Pattern: "invalid input syntax", Hint: "Check the value format. Use explicit CAST or type conversion."},
-	{Code: CodeCannotCoerce, Pattern: "cannot cast", Hint: "Use a two-step conversion or a different approach for this type conversion."},
-	{Code: CodeNumericValueOutOfRange, Pattern: "out of range", Hint: "Use a larger numeric type (e.g., BIGINT instead of INTEGER) or check for overflow."},
+	{
+		Code:    CodeInvalidTextRepresentation,
+		Pattern: "invalid input syntax",
+		Hint:    "Check the value format. Use explicit CAST or type conversion.",
+	},
+	{
+		Code:    CodeCannotCoerce,
+		Pattern: "cannot cast",
+		Hint:    "Use a two-step conversion or a different approach for this type conversion.",
+	},
+	{
+		Code:    CodeNumericValueOutOfRange,
+		Pattern: "out of range",
+		Hint:    "Use a larger numeric type (e.g., BIGINT instead of INTEGER) or check for overflow.",
+	},
 
 	// Transaction errors
-	{Code: CodeSerializationFailure, Pattern: "serialize", Hint: "Retry the transaction. Consider reducing isolation level if conflicts are frequent."},
-	{Code: CodeDeadlockDetected, Pattern: "deadlock", Hint: "Retry the transaction. Consider reordering operations or using shorter transactions."},
+	{
+		Code:    CodeSerializationFailure,
+		Pattern: "serialize",
+		Hint:    "Retry the transaction. Consider reducing isolation level if conflicts are frequent.",
+	},
+	{
+		Code:    CodeDeadlockDetected,
+		Pattern: "deadlock",
+		Hint:    "Retry the transaction. Consider reordering operations or using shorter transactions.",
+	},
 
 	// Resource errors
-	{Code: CodeOutOfMemory, Pattern: "memory", Hint: "Reduce batch size or query complexity. Consider pagination for large result sets."},
-	{Code: CodeTooManyConnections, Pattern: "connections", Hint: "Close unused connections or use connection pooling. Consider increasing max_connections."},
+	{
+		Code:    CodeOutOfMemory,
+		Pattern: "memory",
+		Hint:    "Reduce batch size or query complexity. Consider pagination for large result sets.",
+	},
+	{
+		Code:    CodeTooManyConnections,
+		Pattern: "connections",
+		Hint:    "Close unused connections or use connection pooling. Consider increasing max_connections.",
+	},
 
 	// Syntax errors
-	{Code: CodeSyntaxError, Pattern: "syntax error", Hint: "Check the SQL syntax near the indicated position. Common issues: missing commas, unbalanced quotes."},
+	{
+		Code:    CodeSyntaxError,
+		Pattern: "syntax error",
+		Hint:    "Check the SQL syntax near the indicated position. Common issues: missing commas, unbalanced quotes.",
+	},
 }
 
 // AddHintForError adds a helpful hint to a PgError based on common patterns.

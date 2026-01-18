@@ -165,10 +165,10 @@ func TestExplainComparisonSimpleSelect(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name           string
-		query          string
-		expectedOps    []string // Expected operators in plan
-		desc           string
+		name        string
+		query       string
+		expectedOps []string // Expected operators in plan
+		desc        string
 	}{
 		{
 			name:        "full_scan",
@@ -212,7 +212,13 @@ func TestExplainComparisonSimpleSelect(t *testing.T) {
 					break
 				}
 			}
-			require.True(t, found, "EXPLAIN output should contain one of: %v, got: %s", tc.expectedOps, explain)
+			require.True(
+				t,
+				found,
+				"EXPLAIN output should contain one of: %v, got: %s",
+				tc.expectedOps,
+				explain,
+			)
 		})
 	}
 }
@@ -246,8 +252,8 @@ func TestExplainComparisonJoinPlans(t *testing.T) {
 			desc:       "Left outer join should have JOIN operator",
 		},
 		{
-			name:       "multi_table_join",
-			query:      `SELECT COUNT(*) FROM orders o
+			name: "multi_table_join",
+			query: `SELECT COUNT(*) FROM orders o
 					JOIN order_items oi ON o.order_id = oi.order_id
 					JOIN products p ON oi.product_id = p.product_id`,
 			expectJoin: true,
@@ -263,8 +269,13 @@ func TestExplainComparisonJoinPlans(t *testing.T) {
 			require.NotEmpty(t, explain, "EXPLAIN output should not be empty")
 
 			if tc.expectJoin {
-				require.True(t, ContainsOperator(explain, "JOIN") || ContainsOperator(explain, "HASH_JOIN") || ContainsOperator(explain, "NESTED_LOOP"),
-					"JOIN query should contain JOIN operator, got: %s", explain)
+				require.True(
+					t,
+					ContainsOperator(explain, "JOIN") || ContainsOperator(explain, "HASH_JOIN") ||
+						ContainsOperator(explain, "NESTED_LOOP"),
+					"JOIN query should contain JOIN operator, got: %s",
+					explain,
+				)
 			}
 		})
 	}
@@ -281,10 +292,10 @@ func TestExplainComparisonFilterPlacement(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name           string
-		query          string
-		expectFilter   bool // Should contain filter operator
-		desc           string
+		name         string
+		query        string
+		expectFilter bool // Should contain filter operator
+		desc         string
 	}{
 		{
 			name:         "filter_to_scan",
@@ -315,8 +326,14 @@ func TestExplainComparisonFilterPlacement(t *testing.T) {
 
 			if tc.expectFilter {
 				// Filter could be shown as FILTER operator or might be pushed to SCAN
-				hasFilter := ContainsOperator(explain, "FILTER") || ContainsOperator(explain, "SCAN")
-				require.True(t, hasFilter, "Filter query should show filter in plan, got: %s", explain)
+				hasFilter := ContainsOperator(explain, "FILTER") ||
+					ContainsOperator(explain, "SCAN")
+				require.True(
+					t,
+					hasFilter,
+					"Filter query should show filter in plan, got: %s",
+					explain,
+				)
 			}
 		})
 	}
@@ -333,9 +350,9 @@ func TestExplainComparisonSubqueryDecorelation(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name string
+		name  string
 		query string
-		desc string
+		desc  string
 	}{
 		{
 			name: "exists_decorrelation",
@@ -344,9 +361,9 @@ func TestExplainComparisonSubqueryDecorelation(t *testing.T) {
 			desc: "EXISTS should be decorrelated to JOIN",
 		},
 		{
-			name: "in_decorrelation",
+			name:  "in_decorrelation",
 			query: `SELECT COUNT(*) FROM orders WHERE customer_id IN (SELECT customer_id FROM customers WHERE country = 'US')`,
-			desc: "IN subquery structure in plan",
+			desc:  "IN subquery structure in plan",
 		},
 	}
 
@@ -388,7 +405,7 @@ func TestExplainComparisonAggregateStructure(t *testing.T) {
 			desc:  "GROUP BY aggregate",
 		},
 		{
-			name:  "aggregate_with_join",
+			name: "aggregate_with_join",
 			query: `SELECT c.country, COUNT(*) FROM customers c
 					JOIN orders o ON c.customer_id = o.customer_id
 					GROUP BY c.country`,
@@ -402,7 +419,12 @@ func TestExplainComparisonAggregateStructure(t *testing.T) {
 			skipIfBackendUnavailable(t, err)
 
 			require.NotEmpty(t, explain, "EXPLAIN output should not be empty")
-			require.True(t, ContainsOperator(explain, "AGGREGATE"), "Aggregate query should contain AGGREGATE operator, got: %s", explain)
+			require.True(
+				t,
+				ContainsOperator(explain, "AGGREGATE"),
+				"Aggregate query should contain AGGREGATE operator, got: %s",
+				explain,
+			)
 		})
 	}
 }

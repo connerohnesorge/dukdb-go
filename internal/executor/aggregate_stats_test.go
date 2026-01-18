@@ -256,7 +256,11 @@ func TestComputeQuantileArray(t *testing.T) {
 				return
 			}
 			if len(resultSlice) != len(tt.expected) {
-				t.Errorf("computeQuantileArray() returned %d values, want %d", len(resultSlice), len(tt.expected))
+				t.Errorf(
+					"computeQuantileArray() returned %d values, want %d",
+					len(resultSlice),
+					len(tt.expected),
+				)
 				return
 			}
 			for i, exp := range tt.expected {
@@ -782,7 +786,12 @@ func TestCollectNonNullFloats(t *testing.T) {
 			}
 			for i := range result {
 				if !almostEqual(result[i], tt.expected[i]) {
-					t.Errorf("collectNonNullFloats()[%d] = %v, want %v", i, result[i], tt.expected[i])
+					t.Errorf(
+						"collectNonNullFloats()[%d] = %v, want %v",
+						i,
+						result[i],
+						tt.expected[i],
+					)
 				}
 			}
 		})
@@ -933,7 +942,7 @@ func TestVarianceStateUpdate(t *testing.T) {
 			values:          []float64{1.0, 3.0},
 			expectedCount:   2,
 			expectedMean:    2.0,
-			expectedVarPop:  1.0,  // ((1-2)^2 + (3-2)^2) / 2 = 2/2 = 1
+			expectedVarPop:  1.0, // ((1-2)^2 + (3-2)^2) / 2 = 2/2 = 1
 			expectedVarSamp: 2.0, // ((1-2)^2 + (3-2)^2) / 1 = 2/1 = 2
 		},
 		{
@@ -988,33 +997,33 @@ func TestVarianceStateUpdate(t *testing.T) {
 // TestVarianceStateStdDev tests the standard deviation methods.
 func TestVarianceStateStdDev(t *testing.T) {
 	tests := []struct {
-		name              string
-		values            []float64
-		expectedStdDevPop float64
+		name               string
+		values             []float64
+		expectedStdDevPop  float64
 		expectedStdDevSamp float64
 	}{
 		{
-			name:              "no values",
-			values:            []float64{},
-			expectedStdDevPop: 0.0,
+			name:               "no values",
+			values:             []float64{},
+			expectedStdDevPop:  0.0,
 			expectedStdDevSamp: 0.0,
 		},
 		{
-			name:              "single value",
-			values:            []float64{5.0},
-			expectedStdDevPop: 0.0,
+			name:               "single value",
+			values:             []float64{5.0},
+			expectedStdDevPop:  0.0,
 			expectedStdDevSamp: 0.0, // N<2, returns 0
 		},
 		{
-			name:              "two values",
-			values:            []float64{1.0, 3.0},
-			expectedStdDevPop: 1.0,            // sqrt(1)
+			name:               "two values",
+			values:             []float64{1.0, 3.0},
+			expectedStdDevPop:  1.0,            // sqrt(1)
 			expectedStdDevSamp: math.Sqrt(2.0), // sqrt(2)
 		},
 		{
-			name:              "known dataset - stddev pop = 2",
-			values:            []float64{2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0},
-			expectedStdDevPop: 2.0,
+			name:               "known dataset - stddev pop = 2",
+			values:             []float64{2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0},
+			expectedStdDevPop:  2.0,
 			expectedStdDevSamp: math.Sqrt(32.0 / 7.0),
 		},
 	}
@@ -1081,7 +1090,11 @@ func TestVarianceStateNumericalStability(t *testing.T) {
 	// More precisely: sum((i - 49.5)^2) / 100 for i in 0..99
 	expectedVarPop := 833.25
 	if !almostEqual(vs.VariancePop(), expectedVarPop) {
-		t.Errorf("Numerical stability test: VariancePop() = %v, want %v", vs.VariancePop(), expectedVarPop)
+		t.Errorf(
+			"Numerical stability test: VariancePop() = %v, want %v",
+			vs.VariancePop(),
+			expectedVarPop,
+		)
 	}
 }
 
@@ -1113,11 +1126,21 @@ func TestVarianceStateCompareWithBatchComputation(t *testing.T) {
 		batchVarSamp, _ := computeVarSamp(anyValues)
 
 		if batchVarPop != nil && !almostEqual(vs.VariancePop(), batchVarPop.(float64)) {
-			t.Errorf("Test case %d: VariancePop() = %v, batch computation = %v", i, vs.VariancePop(), batchVarPop)
+			t.Errorf(
+				"Test case %d: VariancePop() = %v, batch computation = %v",
+				i,
+				vs.VariancePop(),
+				batchVarPop,
+			)
 		}
 
 		if batchVarSamp != nil && !almostEqual(vs.VarianceSamp(), batchVarSamp.(float64)) {
-			t.Errorf("Test case %d: VarianceSamp() = %v, batch computation = %v", i, vs.VarianceSamp(), batchVarSamp)
+			t.Errorf(
+				"Test case %d: VarianceSamp() = %v, batch computation = %v",
+				i,
+				vs.VarianceSamp(),
+				batchVarSamp,
+			)
 		}
 	}
 }

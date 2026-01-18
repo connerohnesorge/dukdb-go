@@ -168,8 +168,20 @@ func TestJoinOrderOptimizer_GreedyFallback(t *testing.T) {
 	}
 
 	predicates := []JoinPredicate{
-		{LeftTable: "t1", LeftColumn: "id", RightTable: "t2", RightColumn: "t1_id", IsEquality: true},
-		{LeftTable: "t2", LeftColumn: "id", RightTable: "t3", RightColumn: "t2_id", IsEquality: true},
+		{
+			LeftTable:   "t1",
+			LeftColumn:  "id",
+			RightTable:  "t2",
+			RightColumn: "t1_id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "t2",
+			LeftColumn:  "id",
+			RightTable:  "t3",
+			RightColumn: "t2_id",
+			IsEquality:  true,
+		},
 	}
 
 	plan, err := optimizer.OptimizeJoinOrder(tables, predicates)
@@ -513,10 +525,34 @@ func TestJoinOrderOptimizer_LargeQuery(t *testing.T) {
 	}
 
 	predicates := []JoinPredicate{
-		{LeftTable: "t1", LeftColumn: "id", RightTable: "t2", RightColumn: "t1_id", IsEquality: true},
-		{LeftTable: "t2", LeftColumn: "id", RightTable: "t3", RightColumn: "t2_id", IsEquality: true},
-		{LeftTable: "t3", LeftColumn: "id", RightTable: "t4", RightColumn: "t3_id", IsEquality: true},
-		{LeftTable: "t4", LeftColumn: "id", RightTable: "t5", RightColumn: "t4_id", IsEquality: true},
+		{
+			LeftTable:   "t1",
+			LeftColumn:  "id",
+			RightTable:  "t2",
+			RightColumn: "t1_id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "t2",
+			LeftColumn:  "id",
+			RightTable:  "t3",
+			RightColumn: "t2_id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "t3",
+			LeftColumn:  "id",
+			RightTable:  "t4",
+			RightColumn: "t3_id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "t4",
+			LeftColumn:  "id",
+			RightTable:  "t5",
+			RightColumn: "t4_id",
+			IsEquality:  true,
+		},
 	}
 
 	plan, err := optimizer.OptimizeJoinOrder(tables, predicates)
@@ -543,9 +579,27 @@ func TestJoinOrderOptimizer_StarSchema(t *testing.T) {
 	}
 
 	predicates := []JoinPredicate{
-		{LeftTable: "fact_sales", LeftColumn: "product_id", RightTable: "dim_product", RightColumn: "id", IsEquality: true},
-		{LeftTable: "fact_sales", LeftColumn: "customer_id", RightTable: "dim_customer", RightColumn: "id", IsEquality: true},
-		{LeftTable: "fact_sales", LeftColumn: "time_id", RightTable: "dim_time", RightColumn: "id", IsEquality: true},
+		{
+			LeftTable:   "fact_sales",
+			LeftColumn:  "product_id",
+			RightTable:  "dim_product",
+			RightColumn: "id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "fact_sales",
+			LeftColumn:  "customer_id",
+			RightTable:  "dim_customer",
+			RightColumn: "id",
+			IsEquality:  true,
+		},
+		{
+			LeftTable:   "fact_sales",
+			LeftColumn:  "time_id",
+			RightTable:  "dim_time",
+			RightColumn: "id",
+			IsEquality:  true,
+		},
 	}
 
 	plan, err := optimizer.OptimizeJoinOrder(tables, predicates)

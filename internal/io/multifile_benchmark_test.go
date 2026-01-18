@@ -246,7 +246,12 @@ func BenchmarkAlignChunkWithMissing(b *testing.B) {
 
 	// Target has 4 columns, 2 missing from source
 	mapping := []int{0, -1, 1, -1}
-	targetTypes := []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE, dukdb.TYPE_VARCHAR, dukdb.TYPE_BIGINT}
+	targetTypes := []dukdb.Type{
+		dukdb.TYPE_INTEGER,
+		dukdb.TYPE_DOUBLE,
+		dukdb.TYPE_VARCHAR,
+		dukdb.TYPE_BIGINT,
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()

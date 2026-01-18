@@ -25,14 +25,16 @@ func TestSTGeomFromText(t *testing.T) {
 
 	t.Run("parse LINESTRING", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2)'))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2)'))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "LINESTRING", result)
 	})
 
 	t.Run("parse POLYGON", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "POLYGON", result)
 	})
@@ -60,14 +62,16 @@ func TestSTAsText(t *testing.T) {
 
 	t.Run("LINESTRING to WKT", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_AsText(ST_GeomFromText('LINESTRING(0 0, 1 1)'))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_AsText(ST_GeomFromText('LINESTRING(0 0, 1 1)'))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "LINESTRING(0 0, 1 1)", result)
 	})
 
 	t.Run("roundtrip preserves data", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_AsText(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_AsText(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", result)
 	})
@@ -185,7 +189,8 @@ func TestSTPoint(t *testing.T) {
 
 	t.Run("negative coordinates", func(t *testing.T) {
 		var x, y float64
-		err := db.QueryRow(`SELECT ST_X(ST_Point(-1.5, -2.5)), ST_Y(ST_Point(-1.5, -2.5))`).Scan(&x, &y)
+		err := db.QueryRow(`SELECT ST_X(ST_Point(-1.5, -2.5)), ST_Y(ST_Point(-1.5, -2.5))`).
+			Scan(&x, &y)
 		require.NoError(t, err)
 		assert.InDelta(t, -1.5, x, 0.0001)
 		assert.InDelta(t, -2.5, y, 0.0001)
@@ -200,14 +205,16 @@ func TestSTMakeLine(t *testing.T) {
 
 	t.Run("create line from two points", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_AsText(ST_MakeLine(ST_Point(0, 0), ST_Point(1, 1)))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_AsText(ST_MakeLine(ST_Point(0, 0), ST_Point(1, 1)))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "LINESTRING(0 0, 1 1)", result)
 	})
 
 	t.Run("verify geometry type", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_GeometryType(ST_MakeLine(ST_Point(0, 0), ST_Point(1, 1)))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_GeometryType(ST_MakeLine(ST_Point(0, 0), ST_Point(1, 1)))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "LINESTRING", result)
 	})
@@ -235,7 +242,8 @@ func TestSTSetSRID(t *testing.T) {
 
 	t.Run("set SRID to 4326", func(t *testing.T) {
 		var result int64
-		err := db.QueryRow(`SELECT ST_SRID(ST_SetSRID(ST_GeomFromText('POINT(0 0)'), 4326))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_SRID(ST_SetSRID(ST_GeomFromText('POINT(0 0)'), 4326))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, int64(4326), result)
 	})
@@ -274,7 +282,8 @@ func TestGeometryFunctionsIntegration(t *testing.T) {
 
 	t.Run("ST_GeometryType from LINESTRING", func(t *testing.T) {
 		var result string
-		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('LINESTRING(0 0, 1 1)'))`).Scan(&result)
+		err := db.QueryRow(`SELECT ST_GeometryType(ST_GeomFromText('LINESTRING(0 0, 1 1)'))`).
+			Scan(&result)
 		require.NoError(t, err)
 		assert.Equal(t, "LINESTRING", result)
 	})

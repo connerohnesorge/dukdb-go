@@ -484,11 +484,11 @@ func TestInsertChunk_NullValues_ValidityMasks(t *testing.T) {
 
 	// Create chunk with NULL values
 	chunk := NewDataChunk(columnTypes)
-	chunk.AppendRow([]any{int32(1), "test", float64(1.1)})     // No NULLs
-	chunk.AppendRow([]any{nil, "test2", float64(2.2)})        // NULL in col 0
-	chunk.AppendRow([]any{int32(3), nil, float64(3.3)})       // NULL in col 1
-	chunk.AppendRow([]any{int32(4), "test4", nil})            // NULL in col 2
-	chunk.AppendRow([]any{nil, nil, nil})                      // All NULLs
+	chunk.AppendRow([]any{int32(1), "test", float64(1.1)}) // No NULLs
+	chunk.AppendRow([]any{nil, "test2", float64(2.2)})     // NULL in col 0
+	chunk.AppendRow([]any{int32(3), nil, float64(3.3)})    // NULL in col 1
+	chunk.AppendRow([]any{int32(4), "test4", nil})         // NULL in col 2
+	chunk.AppendRow([]any{nil, nil, nil})                  // All NULLs
 
 	// Insert chunk
 	rowsInserted, err := table.InsertChunk(chunk)

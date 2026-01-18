@@ -107,8 +107,18 @@ func TestDecompressConstant_LargeCount(t *testing.T) {
 	// Verify first, middle, and last values
 	expected := uint32(0xCCDDEEFF)
 	assert.Equal(t, expected, binary.LittleEndian.Uint32(result[0:4]), "first value should match")
-	assert.Equal(t, expected, binary.LittleEndian.Uint32(result[20000:20004]), "middle value should match")
-	assert.Equal(t, expected, binary.LittleEndian.Uint32(result[39996:40000]), "last value should match")
+	assert.Equal(
+		t,
+		expected,
+		binary.LittleEndian.Uint32(result[20000:20004]),
+		"middle value should match",
+	)
+	assert.Equal(
+		t,
+		expected,
+		binary.LittleEndian.Uint32(result[39996:40000]),
+		"last value should match",
+	)
 }
 
 func TestDecompressConstant_DataTooShort(t *testing.T) {
@@ -1173,7 +1183,12 @@ func TestDecompressDictionary_FixedSize_Int64_Simple(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 32, len(result)) // 4 * 8 bytes
 
-	expected := []uint64{0xFEDCBA9876543210, 0x123456789ABCDEF0, 0xFEDCBA9876543210, 0xFEDCBA9876543210}
+	expected := []uint64{
+		0xFEDCBA9876543210,
+		0x123456789ABCDEF0,
+		0xFEDCBA9876543210,
+		0xFEDCBA9876543210,
+	}
 	for i, exp := range expected {
 		offset := i * 8
 		v := binary.LittleEndian.Uint64(result[offset : offset+8])
@@ -1342,9 +1357,11 @@ func TestDecompressDictionary_TruncatedDictValue(t *testing.T) {
 func TestDecompressDictionary_TruncatedIndexCount(t *testing.T) {
 	// Dict size = 1, one 4-byte value, but index count is truncated
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, uint32(1)) // dictSize = 1
+	binary.Write(&buf, binary.LittleEndian, uint32(1))  // dictSize = 1
 	binary.Write(&buf, binary.LittleEndian, uint32(42)) // value
-	buf.Write([]byte{0x01, 0x00, 0x00, 0x00})          // Only 4 bytes when we need 8 for indexCount
+	buf.Write(
+		[]byte{0x01, 0x00, 0x00, 0x00},
+	) // Only 4 bytes when we need 8 for indexCount
 
 	result, err := DecompressDictionary(buf.Bytes(), 4, 1)
 
@@ -1815,7 +1832,14 @@ func TestDecompressBitPacking_BitWidth32_FourBytes(t *testing.T) {
 
 func TestDecompressBitPacking_BitWidth64_FullUint64(t *testing.T) {
 	// Bit width 64: full uint64 values
-	values := []uint64{0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000, 0xFFFFFFFFFFFFFFFF, 0x123456789ABCDEF0}
+	values := []uint64{
+		0,
+		1,
+		0x7FFFFFFFFFFFFFFF,
+		0x8000000000000000,
+		0xFFFFFFFFFFFFFFFF,
+		0x123456789ABCDEF0,
+	}
 	data := buildBitPackedData(64, values)
 
 	result, err := DecompressBitPackingToUint64(data)
@@ -1907,7 +1931,7 @@ func TestDecompressBitPacking_RowGroupSize(t *testing.T) {
 
 	// Verify first, middle, and last values
 	assert.Equal(t, uint64(0), result[0])
-	assert.Equal(t, uint64(0), result[61440]) // 61440 % 256 = 0
+	assert.Equal(t, uint64(0), result[61440])    // 61440 % 256 = 0
 	assert.Equal(t, uint64(255), result[122879]) // 122879 % 256 = 255
 }
 
@@ -1955,7 +1979,7 @@ func TestDecompressBitPacking_DataTooShort_PackedData(t *testing.T) {
 	// Header says 10 values at 8 bits each = 10 bytes needed
 	// But only provide 5 bytes of packed data
 	header := make([]byte, 9)
-	header[0] = 8 // bitWidth
+	header[0] = 8                                  // bitWidth
 	binary.LittleEndian.PutUint64(header[1:9], 10) // count
 
 	data := append(header, []byte{1, 2, 3, 4, 5}...) // Only 5 bytes
@@ -2644,7 +2668,7 @@ func TestEncodeZigZag(t *testing.T) {
 		{3, 6},
 		{50, 100},
 		{-51, 101},
-		{0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFE},  // Max positive
+		{0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFE}, // Max positive
 		{-0x8000000000000000, 0xFFFFFFFFFFFFFFFF}, // Min negative
 	}
 

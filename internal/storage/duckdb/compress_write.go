@@ -215,7 +215,11 @@ func Compress(compression CompressionType, data []byte, valueSize int) ([]byte, 
 //   - []byte: The compressed data
 //   - CompressionType: The actual compression type used
 //   - error: nil on success (may use different compression than requested)
-func TryCompress(compression CompressionType, data []byte, valueSize int) ([]byte, CompressionType, error) {
+func TryCompress(
+	compression CompressionType,
+	data []byte,
+	valueSize int,
+) ([]byte, CompressionType, error) {
 	if len(data) == 0 {
 		return []byte{}, CompressionEmpty, nil
 	}
@@ -454,7 +458,9 @@ func NewRLECompressor() Compressor {
 }
 
 // ErrDictionaryNotBeneficial is returned when DICTIONARY compression does not reduce size.
-var ErrDictionaryNotBeneficial = errors.New("DICTIONARY compression not beneficial: too many unique values")
+var ErrDictionaryNotBeneficial = errors.New(
+	"DICTIONARY compression not beneficial: too many unique values",
+)
 
 // CompressDictionary compresses data using dictionary encoding.
 // Unique values are stored in a dictionary, and each value is
@@ -719,7 +725,9 @@ func NewDictionaryCompressor() Compressor {
 }
 
 // ErrBitPackingNotBeneficial is returned when BITPACKING compression does not reduce size.
-var ErrBitPackingNotBeneficial = errors.New("BITPACKING compression not beneficial: packed size >= original size")
+var ErrBitPackingNotBeneficial = errors.New(
+	"BITPACKING compression not beneficial: packed size >= original size",
+)
 
 // CompressBitPacking compresses integer data using bit packing.
 // Values are stored using the minimum number of bits needed to
@@ -972,7 +980,9 @@ func NewBitPackingCompressor() Compressor {
 }
 
 // ErrPFORDeltaNotBeneficial is returned when PFOR_DELTA compression does not reduce size.
-var ErrPFORDeltaNotBeneficial = errors.New("PFOR_DELTA compression not beneficial: packed size >= original size")
+var ErrPFORDeltaNotBeneficial = errors.New(
+	"PFOR_DELTA compression not beneficial: packed size >= original size",
+)
 
 // CompressPFORDelta compresses integer data using Packed Frame of Reference
 // with Delta encoding. Values are stored as a reference value plus

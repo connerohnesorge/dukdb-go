@@ -124,7 +124,8 @@ func TestSTPerimeter(t *testing.T) {
 
 	// ST_Perimeter should work like ST_Length for polygons
 	var result float64
-	err = db.QueryRow("SELECT ST_Perimeter(ST_GeomFromText('POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))'))").Scan(&result)
+	err = db.QueryRow("SELECT ST_Perimeter(ST_GeomFromText('POLYGON((0 0, 0 3, 4 3, 4 0, 0 0))'))").
+		Scan(&result)
 	require.NoError(t, err)
 	assert.InDelta(t, 14.0, result, 0.0001) // 3 + 4 + 3 + 4 = 14
 }
@@ -185,7 +186,8 @@ func TestSTCentroidAsText(t *testing.T) {
 	defer db.Close()
 
 	var wkt string
-	err = db.QueryRow("SELECT ST_AsText(ST_Centroid(ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')))").Scan(&wkt)
+	err = db.QueryRow("SELECT ST_AsText(ST_Centroid(ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')))").
+		Scan(&wkt)
 	require.NoError(t, err)
 	assert.Equal(t, "POINT(1 1)", wkt)
 }
@@ -232,7 +234,9 @@ func TestGeometricAnalysisWithTable(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query areas
-	rows, err := db.Query(`SELECT name, ST_Area(ST_GeomFromText(geom)) AS area FROM shapes ORDER BY id`)
+	rows, err := db.Query(
+		`SELECT name, ST_Area(ST_GeomFromText(geom)) AS area FROM shapes ORDER BY id`,
+	)
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -268,7 +272,8 @@ func TestAreaPolygonWithHole(t *testing.T) {
 	// 10x10 square with 2x2 hole
 	// Exterior: 100, Hole: 4, Net: 96
 	var area float64
-	err = db.QueryRow("SELECT ST_Area(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0), (4 4, 4 6, 6 6, 6 4, 4 4))'))").Scan(&area)
+	err = db.QueryRow("SELECT ST_Area(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0), (4 4, 4 6, 6 6, 6 4, 4 4))'))").
+		Scan(&area)
 	require.NoError(t, err)
 	assert.InDelta(t, 96.0, area, 0.0001)
 }
@@ -325,7 +330,8 @@ func TestDeliverableExamples(t *testing.T) {
 
 	// Test: SELECT ST_Area(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))')); -- returns 1.0
 	var area float64
-	err = db.QueryRow("SELECT ST_Area(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))").Scan(&area)
+	err = db.QueryRow("SELECT ST_Area(ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))").
+		Scan(&area)
 	require.NoError(t, err)
 	assert.InDelta(t, 1.0, area, 0.0001)
 
@@ -337,7 +343,8 @@ func TestDeliverableExamples(t *testing.T) {
 
 	// Test: SELECT ST_AsText(ST_Centroid(ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'))); -- returns 'POINT(1 1)'
 	var wkt string
-	err = db.QueryRow("SELECT ST_AsText(ST_Centroid(ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')))").Scan(&wkt)
+	err = db.QueryRow("SELECT ST_AsText(ST_Centroid(ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')))").
+		Scan(&wkt)
 	require.NoError(t, err)
 	assert.Equal(t, "POINT(1 1)", wkt)
 }

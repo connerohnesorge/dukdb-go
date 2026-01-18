@@ -64,13 +64,17 @@ var (
 // These errors are returned when validating file or database headers.
 var (
 	// ErrInvalidMagicBytes indicates the file doesn't have the "DUCK" magic bytes.
-	ErrInvalidMagicBytes = errors.New("not a valid DuckDB file: expected 'DUCK' magic bytes at offset 8")
+	ErrInvalidMagicBytes = errors.New(
+		"not a valid DuckDB file: expected 'DUCK' magic bytes at offset 8",
+	)
 
 	// ErrVersionTooOld indicates the file version is older than supported.
 	ErrVersionTooOld = errors.New("DuckDB file version too old: consider upgrading the file")
 
 	// ErrVersionTooNew indicates the file version is newer than supported.
-	ErrVersionTooNew = errors.New("DuckDB file version too new: this implementation supports up to version 67 (DuckDB v1.4.3)")
+	ErrVersionTooNew = errors.New(
+		"DuckDB file version too new: this implementation supports up to version 67 (DuckDB v1.4.3)",
+	)
 
 	// ErrInvalidBlockSize indicates an invalid block allocation size in the header.
 	ErrInvalidBlockSize = errors.New("invalid block allocation size: must be positive")
@@ -79,7 +83,9 @@ var (
 	ErrInvalidVectorSize = errors.New("invalid vector size: must be positive")
 
 	// ErrHeaderChecksumFailed indicates a header checksum verification failed.
-	ErrHeaderChecksumFailed = errors.New("header checksum verification failed: data may be corrupted")
+	ErrHeaderChecksumFailed = errors.New(
+		"header checksum verification failed: data may be corrupted",
+	)
 
 	// ErrHeader1Corrupted indicates the first database header is corrupted.
 	ErrHeader1Corrupted = errors.New("database header 1 is corrupted")

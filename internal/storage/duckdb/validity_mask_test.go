@@ -129,7 +129,12 @@ func TestValidityMaskBasic(t *testing.T) {
 				// For UNCOMPRESSED validity, the data is a bitmap
 				if validityDP.Compression == CompressionUncompressed {
 					// Verify bitmap encoding
-					verifyValidityBitmap(t, validityData.Data[validityDP.Block.Offset:], validityDP.TupleCount, colIdx)
+					verifyValidityBitmap(
+						t,
+						validityData.Data[validityDP.Block.Offset:],
+						validityDP.TupleCount,
+						colIdx,
+					)
 				}
 			} else if dp.SegmentState.HasValidityMask && len(dp.SegmentState.StateData) > 0 {
 				// Validity is inlined in StateData
@@ -194,7 +199,11 @@ func TestValidityMaskAllNull(t *testing.T) {
 	// When all values are NULL, DuckDB often uses CONSTANT compression
 	// with a special validity encoding
 	if dp.ValidityPointer != nil {
-		t.Logf("Validity compression: %d, block: %d", dp.ValidityPointer.Compression, dp.ValidityPointer.Block.BlockID)
+		t.Logf(
+			"Validity compression: %d, block: %d",
+			dp.ValidityPointer.Compression,
+			dp.ValidityPointer.Block.BlockID,
+		)
 
 		// Special block ID 127 means constant NULL validity
 		if dp.ValidityPointer.Block.BlockID == 127 {
@@ -336,8 +345,12 @@ func TestValidityMaskBitOrdering(t *testing.T) {
 	// Expected pattern: 0b01010101 = 0x55 (LSB first)
 	// bit 0 = 1 (valid), bit 1 = 0 (NULL), bit 2 = 1 (valid), etc.
 	t.Logf("First validity byte: 0x%02X (binary: %08b)", firstByte, firstByte)
-	assert.Equal(t, uint8(0x55), firstByte,
-		"validity mask should be 0x55 (0b01010101) for alternating valid/NULL pattern with LSB first")
+	assert.Equal(
+		t,
+		uint8(0x55),
+		firstByte,
+		"validity mask should be 0x55 (0b01010101) for alternating valid/NULL pattern with LSB first",
+	)
 }
 
 // TestValidityMaskMultipleWords tests validity mask with more than 64 values.
@@ -408,7 +421,11 @@ func TestValidityMaskMultipleWords(t *testing.T) {
 	hasValidityMask := dp.ValidityPointer != nil || dp.SegmentState.HasValidityMask
 	if !hasValidityMask {
 		t.Logf("No explicit validity mask found (NULLs encoded via compression)")
-		t.Logf("Statistics: HasNull=%v, NullCount=%d", dp.Statistics.HasNull, dp.Statistics.NullCount)
+		t.Logf(
+			"Statistics: HasNull=%v, NullCount=%d",
+			dp.Statistics.HasNull,
+			dp.Statistics.NullCount,
+		)
 		t.Skip("DuckDB optimized storage - validity mask not separately stored")
 	}
 
@@ -479,7 +496,10 @@ func TestValidityMaskMultipleColumns(t *testing.T) {
 
 	for colIdx := 0; colIdx < 3; colIdx++ {
 		t.Run(fmt.Sprintf("column_%s", columnNames[colIdx]), func(t *testing.T) {
-			dp, err := ReadColumnDataPointer(storage.blockManager, rowGroups[0].DataPointers[colIdx])
+			dp, err := ReadColumnDataPointer(
+				storage.blockManager,
+				rowGroups[0].DataPointers[colIdx],
+			)
 			require.NoError(t, err)
 
 			// Verify statistics
@@ -495,7 +515,10 @@ func TestValidityMaskMultipleColumns(t *testing.T) {
 			// Note: DuckDB may use compression that encodes NULLs without explicit validity masks
 			hasValidityMask := dp.ValidityPointer != nil || dp.SegmentState.HasValidityMask
 			if !hasValidityMask {
-				t.Logf("Column %s: No explicit validity mask (NULLs encoded via compression)", columnNames[colIdx])
+				t.Logf(
+					"Column %s: No explicit validity mask (NULLs encoded via compression)",
+					columnNames[colIdx],
+				)
 			} else {
 				t.Logf("Column %s: Has explicit validity mask", columnNames[colIdx])
 			}

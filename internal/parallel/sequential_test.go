@@ -159,8 +159,14 @@ func TestSequentialHashJoin(t *testing.T) {
 		InnerJoin,
 		4, // Still use partitions for correctness
 	)
-	join.SetBuildSchema([]string{"id", "value"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT})
-	join.SetProbeSchema([]string{"id", "name"}, []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR})
+	join.SetBuildSchema(
+		[]string{"id", "value"},
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT},
+	)
+	join.SetProbeSchema(
+		[]string{"id", "name"},
+		[]dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_VARCHAR},
+	)
 
 	ctx := context.Background()
 	resultChan, err := join.Execute(pool, ctx)
