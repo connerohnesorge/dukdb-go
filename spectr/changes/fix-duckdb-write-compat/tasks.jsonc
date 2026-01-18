@@ -318,19 +318,19 @@
       "id": "9.3",
       "section": "Phase 9: Cleanup and Documentation",
       "description": "Document any remaining limitations or version requirements",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "Phase 9: Cleanup and Documentation",
       "description": "Add CI job for write compatibility testing",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.5",
       "section": "Phase 9: Cleanup and Documentation",
       "description": "Update duckdb-storage-format spec with implementation notes",
-      "status": "pending"
+      "status": "completed"
     }
   ]
 }

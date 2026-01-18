@@ -16,11 +16,18 @@ import (
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
+// ConnectionInterface is the interface for accessing connection-level settings.
+type ConnectionInterface interface {
+	GetSetting(key string) string
+	SetSetting(key string, value string)
+}
+
 // ExecutionContext holds context for query execution.
 type ExecutionContext struct {
 	Context          context.Context
 	Args             []driver.NamedValue
-	CorrelatedValues map[string]any // Values from outer scope for LATERAL/correlated subqueries
+	CorrelatedValues map[string]any         // Values from outer scope for LATERAL/correlated subqueries
+	conn             ConnectionInterface    // Connection for accessing session-level settings
 }
 
 // ExecutionResult holds the result of query execution.
@@ -176,6 +183,9 @@ type Executor struct {
 	txnCtx           storage.TransactionContext // Transaction context for visibility checks (optional, may be nil)
 	conflictDetector *storage.ConflictDetector  // Conflict detector for SERIALIZABLE (optional, may be nil)
 	lockManager      *storage.LockManager       // Lock manager for SERIALIZABLE write locks (optional, may be nil)
+
+	// Connection for accessing session-level settings
+	conn ConnectionInterface // Connection interface for settings (optional, may be nil)
 }
 
 // NewExecutor creates a new Executor.
@@ -246,6 +256,12 @@ func (e *Executor) SetLockManager(lm *storage.LockManager) {
 	e.lockManager = lm
 }
 
+// SetConnection sets the connection for accessing session-level settings.
+// If set to nil, settings will not be accessible.
+func (e *Executor) SetConnection(conn ConnectionInterface) {
+	e.conn = conn
+}
+
 // recordUndo records an undo operation if we're in a transaction.
 func (e *Executor) recordUndo(op UndoOperation) {
 	if e.undoRecorder != nil && e.inTxn {
@@ -262,6 +278,7 @@ func (e *Executor) Execute(
 	execCtx := &ExecutionContext{
 		Context: ctx,
 		Args:    args,
+		conn:    e.conn,
 	}
 	return e.executeWithContext(execCtx, plan)
 }

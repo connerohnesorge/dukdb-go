@@ -239,6 +239,12 @@ type Config struct {
 	// This is useful for preventing long-running list operations on large buckets.
 	// Default is 60 seconds. Set to 0 to use the default.
 	FileGlobTimeout int
+
+	// CheckpointThreshold specifies the threshold for automatic checkpoint triggering.
+	// When the WAL size exceeds this threshold, an automatic checkpoint is triggered.
+	// Examples: "256MB", "1GB", "512KB"
+	// Default is "256MB".
+	CheckpointThreshold string
 }
 
 // Type enum is defined in type_enum.go

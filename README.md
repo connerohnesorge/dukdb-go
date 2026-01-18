@@ -557,6 +557,30 @@ DROP SECRET my_s3;
 
 See [docs/secrets.md](docs/secrets.md) for detailed secrets management documentation.
 
+## Database Configuration
+
+dukdb-go provides PRAGMA commands for configuring database behavior and accessing system information. Key configuration options include:
+
+- **checkpoint_threshold**: Control when automatic checkpoints are triggered based on WAL file size
+- **database_size**: View database and WAL file sizes
+- **table_info**: Query table schema and column information
+- **settings**: List and modify database settings
+
+### Example: Configuring Checkpoint Behavior
+
+```sql
+-- Set checkpoint threshold for high-performance bulk loading
+PRAGMA checkpoint_threshold = '2GB';
+
+-- Perform bulk operations
+-- INSERT statements...
+
+-- Restore default threshold
+PRAGMA checkpoint_threshold = '256MB';
+```
+
+See [docs/pragmas.md](docs/pragmas.md) for comprehensive PRAGMA documentation and configuration recommendations.
+
 ## Running Tests
 
 ```bash

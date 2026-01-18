@@ -93,6 +93,9 @@ type EngineConn struct {
 	// Glob settings - initialized from config, can be overridden via SET
 	maxFilesPerGlob int // Max files a glob pattern can match (default: 10000)
 	fileGlobTimeout int // Timeout for cloud storage glob operations in seconds (default: 60)
+
+	// Settings map for storing session-level settings like checkpoint_threshold
+	settings map[string]string
 }
 
 // undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
@@ -176,6 +179,8 @@ func (c *EngineConn) Execute(
 		c.engine.catalog,
 		c.engine.storage,
 	)
+	// Set connection for accessing session-level settings
+	exec.SetConnection(c)
 	// Set WAL writer for persistent databases
 	if c.engine.WAL() != nil {
 		exec.SetWAL(c.engine.WAL())
@@ -630,6 +635,28 @@ func (c *EngineConn) FileGlobTimeout() int {
 	return c.fileGlobTimeout
 }
 
+// SetSetting stores a session-level setting value.
+func (c *EngineConn) SetSetting(key string, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.settings == nil {
+		c.settings = make(map[string]string)
+	}
+	c.settings[key] = value
+}
+
+// GetSetting retrieves a session-level setting value, returning empty string if not set.
+func (c *EngineConn) GetSetting(key string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.settings == nil {
+		return ""
+	}
+	return c.settings[key]
+}
+
 // Query executes a query that returns rows.
 func (c *EngineConn) Query(
 	ctx context.Context,
@@ -700,6 +727,8 @@ func (c *EngineConn) Query(
 		c.engine.catalog,
 		c.engine.storage,
 	)
+	// Set connection for accessing session-level settings
+	exec.SetConnection(c)
 	// Set WAL writer for persistent databases
 	if c.engine.WAL() != nil {
 		exec.SetWAL(c.engine.WAL())

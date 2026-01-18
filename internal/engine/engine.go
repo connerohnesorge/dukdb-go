@@ -30,6 +30,7 @@ type Engine struct {
 	txnMgr     *TransactionManager
 	optimizer  *optimizer.CostBasedOptimizer // Cost-based query optimizer
 	walWriter  *wal.Writer                   // WAL writer for persistent databases
+	checkpointMgr *wal.CheckpointManager      // Checkpoint manager for WAL-based checkpointing
 	config     *dukdb.Config
 	path       string
 	persistent bool // true if not :memory:
@@ -166,6 +167,31 @@ func (e *Engine) Open(
 			)
 		}
 		e.walWriter = walWriter
+
+		// Initialize CheckpointManager with configured threshold
+		// Task 4.1: Read checkpoint_threshold from settings during database open
+		thresholdStr := "256MB" // Task 4.3: Default value
+		if e.config != nil && e.config.CheckpointThreshold != "" {
+			thresholdStr = e.config.CheckpointThreshold
+		}
+
+		// Task 4.1: Parse the threshold value
+		thresholdBytes, err := dukdb.ParseThreshold(thresholdStr)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to parse checkpoint_threshold: %w",
+				err,
+			)
+		}
+
+		// Task 4.2: Pass threshold to CheckpointManager constructor
+		e.checkpointMgr = wal.NewCheckpointManager(
+			e.walWriter,
+			e.catalog,
+			e.storage,
+			quartz.NewReal(),
+			uint64(thresholdBytes),
+		)
 	}
 
 	// Initialize glob settings from config

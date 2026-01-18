@@ -2,6 +2,7 @@ package wal
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -35,6 +36,15 @@ const (
 // DefaultCheckpointThreshold is the default WAL size threshold for auto-checkpoint (1GB).
 const DefaultCheckpointThreshold uint64 = 1024 * 1024 * 1024
 
+// MinCheckpointThreshold is the minimum allowed threshold (1KB).
+const MinCheckpointThreshold uint64 = 1024
+
+// RecommendedMinimumThreshold is the recommended minimum threshold (1MB).
+const RecommendedMinimumThreshold uint64 = 1024 * 1024
+
+// MaxCheckpointThreshold is the maximum allowed threshold (1TB).
+const MaxCheckpointThreshold uint64 = 1024 * 1024 * 1024 * 1024
+
 // CheckpointManager manages WAL checkpoints.
 type CheckpointManager struct {
 	wal       *Writer
@@ -46,30 +56,79 @@ type CheckpointManager struct {
 	mu        sync.Mutex
 }
 
+// ValidateCheckpointThreshold validates a checkpoint threshold value.
+// Returns an error if the threshold is invalid.
+// Logs a warning if the threshold is below the recommended minimum.
+func ValidateCheckpointThreshold(thresholdBytes uint64) error {
+	if thresholdBytes < MinCheckpointThreshold {
+		return fmt.Errorf(
+			"checkpoint threshold must be at least %d bytes (1KB), got %d",
+			MinCheckpointThreshold,
+			thresholdBytes,
+		)
+	}
+
+	if thresholdBytes > MaxCheckpointThreshold {
+		return fmt.Errorf(
+			"checkpoint threshold must not exceed %d bytes (1TB), got %d",
+			MaxCheckpointThreshold,
+			thresholdBytes,
+		)
+	}
+
+	if thresholdBytes < RecommendedMinimumThreshold {
+		log.Printf(
+			"warning: checkpoint threshold %d bytes is below recommended minimum of %d bytes (1MB)",
+			thresholdBytes,
+			RecommendedMinimumThreshold,
+		)
+	}
+
+	return nil
+}
+
 // NewCheckpointManager creates a new checkpoint manager.
+// If thresholdBytes is 0, uses DefaultCheckpointThreshold.
+// Validates that the threshold is within acceptable bounds.
 func NewCheckpointManager(
 	wal *Writer,
 	cat *catalog.Catalog,
 	store *storage.Storage,
 	clock quartz.Clock,
+	thresholdBytes uint64,
 ) *CheckpointManager {
+	threshold := thresholdBytes
+	if threshold == 0 {
+		threshold = DefaultCheckpointThreshold
+	}
+
+	// Validate threshold (log warning if below recommended minimum)
+	_ = ValidateCheckpointThreshold(threshold)
+
 	return &CheckpointManager{
 		wal:       wal,
 		catalog:   cat,
 		storage:   store,
 		walPath:   wal.Path(),
-		threshold: DefaultCheckpointThreshold,
+		threshold: threshold,
 		clock:     clock,
 	}
 }
 
 // SetThreshold sets the auto-checkpoint threshold in bytes.
+// Validates the threshold and logs a warning if below recommended minimum.
 func (cm *CheckpointManager) SetThreshold(
 	bytes uint64,
-) {
+) error {
+	// Validate threshold
+	if err := ValidateCheckpointThreshold(bytes); err != nil {
+		return err
+	}
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.threshold = bytes
+	return nil
 }
 
 // Threshold returns the current auto-checkpoint threshold.

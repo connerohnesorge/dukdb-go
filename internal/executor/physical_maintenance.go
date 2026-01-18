@@ -48,6 +48,8 @@ func (e *Executor) executePragma(
 		return e.pragmaThreads(ctx, plan)
 	case "temp_directory":
 		return e.pragmaTempDirectory(ctx, plan)
+	case "checkpoint_threshold":
+		return e.pragmaCheckpointThreshold(ctx, plan)
 
 	// Profiling pragmas
 	case "enable_profiling":
@@ -389,6 +391,53 @@ func (e *Executor) pragmaTempDirectory(
 	return &ExecutionResult{
 		Columns: []string{"temp_directory"},
 		Rows:    []map[string]any{{"temp_directory": "/tmp"}},
+	}, nil
+}
+
+func (e *Executor) pragmaCheckpointThreshold(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
+	if plan.Value != nil {
+		// SET mode - parse, validate, and store the threshold value
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		// Validate the threshold value using the config package function
+		if err := dukdb.ValidateThreshold(valueStr); err != nil {
+			return nil, err
+		}
+
+		// Store in the settings map
+		if ctx.conn != nil {
+			ctx.conn.SetSetting("checkpoint_threshold", valueStr)
+		}
+
+		return &ExecutionResult{
+			Columns: []string{"success"},
+			Rows:    []map[string]any{{"success": true}},
+		}, nil
+	}
+
+	// GET mode - retrieve the current threshold value
+	var thresholdValue string
+	if ctx.conn != nil {
+		val := ctx.conn.GetSetting("checkpoint_threshold")
+		if val != "" {
+			thresholdValue = val
+		} else {
+			// Default value if not set
+			thresholdValue = "256MB"
+		}
+	} else {
+		thresholdValue = "256MB"
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"checkpoint_threshold"},
+		Rows:    []map[string]any{{"checkpoint_threshold": thresholdValue}},
 	}, nil
 }
 

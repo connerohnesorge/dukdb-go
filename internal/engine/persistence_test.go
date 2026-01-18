@@ -587,3 +587,103 @@ func TestAllPrimitiveTypesPersistence(
 	err = engine2.Close()
 	require.NoError(t, err)
 }
+
+// TestCheckpointThresholdPersistence tests that checkpoint threshold is properly
+// initialized with the configured value when a database is opened.
+// Task 4.4: Integration test for threshold persistence
+func TestCheckpointThresholdPersistence(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "threshold_test.dukdb")
+
+	// Test 1: Default threshold on new database
+	// Scenario: New database should use default threshold
+	engine1 := NewEngine()
+	conn, err := engine1.Open(dbPath, nil)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	// Verify that CheckpointManager was created
+	require.NotNil(t, engine1.checkpointMgr, "CheckpointManager should be initialized for persistent database")
+
+	// Verify default threshold (256MB = 268435456 bytes)
+	defaultThresholdBytes := uint64(256 * 1024 * 1024)
+	assert.Equal(t, defaultThresholdBytes, engine1.checkpointMgr.Threshold(),
+		"Default threshold should be 256MB")
+
+	err = engine1.Close()
+	require.NoError(t, err)
+
+	// Test 2: Custom threshold from config
+	// Scenario: Custom threshold specified in config should be used
+	engine2 := NewEngine()
+	customConfig := &dukdb.Config{
+		CheckpointThreshold: "512MB",
+	}
+	conn2, err := engine2.Open(dbPath, customConfig)
+	require.NoError(t, err)
+	require.NotNil(t, conn2)
+
+	// Verify custom threshold was applied
+	require.NotNil(t, engine2.checkpointMgr, "CheckpointManager should be initialized with custom config")
+	customThresholdBytes := uint64(512 * 1024 * 1024)
+	assert.Equal(t, customThresholdBytes, engine2.checkpointMgr.Threshold(),
+		"Threshold should be 512MB from config")
+
+	err = engine2.Close()
+	require.NoError(t, err)
+
+	// Test 3: Different threshold values
+	// Scenario: Various threshold formats should be correctly parsed
+	testThresholds := []struct {
+		configValue string
+		expectedBytes uint64
+		description string
+	}{
+		{"1GB", 1024 * 1024 * 1024, "1GB threshold"},
+		{"256MB", 256 * 1024 * 1024, "256MB threshold"},
+		{"512MB", 512 * 1024 * 1024, "512MB threshold"},
+		{"1048576b", 1048576, "1MB in bytes"},
+	}
+
+	for _, tc := range testThresholds {
+		t.Run(tc.description, func(t *testing.T) {
+			dbPathVariant := filepath.Join(tmpDir, "threshold_"+tc.description+".dukdb")
+			engine := NewEngine()
+			config := &dukdb.Config{
+				CheckpointThreshold: tc.configValue,
+			}
+			conn, err := engine.Open(dbPathVariant, config)
+			require.NoError(t, err, "Should open database with threshold: %s", tc.configValue)
+			require.NotNil(t, conn)
+
+			// Verify threshold was parsed correctly
+			require.NotNil(t, engine.checkpointMgr)
+			assert.Equal(t, tc.expectedBytes, engine.checkpointMgr.Threshold(),
+				"Threshold %s should parse to %d bytes", tc.configValue, tc.expectedBytes)
+
+			err = engine.Close()
+			require.NoError(t, err)
+		})
+	}
+
+	// Test 4: Multiple connections use the same threshold
+	// Scenario: Multiple connections from the same database path should use the configured threshold
+	engine3 := NewEngine()
+	config3 := &dukdb.Config{
+		CheckpointThreshold: "1GB",
+	}
+	dbPath3 := filepath.Join(tmpDir, "multi_conn.dukdb")
+
+	conn3a, err := engine3.Open(dbPath3, config3)
+	require.NoError(t, err)
+	require.NotNil(t, conn3a)
+
+	// CheckpointManager in Engine should reflect the 1GB setting
+	require.NotNil(t, engine3.checkpointMgr)
+	assert.Equal(t, uint64(1024*1024*1024), engine3.checkpointMgr.Threshold(),
+		"Engine should use 1GB threshold from config")
+
+	err = engine3.Close()
+	require.NoError(t, err)
+}

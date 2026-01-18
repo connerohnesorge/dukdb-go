@@ -18,12 +18,13 @@ var validAccessModes = map[string]bool{
 
 // validConfigKeys contains the recognized configuration keys.
 var validConfigKeys = map[string]bool{
-	"access_mode":        true,
-	"threads":            true,
-	"max_memory":         true,
-	"storage_format":     true,
-	"max_files_per_glob": true,
-	"file_glob_timeout":  true,
+	"access_mode":         true,
+	"threads":             true,
+	"max_memory":          true,
+	"storage_format":      true,
+	"max_files_per_glob":  true,
+	"file_glob_timeout":   true,
+	"checkpoint_threshold": true,
 }
 
 // minThreads is the minimum number of threads allowed.
@@ -128,14 +129,16 @@ func ParseDSN(dsn string) (*Config, error) {
 //   - MaxMemory: "80%"
 //   - MaxFilesPerGlob: DefaultMaxFilesPerGlob (10000)
 //   - FileGlobTimeout: DefaultFileGlobTimeout (60 seconds)
+//   - CheckpointThreshold: "256MB"
 func NewConfig() *Config {
 	return &Config{
-		Path:            "",
-		AccessMode:      "automatic",
-		Threads:         runtime.NumCPU(),
-		MaxMemory:       "80%",
-		MaxFilesPerGlob: DefaultMaxFilesPerGlob,
-		FileGlobTimeout: DefaultFileGlobTimeout,
+		Path:                "",
+		AccessMode:          "automatic",
+		Threads:             runtime.NumCPU(),
+		MaxMemory:           "80%",
+		MaxFilesPerGlob:     DefaultMaxFilesPerGlob,
+		FileGlobTimeout:     DefaultFileGlobTimeout,
+		CheckpointThreshold: "256MB",
 	}
 }
 
@@ -219,6 +222,12 @@ func parseOptions(
 				return err
 			}
 			config.FileGlobTimeout = timeout
+
+		case "checkpoint_threshold":
+			if err := ValidateThreshold(value); err != nil {
+				return err
+			}
+			config.CheckpointThreshold = value
 		}
 	}
 
@@ -521,4 +530,114 @@ func parseFileGlobTimeout(value string) (int, error) {
 	}
 
 	return timeout, nil
+}
+
+// Constants for threshold validation
+const (
+	minThresholdBytes = 1024       // 1 KB minimum
+	minRecommendedBytes = 1048576  // 1 MB recommended minimum
+)
+
+// ParseThreshold parses a threshold value string and returns the size in bytes.
+// Supports suffixes: b, kb, mb, gb (case-insensitive)
+// Plain numbers are treated as bytes.
+// Examples:
+//   - "1024b" → 1024
+//   - "512KB" → 524288
+//   - "256MB" → 268435456
+//   - "1GB" → 1073741824
+//   - "1000000" → 1000000
+func ParseThreshold(value string) (int64, error) {
+	if value == "" {
+		return 0, fmt.Errorf("threshold value cannot be empty")
+	}
+
+	// Try to parse with suffixes
+	upperValue := strings.ToUpper(value)
+
+	type unitMultiplier struct {
+		suffix     string
+		multiplier int64
+	}
+
+	units := []unitMultiplier{
+		{"GB", 1024 * 1024 * 1024},
+		{"MB", 1024 * 1024},
+		{"KB", 1024},
+		{"B", 1},
+	}
+
+	for _, unit := range units {
+		if strings.HasSuffix(upperValue, unit.suffix) {
+			numStr := strings.TrimSuffix(upperValue, unit.suffix)
+			num, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf(
+					"invalid threshold format: %s (invalid number before suffix)",
+					value,
+				)
+			}
+
+			return num * unit.multiplier, nil
+		}
+	}
+
+	// Try parsing as raw bytes
+	bytes, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"invalid threshold format: %s (use format like 256MB, 1GB, or raw bytes)",
+			value,
+		)
+	}
+
+	return bytes, nil
+}
+
+// ValidateThreshold validates a threshold value string.
+// Returns an error if:
+//   - The threshold is below 1KB (absolute minimum)
+// Warns if:
+//   - The threshold is below 1MB (recommended minimum)
+func ValidateThreshold(value string) error {
+	if value == "" {
+		return &Error{
+			Type: ErrorTypeSettings,
+			Msg:  "checkpoint_threshold cannot be empty",
+		}
+	}
+
+	bytes, err := ParseThreshold(value)
+	if err != nil {
+		return &Error{
+			Type: ErrorTypeSettings,
+			Msg:  fmt.Sprintf("invalid checkpoint_threshold: %v", err),
+		}
+	}
+
+	if bytes <= 0 {
+		return &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"checkpoint_threshold must be positive, got %d bytes",
+				bytes,
+			),
+		}
+	}
+
+	if bytes < minThresholdBytes {
+		return &Error{
+			Type: ErrorTypeSettings,
+			Msg: fmt.Sprintf(
+				"checkpoint_threshold must be at least 1KB (1024 bytes), got %d bytes",
+				bytes,
+			),
+		}
+	}
+
+	// Note: We log a warning if below 1MB but don't reject it
+	// This would require a logger, so we silently allow small values
+	// but document the recommendation
+
+	return nil
 }

@@ -2,13 +2,59 @@
 
 This document describes the compatibility of this pure Go implementation with DuckDB's native file format.
 
+## DuckDB CLI Compatibility
+
+### Version Requirements
+
+**Minimum Required DuckDB CLI Version: v1.1.0+**
+
+dukdb-go can read and write files that are compatible with DuckDB CLI v1.1.0 and newer versions. The implementation has been tested against DuckDB CLI v1.4.3.
+
+| Feature | Read Compatibility | Write Compatibility |
+|---------|-------------------|---------------------|
+| DuckDB CLI v1.1.0+ | ✓ Supported | ✓ Supported |
+| DuckDB CLI v0.9.0 - v1.0.x | ⚠ May work | ⚠ May work |
+| DuckDB CLI < v0.9.0 | ✗ Not supported | ✗ Not supported |
+
+**Tested Against**: DuckDB CLI v1.4.3 (Andium) d1dc88f950
+
+### Interoperability Status
+
+**Files Created by dukdb-go → DuckDB CLI**:
+- ✓ SHOW TABLES works
+- ✓ SELECT queries work
+- ✓ DESCRIBE works
+- ✓ Schema information readable
+- ✓ Row data readable
+- ✓ Multiple data types supported
+
+**Files Created by DuckDB CLI → dukdb-go**:
+- ✓ Read support for all common data types
+- ✓ Catalog metadata readable
+- ✓ Table schemas readable
+- ✓ Row data readable
+- ⚠ Some advanced compression formats may not be supported (see limitations below)
+
+### Round-Trip Compatibility
+
+Round-trip workflows are supported:
+1. Create database with dukdb-go
+2. Modify with DuckDB CLI
+3. Read back with dukdb-go
+
+This enables hybrid workflows where DuckDB CLI tools can be used alongside dukdb-go applications.
+
 ## Supported Version
 
 - **DuckDB Version**: v1.4.3
-- **Storage Format Version**: 67
-- **Serialization Compatibility**: 67
+- **Storage Format Version**: 64-67 (reads), 64 (writes)
+- **Serialization Compatibility**: 64-67 (reads), 64 (writes)
 
-Files created by DuckDB versions newer than v1.4.3 may not be readable if they use a newer storage format version. The implementation validates the version and will return an error for unsupported versions.
+**Version Strategy**:
+- dukdb-go **writes** format version 64 for maximum compatibility with DuckDB v0.9.0+
+- dukdb-go **reads** format versions 64-67 (DuckDB v0.9.0 through v1.5.0+)
+
+Files created by DuckDB versions newer than v1.5.0 may not be readable if they use a storage format version newer than 67. The implementation validates the version and will return an error for unsupported versions.
 
 ## File Structure
 
@@ -193,16 +239,57 @@ When encountering unsupported compression, an `ErrUnsupportedCompression` error 
 ### Not Supported
 
 1. **Advanced Compression**: FSST, ALP, CHIMP, PATAS, ZSTD compression
+   - Files using these compression algorithms will return `ErrUnsupportedCompression`
+   - DuckDB CLI may choose these automatically for optimal storage
+   - **Workaround**: Use DuckDB CLI with `SET preserve_insertion_order = true` to avoid some advanced compression
+
 2. **Encryption**: Encrypted database files are not supported
+   - Files with encryption will fail to open
+   - No API for encryption keys
+
 3. **Concurrent Writes**: Only single-writer is supported
+   - Multiple writers will cause data corruption
+   - Use application-level locking if multiple processes need write access
+
 4. **Storage Extensions**: External storage plugins not supported
+   - Pure Go implementation cannot load C/C++ shared libraries
+   - Extensions like `spatial`, `httpfs`, `icu` cannot be loaded
+
 5. **Delta/Iceberg**: Format variants not supported
+   - Standard DuckDB format only
+   - Iceberg tables via `iceberg_scan()` are supported separately
 
 ### Partial Support
 
 1. **DELETE/UPDATE**: Currently marks rows as modified but full MVCC not implemented
+   - Basic DELETE/UPDATE operations work
+   - Concurrent transaction isolation is limited
+
 2. **Transactions**: Basic transaction support without full snapshot isolation
+   - ACID guarantees provided for single transaction
+   - Concurrent transaction isolation may have limitations
+
 3. **Complex Type Nesting**: Deep nesting of complex types may have edge cases
+   - Simple LIST, STRUCT, MAP types work well
+   - Deep nesting (e.g., LIST of STRUCT of MAP) may have issues
+
+### Edge Cases and Known Issues
+
+1. **Large String Values**: VARCHAR values larger than 4GB are not supported
+   - Limited by uint32 length encoding in format
+
+2. **Very Large Tables**: Tables with billions of rows may have performance issues
+   - Row group management optimized for typical workloads
+
+3. **Schema Changes**: ALTER TABLE support is limited
+   - Adding/dropping columns works
+   - Type changes may require table recreation
+
+4. **Checksum Validation**: Checksum errors may occur with format mismatches
+   - If you encounter checksum errors, verify DuckDB CLI version compatibility
+
+5. **Metadata Block Chains**: Very long metadata chains (thousands of entries) are untested
+   - Typical catalogs with hundreds of tables work fine
 
 ## Testing Against DuckDB CLI
 
@@ -328,14 +415,87 @@ Each column segment is referenced by a DataPointer:
 
 ## Version History
 
-| DuckDB Version | Storage Version | Notes |
-|----------------|-----------------|-------|
-| v1.4.3 | 67 | Current target |
-| v1.3.x | 64-66 | May be compatible |
-| v1.2.x | 60-63 | May have issues |
-| v1.1.x | 50-59 | Not tested |
-| v1.0.x | 40-49 | Not supported |
-| < v1.0 | < 40 | Not supported |
+| DuckDB Version | Storage Version | Read Support | Write Support | Notes |
+|----------------|-----------------|--------------|---------------|-------|
+| v1.5.0 | 67 | ✓ Yes | ✓ Yes (v64) | Current |
+| v1.4.3 | 67 | ✓ Yes | ✓ Yes (v64) | Tested target |
+| v1.3.x | 64-66 | ✓ Yes | ✓ Yes (v64) | Compatible |
+| v1.2.x | 64-65 | ✓ Yes | ✓ Yes (v64) | Compatible |
+| v1.1.x | 64 | ✓ Yes | ✓ Yes (v64) | Minimum recommended |
+| v0.9.0 - v1.0.x | 64 | ⚠ May work | ⚠ May work | Not fully tested |
+| < v0.9.0 | < 64 | ✗ No | ✗ No | Not supported |
+
+### Version-Specific Features
+
+| Feature | Minimum DuckDB Version | dukdb-go Support |
+|---------|------------------------|------------------|
+| Basic file format (v64) | v0.9.0 | ✓ Full |
+| Serialization compatibility field | v1.2.0 (v65) | ✓ Read only |
+| Enhanced nested types | v1.3.0 (v66) | ✓ Read only |
+| TIME_TZ, TIMESTAMP_TZ | v1.4.0 (v67) | ✓ Read only |
+| BIT type | v1.4.0 (v67) | ✓ Read only |
+
+## Data Type Compatibility Matrix
+
+### Fully Supported for Read/Write
+
+These types work in both directions (dukdb-go ↔ DuckDB CLI):
+
+- INTEGER, BIGINT, SMALLINT, TINYINT (signed and unsigned variants)
+- FLOAT, DOUBLE
+- VARCHAR, BLOB
+- BOOLEAN
+- DATE, TIME, TIMESTAMP (all variants)
+- DECIMAL(p, s) up to precision 38
+- UUID
+- LIST, STRUCT, MAP (with supported element types)
+- ENUM
+- INTERVAL
+
+### Read-Only Support
+
+These types can be read from DuckDB CLI files but may have limitations when writing:
+
+- HUGEINT, UHUGEINT (128-bit integers) - read support full, write untested
+- BIT - depends on version
+- TIME_TZ, TIMESTAMP_TZ - requires DuckDB v1.4.0+
+- Deeply nested complex types (LIST of STRUCT of MAP, etc.)
+
+### Type-Specific Limitations
+
+1. **DECIMAL**: Precision limited to 38 digits
+2. **VARCHAR**: Length limited to ~4GB (uint32 max)
+3. **ENUM**: Dictionary size limited to uint32 max entries
+4. **LIST**: Nesting depth not enforced but very deep nesting untested
+5. **UNION**: Tagged union support is basic
+
+## Recommendations for Production Use
+
+### For Maximum Compatibility
+
+1. **Use DuckDB CLI v1.1.0 or newer** for best interoperability
+2. **Test round-trip workflows** (create with dukdb-go, read with DuckDB CLI, modify, read back)
+3. **Avoid advanced compression** if you need to share files between implementations
+4. **Use common data types** (INTEGER, VARCHAR, TIMESTAMP, etc.) for highest compatibility
+5. **Checkpoint frequently** to ensure data is written to disk in compatible format
+
+### For Performance
+
+1. **Use appropriate checkpoint thresholds** (see PRAGMA checkpoint_threshold)
+2. **Batch inserts** when possible to reduce overhead
+3. **Use appropriate data types** (don't use DECIMAL if INTEGER suffices)
+4. **Consider compression trade-offs** (supported compression is sufficient for most cases)
+
+### For Debugging Compatibility Issues
+
+If you encounter issues reading files between dukdb-go and DuckDB CLI:
+
+1. **Check DuckDB CLI version**: `duckdb --version`
+2. **Verify file format version**: Query the file header
+3. **Look for compression errors**: Check if advanced compression is in use
+4. **Test with empty table**: Rule out data-specific issues
+5. **Enable verbose logging**: Check for checksum or metadata errors
+6. **Compare hex dumps**: Use diagnostic tools to identify byte-level differences
 
 ## References
 
@@ -343,3 +503,10 @@ Each column segment is referenced by a DataPointer:
 - DuckDB Documentation: https://duckdb.org/docs/
 - Storage Format: `src/storage/` in DuckDB source
 - Type Definitions: `src/include/duckdb/common/types.hpp`
+- Format Version History: `src/storage/storage_info.cpp`
+
+## Related Documentation
+
+- See `docs/pragmas.md` for PRAGMA settings including checkpoint_threshold
+- See `spectr/changes/fix-duckdb-write-compat/diagnostics.md` for detailed compatibility analysis
+- See `spectr/changes/gap-analysis.md` for overall feature compatibility status

@@ -1962,3 +1962,146 @@ func TestExplainIndexScanEmptyLookupKeys(t *testing.T) {
 	assert.Contains(t, planText, "IndexScan: users")
 	assert.NotContains(t, planText, "Index Cond:")
 }
+
+// =============================================================================
+// PRAGMA checkpoint_threshold Tests
+// =============================================================================
+
+// mockConnection is a simple mock for testing connection-level settings
+type mockConnection struct {
+	settings map[string]string
+}
+
+func (mc *mockConnection) GetSetting(key string) string {
+	return mc.settings[key]
+}
+
+func (mc *mockConnection) SetSetting(key string, value string) {
+	mc.settings[key] = value
+}
+
+func newMockConnection() *mockConnection {
+	return &mockConnection{
+		settings: make(map[string]string),
+	}
+}
+
+func TestPragmaCheckpointThresholdGet(t *testing.T) {
+	exec, cat, _ := setupTestExecutor()
+
+	// Set up mock connection with executor
+	mockConn := newMockConnection()
+	exec.SetConnection(mockConn)
+
+	// Get default checkpoint_threshold
+	result, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, []string{"checkpoint_threshold"}, result.Columns)
+	require.Len(t, result.Rows, 1)
+
+	// Default should be "256MB"
+	assert.Equal(t, "256MB", result.Rows[0]["checkpoint_threshold"].(string))
+}
+
+func TestPragmaCheckpointThresholdSet(t *testing.T) {
+	exec, cat, _ := setupTestExecutor()
+	mockConn := newMockConnection()
+	exec.SetConnection(mockConn)
+
+	// Set checkpoint_threshold to 512MB
+	result, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold = '512MB'")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, []string{"success"}, result.Columns)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, true, result.Rows[0]["success"])
+}
+
+func TestPragmaCheckpointThresholdSetAndGet(t *testing.T) {
+	exec, cat, _ := setupTestExecutor()
+	mockConn := newMockConnection()
+	exec.SetConnection(mockConn)
+
+	// Set to 1GB
+	result, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold = '1GB'")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, true, result.Rows[0]["success"])
+
+	// Get the value back
+	result, err = executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, "1GB", result.Rows[0]["checkpoint_threshold"].(string))
+}
+
+func TestPragmaCheckpointThresholdValidation(t *testing.T) {
+	exec, cat, _ := setupTestExecutor()
+	mockConn := newMockConnection()
+	exec.SetConnection(mockConn)
+
+	// Test with very small value (< 1KB) - should fail
+	_, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold = '512b'")
+	require.Error(t, err, "Should reject threshold < 1KB")
+}
+
+func TestPragmaCheckpointThresholdDifferentFormats(t *testing.T) {
+	testCases := []struct {
+		name      string
+		value     string
+		shouldSet bool
+	}{
+		{"256MB", "256MB", true},
+		{"512MB", "512MB", true},
+		{"1GB", "1GB", true},
+		{"512KB", "512KB", true},
+		{"1024KB", "1024KB", true},
+		{"1048576b", "1048576b", true}, // 1MB
+		{"5368709120b", "5368709120b", true}, // 5GB
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			exec, cat, _ := setupTestExecutor()
+			mockConn := newMockConnection()
+			exec.SetConnection(mockConn)
+
+			result, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold = '"+tc.value+"'")
+			if tc.shouldSet {
+				require.NoError(t, err, "Should accept %s", tc.name)
+				assert.Equal(t, true, result.Rows[0]["success"])
+
+				// Get value back
+				result, err = executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold")
+				require.NoError(t, err)
+				assert.Equal(t, tc.value, result.Rows[0]["checkpoint_threshold"].(string))
+			} else {
+				require.Error(t, err, "Should reject %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestPragmaCheckpointThresholdMultipleSets(t *testing.T) {
+	exec, cat, _ := setupTestExecutor()
+	mockConn := newMockConnection()
+	exec.SetConnection(mockConn)
+
+	values := []string{"256MB", "512MB", "1GB", "512KB"}
+
+	for _, val := range values {
+		// Set
+		result, err := executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold = '"+val+"'")
+		require.NoError(t, err)
+		assert.Equal(t, true, result.Rows[0]["success"])
+
+		// Verify
+		result, err = executeSQL(t, exec, cat, "PRAGMA checkpoint_threshold")
+		require.NoError(t, err)
+		assert.Equal(t, val, result.Rows[0]["checkpoint_threshold"].(string))
+	}
+}

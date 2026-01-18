@@ -1095,6 +1095,7 @@ func TestCheckpointManager(t *testing.T) {
 		cat,
 		store,
 		clock,
+		0, // Use default threshold
 	)
 
 	// Perform checkpoint
@@ -1133,10 +1134,12 @@ func TestAutoCheckpoint(t *testing.T) {
 		cat,
 		store,
 		clock,
+		0, // Use default threshold
 	)
 
-	// Set a low threshold - but high enough to contain checkpoint data
-	cm.SetThreshold(500)
+	// Set a low threshold - but high enough to contain checkpoint data (1KB minimum)
+	err = cm.SetThreshold(1024)
+	require.NoError(t, err)
 
 	// Write enough data to trigger auto-checkpoint
 	for i := range 20 {
@@ -2469,4 +2472,311 @@ func TestTransactionRollback_UndoesPartialInsert(t *testing.T) {
 		row := table.GetRow(storage.RowID(i + 125))
 		assert.Nil(t, row, "RowID %d should NOT exist", i+125)
 	}
+}
+
+// TestCheckpointManagerThresholdConfiguration tests that CheckpointManager accepts configurable threshold
+// This covers task 3.1: Modify CheckpointManager to accept configurable threshold
+func TestCheckpointManagerThresholdConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	cat := catalog.NewCatalog()
+	store := storage.NewStorage()
+
+	writer, err := NewWriter(walPath, clock)
+	require.NoError(t, err)
+
+	// Test with custom threshold of 256MB
+	customThreshold := uint64(256 * 1024 * 1024)
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+		customThreshold,
+	)
+
+	// Verify threshold was set correctly
+	assert.Equal(t, customThreshold, cm.Threshold())
+
+	// Verify it's not the default
+	assert.NotEqual(t, DefaultCheckpointThreshold, cm.Threshold())
+
+	err = cm.WAL().Close()
+	require.NoError(t, err)
+}
+
+// TestCheckpointManagerDefaultThreshold tests that CheckpointManager uses default when threshold is 0
+// This covers task 3.1: Default threshold when not specified
+func TestCheckpointManagerDefaultThreshold(t *testing.T) {
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	cat := catalog.NewCatalog()
+	store := storage.NewStorage()
+
+	writer, err := NewWriter(walPath, clock)
+	require.NoError(t, err)
+
+	// Create with 0 threshold (should use default)
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+		0, // Use default
+	)
+
+	// Verify default threshold was used
+	assert.Equal(t, DefaultCheckpointThreshold, cm.Threshold())
+
+	err = cm.WAL().Close()
+	require.NoError(t, err)
+}
+
+// TestCheckpointThresholdValidation tests threshold validation
+// This covers task 3.3: Add threshold validation at CheckpointManager initialization
+func TestCheckpointThresholdValidation(t *testing.T) {
+	tests := []struct {
+		name          string
+		threshold     uint64
+		expectError   bool
+		expectWarning bool
+	}{
+		{
+			name:          "valid_default",
+			threshold:     DefaultCheckpointThreshold,
+			expectError:   false,
+			expectWarning: false,
+		},
+		{
+			name:          "valid_1mb",
+			threshold:     1024 * 1024,
+			expectError:   false,
+			expectWarning: false,
+		},
+		{
+			name:          "valid_256mb",
+			threshold:     256 * 1024 * 1024,
+			expectError:   false,
+			expectWarning: false,
+		},
+		{
+			name:          "valid_min_1kb",
+			threshold:     MinCheckpointThreshold,
+			expectError:   false,
+			expectWarning: true, // Below recommended minimum
+		},
+		{
+			name:          "too_low",
+			threshold:     512, // Below 1KB minimum
+			expectError:   true,
+			expectWarning: false,
+		},
+		{
+			name:          "below_recommended",
+			threshold:     512 * 1024, // 512KB, below 1MB recommended
+			expectError:   false,
+			expectWarning: true,
+		},
+		{
+			name:          "too_high",
+			threshold:     MaxCheckpointThreshold + 1,
+			expectError:   true,
+			expectWarning: false,
+		},
+		{
+			name:          "max_valid",
+			threshold:     MaxCheckpointThreshold,
+			expectError:   false,
+			expectWarning: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCheckpointThreshold(tt.threshold)
+			if tt.expectError {
+				assert.Error(t, err, "Expected validation error")
+			} else {
+				assert.NoError(t, err, "Expected no validation error")
+			}
+		})
+	}
+}
+
+// TestCheckpointTriggeredAtThreshold tests that checkpoint is triggered when WAL exceeds threshold
+// This covers task 3.2: Update checkpoint trigger logic to use configurable threshold
+func TestCheckpointTriggeredAtThreshold(t *testing.T) {
+	var err error
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	cat := catalog.NewCatalog()
+	store := storage.NewStorage()
+
+	// Create a table in storage
+	_, err = store.CreateTable(
+		"test_table",
+		[]dukdb.Type{
+			dukdb.TYPE_INTEGER,
+			dukdb.TYPE_VARCHAR,
+		},
+	)
+	require.NoError(t, err)
+
+	// Create a table in catalog
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef("id", dukdb.TYPE_INTEGER).
+			WithNullable(false),
+		catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR).
+			WithNullable(true),
+	}
+	tableDef := catalog.NewTableDef("test_table", columns)
+	err = cat.CreateTable(tableDef)
+	require.NoError(t, err)
+
+	writer, err := NewWriter(walPath, clock)
+	require.NoError(t, err)
+
+	// Set a low threshold for testing
+	lowThreshold := uint64(5 * 1024) // 5KB
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+		lowThreshold,
+	)
+
+	// Write INSERT entry with many rows to exceed threshold
+	rows := make([][]any, 200)
+	for i := range 200 {
+		rows[i] = []any{int32(i), "value_" + string(rune('a'+(i%26)))}
+	}
+	insertEntry := NewInsertEntry(1, "main", "test_table", rows)
+	err = cm.WAL().WriteEntry(insertEntry)
+	require.NoError(t, err)
+
+	// At this point, WAL size should exceed threshold
+	bytesWritten := cm.WAL().BytesWritten()
+	assert.GreaterOrEqual(t, bytesWritten, lowThreshold,
+		"WAL should contain more than threshold bytes, got %d bytes", bytesWritten)
+
+	// Trigger auto-checkpoint
+	err = cm.MaybeAutoCheckpoint()
+	require.NoError(t, err)
+
+	// After checkpoint, WAL should be smaller
+	bytesAfterCheckpoint := cm.WAL().BytesWritten()
+	assert.Less(t, bytesAfterCheckpoint, bytesWritten,
+		"WAL should be smaller after checkpoint (before: %d, after: %d)",
+		bytesWritten, bytesAfterCheckpoint)
+
+	err = cm.WAL().Close()
+	require.NoError(t, err)
+}
+
+// TestCheckpointNotTriggeredBelowThreshold tests that checkpoint is NOT triggered when WAL is below threshold
+// This covers task 3.2: Checkpoint should only trigger when exceeding threshold
+func TestCheckpointNotTriggeredBelowThreshold(t *testing.T) {
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	cat := catalog.NewCatalog()
+	store := storage.NewStorage()
+
+	writer, err := NewWriter(walPath, clock)
+	require.NoError(t, err)
+
+	// Set a high threshold
+	highThreshold := uint64(10 * 1024 * 1024) // 10MB
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+		highThreshold,
+	)
+
+	// Write a single small entry
+	entry := &CreateTableEntry{
+		Schema: "main",
+		Name:   "small_table",
+		Columns: []ColumnDef{
+			{
+				Name:     "id",
+				Type:     dukdb.TYPE_INTEGER,
+				Nullable: false,
+			},
+		},
+	}
+	err = cm.WAL().WriteEntry(entry)
+	require.NoError(t, err)
+
+	bytesBeforeCheckpoint := cm.WAL().BytesWritten()
+	assert.Less(t, bytesBeforeCheckpoint, highThreshold,
+		"WAL should be below threshold")
+
+	// Try auto-checkpoint (should NOT checkpoint)
+	err = cm.MaybeAutoCheckpoint()
+	require.NoError(t, err)
+
+	// WAL size should be unchanged
+	bytesAfterCheckpoint := cm.WAL().BytesWritten()
+	assert.Equal(t, bytesBeforeCheckpoint, bytesAfterCheckpoint,
+		"WAL should not checkpoint when below threshold")
+
+	err = cm.WAL().Close()
+	require.NoError(t, err)
+}
+
+// TestSetThresholdValidation tests that SetThreshold validates the new threshold
+// This covers task 3.3: Validation at runtime
+func TestSetThresholdValidation(t *testing.T) {
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "test.wal")
+	clock := quartz.NewReal()
+
+	cat := catalog.NewCatalog()
+	store := storage.NewStorage()
+
+	writer, err := NewWriter(walPath, clock)
+	require.NoError(t, err)
+
+	cm := NewCheckpointManager(
+		writer,
+		cat,
+		store,
+		clock,
+		DefaultCheckpointThreshold,
+	)
+
+	// Valid threshold update
+	newThreshold := uint64(512 * 1024 * 1024) // 512MB
+	err = cm.SetThreshold(newThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, newThreshold, cm.Threshold())
+
+	// Invalid threshold (too low)
+	err = cm.SetThreshold(100)
+	assert.Error(t, err, "Should reject threshold below minimum")
+	assert.Equal(t, newThreshold, cm.Threshold(), "Threshold should not change on error")
+
+	// Invalid threshold (too high)
+	err = cm.SetThreshold(MaxCheckpointThreshold + 1)
+	assert.Error(t, err, "Should reject threshold above maximum")
+	assert.Equal(t, newThreshold, cm.Threshold(), "Threshold should not change on error")
+
+	// Valid maximum threshold
+	err = cm.SetThreshold(MaxCheckpointThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, MaxCheckpointThreshold, cm.Threshold())
+
+	err = cm.WAL().Close()
+	require.NoError(t, err)
 }
