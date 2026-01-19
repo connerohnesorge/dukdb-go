@@ -28,9 +28,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/azure/azurite"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // Azurite well-known development credentials
@@ -43,79 +40,7 @@ const (
 	azuriteContainer  = "dukdb-azurite-test"
 )
 
-// Global Azurite container used across all tests in this package
-var azuriteCtx context.Context
-var azuriteTestContainer *azurite.Container
-var azuriteEndpoint string
 
-// TestMain sets up the Azurite container for all tests and tears it down afterward.
-func TestMain(m *testing.M) {
-	// Skip setup if running outside integration tests
-	if !isIntegrationTest() {
-		os.Exit(m.Run())
-	}
-
-	// Use a context with timeout for container setup, but keep a separate context for cleanup
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	azuriteCtx = context.Background() // Use background context for tests
-
-	// Start the Azurite container
-	var err error
-	azuriteTestContainer, azuriteEndpoint, err = setupAzuriteContainer(setupCtx)
-	setupCancel()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start Azurite container: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Run tests
-	exitCode := m.Run()
-
-	// Cleanup with a fresh context
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if azuriteTestContainer != nil {
-		if err := azuriteTestContainer.Terminate(cleanupCtx); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to terminate Azurite container: %v\n", err)
-		}
-	}
-	cleanupCancel()
-
-	os.Exit(exitCode)
-}
-
-// isIntegrationTest returns true if tests are being run with the integration build tag.
-func isIntegrationTest() bool {
-	// This function is called during TestMain, which only runs when tests are executed.
-	// If we're here and have integration tests, we should proceed.
-	return true
-}
-
-// setupAzuriteContainer starts an Azurite container and returns the container, endpoint, and error.
-func setupAzuriteContainer(ctx context.Context) (*azurite.Container, string, error) {
-	// Create Azurite container
-	container, err := azurite.Run(ctx,
-		"mcr.microsoft.com/azure-storage/azurite:latest",
-		testcontainers.WithWaitStrategy(wait.ForLog("Azurite Blob service is successfully listening")),
-	)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to create Azurite container: %w", err)
-	}
-
-	// Get the blob service URL
-	baseURL, err := container.BlobServiceURL(ctx)
-	if err != nil {
-		container.Terminate(ctx) //nolint:errcheck
-		return nil, "", fmt.Errorf("failed to get Azurite blob service URL: %w", err)
-	}
-
-	// Append the account name to match Azure SDK expectations
-	endpoint := baseURL + "/" + azuriteAccountName
-	if !strings.HasSuffix(endpoint, "/") {
-		endpoint += "/"
-	}
-
-	return container, endpoint, nil
-}
 
 // getAzuriteConfig returns an AzureConfig configured for Azurite testing.
 // The config uses the endpoint from the TestMain-managed testcontainers setup.

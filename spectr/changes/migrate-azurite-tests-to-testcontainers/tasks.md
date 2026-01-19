@@ -9,4 +9,4 @@
 
 - [x] 2.1 Run Azurite integration tests: `go test -tags integration -v ./internal/io/filesystem/ -run Azurite`
 - [x] 2.2 Verify container is properly cleaned up after tests
-- [ ] 2.3 Run `spectr validate migrate-azurite-tests-to-testcontainers`
+- [x] 2.3 Run `spectr validate migrate-azurite-tests-to-testcontainers`

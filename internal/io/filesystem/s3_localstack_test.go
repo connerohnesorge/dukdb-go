@@ -3,17 +3,23 @@
 // Package filesystem provides LocalStack-specific integration tests for S3 filesystem operations.
 // These tests verify S3 compatibility using LocalStack, an AWS S3 emulator.
 //
+// LocalStack Container Automation:
+// This test file uses testcontainers-go to automatically start and stop a LocalStack container
+// for each test run. No manual Docker setup is required.
+//
 // To run these tests:
 //
-//	# Start LocalStack
-//	docker run -d -p 4566:4566 localstack/localstack
+//	go test -tags integration -v ./internal/io/filesystem/... -run LocalStack
 //
-//	# Run tests
-//	LOCALSTACK_ENDPOINT=http://localhost:4566 go test -tags integration ./internal/io/filesystem/... -run LocalStack
+// The tests will automatically:
+// 1. Start a LocalStack container in Docker
+// 2. Wait for it to be ready
+// 3. Configure tests to use the container's endpoint
+// 4. Clean up the container after tests complete
 //
-// Or with a specific LocalStack endpoint:
-//
-//	LOCALSTACK_ENDPOINT=localhost:4566 go test -tags integration ./internal/io/filesystem/... -run LocalStack
+// Requirements:
+// - Docker must be installed and running
+// - testcontainers-go will use the Docker daemon socket
 //
 // Note: LocalStack accepts any credentials, so tests use "test"/"test" for access keys.
 package filesystem
@@ -34,7 +40,7 @@ import (
 )
 
 // getLocalStackConfig returns an S3Config configured for LocalStack testing.
-// Tests are skipped if LOCALSTACK_ENDPOINT environment variable is not set.
+// The endpoint is set automatically by TestMain, but can be overridden with LOCALSTACK_ENDPOINT.
 func getLocalStackConfig(t *testing.T) *S3Config {
 	t.Helper()
 

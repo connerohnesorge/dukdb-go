@@ -123,13 +123,26 @@ func buildClientOptions(config *S3Config, creds *credentials.Credentials) *minio
 func parseS3Path(path string) (bucket, key string, err error) {
 	cleanPath := stripS3Prefix(path)
 
+	// Only parse as URL if '?' is followed by something that looks like a query parameter
+	// (i.e., it's not a glob wildcard pattern). A '?' is a glob wildcard if it's not
+	// preceded by a real query parameter name.
 	if strings.Contains(cleanPath, "?") {
-		parsed, err := url.Parse("s3://" + cleanPath)
-		if err != nil {
-			return "", "", fmt.Errorf("s3: failed to parse URL: %w", err)
+		// Check if this looks like a query parameter (e.g., ?key=value) vs glob wildcard
+		// Split on the first '?' to check what comes before and after
+		parts := strings.SplitN(cleanPath, "?", 2)
+		if len(parts) == 2 {
+			afterQuestion := parts[1]
+			// If what follows looks like query parameters (contains = or &), parse as URL
+			// Otherwise, treat the ? as a glob wildcard and don't parse as URL
+			if strings.Contains(afterQuestion, "=") || strings.Contains(afterQuestion, "&") {
+				parsed, err := url.Parse("s3://" + cleanPath)
+				if err != nil {
+					return "", "", fmt.Errorf("s3: failed to parse URL: %w", err)
+				}
+				cleanPath = parsed.Host + parsed.Path
+			}
+			// If no = or &, the ? is likely a glob wildcard, so don't parse as URL
 		}
-
-		cleanPath = parsed.Host + parsed.Path
 	}
 
 	parts := strings.SplitN(cleanPath, s3PathSeparator, 2)

@@ -169,6 +169,35 @@ COPY (
 COPY sales TO 'azure://container/exports/sales.json' (FORMAT JSON);
 ```
 
+### Azure Blob Storage Write Operations
+
+Azure Blob Storage provides full write support for all file formats. Key features include:
+
+- **Multiple authentication methods**: Connection string, account key, SAS token, service principal, or managed identity
+- **Automatic multipart upload**: For files larger than 256MB
+- **Concurrent writes**: Support for parallel write operations to different blobs
+- **All file formats**: Parquet, CSV, JSON, and more
+
+For detailed Azure write documentation, see [Azure Write Support](azure-write-support.md).
+
+Example Azure write operations:
+
+```sql
+-- Create Azure secret with connection string
+CREATE SECRET azure_secret (
+    TYPE AZURE,
+    CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=mykey;EndpointSuffix=core.windows.net'
+);
+
+-- Export to Azure in different formats
+COPY my_table TO 'azure://mycontainer/data.parquet' (FORMAT PARQUET);
+COPY my_table TO 'azure://mycontainer/data.csv' (FORMAT CSV, HEADER true);
+COPY my_table TO 'azure://mycontainer/data.json' (FORMAT JSON);
+
+-- Export with custom path structure
+COPY sales_data TO 'azure://reports/2024/01/sales.parquet' (FORMAT PARQUET);
+```
+
 ### Write Table Functions
 
 ```sql
