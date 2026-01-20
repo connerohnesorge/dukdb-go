@@ -39,8 +39,8 @@ jobs:
           # - SHOW TABLES works
           # - DESCRIBE works
           # - SELECT queries work
-          go test -v ./internal/storage/duckdb -run TestDuckDBCLIInterop
-
+          go test -short -v ./internal/storage/duckdb -run TestDuckDBCLIInterop
+          
           # Run comprehensive interop tests that verify:
           # - Files created by dukdb-go can be read by DuckDB CLI
           # - Round-trip data integrity (dukdb-go → CLI → dukdb-go)
@@ -48,12 +48,12 @@ jobs:
           # - Large file handling
           # - Edge cases
           # - Compression compatibility
-          go test -v ./internal/storage/duckdb -run TestDuckDBCLIReadsDukdbFile
-          go test -v ./internal/storage/duckdb -run TestRoundTripDataIntegrity
-          go test -v ./internal/storage/duckdb -run TestAllTypesRoundTrip
-          go test -v ./internal/storage/duckdb -run TestLargeFileHandling
-          go test -v ./internal/storage/duckdb -run TestInteropEdgeCases
-          go test -v ./internal/storage/duckdb -run TestCompressionInterop
+          go test -short -v ./internal/storage/duckdb -run TestDuckDBCLIReadsDukdbFile
+          go test -short -v ./internal/storage/duckdb -run TestRoundTripDataIntegrity
+          go test -short -v ./internal/storage/duckdb -run TestAllTypesRoundTrip
+          go test -short -v ./internal/storage/duckdb -run TestLargeFileHandling
+          go test -short -v ./internal/storage/duckdb -run TestInteropEdgeCases
+          go test -short -v ./internal/storage/duckdb -run TestCompressionInterop
 
       - name: Upload test artifacts on failure
         if: failure()

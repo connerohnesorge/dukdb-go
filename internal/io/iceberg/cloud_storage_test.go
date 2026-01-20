@@ -17,12 +17,13 @@ func setupCloudTestcontainers(t *testing.T, ctx context.Context) (compose.Compos
 	t.Helper()
 
 	composeFile := filepath.Join("testdata", "docker-compose.yml")
+
 	stack, err := compose.NewDockerCompose(composeFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create compose stack: %w", err)
 	}
 
-	err = stack.Up(ctx, compose.Wait(false))
+	err = stack.Up(ctx, compose.Wait(true), compose.RunServices("minio", "fake-gcs"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to start compose stack: %w", err)
 	}

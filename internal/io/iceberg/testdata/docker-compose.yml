@@ -2,7 +2,6 @@ services:
   # MinIO for S3-compatible storage testing
   minio:
     image: minio/minio:latest
-    container_name: iceberg-minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -21,7 +20,6 @@ services:
   # MinIO client to create buckets
   minio-setup:
     image: minio/mc:latest
-    container_name: iceberg-minio-setup
     depends_on:
       minio:
         condition: service_healthy
@@ -37,7 +35,6 @@ services:
   # Fake GCS server for GCS testing
   fake-gcs:
     image: fsouza/fake-gcs-server:latest
-    container_name: iceberg-fake-gcs
     ports:
       - "4443:4443"
     command: ["-scheme", "http", "-port", "4443", "-external-url", "http://localhost:4443"]
@@ -47,7 +44,6 @@ services:
   # Apache Spark for Spark-generated Iceberg tables
   spark:
     image: apache/spark:3.5.0-scala2.12-java11-python3-ubuntu
-    container_name: iceberg-spark
     ports:
       - "8080:8080"
       - "7077:7077"
@@ -71,7 +67,6 @@ services:
   # Apache Flink for Flink-generated Iceberg tables
   flink-jobmanager:
     image: flink:1.18.0-scala_2.12-java11
-    container_name: iceberg-flink-jobmanager
     ports:
       - "8081:8081"
     environment:
@@ -86,7 +81,6 @@ services:
 
   flink-taskmanager:
     image: flink:1.18.0-scala_2.12-java11
-    container_name: iceberg-flink-taskmanager
     depends_on:
       - flink-jobmanager
     environment:
