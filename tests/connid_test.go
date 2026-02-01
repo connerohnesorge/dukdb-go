@@ -205,25 +205,6 @@ func TestConnId_SameDatabase(t *testing.T) {
 	require.Equal(t, id1, id2, "connections to same database share backend ID")
 }
 
-// TestConnId_ReturnsNonZeroID verifies that ConnId returns a non-zero ID.
-// This is a dedicated test case for task 3.1.
-func TestConnId_ReturnsNonZeroID(t *testing.T) {
-	db, err := sql.Open("dukdb", ":memory:")
-	require.NoError(t, err)
-
-	defer func() { _ = db.Close() }()
-
-	conn, err := db.Conn(context.Background())
-	require.NoError(t, err)
-
-	defer func() { _ = conn.Close() }()
-
-	id, err := dukdb.ConnId(conn)
-	require.NoError(t, err)
-	require.NotZero(t, id, "ConnId should return a non-zero ID")
-	require.Greater(t, id, uint64(0), "ID should be greater than 0")
-}
-
 // TestConnId_Uniqueness100 creates 100 connections and verifies all IDs are unique.
 // Task 3.2: Create 100 connections, verify all IDs unique.
 func TestConnId_Uniqueness100(t *testing.T) {
@@ -250,49 +231,6 @@ func TestConnId_Uniqueness100(t *testing.T) {
 	}
 
 	require.Equal(t, numConnections, len(ids), "should have %d unique IDs", numConnections)
-}
-
-// TestConnId_DifferentConnections verifies different connections have different IDs.
-// Task 3.4: Verify different connections have different IDs.
-func TestConnId_DifferentConnections(t *testing.T) {
-	// Create multiple databases to get different backend connections
-	databases := make([]*sql.DB, 5)
-	connections := make([]*sql.Conn, 5)
-	ids := make([]uint64, 5)
-
-	for i := range 5 {
-		db, err := sql.Open("dukdb", ":memory:")
-		require.NoError(t, err)
-
-		databases[i] = db
-
-		conn, err := db.Conn(context.Background())
-		require.NoError(t, err)
-
-		connections[i] = conn
-
-		id, err := dukdb.ConnId(conn)
-		require.NoError(t, err)
-
-		ids[i] = id
-	}
-
-	// Cleanup
-	defer func() {
-		for i := range 5 {
-			_ = connections[i].Close()
-			_ = databases[i].Close()
-		}
-	}()
-
-	// Verify all IDs are different
-	for i := range 5 {
-		for j := i + 1; j < 5; j++ {
-			require.NotEqual(t, ids[i], ids[j],
-				"connections %d and %d should have different IDs (id%d=%d, id%d=%d)",
-				i, j, i, ids[i], j, ids[j])
-		}
-	}
 }
 
 // TestConnId_Sequential verifies IDs increment sequentially (1, 2, 3, ...).
@@ -481,49 +419,4 @@ func TestConnId_ConcurrentCalls(t *testing.T) {
 	for i, id := range allIDs {
 		require.Equal(t, expectedID, id, "ID at index %d should equal expected ID", i)
 	}
-}
-
-// TestConnId_NoRaceConditions is designed to be run with -race flag.
-// Task 3.10: Run with -race flag, verify no races.
-// This test creates connections and calls ConnId() concurrently to check for race conditions.
-func TestConnId_NoRaceConditions(t *testing.T) {
-	t.Parallel() // Enable parallel test execution
-
-	const numGoroutines = 20
-	const opsPerGoroutine = 50
-
-	var wg sync.WaitGroup
-
-	wg.Add(numGoroutines)
-
-	for range numGoroutines {
-		go func() {
-			defer wg.Done()
-
-			for range opsPerGoroutine {
-				db, err := sql.Open("dukdb", ":memory:")
-				if err != nil {
-					continue
-				}
-
-				conn, err := db.Conn(context.Background())
-				if err != nil {
-					_ = db.Close()
-
-					continue
-				}
-
-				// Call ConnId multiple times
-				for range 5 {
-					_, _ = dukdb.ConnId(conn)
-				}
-
-				_ = conn.Close()
-				_ = db.Close()
-			}
-		}()
-	}
-
-	wg.Wait()
-	// If we get here without the race detector complaining, the test passes
 }
