@@ -75,3 +75,6 @@
 // The MemoryCatalog provides in-memory storage for testing.
 // Production use would typically use a DuckDB catalog-backed implementation.
 package secret
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

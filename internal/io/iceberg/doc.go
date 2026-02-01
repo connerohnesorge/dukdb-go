@@ -266,3 +266,6 @@
 //   - Apache iceberg-go library: https://github.com/apache/iceberg-go
 //   - dukdb-go Parquet reader: github.com/dukdb/dukdb-go/internal/io/parquet
 package iceberg
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

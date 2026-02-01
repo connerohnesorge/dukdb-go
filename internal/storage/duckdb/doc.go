@@ -186,3 +186,6 @@
 //
 // See COMPATIBILITY.md in this package for detailed format compatibility notes.
 package duckdb
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

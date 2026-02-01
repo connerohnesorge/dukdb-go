@@ -44,3 +44,6 @@
 // implementation choices or missing features. Known differences are documented
 // in the individual test cases.
 package compat
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

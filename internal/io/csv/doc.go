@@ -10,3 +10,6 @@
 //   - Comment line skipping
 //   - Automatic type inference for columns
 package csv
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

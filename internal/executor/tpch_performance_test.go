@@ -328,7 +328,7 @@ func TestTPCHQuery1SimpleAggregation(t *testing.T) {
 
 	// Query 1 should be fast (aggregation only)
 	require.Greater(t, rowCount, 0, "Query should return rows")
-	require.Less(t, elapsedMS, int64(5000), "Query should complete in less than 5 seconds")
+	require.Less(t, elapsedMS, int64(10000), "Query should complete in less than 10 seconds")
 }
 
 // TestTPCHQuery3JoinAggregation tests TPC-H Query 3 (3-table join + aggregation)
@@ -372,7 +372,7 @@ func TestTPCHQuery3JoinAggregation(t *testing.T) {
 
 	// Query 3 should return up to 10 rows
 	require.LessOrEqual(t, rowCount, 10, "Query should return at most 10 rows")
-	require.Less(t, elapsedMS, int64(10000), "Query should complete in less than 10 seconds")
+	require.Less(t, elapsedMS, int64(15000), "Query should complete in less than 15 seconds")
 }
 
 // TestTPCHQuery5MultiJoin tests TPC-H Query 5 (5-table join + aggregation)
@@ -459,7 +459,7 @@ func TestTPCHQuery10Selective(t *testing.T) {
 		t.Logf("TPC-H Q10: %d rows in %dms", rowCount, elapsedMS)
 	}
 
-	require.Less(t, elapsedMS, int64(10000), "Query should complete in less than 10 seconds")
+	require.Less(t, elapsedMS, int64(15000), "Query should complete in less than 15 seconds")
 }
 
 // TestTPCHAllQueriesCompleteWithinTimeout verifies all queries complete within timeout

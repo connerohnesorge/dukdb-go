@@ -201,3 +201,6 @@
 // DataChunks returned by ReadChunk() are managed internally and do not require
 // explicit release.
 package arrow
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .

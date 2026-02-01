@@ -235,3 +235,6 @@
 //   - Cell styles: Limited support (date formats only)
 //   - Charts/Images: Not supported
 package xlsx
+
+//go:generate gomarkdoc -u -o CLAUDE.md .
+//go:generate gomarkdoc -u -o AGENTS.md .
