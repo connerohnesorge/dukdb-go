@@ -277,8 +277,8 @@ func (fm *FileManager) WriteCatalog(data []byte) error {
 		return fmt.Errorf("failed to seek to catalog position: %w", err)
 	}
 
-	// Store the catalog offset in MetaBlock
-	fm.metadata.ActiveHeader.MetaBlock = uint64(fm.dataOffset)
+	// Store the catalog block number in MetaBlock (not byte offset)
+	fm.metadata.ActiveHeader.MetaBlock = uint64(fm.dataOffset / int64(fm.metadata.ActiveHeader.BlockAllocSize))
 
 	if _, err := fm.file.Write(data); err != nil {
 		return fmt.Errorf("failed to write catalog: %w", err)
@@ -293,7 +293,7 @@ func (fm *FileManager) ReadCatalog() ([]byte, error) {
 	if fm.metadata.ActiveHeader == nil || fm.metadata.ActiveHeader.MetaBlock == 0 {
 		return nil, ErrCorruptedFile
 	}
-	catalogOffset := int64(fm.metadata.ActiveHeader.MetaBlock)
+	catalogOffset := int64(fm.metadata.ActiveHeader.MetaBlock) * int64(fm.metadata.ActiveHeader.BlockAllocSize)
 
 	if _, err := fm.file.Seek(catalogOffset, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to catalog: %w", err)
