@@ -1,4 +1,4 @@
-package optimizer
+package optimizer_test
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/dukdb/dukdb-go" // Register dukdb driver
+	_ "github.com/dukdb/dukdb-go"                 // Register dukdb driver
+	_ "github.com/dukdb/dukdb-go/internal/engine" // Register engine backend
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,6 +21,17 @@ import (
 type CardinalityEstimationSuite struct {
 	dbPath string
 	db     *sql.DB
+}
+
+// CardinalityEstimateResult holds estimate accuracy metrics
+type CardinalityEstimateResult struct {
+	Query             string
+	EstimatedRows     int64
+	ActualRows        int64
+	EstimateError     float64 // (Estimated - Actual) / Actual
+	WithinTwox        bool    // Estimate within 2x of actual
+	OperatorEstimates map[string]int64
+	OperatorActuals   map[string]int64
 }
 
 // findTestDatabase searches for the comprehensive test database

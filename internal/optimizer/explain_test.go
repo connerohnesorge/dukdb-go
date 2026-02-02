@@ -1,4 +1,4 @@
-package optimizer
+package optimizer_test
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/dukdb/dukdb-go" // Register dukdb driver
+	_ "github.com/dukdb/dukdb-go"                 // Register dukdb driver
+	_ "github.com/dukdb/dukdb-go/internal/engine" // Register engine backend
 	"github.com/stretchr/testify/require"
 )
 
