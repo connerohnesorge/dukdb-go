@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "github.com/dukdb/dukdb-go"                 // Register dukdb driver
@@ -60,6 +61,18 @@ func NewCorrectnessTestSuite() *CorrectnessTestSuite {
 	return &CorrectnessTestSuite{
 		dbPath: findTestDatabaseCorrect(),
 	}
+}
+
+// shouldSkipForDatabaseError checks if we should skip due to database errors
+func shouldSkipForDatabaseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "no backend registered") ||
+		strings.Contains(errStr, "invalid argument") ||
+		strings.Contains(errStr, "failed to seek") ||
+		strings.Contains(errStr, "failed to load database")
 }
 
 // TestCorrectnessBasicSelectQueries validates basic SELECT queries produce correct results
@@ -133,11 +146,8 @@ func TestCorrectnessBasicSelectQueries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -246,11 +256,8 @@ func TestCorrectnessJoinCorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -340,11 +347,8 @@ func TestCorrectnessSubqueryCorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -409,11 +413,8 @@ func TestCorrectnessAggregateCorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -497,11 +498,8 @@ func TestCorrectnessFilterCorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -568,11 +566,8 @@ func TestCorrectnessCTECorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
@@ -620,11 +615,8 @@ func TestCorrectnessEdgeCases(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if suite.db == nil {
 				db, err := sql.Open("dukdb", suite.dbPath)
-				if err != nil && err.Error() != "" {
-					if err.Error() == "no backend registered" {
-						t.Skip("Backend not available for testing")
-					}
-					t.Skipf("Failed to open database: %v", err)
+				if shouldSkipForDatabaseError(err) {
+					t.Skip("Database not available for testing")
 				}
 				suite.db = db
 			}
