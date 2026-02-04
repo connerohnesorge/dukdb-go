@@ -1,11 +1,10 @@
 # Specification: Complex Type Functions and Operators
 
-## Overview
-This spec defines construction functions and operators for complex types (JSON, MAP, STRUCT, UNION) in dukdb-go for DuckDB v1.4.3 compatibility.
-
 ## ADDED Requirements
 
-### Requirement 1: Complex Type Casting Functions
+### Requirement: Complex Type Casting Functions
+
+The system MUST provide functions to cast between complex types and JSON/TEXT.
 
 #### Scenario: Use to_json for any type
 ```sql
@@ -44,7 +43,9 @@ FROM users LIMIT 1;
 -- And: Column names become JSON keys
 ```
 
-### Requirement 2: MAP Construction Functions
+### Requirement: MAP Construction Functions
+
+The system MUST provide functions to construct MAP values.
 
 #### Scenario: Use map() function
 ```sql
@@ -66,7 +67,9 @@ SELECT map_from_entries([
 -- Then: Should construct MAP from struct array
 ```
 
-### Requirement 3: STRUCT Construction Functions
+### Requirement: STRUCT Construction Functions
+
+The system MUST provide functions to construct STRUCT values.
 
 #### Scenario: Use struct_pack
 ```sql
@@ -91,7 +94,9 @@ SELECT struct_insert(
 -- Then: Should return new struct with added field
 ```
 
-### Requirement 4: UNION Functions
+### Requirement: UNION Functions
+
+The system MUST provide functions to construct and inspect UNION values.
 
 #### Scenario: Use union_value for construction
 ```sql
@@ -120,7 +125,9 @@ SELECT union_extract(union_value(num := 42), 'num');
 -- And: Return NULL for non-active members
 ```
 
-### Requirement 5: Complex Type Operators
+### Requirement: Complex Type Operators
+
+The system MUST implement operators for accessing complex type elements.
 
 #### Scenario: Use [] operator for MAP access
 ```sql
@@ -150,7 +157,9 @@ FROM events;
 -- Then: Should navigate JSON structure
 ```
 
-### Requirement 6: Array Functions on Complex Types
+### Requirement: Array Functions on Complex Types
+
+The system MUST provide array functions that work with complex types.
 
 #### Scenario: Transform MAP keys to array
 ```sql
@@ -177,7 +186,9 @@ SELECT map_contains(MAP(['a', 'b'], [1, 2]), 'c') as has_c;
 -- Then: First should return TRUE, second FALSE
 ```
 
-### Requirement 7: Complex Type Inspection Functions
+### Requirement: Complex Type Inspection Functions
+
+The system MUST provide functions to inspect the structure and type of complex values.
 
 #### Scenario: Get JSON type information
 ```sql
@@ -209,7 +220,9 @@ FROM users;
 -- Then: Should indicate if field extraction succeeded
 ```
 
-### Requirement 8: Complex Type Conversion Functions
+### Requirement: Complex Type Conversion Functions
+
+The system MUST provide functions to convert between complex types.
 
 #### Scenario: Convert MAP to JSON
 ```sql
@@ -227,7 +240,9 @@ SELECT to_json({'name': 'Alice', 'age': 30}) as json_struct;
 -- Then: Should return '{"name": "Alice", "age": 30}' as JSON
 ```
 
-### Requirement 9: Nested Complex Type Functions
+### Requirement: Nested Complex Type Functions
+
+The system MUST support function access on nested complex structures.
 
 #### Scenario: Nested MAP access
 ```sql
@@ -247,7 +262,9 @@ FROM table_with_nested_structs;
 -- Then: Should navigate nested structure
 ```
 
-### Requirement 10: Complex Type Aggregations
+### Requirement: Complex Type Aggregations
+
+The system MUST support aggregation functions on complex types.
 
 #### Scenario: Aggregate STRUCT fields
 ```sql
@@ -269,27 +286,30 @@ GROUP BY category;
 -- Then: Should aggregate maps across groups
 ```
 
-## MODIFIED Requirements
+### Requirement: Function Registry Updates
 
-### Function Registry
-```
--- In: internal/functions/registry.go
--- Add: Registration for all complex type functions
--- Add: Type checking for complex type parameters
--- Add: Overload resolution for polymorphic functions
-```
+The system MUST register all complex type functions in the function registry.
 
-### Operator Implementation
-```
--- In: internal/executor/operators.go
--- Add: Bracket operator [] for MAP access
--- Add: Dot operator . for STRUCT access
--- Add: Arrow operators -> and ->> for JSON navigation
--- Add: Path operators #> and #>> for JSON paths
-```
+#### Scenario: Register complex functions
+- **Given** the function registry
+- **When** the system starts
+- **Then** all complex type functions are registered
+- **And** parameter type checking is enabled
+- **And** overload resolution supports polymorphic functions
 
-## REMOVED Requirements
-*None - purely additive*
+### Requirement: Operator Implementation Updates
+
+The system MUST implement operators for complex type access.
+
+#### Scenario: Support complex type operators
+- **Given** the executor operator system
+- **When** expressions are evaluated
+- **Then** bracket operator [] supports MAP access
+- **And** dot operator . supports STRUCT access
+- **And** arrow operators -> and ->> support JSON navigation
+- **And** path operators #> and #>> support JSON paths
+
+
 
 ## FUNCTION SIGNATURES
 

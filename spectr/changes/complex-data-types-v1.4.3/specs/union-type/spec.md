@@ -1,11 +1,11 @@
 # Specification: UNION Type Completion
 
-## Overview
-This spec completes the UNION type implementation in dukdb-go for DuckDB v1.4.3 compatibility, enabling polymorphic columns where each row can be a different type.
-
 ## ADDED Requirements
 
-### Requirement 1: UNION Type Definition
+### Requirement: UNION Type Definition
+
+The system MUST implement a UNION data type that allows a column to hold different types per row.
+
 #### Scenario: Create table with UNION column
 ```sql
 -- Given: A database connection
@@ -33,7 +33,10 @@ CREATE TABLE complex (
 -- And: Should support nested complex types within UNION
 ```
 
-### Requirement 2: UNION Construction with union_value
+### Requirement: UNION Construction with union_value
+
+The system MUST provide functions to construct UNION values.
+
 #### Scenario: Construct UNION with integer member
 ```sql
 -- Given: Database connection
@@ -70,7 +73,10 @@ SELECT union_value(num = 100) as value;
 -- And: Work equivalently
 ```
 
-### Requirement 3: Union Tag Inspection
+### Requirement: Union Tag Inspection
+
+The system MUST provide functions to inspect the active member of a UNION value.
+
 #### Scenario: Use union_tag function
 ```sql
 -- Given: Table with UNION data
@@ -90,7 +96,10 @@ WHERE union_tag(value) = 'num';
 -- Then: Should return only rows where num member is active
 ```
 
-### Requirement 4: Union Value Extraction
+### Requirement: Union Value Extraction
+
+The system MUST provide functions to extract values from a UNION.
+
 #### Scenario: Extract union values with union_extract
 ```sql
 -- Given: Table with UNION data
@@ -114,7 +123,10 @@ WHERE union_extract(value, 'num') > 20;
 -- And: Other rows return NULL for extract
 ```
 
-### Requirement 5: UNION Type Discrimination
+### Requirement: UNION Type Discrimination
+
+The system MUST support type discrimination for UNION values.
+
 #### Scenario: Different rows use different members
 ```sql
 -- Given: Empty table with UNION column
@@ -143,7 +155,10 @@ FROM flexible_values;
 -- And: Correctly extract and format values
 ```
 
-### Requirement 6: UNION with Complex Nested Types
+### Requirement: UNION with Complex Nested Types
+
+The system MUST support nested complex types within UNIONs.
+
 #### Scenario: UNION containing STRUCT
 ```sql
 -- Given: Table with UNION containing STRUCT
@@ -168,7 +183,10 @@ WHERE union_tag(data) = 'point';
 -- And: Handle NULL for non-STRUCT rows
 ```
 
-### Requirement 7: UNION NULL Handling
+### Requirement: UNION NULL Handling
+
+The system MUST handle NULL values for UNIONs correctly.
+
 #### Scenario: NULL union values
 ```sql
 -- Given: Table with UNION column
@@ -188,7 +206,10 @@ WHERE value IS NULL;
 -- And: union_tag should return NULL
 ```
 
-### Requirement 8: UNION in Expressions
+### Requirement: UNION in Expressions
+
+The system MUST support UNION values in SQL expressions.
+
 #### Scenario: UNION values in CASE expressions
 ```sql
 -- Given: Table with UNION values
@@ -217,7 +238,10 @@ FROM flexible_values;
 -- Then: Should return first non-NULL extraction
 ```
 
-### Requirement 9: UNION Type Validation
+### Requirement: UNION Type Validation
+
+The system MUST enforce validation on UNION types.
+
 #### Scenario: Reject invalid member names
 ```sql
 -- Given: Database connection
@@ -234,7 +258,10 @@ SELECT union_value(num := 'not a number');
 -- Then: Should fail or attempt to cast string to INTEGER
 ```
 
-### Requirement 10: UNION Storage Format
+### Requirement: UNION Storage Format
+
+The system MUST persist UNION values correctly.
+
 #### Scenario: UNION preserves type information
 ```sql
 -- Given: Table with UNION column
@@ -247,29 +274,28 @@ SELECT union_value(num := 'not a number');
 -- And: union_extract should return correct values
 ```
 
-## MODIFIED Requirements
+### Requirement: Existing Union Type Definition
 
-### Existing Union Type Definition
+The system MUST update the existing Union type implementation.
+
 #### Scenario: Complete types.go Union implementation
-```
--- In: /home/connerohnesorge/Documents/001Repos/dukdb-go/types.go
--- Current: Union struct defined for scanning
--- Modify: Add discriminator field storage
--- Add: Serialization to DuckDB format
--- Add: Type information preservation
-```
+- **Given** types.go Union definition
+- **When** updated
+- **Then** Discriminator field storage is added
+- **And** Serialization to DuckDB format is supported
+- **And** Type information preservation is handled
 
-### Expression Framework
+### Requirement: Expression Framework Updates
+
+The system MUST update the expression framework to support UNIONs.
+
 #### Scenario: Add union construction and extraction
-```
--- In: internal/functions/union/
--- Add: union_value construction function
--- Add: union_tag inspection function
--- Add: union_extract accessor function
--- Add: Type resolution based on active member
-```
-
-## STORAGE IMPLEMENTATION
+- **Given** executor operators
+- **When** updated
+- **Then** union_value function constructs values
+- **And** union_tag function inspects values
+- **And** union_extract function extracts values
+- **And** Type resolution works based on active member## STORAGE IMPLEMENTATION
 
 ### Physical Layout
 ```

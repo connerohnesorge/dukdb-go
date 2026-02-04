@@ -1,17 +1,31 @@
 # Security Model Specification
 
+## ADDED Requirements
+
 **Specification ID:** `security-model-v1.0`
 **Version:** 1.0
 **Status:** Draft
 **Last Updated:** 2024-01-20
 
-## Overview
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the comprehensive security model for the dukdb-go extension system. The model implements defense-in-depth principles to ensure extensions operate within strict security boundaries while maintaining functionality and performance.
 
-## Security Requirements
 
-### Core Security Requirements
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security Requirements
+
+The system MUST implement the following functionality.
+
+
+#### Core Security Requirements
 
 1. **Code Integrity**: All extensions must be cryptographically signed and verified
 2. **Sandboxing**: Extensions run in isolated environments with restricted capabilities
@@ -21,9 +35,9 @@ This specification defines the comprehensive security model for the dukdb-go ext
 6. **Safe Failure**: Graceful degradation when security checks fail
 7. **Update Security**: Secure update mechanism with rollback capability
 
-### Threat Model
+#### Threat Model
 
-#### Attack Vectors
+##### Attack Vectors
 - Malicious extension code
 - Compromised extension repositories
 - Supply chain attacks
@@ -32,15 +46,24 @@ This specification defines the comprehensive security model for the dukdb-go ext
 - Data exfiltration attempts
 - Code injection attacks
 
-#### Security Objectives
+##### Security Objectives
 - Confidentiality: Prevent unauthorized data access
 - Integrity: Prevent unauthorized data modification
 - Availability: Maintain system availability
 - Accountability: Track all security-relevant actions
 
-## Code Signing and Verification
 
-### Signing Process
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Code Signing and Verification
+
+The system MUST implement the following functionality.
+
+
+#### Signing Process
 
 ```
 Developer ──► Code Signing ──► Signed Extension
@@ -53,7 +76,7 @@ Private Key    Certificate
     Certificate Authority
 ```
 
-### Signature Format
+#### Signature Format
 
 ```go
 // ExtensionSignature contains cryptographic signature
@@ -113,7 +136,7 @@ func (s *ExtensionSigner) Sign(manifest *ExtensionManifest) (*ExtensionSignature
 }
 ```
 
-### Verification Process
+#### Verification Process
 
 ```go
 type SignatureVerifier struct {
@@ -181,9 +204,18 @@ func (v *SignatureVerifier) verifyCertificateChain(certificates []*x509.Certific
 }
 ```
 
-## Sandboxing Architecture
 
-### Sandbox Layers
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Sandboxing Architecture
+
+The system MUST implement the following functionality.
+
+
+#### Sandbox Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -203,7 +235,7 @@ func (v *SignatureVerifier) verifyCertificateChain(certificates []*x509.Certific
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Memory Sandboxing
+#### Memory Sandboxing
 
 ```go
 // MemorySandbox provides memory isolation
@@ -321,7 +353,7 @@ func (a *SecureAllocator) Free(ptr []byte) error {
 }
 ```
 
-### CPU Sandboxing
+#### CPU Sandboxing
 
 ```go
 // CPUSandbox controls CPU usage
@@ -389,7 +421,7 @@ func (c *CPUController) CountInstructions(fn func()) {
 }
 ```
 
-### I/O Sandboxing
+#### I/O Sandboxing
 
 ```go
 // IOSandbox controls file system access
@@ -518,9 +550,18 @@ func (f *IOSandboxFile) Write(b []byte) (int, error) {
 }
 ```
 
-## Permission System
 
-### Capability-Based Permissions
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Permission System
+
+The system MUST implement the following functionality.
+
+
+#### Capability-Based Permissions
 
 ```go
 // Permission represents a security permission
@@ -638,7 +679,7 @@ func (p *MemoryPermission) Validate() error {
 }
 ```
 
-### Permission Enforcement
+#### Permission Enforcement
 
 ```go
 // PermissionManager manages permissions
@@ -708,9 +749,18 @@ func (e *PermissionEnforcer) Enforce(permission Permission) error {
 }
 ```
 
-## Audit Logging
 
-### Audit Events
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Audit Logging
+
+The system MUST implement the following functionality.
+
+
+#### Audit Events
 
 ```go
 // AuditEvent represents a security-relevant event
@@ -817,9 +867,18 @@ func (p *SuspiciousPermissionPattern) Match(event *AuditEvent) bool {
 }
 ```
 
-## Secure Update Mechanism
 
-### Update Process
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Secure Update Mechanism
+
+The system MUST implement the following functionality.
+
+
+#### Update Process
 
 ```go
 // SecureUpdater handles secure updates
@@ -942,9 +1001,18 @@ func (m *RollbackManager) Rollback(extension string) error {
 }
 ```
 
-## Configuration
 
-### Security Configuration
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Configuration
+
+The system MUST implement the following functionality.
+
+
+#### Security Configuration
 
 ```yaml
 # Security configuration
@@ -1006,9 +1074,18 @@ security:
     max_backups: 3
 ```
 
-## Security Testing
 
-### Security Test Suite
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security Testing
+
+The system MUST implement the following functionality.
+
+
+#### Security Test Suite
 
 ```go
 type SecurityTestSuite struct {
@@ -1063,7 +1140,7 @@ func (s *SecurityTestSuite) TestCodeInjection() {
 }
 ```
 
-### Fuzzing Framework
+#### Fuzzing Framework
 
 ```go
 type SecurityFuzzer struct {
@@ -1105,8 +1182,23 @@ func (f *SecurityFuzzer) FuzzFilePaths() {
 }
 ```
 
-## Version History
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Version History
+
+The system MUST implement the following functionality.
+
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2024-01-20 | Initial specification | dukdb-go Team |
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

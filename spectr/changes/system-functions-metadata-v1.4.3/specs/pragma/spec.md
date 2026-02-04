@@ -1,16 +1,30 @@
 # PRAGMA Statement Specification
 
-## Overview
+## ADDED Requirements
+
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the implementation of DuckDB v1.4.3 compatible PRAGMA statements in dukdb-go. PRAGMA statements provide a way to query or modify the internal state of the database engine.
 
-## PRAGMA Categories
 
-### 1. Information PRAGMAs
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: PRAGMA Categories
+
+The system MUST implement the following functionality.
+
+
+#### 1. Information PRAGMAs
 
 These PRAGMAs return information about the database or its objects.
 
-#### PRAGMA database_list
+##### PRAGMA database_list
 
 Lists all databases attached to the current session.
 
@@ -39,7 +53,7 @@ PRAGMA database_list;
 - ':memory:' for in-memory databases
 - Empty string for temporary databases
 
-#### PRAGMA database_size
+##### PRAGMA database_size
 
 Returns information about the database file size and block count.
 
@@ -66,7 +80,7 @@ PRAGMA database_size;
 -- main          | 1.5GB         | 262144     | 6000         | 1000        | 5000        | 83.3
 ```
 
-#### PRAGMA table_info(table_name)
+##### PRAGMA table_info(table_name)
 
 Returns information about the columns in a table.
 
@@ -103,7 +117,7 @@ PRAGMA table_info('users');
 - Returns empty result if table doesn't exist
 - Primary key columns marked with pk=true
 
-#### PRAGMA table_storage_info(table_name)
+##### PRAGMA table_storage_info(table_name)
 
 Returns detailed storage information about a table.
 
@@ -135,7 +149,7 @@ PRAGMA table_storage_info('users');
 -- Returns detailed storage layout information
 ```
 
-#### PRAGMA storage_info(table_name)
+##### PRAGMA storage_info(table_name)
 
 Alias for table_storage_info.
 
@@ -144,7 +158,7 @@ Alias for table_storage_info.
 PRAGMA storage_info('table_name');
 ```
 
-#### PRAGMA stats(table_name)
+##### PRAGMA stats(table_name)
 
 Returns statistics for a table.
 
@@ -170,11 +184,11 @@ PRAGMA stats('users');
 -- name | {"null_count": 0, "distinct_count": 950}
 ```
 
-### 2. Configuration PRAGMAs
+#### 2. Configuration PRAGMAs
 
 These PRAGMAs modify the behavior of the database.
 
-#### PRAGMA version
+##### PRAGMA version
 
 Returns the DuckDB version.
 
@@ -199,7 +213,7 @@ PRAGMA version;
 - Returns dukdb-go version matching DuckDB v1.4.3
 - source_id should match DuckDB git hash
 
-#### PRAGMA platform
+##### PRAGMA platform
 
 Returns platform information.
 
@@ -220,7 +234,7 @@ PRAGMA platform;
 -- linux_amd64
 ```
 
-#### PRAGMA functions
+##### PRAGMA functions
 
 Lists all functions or searches for specific functions.
 
@@ -250,7 +264,7 @@ PRAGMA functions('string%');
 -- string_split| scalar | (text, delimiter)  | VARCHAR[]   | Split string
 ```
 
-#### PRAGMA collations
+##### PRAGMA collations
 
 Lists all available collations.
 
@@ -274,11 +288,11 @@ PRAGMA collations;
 -- rtrim     | Right-trim collation
 ```
 
-### 3. Debug PRAGMAs
+#### 3. Debug PRAGMAs
 
 These PRAGMAs are used for debugging and development.
 
-#### PRAGMA disable_optimizer
+##### PRAGMA disable_optimizer
 
 Disables the query optimizer.
 
@@ -292,7 +306,7 @@ PRAGMA disable_optimizer;
 - Can significantly impact performance
 - Useful for debugging query plans
 
-#### PRAGMA enable_optimizer
+##### PRAGMA enable_optimizer
 
 Enables the query optimizer (default).
 
@@ -301,7 +315,7 @@ Enables the query optimizer (default).
 PRAGMA enable_optimizer;
 ```
 
-#### PRAGMA enable_profiling
+##### PRAGMA enable_profiling
 
 Enables query profiling.
 
@@ -321,7 +335,7 @@ PRAGMA enable_profiling = 'detailed';
 - Affects current session only
 - May impact query performance
 
-#### PRAGMA disable_profiling
+##### PRAGMA disable_profiling
 
 Disables query profiling (default).
 
@@ -330,7 +344,7 @@ Disables query profiling (default).
 PRAGMA disable_profiling;
 ```
 
-#### PRAGMA profiling_output
+##### PRAGMA profiling_output
 
 Sets the output file for profiling information.
 
@@ -342,7 +356,7 @@ PRAGMA profiling_output = 'profile.json';
 **Parameters:**
 - `filename` (VARCHAR): Output file path
 
-#### PRAGMA explain_output
+##### PRAGMA explain_output
 
 Controls the output format of EXPLAIN.
 
@@ -353,9 +367,9 @@ PRAGMA explain_output = 'optimized';  -- Only optimized plan
 PRAGMA explain_output = 'physical';   -- Only physical plan
 ```
 
-### 4. Memory PRAGMAs
+#### 4. Memory PRAGMAs
 
-#### PRAGMA memory_limit
+##### PRAGMA memory_limit
 
 Sets or shows the memory limit.
 
@@ -374,7 +388,7 @@ PRAGMA memory_limit = 0;              -- No limit
 - 0 means no limit
 - Affects current session only
 
-#### PRAGMA threads
+##### PRAGMA threads
 
 Sets or shows the number of threads.
 
@@ -391,9 +405,9 @@ PRAGMA threads = 4;                   -- Set thread count
 - 0 means use all available cores
 - Affects current session only
 
-### 5. Checkpoint PRAGMAs
+#### 5. Checkpoint PRAGMAs
 
-#### PRAGMA checkpoint
+##### PRAGMA checkpoint
 
 Performs a checkpoint operation.
 
@@ -407,7 +421,7 @@ PRAGMA checkpoint;
 - Truncates WAL file
 - Blocks until complete
 
-#### PRAGMA wal_checkpoint
+##### PRAGMA wal_checkpoint
 
 Performs a WAL checkpoint.
 
@@ -421,9 +435,9 @@ PRAGMA wal_checkpoint;
 - `log` (INTEGER): Number of WAL frames
 - `checkpointed` (INTEGER): Number of frames checkpointed
 
-### 6. Import/Export PRAGMAs
+#### 6. Import/Export PRAGMAs
 
-#### PRAGMA import_database
+##### PRAGMA import_database
 
 Imports a database from a directory.
 
@@ -435,7 +449,7 @@ PRAGMA import_database('path/to/directory');
 **Parameters:**
 - `directory` (VARCHAR): Path to directory containing exported database
 
-#### PRAGMA export_database
+##### PRAGMA export_database
 
 Exports the entire database to a directory.
 
@@ -452,9 +466,9 @@ PRAGMA export_database('path/to/directory');
 - Overwrites existing files
 - Exports all schemas and data
 
-### 7. Transaction PRAGMAs
+#### 7. Transaction PRAGMAs
 
-#### PRAGMA transaction_isolation
+##### PRAGMA transaction_isolation
 
 Sets or shows the transaction isolation level.
 
@@ -473,9 +487,18 @@ PRAGMA transaction_isolation = 'serializable';
 - Default is SERIALIZABLE
 - Affects current transaction only
 
-## Implementation Details
 
-### PRAGMA Handler Framework
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Implementation Details
+
+The system MUST implement the following functionality.
+
+
+#### PRAGMA Handler Framework
 
 ```go
 type PragmaHandler interface {
@@ -493,7 +516,7 @@ func (r *PragmaRegistry) Register(handler PragmaHandler) {
 }
 ```
 
-### PRAGMA Parser Extension
+#### PRAGMA Parser Extension
 
 ```go
 type PragmaStatement struct {
@@ -508,7 +531,7 @@ pragma_stmt:
     | PRAGMA identifier '=' expression
 ```
 
-### PRAGMA Execution
+#### PRAGMA Execution
 
 ```go
 func (e *Engine) ExecutePragma(stmt PragmaStatement) (Result, error) {
@@ -521,7 +544,7 @@ func (e *Engine) ExecutePragma(stmt PragmaStatement) (Result, error) {
 }
 ```
 
-### PRAGMA Categories
+#### PRAGMA Categories
 
 ```go
 const (
@@ -535,9 +558,18 @@ const (
 )
 ```
 
-## Error Handling
 
-### PRAGMA Errors
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Error Handling
+
+The system MUST implement the following functionality.
+
+
+#### PRAGMA Errors
 
 - `UNKNOWN_PRAGMA`: PRAGMA statement not recognized
 - `INVALID_ARGUMENT_COUNT`: Wrong number of arguments
@@ -545,7 +577,7 @@ const (
 - `INVALID_ARGUMENT_VALUE`: Invalid argument value
 - `OBJECT_NOT_FOUND`: Referenced object doesn't exist
 
-### Error Examples
+#### Error Examples
 
 ```sql
 -- Unknown PRAGMA
@@ -561,23 +593,32 @@ PRAGMA table_info('nonexistent');
 -- Returns empty result set
 ```
 
-## Testing Requirements
 
-### Unit Tests
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Testing Requirements
+
+The system MUST implement the following functionality.
+
+
+#### Unit Tests
 
 1. **PRAGMA Parser Tests**: Verify correct parsing
 2. **PRAGMA Handler Tests**: Test each PRAGMA implementation
 3. **Argument Validation Tests**: Test error handling
 4. **Result Format Tests**: Verify correct output format
 
-### Integration Tests
+#### Integration Tests
 
 1. **DuckDB Compatibility**: Compare output with DuckDB v1.4.3
 2. **Transaction Tests**: Test PRAGMAs in transactions
 3. **Multi-session Tests**: Test session-specific PRAGMAs
 4. **Error Condition Tests**: Test all error paths
 
-### Test Examples
+#### Test Examples
 
 ```sql
 -- Test table_info
@@ -600,15 +641,24 @@ PRAGMA memory_limit = '500MB';
 PRAGMA memory_limit;
 ```
 
-## Security Considerations
 
-### Access Control
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security Considerations
+
+The system MUST implement the following functionality.
+
+
+#### Access Control
 
 1. **Information Disclosure**: Some PRAGMAs reveal system information
 2. **Configuration Changes**: PRAGMAs can modify system behavior
 3. **Resource Usage**: PRAGMAs can affect resource limits
 
-### Privileges
+#### Privileges
 
 ```sql
 -- Grant PRAGMA execution
@@ -619,7 +669,7 @@ GRANT PRAGMA ON table_info TO user;
 REVOKE PRAGMA ON checkpoint FROM user;
 ```
 
-### Audit Logging
+#### Audit Logging
 
 All PRAGMA executions are logged:
 ```
@@ -627,26 +677,50 @@ All PRAGMA executions are logged:
 [timestamp] user='user2' pragma='memory_limit' args=['1GB'] result='SUCCESS'
 ```
 
-## Performance Considerations
 
-### Implementation Optimizations
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Performance Considerations
+
+The system MUST implement the following functionality.
+
+
+#### Implementation Optimizations
 
 1. **Cached Results**: Some PRAGMAs cache results
 2. **Lazy Loading**: Metadata loaded on demand
 3. **Index Usage**: Use indexes for metadata queries
 4. **Parallel Scanning**: Scan multiple objects in parallel
 
-### Resource Usage
+#### Resource Usage
 
 1. **Memory Usage**: PRAGMAs should use minimal memory
 2. **CPU Usage**: Avoid expensive computations
 3. **I/O Usage**: Minimize disk access
 4. **Locking**: Avoid long-held locks
 
-## Future Enhancements
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Future Enhancements
+
+The system MUST implement the following functionality.
+
 
 1. **Custom PRAGMAs**: User-defined PRAGMA support
 2. **Persistent Settings**: Some PRAGMAs persist across sessions
 3. **Group PRAGMAs**: PRAGMAs that affect multiple settings
 4. **Conditional PRAGMAs**: PRAGMAs with conditions
 5. **Plugin PRAGMAs**: PRAGMAs from extensions
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

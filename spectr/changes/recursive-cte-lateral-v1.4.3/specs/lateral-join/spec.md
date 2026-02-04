@@ -1,17 +1,31 @@
 # Specification: Lateral Joins
 
+## ADDED Requirements
+
 **Spec ID:** `lateral-join-v1.4.3`
 **Status:** Draft
 **Version:** 1.0
 **Author:** dukdb-go Team
 
-## Overview
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the implementation requirements for Lateral Joins in dukdb-go to achieve DuckDB v1.4.3 compatibility. Lateral joins enable subqueries in the FROM clause to reference columns from preceding tables, allowing for powerful correlated subqueries and row-by-row computations.
 
-## Syntax
 
-### Basic Lateral Join
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Syntax
+
+The system MUST implement the following functionality.
+
+
+#### Basic Lateral Join
 
 ```sql
 SELECT select_list
@@ -23,7 +37,7 @@ JOIN LATERAL (
 ) subq ON true;
 ```
 
-### Lateral with Different Join Types
+#### Lateral with Different Join Types
 
 ```sql
 -- INNER JOIN LATERAL
@@ -43,9 +57,18 @@ LEFT JOIN LATERAL (
 ) latest_order ON true;
 ```
 
-## Requirements
 
-### LJ-1: Basic Lateral Join Support
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Requirements
+
+The system MUST implement the following functionality.
+
+
+#### LJ-1: Basic Lateral Join Support
 
 **Priority:** MUST
 **Testability:** High
@@ -72,7 +95,7 @@ JOIN LATERAL (
 - [ ] Lateral join with aggregation
 - [ ] Lateral join returning multiple columns
 
-### LJ-2: Left Lateral Join
+#### LJ-2: Left Lateral Join
 
 **Priority:** MUST
 **Testability:** High
@@ -99,7 +122,7 @@ LEFT JOIN LATERAL (
 - [ ] Left lateral join with NULL handling
 - [ ] Left lateral join with complex predicates
 
-### LJ-3: Multiple Lateral Joins
+#### LJ-3: Multiple Lateral Joins
 
 **Priority:** MUST
 **Testability:** High
@@ -136,7 +159,7 @@ JOIN LATERAL (
 - [ ] Mixed lateral and regular joins
 - [ ] Performance with multiple laterals
 
-### LJ-4: Lateral with Aggregations
+#### LJ-4: Lateral with Aggregations
 
 **Priority:** MUST
 **Testability:** High
@@ -172,7 +195,7 @@ JOIN LATERAL (
 - [ ] Lateral with GROUP BY (if supported)
 - [ ] Lateral with HAVING clause
 
-### LJ-5: Lateral Subquery with Set Operations
+#### LJ-5: Lateral Subquery with Set Operations
 
 **Priority:** SHOULD
 **Testability:** Medium
@@ -197,7 +220,7 @@ JOIN LATERAL (
 ) combined_data ON true;
 ```
 
-### LJ-6: Correlated Lateral Subqueries
+#### LJ-6: Correlated Lateral Subqueries
 
 **Priority:** MUST
 **Testability:** High
@@ -236,7 +259,7 @@ JOIN LATERAL (
 - [ ] Subqueries in lateral conditions
 - [ ] Nested correlations
 
-### LJ-7: Performance Requirements
+#### LJ-7: Performance Requirements
 
 **Priority:** MUST
 **Testability:** High
@@ -254,7 +277,7 @@ Lateral joins MUST meet the following performance requirements:
 - [ ] Benchmark with complex subqueries
 - [ ] Memory usage profiling
 
-### LJ-8: Lateral with Window Functions
+#### LJ-8: Lateral with Window Functions
 
 **Priority:** SHOULD
 **Testability:** Medium
@@ -280,7 +303,7 @@ JOIN LATERAL (
 ) ranked_orders ON true;
 ```
 
-### LJ-9: Lateral in WHERE Clause
+#### LJ-9: Lateral in WHERE Clause
 
 **Priority:** SHOULD NOT (Phase 2)
 **Testability:** Low
@@ -309,7 +332,7 @@ WHERE (
 );
 ```
 
-### LJ-10: Integration with Other Features
+#### LJ-10: Integration with Other Features
 
 **Priority:** MUST
 **Testability:** High
@@ -327,9 +350,18 @@ Lateral joins MUST integrate seamlessly with other dukdb-go features:
 - [ ] Lateral with recursive CTE
 - [ ] Lateral join with index usage
 
-## Implementation Details
 
-### Execution Model
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Implementation Details
+
+The system MUST implement the following functionality.
+
+
+#### Execution Model
 
 Lateral joins execute the right-hand subquery once for each row from the left input:
 
@@ -341,7 +373,7 @@ For each row R in left input:
     4. Output joined rows
 ```
 
-### Correlation Handling
+#### Correlation Handling
 
 ```go
 type CorrelationSpec struct {
@@ -351,22 +383,31 @@ type CorrelationSpec struct {
 }
 ```
 
-### Optimization Strategies
+#### Optimization Strategies
 
 1. **Predicate Pushdown**: Push outer predicates into lateral subquery
 2. **Caching**: Cache subquery results for repeated outer values
 3. **Batching**: Process multiple outer rows together when possible
 4. **Index Usage**: Utilize indexes on correlation predicates
 
-### Memory Management
+#### Memory Management
 
 - Process in chunks of 2048 rows
 - Stream results to avoid materialization
 - Bounded memory usage per operator
 
-## Examples
 
-### Top-N per Group
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Examples
+
+The system MUST implement the following functionality.
+
+
+#### Top-N per Group
 
 ```sql
 -- Top 3 products by revenue for each category
@@ -385,7 +426,7 @@ JOIN LATERAL (
 ) top_products ON true;
 ```
 
-### Time Series Analysis
+#### Time Series Analysis
 
 ```sql
 -- Compare each order with customer's previous order
@@ -410,7 +451,7 @@ LEFT JOIN LATERAL (
 ) prev_order ON true;
 ```
 
-### Running Totals
+#### Running Totals
 
 ```sql
 -- Running balance for each account
@@ -432,7 +473,7 @@ JOIN LATERAL (
 ORDER BY a.account_id, t.transaction_date;
 ```
 
-### Existential Queries
+#### Existential Queries
 
 ```sql
 -- Products that have been ordered at least once
@@ -449,25 +490,43 @@ WHERE EXISTS (
 );
 ```
 
-## Performance Considerations
 
-### Best Practices
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Performance Considerations
+
+The system MUST implement the following functionality.
+
+
+#### Best Practices
 
 1. **Use LIMIT**: Always use LIMIT in lateral subqueries when possible
 2. **Index Outer Columns**: Ensure indexes exist on correlation columns
 3. **Avoid Correlated Aggregates**: Consider pre-aggregation when possible
 4. **Batch Processing**: Process multiple rows when correlation values repeat
 
-### Anti-Patterns
+#### Anti-Patterns
 
 1. **Uncorrelated Lateral**: Don't use LATERAL when regular subquery works
 2. **Missing Indexes**: Ensure proper indexes on correlation predicates
 3. **Large Result Sets**: Avoid lateral subqueries returning many rows per outer row
 4. **Deep Nesting**: Avoid deeply nested lateral joins
 
-## Migration Guide
 
-### From Correlated Subqueries
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Migration Guide
+
+The system MUST implement the following functionality.
+
+
+#### From Correlated Subqueries
 
 ```sql
 -- Before: Correlated subquery in SELECT
@@ -486,7 +545,7 @@ JOIN LATERAL (
 ) order_stats ON true;
 ```
 
-### From Self-Joins
+#### From Self-Joins
 
 ```sql
 -- Before: Self-join for previous row
@@ -512,9 +571,18 @@ LEFT JOIN LATERAL (
 ) prev ON true;
 ```
 
-## Test Data
 
-### E-commerce Schema
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Test Data
+
+The system MUST implement the following functionality.
+
+
+#### E-commerce Schema
 
 ```sql
 CREATE TABLE customers (
@@ -553,7 +621,7 @@ CREATE TABLE categories (
 );
 ```
 
-### Time Series Data
+#### Time Series Data
 
 ```sql
 CREATE TABLE accounts (
@@ -571,7 +639,16 @@ CREATE TABLE transactions (
 );
 ```
 
-## References
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: References
+
+The system MUST implement the following functionality.
+
 
 1. SQL:2011 Standard - Section 7.6 (<table reference>)
 2. PostgreSQL Documentation - https://www.postgresql.org/docs/current/queries-table-expressions.html
@@ -579,23 +656,32 @@ CREATE TABLE transactions (
 4. "SQL and Relational Theory" - C.J. Date
 5. "SQL Antipatterns" - Bill Karwin
 
-## Appendix
 
-### A. Complete Examples
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Appendix
+
+The system MUST implement the following functionality.
+
+
+#### A. Complete Examples
 
 See `examples/lateral_join/` directory for complete working examples.
 
-### B. Performance Benchmarks
+#### B. Performance Benchmarks
 
 See `benchmarks/lateral_join/` directory for performance test results.
 
-### C. Error Message Catalog
+#### C. Error Message Catalog
 
 See `docs/errors/lateral_join_errors.md` for complete error message documentation.
 
-### D. Implementation Notes
+#### D. Implementation Notes
 
-#### Correlation Detection
+##### Correlation Detection
 
 The system must detect which columns from the outer query are referenced in the lateral subquery:
 
@@ -622,7 +708,7 @@ func detectCorrelations(subquery *SelectStmt, outerScope *Scope) []Correlation {
 }
 ```
 
-#### Execution Strategy
+##### Execution Strategy
 
 The lateral join operator processes rows in batches for efficiency:
 
@@ -657,3 +743,9 @@ func (l *LateralJoinOperator) execute() error {
     return nil
 }
 ```
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

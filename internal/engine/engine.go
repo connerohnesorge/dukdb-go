@@ -18,23 +18,24 @@ import (
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/persistence"
 	"github.com/dukdb/dukdb-go/internal/storage"
+	"github.com/dukdb/dukdb-go/internal/storage/duckdb"
 	"github.com/dukdb/dukdb-go/internal/wal"
 )
 
 // Engine is the core execution engine implementing the Backend interface.
 // It manages the catalog, storage, and transaction manager for the database.
 type Engine struct {
-	mu         sync.RWMutex
-	catalog    *catalog.Catalog
-	storage    *storage.Storage
-	txnMgr     *TransactionManager
-	optimizer  *optimizer.CostBasedOptimizer // Cost-based query optimizer
-	walWriter  *wal.Writer                   // WAL writer for persistent databases
-	checkpointMgr *wal.CheckpointManager      // Checkpoint manager for WAL-based checkpointing
-	config     *dukdb.Config
-	path       string
-	persistent bool // true if not :memory:
-	closed     bool
+	mu            sync.RWMutex
+	catalog       *catalog.Catalog
+	storage       *storage.Storage
+	txnMgr        *TransactionManager
+	optimizer     *optimizer.CostBasedOptimizer // Cost-based query optimizer
+	walWriter     *wal.Writer                   // WAL writer for persistent databases
+	checkpointMgr *wal.CheckpointManager        // Checkpoint manager for WAL-based checkpointing
+	config        *dukdb.Config
+	path          string
+	persistent    bool // true if not :memory:
+	closed        bool
 
 	// SERIALIZABLE isolation level support
 	conflictDetector *storage.ConflictDetector // Shared conflict detector for all connections
@@ -1118,8 +1119,71 @@ func (e *Engine) exportDatabase() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// CatalogFormat represents the detected format of the database file.
+type CatalogFormat int
+
+const (
+	// FormatUnknown indicates the format could not be determined.
+	FormatUnknown CatalogFormat = iota
+	// FormatCustom indicates the native dukdb-go format (4-byte length prefix).
+	FormatCustom
+	// FormatDuckDB indicates a real DuckDB database file.
+	FormatDuckDB
+)
+
+// detectCatalogFormat detects whether the data is in DuckDB format or custom format.
+// DuckDB format: Has "DUCK" signature at offset 8, or starts with field IDs (uint16 LE).
+// Custom format: First 4 bytes are a small uint32 catalog length (<100MB).
+func detectCatalogFormat(data []byte) CatalogFormat {
+	if len(data) < 4 {
+		return FormatUnknown
+	}
+
+	// Check for DuckDB "DUCK" signature at offset 8 (standard DuckDB file format)
+	if len(data) >= 12 {
+		if string(data[8:12]) == "DUCK" {
+			return FormatDuckDB
+		}
+	}
+
+	// Check first 4 bytes as uint32 (custom format catalog length) FIRST
+	// This prevents misidentification of native format files which start with
+	// PropertyIDType (1) and Version (1), appearing as uint16 value 257 (0x0101)
+	// which falls in the DuckDB field ID range (99-300) when checked as uint16.
+	first4 := binary.LittleEndian.Uint32(data[0:4])
+	if first4 > 0 && first4 < 100*1024*1024 {
+		return FormatCustom
+	}
+
+	// Check first 2 bytes as uint16 (DuckDB field ID for metadata block format)
+	fieldID := binary.LittleEndian.Uint16(data[0:2])
+	if (fieldID >= 99 && fieldID <= 300) || fieldID == 0xFFFF {
+		return FormatDuckDB
+	}
+
+	return FormatUnknown
+}
+
 // importDatabase imports both catalog and storage data from a byte slice.
+// It auto-detects the format (DuckDB vs custom) and imports accordingly.
 func (e *Engine) importDatabase(data []byte) error {
+	format := detectCatalogFormat(data)
+
+	switch format {
+	case FormatDuckDB:
+		return e.importDuckDBFormat(data)
+	case FormatCustom:
+		return e.importCustomFormat(data)
+	case FormatUnknown:
+		return fmt.Errorf("unknown database format: cannot detect catalog format from first bytes")
+	default:
+		return fmt.Errorf("unknown database format: %v", format)
+	}
+}
+
+// importCustomFormat imports data from the native dukdb-go format.
+// Format: catalog length (4 bytes) + catalog data + "STRG" marker + table data + optional "STAT" section.
+func (e *Engine) importCustomFormat(data []byte) error {
 	r := bytes.NewReader(data)
 
 	// Read catalog data length
@@ -1290,6 +1354,47 @@ func (e *Engine) importDatabase(data []byte) error {
 			}
 		}
 	}
+
+	return nil
+}
+
+// importDuckDBFormat imports data from a real DuckDB database file.
+// This enables opening .duckdb files created by the official DuckDB CLI.
+func (e *Engine) importDuckDBFormat(data []byte) error {
+	tmpFile, err := os.CreateTemp("", "duckdb-import-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for DuckDB import: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write DuckDB data to temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	file, err := os.Open(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to open temp file for reading: %w", err)
+	}
+	defer file.Close()
+
+	bm := duckdb.NewBlockManager(file, duckdb.DefaultBlockSize, 128)
+
+	dcat, err := duckdb.ReadCatalogFromMetadata(bm, 0)
+	if err != nil {
+		return fmt.Errorf("failed to read DuckDB catalog from metadata: %w", err)
+	}
+
+	cat, err := duckdb.ConvertCatalogFromDuckDB(dcat)
+	if err != nil {
+		return fmt.Errorf("failed to convert DuckDB catalog to native format: %w", err)
+	}
+
+	e.catalog = cat
 
 	return nil
 }

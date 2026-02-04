@@ -1,10 +1,24 @@
 # Named Windows Specification
 
-## Overview
+## ADDED Requirements
+
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 Named windows allow defining window specifications once and reusing them multiple times in a query. This improves query readability and maintainability while ensuring consistent window definitions across multiple window functions.
 
-## Syntax
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Syntax
+
+The system MUST implement the following functionality.
+
 
 ```sql
 -- Named window in WINDOW clause
@@ -24,7 +38,16 @@ WINDOW
     w2 AS (window_specification2)
 ```
 
-## Window Specification Components
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Window Specification Components
+
+The system MUST implement the following functionality.
+
 
 A window specification can include:
 - PARTITION BY clause
@@ -39,9 +62,18 @@ WINDOW w AS (
 )
 ```
 
-## Basic Usage
 
-### Simple Named Window
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Basic Usage
+
+The system MUST implement the following functionality.
+
+
+#### Simple Named Window
 ```sql
 -- Define and use a named window
 SELECT
@@ -55,7 +87,7 @@ FROM employees
 WINDOW dept_window AS (PARTITION BY department ORDER BY salary DESC);
 ```
 
-### Reusing Window Specifications
+#### Reusing Window Specifications
 ```sql
 -- Same window used for multiple functions
 SELECT
@@ -69,11 +101,20 @@ FROM products
 WINDOW price_window AS (PARTITION BY category ORDER BY price);
 ```
 
-## Window Inheritance
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Window Inheritance
+
+The system MUST implement the following functionality.
+
 
 Named windows can be referenced and modified:
 
-### Adding ORDER BY
+#### Adding ORDER BY
 ```sql
 -- Base window with only PARTITION BY
 SELECT
@@ -91,7 +132,7 @@ FROM employees
 WINDOW dept_partition AS (PARTITION BY department);
 ```
 
-### Adding Frame Clause
+#### Adding Frame Clause
 ```sql
 -- Base window with PARTITION BY and ORDER BY
 SELECT
@@ -105,7 +146,7 @@ FROM daily_sales
 WINDOW sales_window AS (ORDER BY date);
 ```
 
-### Complete Example
+#### Complete Example
 ```sql
 -- Complex window inheritance
 SELECT
@@ -126,7 +167,16 @@ FROM orders
 WINDOW customer_window AS (PARTITION BY customer_id);
 ```
 
-## Multiple Named Windows
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Multiple Named Windows
+
+The system MUST implement the following functionality.
+
 
 A query can define multiple named windows:
 
@@ -149,27 +199,45 @@ WINDOW
     dept_window AS (PARTITION BY department);
 ```
 
-## Window Resolution Rules
 
-### 1. Name Resolution
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Window Resolution Rules
+
+The system MUST implement the following functionality.
+
+
+#### 1. Name Resolution
 - Window names are query-scoped
 - Must be unique within a query
 - Case-insensitive resolution
 
-### 2. Inheritance Rules
+#### 2. Inheritance Rules
 - Can only add clauses, not override
 - Cannot add PARTITION BY if base window has it
 - Can add ORDER BY if base window doesn't have it
 - Can add/modify frame clause
 
-### 3. Reference Validation
+#### 3. Reference Validation
 - All referenced windows must be defined
 - No circular references allowed
 - Forward references are allowed
 
-## Valid Window Modifications
 
-### Allowed Modifications
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Valid Window Modifications
+
+The system MUST implement the following functionality.
+
+
+#### Allowed Modifications
 ```sql
 -- Add ORDER BY to window with only PARTITION BY
 WINDOW w AS (PARTITION BY x)
@@ -184,7 +252,7 @@ WINDOW w AS (ORDER BY x ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 SELECT ... OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) ...
 ```
 
-### Invalid Modifications
+#### Invalid Modifications
 ```sql
 -- Cannot add PARTITION BY to existing partitioned window
 WINDOW w AS (PARTITION BY x)
@@ -195,9 +263,18 @@ WINDOW w AS (ORDER BY x)
 SELECT ... OVER (w ORDER BY y) ...  -- ERROR: conflicting ORDER BY
 ```
 
-## Complex Examples
 
-### Financial Analysis
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Complex Examples
+
+The system MUST implement the following functionality.
+
+
+#### Financial Analysis
 ```sql
 -- Complex financial calculations with named windows
 SELECT
@@ -250,7 +327,7 @@ WINDOW
     );
 ```
 
-### Time Series Analysis
+#### Time Series Analysis
 ```sql
 -- Time-based analysis with multiple windows
 SELECT
@@ -298,9 +375,18 @@ WINDOW
     );
 ```
 
-## Implementation Details
 
-### Window Registry
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Implementation Details
+
+The system MUST implement the following functionality.
+
+
+#### Window Registry
 
 ```go
 type WindowRegistry struct {
@@ -316,7 +402,7 @@ type WindowDefinition struct {
 }
 ```
 
-### Resolution Algorithm
+#### Resolution Algorithm
 
 ```go
 func resolveWindow(windowRef WindowReference, registry *WindowRegistry) (*WindowSpecification, error) {
@@ -358,7 +444,7 @@ func resolveWindow(windowRef WindowReference, registry *WindowRegistry) (*Window
 }
 ```
 
-### Validation Rules
+#### Validation Rules
 
 1. **No Circular References**
    ```sql
@@ -389,37 +475,55 @@ func resolveWindow(windowRef WindowReference, registry *WindowRegistry) (*Window
    SELECT ... OVER (w ORDER BY y) ...  -- ERROR
    ```
 
-## Error Handling
 
-### Undefined Window Reference
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Error Handling
+
+The system MUST implement the following functionality.
+
+
+#### Undefined Window Reference
 ```sql
 SELECT ROW_NUMBER() OVER nonexistent_window;
 -- ERROR: window 'nonexistent_window' does not exist
 ```
 
-### Duplicate Window Definition
+#### Duplicate Window Definition
 ```sql
 SELECT * FROM t
 WINDOW w AS (ORDER BY x), w AS (ORDER BY y);
 -- ERROR: duplicate window name 'w'
 ```
 
-### Invalid Inheritance
+#### Invalid Inheritance
 ```sql
 WINDOW w AS (PARTITION BY x)
 SELECT ... OVER (PARTITION BY y) ...;
 -- ERROR: cannot add PARTITION BY to window 'w'
 ```
 
-### Circular Reference
+#### Circular Reference
 ```sql
 WINDOW w1 AS (w2), w2 AS (w1)
 -- ERROR: circular window reference
 ```
 
-## Performance Considerations
 
-### 1. Window Reuse
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Performance Considerations
+
+The system MUST implement the following functionality.
+
+
+#### 1. Window Reuse
 Named windows enable optimization by reusing computed partitions:
 
 ```sql
@@ -433,7 +537,7 @@ FROM t
 WINDOW w AS (PARTITION BY category)
 ```
 
-### 2. Memory Efficiency
+#### 2. Memory Efficiency
 Shared window definitions reduce memory usage:
 
 ```go
@@ -446,7 +550,7 @@ type SharedWindowState struct {
 }
 ```
 
-### 3. Optimization Opportunities
+#### 3. Optimization Opportunities
 
 ```go
 type WindowOptimizer struct {
@@ -482,9 +586,18 @@ func (o *WindowOptimizer) Optimize(windows []WindowDefinition) []WindowGroup {
 }
 ```
 
-## Testing Scenarios
 
-### 1. Basic Named Windows
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Testing Scenarios
+
+The system MUST implement the following functionality.
+
+
+#### 1. Basic Named Windows
 ```sql
 -- Single named window
 SELECT ROW_NUMBER() OVER w FROM t WINDOW w AS (ORDER BY x);
@@ -496,7 +609,7 @@ SELECT
 FROM t WINDOW w AS (PARTITION BY x ORDER BY y);
 ```
 
-### 2. Window Inheritance
+#### 2. Window Inheritance
 ```sql
 -- Add ORDER BY
 WINDOW w AS (PARTITION BY x)
@@ -507,7 +620,7 @@ WINDOW w AS (ORDER BY x)
 SELECT SUM(y) OVER (w ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM t;
 ```
 
-### 3. Multiple Windows
+#### 3. Multiple Windows
 ```sql
 SELECT
     ROW_NUMBER() OVER w1,
@@ -518,7 +631,7 @@ WINDOW
     w2 AS (PARTITION BY y);
 ```
 
-### 4. Complex Inheritance
+#### 4. Complex Inheritance
 ```sql
 -- Multi-level inheritance
 SELECT
@@ -529,7 +642,7 @@ FROM sales
 WINDOW w AS (PARTITION BY customer_id ORDER BY date);
 ```
 
-### 5. Error Cases
+#### 5. Error Cases
 ```sql
 -- Undefined window
 SELECT ROW_NUMBER() OVER undefined;
@@ -542,3 +655,9 @@ WINDOW w AS (ORDER BY x) SELECT ROW_NUMBER() OVER (w ORDER BY y) FROM t;
 ```
 
 This specification provides comprehensive coverage of named window functionality, ensuring flexible reuse of window definitions while maintaining clear semantics and good performance through optimization opportunities."}
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

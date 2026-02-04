@@ -1,11 +1,11 @@
 # Specification: JSON Type Implementation
 
-## Overview
-This spec adds the JSON data type and associated functions to dukdb-go for DuckDB v1.4.3 compatibility.
-
 ## ADDED Requirements
 
-### Requirement 1: JSON Type Definition
+### Requirement: JSON Type Definition
+
+The system MUST implement a JSON data type that stores and validates JSON data.
+
 #### Scenario: Create table with JSON column
 ```sql
 -- Given: A database connection
@@ -39,7 +39,10 @@ INSERT INTO events VALUES (5, '{invalid json}');
 -- Then: The statement should fail with error "Invalid JSON"
 ```
 
-### Requirement 2: JSON Casting
+### Requirement: JSON Casting
+
+The system MUST provide casting capabilities between JSON and other types.
+
 #### Scenario: Cast other types to JSON
 ```sql
 -- Given: A table with various data types
@@ -67,7 +70,10 @@ FROM events;
 -- And: Return NULL for type mismatches
 ```
 
-### Requirement 3: JSON Operators
+### Requirement: JSON Operators
+
+The system MUST implement standard JSON extraction and navigation operators.
+
 #### Scenario: Extract JSON field with ->
 ```sql
 -- Given: Table with JSON objects
@@ -101,7 +107,10 @@ WHERE data->>'type' = 'login';
 -- And: Return matched JSON value
 ```
 
-### Requirement 4: JSON Construction Functions
+### Requirement: JSON Construction Functions
+
+The system MUST provide functions to construct JSON values.
+
 #### Scenario: Use to_json function
 ```sql
 -- Given: Various data values
@@ -123,7 +132,10 @@ WHERE id = 1;
 -- Then: Should return JSON object representing entire row
 ```
 
-### Requirement 5: JSON Validation Functions
+### Requirement: JSON Validation Functions
+
+The system MUST provide functions to validate and inspect JSON data.
+
 #### Scenario: Use json_valid function
 ```sql
 -- Given: Various string values
@@ -167,7 +179,10 @@ SELECT json_quote('hello') as quoted;
 -- Then: Should return '"hello"' (properly escaped JSON string)
 ```
 
-### Requirement 6: JSON Existence Functions
+### Requirement: JSON Existence Functions
+
+The system MUST provide functions to check for the existence of JSON paths.
+
 #### Scenario: Use json_exists
 ```sql
 -- Given: JSON data
@@ -187,7 +202,10 @@ SELECT json_contains('[1,2,3]', '[1]');
 -- Then: Should return TRUE if right contains all elements of left
 ```
 
-### Requirement 7: JSON Structure Functions
+### Requirement: JSON Structure Functions
+
+The system MUST provide functions to analyze JSON structure.
+
 #### Scenario: Use json_structure
 ```sql
 -- Given: JSON values
@@ -205,7 +223,10 @@ FROM events;
 -- Then: Should return common structure across all rows
 ```
 
-### Requirement 8: JSON Transformation Functions
+### Requirement: JSON Transformation Functions
+
+The system MUST provide functions to transform JSON to structured types.
+
 #### Scenario: Use from_json with structure
 ```sql
 -- Given: JSON string and type specification
@@ -222,7 +243,10 @@ SELECT from_json_strict('[1,2,3]', 'INTEGER[]');
 -- Then: Should strictly validate and parse JSON
 ```
 
-### Requirement 9: JSON Array Functions
+### Requirement: JSON Array Functions
+
+The system MUST provide functions to manipulate JSON arrays.
+
 #### Scenario: Use json_array_length with optional path
 ```sql
 -- Given: JSON arrays
@@ -232,7 +256,10 @@ SELECT json_array_length('[1,2,3,4,5]') as len1,
 -- Then: Should return array length or path navigated length
 ```
 
-### Requirement 6: JSON Manipulation Functions
+### Requirement: JSON Manipulation Functions
+
+The system MUST provide functions to manipulate JSON objects.
+
 #### Scenario: Use json_merge_patch
 ```sql
 -- Given: JSON objects
@@ -244,7 +271,10 @@ SELECT json_merge_patch(
 -- Then: Should return '{"a":1,"b":3,"c":4}'
 ```
 
-### Requirement 7: COPY statement with JSON files
+### Requirement: COPY statement with JSON files
+
+The system MUST support importing and exporting JSON data via COPY.
+
 #### Scenario: Import JSON data from file
 ```sql
 -- Given: A file with JSON data at '/tmp/data.json'
@@ -261,56 +291,13 @@ COPY (SELECT * FROM events) TO '/tmp/export.json';
 -- Then: Should export data in JSON format
 ```
 
-## MODIFIED Requirements
+### Requirement: Existing Type System Updates
 
-### Existing Type System
+The system MUST update the existing type system to include JSON support.
+
 #### Scenario: Enhance type.go with JSON type
-```
--- In: internal/storage/type.go
--- Add: TYPE_JSON = 37
--- Add: TypeName() method returns "JSON"
--- Add: Format() method for display
-```
-
-## REMOVED Requirements
-*None - this is purely additive*
-
-## Cross-Reference Dependencies
-
-- `map-type` - Map type uses similar storage patterns
-- `struct-type` - Both require compound type handling
-- `complex-functions` - Construction functions build on type foundations
-
-## Test Coverage Requirements
-
-### Unit Tests
-- [ ] JSON validation logic (10 test cases)
-- [ ] Casting operations (20 test cases)
-- [ ] Operator implementations (15 test cases)
-- [ ] Function implementations (25 test cases)
-
-### Integration Tests
-- [ ] Full CREATE/INSERT/SELECT flow (5 test cases)
-- [ ] COPY with JSON files (3 test cases)
-- [ ] Complex type in queries (5 test cases)
-
-### Performance Tests
-- [ ] Large JSON parsing speed (1MB+ documents)
-- [ ] Repeated operator usage (cached path)
-- [ ] Nested structure depth (up to 64 levels)
-
-## Acceptance Criteria
-
-1. All scenarios above pass with correct behavior matching DuckDB v1.4.3
-2. JSON validation rejects malformed input with clear error messages
-3. Type casting follows DuckDB compatibility matrix
-4. Performance within 2x of DuckDB for common operations
-5. Memory usage reasonable for large JSON documents (streaming for >10MB)
-
-## Future Enhancements
-
-- JSON path expressions beyond basic navigation
-- JSON aggregate functions (json_group_array, json_group_object)
-- JSON schema validation
-- Partial JSON updates
-- Vectorized JSON parsing with SIMD
+- **Given** the internal type system
+- **When** types are initialized
+- **Then** TYPE_JSON (37) is defined
+- **And** TypeName() returns "JSON"
+- **And** Format() handles JSON display

@@ -1,17 +1,31 @@
 # Extension Registry Specification
 
+## ADDED Requirements
+
 **Specification ID:** `extension-registry-v1.0`
 **Version:** 1.0
 **Status:** Draft
 **Last Updated:** 2024-01-20
 
-## Overview
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the Extension Registry system for dukdb-go, which manages extension discovery, metadata, versioning, and distribution. The registry enables secure, reliable extension management while maintaining compatibility with DuckDB v1.4.3 extension behaviors.
 
-## Requirements
 
-### Functional Requirements
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Requirements
+
+The system MUST implement the following functionality.
+
+
+#### Functional Requirements
 
 1. **Extension Discovery**: Discover extensions locally and remotely
 2. **Metadata Management**: Store and manage extension metadata
@@ -22,7 +36,7 @@ This specification defines the Extension Registry system for dukdb-go, which man
 7. **Compatibility Checking**: Verify DuckDB version compatibility
 8. **Security Validation**: Validate extension signatures and permissions
 
-### Non-Functional Requirements
+#### Non-Functional Requirements
 
 1. **Performance**: Query response time < 100ms
 2. **Scalability**: Support 10,000+ extensions
@@ -31,9 +45,18 @@ This specification defines the Extension Registry system for dukdb-go, which man
 5. **Consistency**: Strong consistency for metadata
 6. **Availability**: Offline access to cached extensions
 
-## Architecture
 
-### Registry Components
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Architecture
+
+The system MUST implement the following functionality.
+
+
+#### Registry Components
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -56,7 +79,7 @@ This specification defines the Extension Registry system for dukdb-go, which man
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Data Model
+#### Data Model
 
 ```go
 // ExtensionInfo contains extension metadata
@@ -122,9 +145,18 @@ type SignatureInfo struct {
 }
 ```
 
-## Local Registry
 
-### File System Layout
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Local Registry
+
+The system MUST implement the following functionality.
+
+
+#### File System Layout
 
 ```
 ${DUCKDB_EXTENSION_DIR}/
@@ -144,7 +176,7 @@ ${DUCKDB_EXTENSION_DIR}/
     └── lock                # Registry lock
 ```
 
-### Local Registry Implementation
+#### Local Registry Implementation
 
 ```go
 type LocalRegistry struct {
@@ -258,7 +290,7 @@ func (r *LocalRegistry) createSchema(db *sql.DB) error {
 }
 ```
 
-### CRUD Operations
+#### CRUD Operations
 
 ```go
 func (r *LocalRegistry) RegisterExtension(info *ExtensionInfo) error {
@@ -404,9 +436,18 @@ func (r *LocalRegistry) GetExtension(name string) (*ExtensionInfo, error) {
 }
 ```
 
-## Remote Registry
 
-### Registry API
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Remote Registry
+
+The system MUST implement the following functionality.
+
+
+#### Registry API
 
 ```go
 type RemoteRegistry struct {
@@ -455,7 +496,7 @@ type SearchResult struct {
 }
 ```
 
-### API Implementation
+#### API Implementation
 
 ```go
 func (r *RemoteRegistry) Search(ctx context.Context, query SearchQuery) (*SearchResult, error) {
@@ -566,9 +607,18 @@ func (r *RemoteRegistry) Download(ctx context.Context, name, version string) (io
 }
 ```
 
-## Search Engine
 
-### Search Implementation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Search Engine
+
+The system MUST implement the following functionality.
+
+
+#### Search Implementation
 
 ```go
 type SearchEngine struct {
@@ -665,9 +715,18 @@ func (s *TFIDFScorer) scoreField(terms []string, field, fieldName string) float6
 }
 ```
 
-## Dependency Management
 
-### Dependency Graph
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Dependency Management
+
+The system MUST implement the following functionality.
+
+
+#### Dependency Graph
 
 ```go
 type DependencyGraph struct {
@@ -790,9 +849,18 @@ func (r *DependencyResolver) checkCycles(graph *DependencyGraph) error {
 }
 ```
 
-## Version Management
 
-### Version Constraints
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Version Management
+
+The system MUST implement the following functionality.
+
+
+#### Version Constraints
 
 ```go
 // VersionConstraint represents a version constraint
@@ -872,7 +940,7 @@ func (s *VersionSelector) Select(versions []string) (string, error) {
 }
 ```
 
-### Update Management
+#### Update Management
 
 ```go
 // UpdateChecker checks for updates
@@ -960,9 +1028,18 @@ func (c *UpdateChecker) calculatePriority(current, latest string) UpdatePriority
 }
 ```
 
-## Cache Management
 
-### Cache Implementation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Cache Management
+
+The system MUST implement the following functionality.
+
+
+#### Cache Implementation
 
 ```go
 // ExtensionCache manages extension cache
@@ -1092,9 +1169,18 @@ func (c *ExtensionCache) checkEviction() {
 }
 ```
 
-## Security
 
-### Signature Validation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security
+
+The system MUST implement the following functionality.
+
+
+#### Signature Validation
 
 ```go
 // SignatureValidator validates extension signatures
@@ -1138,7 +1224,7 @@ func (v *SignatureValidator) Validate(info *ExtensionInfo) error {
 }
 ```
 
-### Permission Validation
+#### Permission Validation
 
 ```go
 // PermissionValidator validates extension permissions
@@ -1196,9 +1282,18 @@ func (p *DefaultPermissionPolicy) Check(permission Permission) error {
 }
 ```
 
-## API Reference
 
-### Registry Client
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: API Reference
+
+The system MUST implement the following functionality.
+
+
+#### Registry Client
 
 ```go
 // RegistryClient provides registry access
@@ -1226,7 +1321,7 @@ type RegistryClient interface {
 }
 ```
 
-### Configuration
+#### Configuration
 
 ```yaml
 # Registry configuration
@@ -1261,8 +1356,23 @@ registry:
     burst: 10
 ```
 
-## Version History
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Version History
+
+The system MUST implement the following functionality.
+
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2024-01-20 | Initial specification | dukdb-go Team |
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

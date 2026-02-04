@@ -1,11 +1,11 @@
 # Specification: STRUCT Type Implementation
 
-## Overview
-This spec implements the STRUCT data type in dukdb-go for DuckDB v1.4.3 compatibility, enabling named field access and nested data structures.
-
 ## ADDED Requirements
 
-### Requirement 1: STRUCT Type Definition and DDL
+### Requirement: STRUCT Type Definition and DDL
+
+The system MUST implement a STRUCT data type that stores named fields of various types.
+
 #### Scenario: Create table with STRUCT column
 ```sql
 -- Given: A database connection
@@ -43,7 +43,10 @@ CREATE TABLE invalid (
 -- Then: Should fail with error "STRUCT requires field definitions"
 ```
 
-### Requirement 2: STRUCT Construction with struct_pack
+### Requirement: STRUCT Construction with struct_pack
+
+The system MUST provide functions to construct STRUCT values.
+
 #### Scenario: Construct STRUCT with struct_pack function
 ```sql
 -- Given: Database connection
@@ -81,7 +84,10 @@ SELECT {'name': 'Charlie', 'age': 25} as profile;
 -- And: Field types inferred from values
 ```
 
-### Requirement 3: Static Field Access with Dot Notation
+### Requirement: Static Field Access with Dot Notation
+
+The system MUST support static field access on STRUCT columns using dot notation.
+
 #### Scenario: Access structure fields with dot notation
 ```sql
 -- Given: A table with STRUCT column
@@ -123,7 +129,10 @@ ORDER BY profile.age DESC;
 -- Then: Should sort by field value
 ```
 
-### Requirement 4: Dynamic Field Access with struct_extract
+### Requirement: Dynamic Field Access with struct_extract
+
+The system MUST support dynamic field access on STRUCT values.
+
 #### Scenario: Use struct_extract for field access
 ```sql
 -- Given: Table with STRUCT column
@@ -146,7 +155,10 @@ FROM users, fields;
 -- Then: Should extract different fields per row
 ```
 
-### Requirement 5: STRUCT Type Consistency
+### Requirement: STRUCT Type Consistency
+
+The system MUST enforce type consistency for STRUCT fields.
+
 #### Scenario: Enforce consistent field names
 ```sql
 -- Given: Table with STRUCT column
@@ -170,7 +182,10 @@ INSERT INTO users VALUES
 -- Then: Should fail or try to cast 'thirty' to INTEGER
 ```
 
-### Requirement 6: STRUCT Functions
+### Requirement: STRUCT Functions
+
+The system MUST provide utility functions for working with STRUCTs.
+
 #### Scenario: Use struct_insert to add fields
 ```sql
 -- Given: A STRUCT value
@@ -197,7 +212,10 @@ FROM raw_data;
 -- Then: Should create STRUCT with NULL for missing values
 ```
 
-### Requirement 7: Nested STRUCT Operations
+### Requirement: Nested STRUCT Operations
+
+The system MUST support operations on nested STRUCTs.
+
 #### Scenario: Navigate nested structs with dot notation
 ```sql
 -- Given: Table with nested STRUCT
@@ -221,7 +239,10 @@ FROM users;
 -- And: Nested STRUCTs become nested JSON
 ```
 
-### Requirement 8: STRUCT in Complex Queries
+### Requirement: STRUCT in Complex Queries
+
+The system MUST support STRUCT values in complex query clauses.
+
 #### Scenario: Join on struct fields
 ```sql
 -- Given: Two tables with STRUCT columns
@@ -244,7 +265,10 @@ FROM (
 -- Then: Should work in subqueries
 ```
 
-### Requirement 9: STRUCT Default Values
+### Requirement: STRUCT Default Values
+
+The system MUST support default values for STRUCT fields.
+
 #### Scenario: Use default values in struct_pack
 ```sql
 -- Given: Database connection
@@ -261,7 +285,10 @@ SELECT * FROM products;
 -- Then: Should return STRUCT with default values
 ```
 
-### Requirement 10: ALTER TABLE with STRUCT columns
+### Requirement: ALTER TABLE with STRUCT columns
+
+The system MUST support adding STRUCT columns via ALTER TABLE.
+
 #### Scenario: Add STRUCT column to existing table
 ```sql
 -- Given: Existing table
@@ -270,27 +297,27 @@ ALTER TABLE users ADD COLUMN metadata STRUCT(tags VARCHAR[]);
 -- Then: Should add STRUCT column successfully
 ```
 
-## MODIFIED Requirements
+### Requirement: Expression Framework Updates
 
-### Expression Framework
+The system MUST update the expression framework to support STRUCT operators.
+
 #### Scenario: Add STRUCT field access operators
-```
--- In: internal/executor/operators.go
--- Add: StructFieldAccessOperator for . notation
--- Add: StructExtractOperator for dynamic access
--- Add: Type checking for field existence
-```
+- **Given** executor operators
+- **When** updated
+- **Then** StructFieldAccessOperator supports . notation
+- **And** StructExtractOperator supports dynamic access
+- **And** Type checking validates field existence
 
-### Type System
+### Requirement: Type System Updates
+
+The system MUST update the type system to support STRUCT literals.
+
 #### Scenario: Enhance type inference for struct literals
-```
--- In: internal/binder/expressions.go
--- Add: STRUCT literal parsing and type inference
--- Add: Field type checking and consistency validation
-```
-
-## REMOVED Requirements
-*None - purely additive*
+- **Given** binder expressions
+- **When** updated
+- **Then** STRUCT literal parsing works
+- **And** Type inference determines struct type
+- **And** Field type checking ensures consistency
 
 ## STORAGE IMPLEMENTATION
 

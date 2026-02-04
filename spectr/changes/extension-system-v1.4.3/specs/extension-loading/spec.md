@@ -1,17 +1,31 @@
 # Extension Loading Specification
 
+## ADDED Requirements
+
 **Specification ID:** `extension-loading-v1.0`
 **Version:** 1.0
 **Status:** Draft
 **Last Updated:** 2024-01-20
 
-## Overview
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the dynamic loading mechanism for extensions in dukdb-go, ensuring secure, efficient, and reliable loading of extension binaries while maintaining compatibility with DuckDB v1.4.3 extension behaviors.
 
-## Requirements
 
-### Functional Requirements
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Requirements
+
+The system MUST implement the following functionality.
+
+
+##### Functional Requirements
 
 1. **Dynamic Loading**: Extensions must be loadable at runtime without restarting the database
 2. **Version Compatibility**: Loader must verify DuckDB version compatibility
@@ -22,7 +36,7 @@ This specification defines the dynamic loading mechanism for extensions in dukdb
 7. **Lazy Loading**: Support for on-demand loading of extensions
 8. **Preloading**: Support for preloading frequently used extensions
 
-### Non-Functional Requirements
+##### Non-Functional Requirements
 
 1. **Performance**: Loading overhead < 100ms for typical extensions
 2. **Memory**: Memory overhead < 10MB per loaded extension
@@ -31,9 +45,18 @@ This specification defines the dynamic loading mechanism for extensions in dukdb
 5. **Scalability**: Support for 100+ extensions loaded simultaneously
 6. **Isolation**: Extensions cannot interfere with each other
 
-## Extension Binary Format
 
-### File Structure
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Extension Binary Format
+
+The system MUST implement the following functionality.
+
+
+##### File Structure
 
 ```
 Extension Binary (.dukdb)
@@ -52,7 +75,7 @@ Extension Binary (.dukdb)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Header Format
+##### Header Format
 
 ```go
 type ExtensionHeader struct {
@@ -72,7 +95,7 @@ type ExtensionHeader struct {
 }
 ```
 
-### Manifest Schema
+##### Manifest Schema
 
 ```yaml
 # Extension Manifest Format
@@ -134,9 +157,18 @@ signature:
   timestamp: 2024-01-20T00:00:00Z
 ```
 
-## Loading Process
 
-### Load Flow
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Loading Process
+
+The system MUST implement the following functionality.
+
+
+##### Load Flow
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -159,7 +191,7 @@ signature:
                     └─────────────┘
 ```
 
-### Loading Algorithm
+##### Loading Algorithm
 
 ```go
 func (l *Loader) LoadExtension(name string, config LoadConfig) (*LoadedExtension, error) {
@@ -222,7 +254,7 @@ func (l *Loader) LoadExtension(name string, config LoadConfig) (*LoadedExtension
 }
 ```
 
-### Dependency Resolution
+##### Dependency Resolution
 
 ```go
 type DependencyResolver struct {
@@ -292,9 +324,18 @@ func (r *DependencyResolver) buildGraph(manifest *Manifest, graph *DependencyGra
 }
 ```
 
-## Security Verification
 
-### Signature Verification
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security Verification
+
+The system MUST implement the following functionality.
+
+
+##### Signature Verification
 
 ```go
 type SignatureVerifier struct {
@@ -336,7 +377,7 @@ func (v *SignatureVerifier) Verify(binary *ExtensionBinary) error {
 }
 ```
 
-### Permission Validation
+##### Permission Validation
 
 ```go
 func (v *SignatureVerifier) checkPermissions(manifest *Manifest, cert *Certificate) error {
@@ -354,9 +395,18 @@ func (v *SignatureVerifier) checkPermissions(manifest *Manifest, cert *Certifica
 }
 ```
 
-## Symbol Registration
 
-### Registration Process
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Symbol Registration
+
+The system MUST implement the following functionality.
+
+
+##### Registration Process
 
 ```go
 type SymbolRegistry struct {
@@ -433,9 +483,18 @@ func (r *SymbolRegistry) registerScalarFunction(ext *LoadedExtension, def Functi
 }
 ```
 
-## Lazy Loading
 
-### Implementation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Lazy Loading
+
+The system MUST implement the following functionality.
+
+
+##### Implementation
 
 ```go
 type LazyLoader struct {
@@ -482,9 +541,18 @@ func (l *LazyLoader) GetExtension(name string) (*LoadedExtension, error) {
 }
 ```
 
-## Error Handling
 
-### Error Types
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Error Handling
+
+The system MUST implement the following functionality.
+
+
+##### Error Types
 
 ```go
 type LoadError struct {
@@ -520,7 +588,7 @@ type SignatureError struct {
 }
 ```
 
-### Recovery Mechanisms
+##### Recovery Mechanisms
 
 ```go
 type LoadRecovery interface {
@@ -538,9 +606,18 @@ type LoadRecovery interface {
 }
 ```
 
-## Performance Optimization
 
-### Caching Strategy
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Performance Optimization
+
+The system MUST implement the following functionality.
+
+
+##### Caching Strategy
 
 ```go
 type LoadCache struct {
@@ -558,7 +635,7 @@ func (c *LoadCache) PutManifest(name string, manifest *Manifest) {
 }
 ```
 
-### Preloading
+##### Preloading
 
 ```go
 type PreloadManager struct {
@@ -578,9 +655,18 @@ func (m *PreloadManager) Start() {
 }
 ```
 
-## Testing
 
-### Load Testing
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Testing
+
+The system MUST implement the following functionality.
+
+
+##### Load Testing
 
 ```go
 type LoadTestSuite struct {
@@ -612,7 +698,7 @@ func (s *LoadTestSuite) TestLoadInvalidSignature() {
 }
 ```
 
-### Performance Testing
+##### Performance Testing
 
 ```go
 func BenchmarkLoadExtension(b *testing.B) {
@@ -629,9 +715,18 @@ func BenchmarkLoadExtension(b *testing.B) {
 }
 ```
 
-## Configuration
 
-### Load Configuration
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Configuration
+
+The system MUST implement the following functionality.
+
+
+##### Load Configuration
 
 ```go
 type LoadConfig struct {
@@ -653,7 +748,7 @@ type LoadConfig struct {
 }
 ```
 
-### Default Configuration
+##### Default Configuration
 
 ```yaml
 # Default load configuration
@@ -679,3 +774,9 @@ This specification provides a complete foundation for implementing secure, effic
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2024-01-20 | Initial specification | dukdb-go Team |
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

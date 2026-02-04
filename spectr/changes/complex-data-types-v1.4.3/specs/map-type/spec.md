@@ -1,11 +1,11 @@
 # Specification: MAP Type Completion
 
-## Overview
-This spec completes the MAP type implementation in dukdb-go for DuckDB v1.4.3 compatibility, adding construction, access, and manipulation capabilities.
-
 ## ADDED Requirements
 
-### Requirement 1: Map Type Definition and Validation
+### Requirement: Map Type Definition and Validation
+
+The system MUST implement a MAP data type that enforces key and value type consistency.
+
 #### Scenario: Create table with MAP column
 ```sql
 -- Given: A database connection
@@ -28,7 +28,10 @@ CREATE TABLE invalid_map (
 -- Then: Should fail with error "MAP requires key and value types"
 ```
 
-### Requirement 2: Map Construction with MAP() Function
+### Requirement: Map Construction with MAP() Function
+
+The system MUST provide functions to construct MAP values from keys and values.
+
 #### Scenario: Construct map from arrays
 ```sql
 -- Given: Database connection
@@ -54,7 +57,10 @@ SELECT map(zip(['a','b','c'], [1,2,3])) as my_map;
 -- Then: Should return MAP equivalent to MAP(['a','b','c'], [1,2,3])
 ```
 
-### Requirement 3: Map Element Access
+### Requirement: Map Element Access
+
+The system MUST allow access to map elements by key.
+
 #### Scenario: Access map element with bracket notation
 ```sql
 -- Given: A map in table
@@ -75,7 +81,9 @@ WHERE settings['enabled'] = 'true';
 -- Then: Should filter rows based on map value
 ```
 
-### Requirement 4: Map Functions
+### Requirement: Map Functions
+
+The system MUST provide utility functions for working with MAPs.
 
 #### Scenario: Use map_keys function
 ```sql
@@ -114,7 +122,10 @@ FROM user_metrics;
 -- Then: Should return integer count of key-value pairs
 ```
 
-### Requirement 5: Map Key Constraints
+### Requirement: Map Key Constraints
+
+The system MUST enforce constraints on map keys, such as uniqueness.
+
 #### Scenario: Reject duplicate keys
 ```sql
 -- Given: Database connection
@@ -134,7 +145,10 @@ INSERT INTO user_metrics VALUES
 -- And: Different rows can have different keys
 ```
 
-### Requirement 6: Map Iteration and Unnesting
+### Requirement: Map Iteration and Unnesting
+
+The system MUST support unnesting maps into rows.
+
 #### Scenario: Unnest map to rows with UNNEST
 ```sql
 -- Given: Table with MAP column
@@ -155,7 +169,10 @@ FROM generate_series(1, 10) t(i);
 -- Then: Should construct maps for each input row
 ```
 
-### Requirement 7: Map Operations in Expressions
+### Requirement: Map Operations in Expressions
+
+The system MUST support map operations in complex expressions.
+
 #### Scenario: Concatenate maps
 ```sql
 -- Given: Two maps
@@ -177,7 +194,10 @@ GROUP BY settings;
 -- Then: Should group by entire map structure
 ```
 
-### Requirement 8: COPY with Maps
+### Requirement: COPY with Maps
+
+The system MUST support importing and exporting MAP data via COPY.
+
 #### Scenario: Export map to CSV
 ```sql
 -- Given: Table with MAP data
@@ -194,27 +214,25 @@ COPY user_metrics FROM '/tmp/import.csv';
 -- Then: Should parse map format correctly
 ```
 
-## MODIFIED Requirements
+### Requirement: Existing Map Type Definition
 
-### Existing Map Type Definition
+The system MUST update the existing Map type implementation.
+
 #### Scenario: Enhance types.go Map implementation
-```
--- In: /home/connerohnesorge/Documents/001Repos/dukdb-go/types.go
--- Current: Map defined for scanning only
--- Modify: Add Value() method for parameter binding
--- Add: Serialization support in database format
-```
+- **Given** types.go Map definition
+- **When** updated for v1.4.3
+- **Then** Value() method is added for parameter binding
+- **And** Serialization support is added for database format
 
-### Expression Framework
+### Requirement: Expression Framework Updates
+
+The system MUST update the expression framework to support map operators.
+
 #### Scenario: Add bracket operator support
-```
--- In: internal/executor/operators.go
--- Add: MapAccessOperator for [] notation
--- Add: Type checking for key/value types
-```
-
-## REMOVED Requirements
-*None - this completes existing partial implementation*
+- **Given** executor operators
+- **When** updated
+- **Then** MapAccessOperator supports [] notation
+- **And** Type checking validates key/value types
 
 ## Performance Characteristics
 

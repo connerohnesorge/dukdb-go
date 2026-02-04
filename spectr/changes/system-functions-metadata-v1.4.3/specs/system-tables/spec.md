@@ -1,16 +1,30 @@
 # System Tables Specification
 
-## Overview
+## ADDED Requirements
+
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 This specification defines the implementation of SQL standard metadata tables (information_schema) and PostgreSQL compatibility tables (pg_catalog) in dukdb-go. These tables provide standardized ways to query database metadata and ensure compatibility with existing database tools and applications.
 
-## information_schema
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: information_schema
+
+The system MUST implement the following functionality.
+
 
 information_schema is a set of views defined by the SQL standard that provide metadata about the database in a standardized format across different database systems.
 
-### Core Views
+#### Core Views
 
-#### information_schema.tables
+##### information_schema.tables
 
 Contains one row for each table or view in the database.
 
@@ -63,7 +77,7 @@ GROUP BY table_schema;
 - table_type values: 'TABLE', 'VIEW', 'LOCAL TEMPORARY'
 - self_referencing_column_name always NULL (not supported)
 
-#### information_schema.columns
+##### information_schema.columns
 
 Contains one row for each column in each table.
 
@@ -146,7 +160,7 @@ WHERE data_type LIKE '%VARCHAR%';
 - numeric_precision/scale for numeric types
 - datetime_precision for temporal types
 
-#### information_schema.schemata
+##### information_schema.schemata
 
 Contains one row for each schema in the database.
 
@@ -181,7 +195,7 @@ LEFT JOIN information_schema.views v ON s.schema_name = v.table_schema
 GROUP BY s.schema_name;
 ```
 
-#### information_schema.views
+##### information_schema.views
 
 Contains one row for each view in the database.
 
@@ -217,7 +231,7 @@ FROM information_schema.views
 WHERE view_definition LIKE '%users%';
 ```
 
-#### information_schema.table_constraints
+##### information_schema.table_constraints
 
 Contains one row for each table constraint.
 
@@ -260,7 +274,7 @@ WHERE NOT EXISTS (
 );
 ```
 
-#### information_schema.key_column_usage
+##### information_schema.key_column_usage
 
 Contains one row for each column that is part of a key (primary, foreign, or unique).
 
@@ -282,7 +296,7 @@ SELECT
 FROM duckdb_key_columns();
 ```
 
-#### information_schema.referential_constraints
+##### information_schema.referential_constraints
 
 Contains one row for each foreign key constraint.
 
@@ -313,7 +327,7 @@ SELECT
 FROM duckdb_referential_constraints();
 ```
 
-#### information_schema.check_constraints
+##### information_schema.check_constraints
 
 Contains one row for each check constraint.
 
@@ -341,7 +355,7 @@ FROM information_schema.check_constraints;
 -- main              | chk_email       | email LIKE '%@%.%'
 ```
 
-#### information_schema.routines
+##### information_schema.routines
 
 Contains one row for each function or procedure.
 
@@ -382,7 +396,7 @@ SELECT
 FROM duckdb_functions();
 ```
 
-#### information_schema.parameters
+##### information_schema.parameters
 
 Contains one row for each parameter of each function.
 
@@ -420,25 +434,25 @@ SELECT
 FROM duckdb_function_parameters();
 ```
 
-### Additional information_schema Views
+#### Additional information_schema Views
 
-#### information_schema.user_defined_types
+##### information_schema.user_defined_types
 
 Contains information about user-defined types (if any).
 
-#### information_schema.domains
+##### information_schema.domains
 
 Contains information about domain types (if any).
 
-#### information_schema.element_types
+##### information_schema.element_types
 
 Contains information about array element types.
 
-#### information_schema.triggers
+##### information_schema.triggers
 
 Contains information about triggers (when implemented).
 
-#### information_schema.sequences
+##### information_schema.sequences
 
 Contains information about sequences.
 
@@ -461,13 +475,22 @@ SELECT
 FROM duckdb_sequences();
 ```
 
-## pg_catalog
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: pg_catalog
+
+The system MUST implement the following functionality.
+
 
 pg_catalog provides PostgreSQL-compatible system tables for compatibility with PostgreSQL tools and applications.
 
-### Core Tables
+#### Core Tables
 
-#### pg_catalog.pg_class
+##### pg_catalog.pg_class
 
 Catalog of tables, indexes, sequences, and views.
 
@@ -535,7 +558,7 @@ WHERE relkind = 'r'
   AND relhaspkey = false;
 ```
 
-#### pg_catalog.pg_namespace
+##### pg_catalog.pg_namespace
 
 Catalog of schemas (namespaces).
 
@@ -563,7 +586,7 @@ JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 GROUP BY n.nspname;
 ```
 
-#### pg_catalog.pg_attribute
+##### pg_catalog.pg_attribute
 
 Catalog of table columns (attributes).
 
@@ -618,7 +641,7 @@ WHERE a.attrelid = 'users'::regclass
 ORDER BY a.attnum;
 ```
 
-#### pg_catalog.pg_index
+##### pg_catalog.pg_index
 
 Catalog of indexes.
 
@@ -654,7 +677,7 @@ CREATE TABLE pg_catalog.pg_index (
 - `indisprimary`: Is primary key index
 - `indkey`: Array of column numbers
 
-#### pg_catalog.pg_constraint
+##### pg_catalog.pg_constraint
 
 Catalog of table constraints.
 
@@ -697,7 +720,7 @@ CREATE TABLE pg_catalog.pg_constraint (
 - 't': TRIGGER constraint
 - 'x': EXCLUSION constraint
 
-#### pg_catalog.pg_proc
+##### pg_catalog.pg_proc
 
 Catalog of functions and procedures.
 
@@ -736,7 +759,7 @@ CREATE TABLE pg_catalog.pg_proc (
 );
 ```
 
-#### pg_catalog.pg_type
+##### pg_catalog.pg_type
 
 Catalog of data types.
 
@@ -791,7 +814,7 @@ FROM pg_catalog.pg_type t
 WHERE t.typname = 'varchar';
 ```
 
-#### pg_catalog.pg_database
+##### pg_catalog.pg_database
 
 Catalog of databases.
 
@@ -815,7 +838,7 @@ CREATE TABLE pg_catalog.pg_database (
 );
 ```
 
-#### pg_catalog.pg_user
+##### pg_catalog.pg_user
 
 Catalog of database users.
 
@@ -834,7 +857,7 @@ CREATE TABLE pg_catalog.pg_user (
 );
 ```
 
-#### pg_catalog.pg_stat_activity
+##### pg_catalog.pg_stat_activity
 
 Shows active server sessions.
 
@@ -877,7 +900,7 @@ FROM pg_catalog.pg_stat_activity
 WHERE state = 'idle';
 ```
 
-#### pg_catalog.pg_settings
+##### pg_catalog.pg_settings
 
 Shows server settings/parameters.
 
@@ -917,11 +940,11 @@ FROM pg_catalog.pg_settings
 WHERE name LIKE '%memory%';
 ```
 
-### PostgreSQL-Specific Views
+#### PostgreSQL-Specific Views
 
 These views provide additional PostgreSQL compatibility.
 
-#### pg_catalog.pg_indexes
+##### pg_catalog.pg_indexes
 
 Convenience view showing index information.
 
@@ -939,7 +962,7 @@ JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid
 LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace;
 ```
 
-#### pg_catalog.pg_tables
+##### pg_catalog.pg_tables
 
 Convenience view showing table information.
 
@@ -959,9 +982,18 @@ LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r';
 ```
 
-## Implementation Details
 
-### System Table Generation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Implementation Details
+
+The system MUST implement the following functionality.
+
+
+#### System Table Generation
 
 System tables are generated from system function results:
 
@@ -1004,7 +1036,7 @@ func generateInformationSchemaTables() *DataChunk {
 }
 ```
 
-### Caching Strategy
+#### Caching Strategy
 
 1. **Metadata Cache**: Cache system table results
 2. **Invalidation**: Invalidate on DDL changes
@@ -1038,7 +1070,7 @@ func (c *SystemTableCache) Get(tableName string) (*DataChunk, bool) {
 }
 ```
 
-### Index Usage
+#### Index Usage
 
 System tables support indexes on common query patterns:
 
@@ -1050,7 +1082,7 @@ CREATE INDEX idx_columns_table ON __system_columns(table_name);
 CREATE INDEX idx_functions_name ON __system_functions(function_name);
 ```
 
-### Performance Optimizations
+#### Performance Optimizations
 
 1. **Predicate Pushdown**: Push WHERE clauses to system functions
 2. **Column Projection**: Only generate required columns
@@ -1058,9 +1090,18 @@ CREATE INDEX idx_functions_name ON __system_functions(function_name);
 4. **Incremental Updates**: Update only changed metadata
 5. **Materialized Views**: Pre-compute complex joins
 
-## Usage Examples
 
-### Schema Discovery
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Usage Examples
+
+The system MUST implement the following functionality.
+
+
+#### Schema Discovery
 
 ```sql
 -- Discover database schema
@@ -1087,7 +1128,7 @@ JOIN information_schema.constraint_column_usage ccu
 WHERE tc.constraint_type = 'FOREIGN KEY';
 ```
 
-### PostgreSQL Compatibility
+#### PostgreSQL Compatibility
 
 ```sql
 -- PostgreSQL-style table listing
@@ -1117,7 +1158,7 @@ WHERE a.attrelid = 'users'::regclass
 ORDER BY a.attnum;
 ```
 
-### System Monitoring
+#### System Monitoring
 
 ```sql
 -- Monitor active queries PostgreSQL style
@@ -1132,9 +1173,18 @@ WHERE name LIKE '%memory%'
    OR name LIKE '%thread%';
 ```
 
-## Testing Requirements
 
-### Unit Tests
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Testing Requirements
+
+The system MUST implement the following functionality.
+
+
+#### Unit Tests
 
 1. **View Definition Tests**: Verify all views are created correctly
 2. **Column Mapping Tests**: Verify correct column mappings
@@ -1142,7 +1192,7 @@ WHERE name LIKE '%memory%'
 4. **Filter Tests**: Test WHERE clause support
 5. **Join Tests**: Test joining system tables
 
-### Integration Tests
+#### Integration Tests
 
 1. **DuckDB Compatibility**: Compare with DuckDB v1.4.3 output
 2. **PostgreSQL Tool Compatibility**: Test with common PostgreSQL tools
@@ -1150,7 +1200,7 @@ WHERE name LIKE '%memory%'
 4. **Concurrent Access**: Test thread safety
 5. **DDL Trigger Tests**: Verify cache invalidation
 
-### Compatibility Tests
+#### Compatibility Tests
 
 ```sql
 -- Test PostgreSQL compatibility views
@@ -1173,23 +1223,32 @@ SELECT COUNT(*) FROM pg_catalog.pg_namespace;
 SELECT COUNT(*) FROM pg_catalog.pg_attribute;
 ```
 
-## Performance Considerations
 
-### Query Optimization
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Performance Considerations
+
+The system MUST implement the following functionality.
+
+
+#### Query Optimization
 
 1. **Use Specific Filters**: Filter early in WHERE clause
 2. **Avoid SELECT ***: Select only needed columns
 3. **Use LIMIT**: Limit large result sets
 4. **Cache Results**: Cache frequently accessed metadata
 
-### Memory Usage
+#### Memory Usage
 
 1. **Streaming**: Stream large result sets
 2. **Chunking**: Process in chunks
 3. **Lazy Loading**: Load metadata on demand
 4. **Cleanup**: Clean up unused cached data
 
-### Indexing Strategy
+#### Indexing Strategy
 
 ```sql
 -- Common access patterns
@@ -1203,16 +1262,25 @@ CREATE INDEX idx_info_tables_lookup ON __system_tables(schema_name, table_name);
 CREATE INDEX idx_info_columns_lookup ON __system_columns(table_name, column_name);
 ```
 
-## Security Considerations
 
-### Access Control
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Security Considerations
+
+The system MUST implement the following functionality.
+
+
+#### Access Control
 
 1. **Schema Visibility**: Users see only accessible schemas
 2. **Table Permissions**: Filter based on table privileges
 3. **Column Masking**: Hide sensitive columns
 4. **Row Level Security**: Apply RLS policies
 
-### Privileges
+#### Privileges
 
 ```sql
 -- Grant access to information_schema
@@ -1228,7 +1296,7 @@ REVOKE SELECT ON pg_catalog.pg_user FROM public;
 REVOKE SELECT ON pg_catalog.pg_stat_activity FROM public;
 ```
 
-### Audit Logging
+#### Audit Logging
 
 All metadata queries are logged:
 ```
@@ -1236,7 +1304,16 @@ All metadata queries are logged:
 [timestamp] user='user2' query='SELECT * FROM pg_catalog.pg_class' rows=100
 ```
 
-## Future Enhancements
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Future Enhancements
+
+The system MUST implement the following functionality.
+
 
 1. **Additional Views**: Complete SQL standard views
 2. **Performance Views**: More performance monitoring
@@ -1244,3 +1321,9 @@ All metadata queries are logged:
 4. **Custom Views**: User-defined metadata views
 5. **Real-time Updates**: Live metadata updates
 6. **Distributed Metadata**: Multi-node metadata views
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

@@ -1,12 +1,26 @@
 # Window Frames Specification
 
-## Overview
+## ADDED Requirements
+
+### Requirement: Overview
+
+The system MUST implement the following functionality.
+
 
 Window frames define the set of rows used for computing window functions. This specification details the implementation of ROWS, RANGE, and GROUPS frame types with full boundary and exclusion support.
 
-## Frame Types
 
-### 1. ROWS Frame
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Frame Types
+
+The system MUST implement the following functionality.
+
+
+#### 1. ROWS Frame
 
 Physical row-based boundaries that count exact number of rows.
 
@@ -20,7 +34,7 @@ ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
 ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 ```
 
-#### ROWS Boundaries
+##### ROWS Boundaries
 
 **UNBOUNDED PRECEDING**
 - Includes all rows from the start of the partition
@@ -46,7 +60,7 @@ ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 - Always valid as end bound
 - Example: `ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING`
 
-### 2. RANGE Frame
+#### 2. RANGE Frame
 
 Value-based boundaries that consider the ORDER BY values.
 
@@ -60,7 +74,7 @@ RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING
 RANGE BETWEEN CURRENT ROW AND CURRENT ROW
 ```
 
-#### RANGE Boundaries
+##### RANGE Boundaries
 
 **UNBOUNDED PRECEDING**
 - All rows with ORDER BY values ≤ current row's ORDER BY value
@@ -84,7 +98,7 @@ RANGE BETWEEN CURRENT ROW AND CURRENT ROW
 - All rows with ORDER BY values ≥ current row's ORDER BY value
 - Equivalent to all rows to partition end
 
-#### RANGE with INTERVAL
+##### RANGE with INTERVAL
 
 For temporal types:
 
@@ -110,7 +124,7 @@ SELECT
 FROM daily_sales;
 ```
 
-### 3. GROUPS Frame
+#### 3. GROUPS Frame
 
 Peer group-based boundaries that count groups of rows with equal ORDER BY values.
 
@@ -124,7 +138,7 @@ GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING
 GROUPS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 ```
 
-#### GROUPS Boundaries
+##### GROUPS Boundaries
 
 **UNBOUNDED PRECEDING**
 - All peer groups from partition start to current peer group
@@ -144,11 +158,20 @@ GROUPS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 **UNBOUNDED FOLLOWING**
 - All peer groups from current peer group to partition end
 
-## Default Frames
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Default Frames
+
+The system MUST implement the following functionality.
+
 
 When no frame is explicitly specified:
 
-### With ORDER BY
+#### With ORDER BY
 ```sql
 -- This:
 SELECT SUM(x) OVER (ORDER BY y) FROM t;
@@ -160,7 +183,7 @@ SELECT SUM(x) OVER (
 ) FROM t;
 ```
 
-### Without ORDER BY
+#### Without ORDER BY
 ```sql
 -- This:
 SELECT SUM(x) OVER () FROM t;
@@ -171,11 +194,20 @@ SELECT SUM(x) OVER (
 ) FROM t;
 ```
 
-## EXCLUDE Clause
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: EXCLUDE Clause
+
+The system MUST implement the following functionality.
+
 
 Fine-grained control over which rows to exclude from the frame.
 
-### EXCLUDE CURRENT ROW
+#### EXCLUDE CURRENT ROW
 Excludes the current row from the frame.
 
 ```sql
@@ -191,7 +223,7 @@ FROM values;
 -- For a row with x=5, the sum includes all other rows but not this row
 ```
 
-### EXCLUDE GROUP
+#### EXCLUDE GROUP
 Excludes all rows in the current peer group.
 
 ```sql
@@ -207,7 +239,7 @@ FROM test_scores;
 -- For score=85, excludes all rows with score=85
 ```
 
-### EXCLUDE TIES
+#### EXCLUDE TIES
 Excludes peer group rows except the current row.
 
 ```sql
@@ -223,7 +255,7 @@ FROM test_scores;
 -- For score=85, includes current row but excludes other rows with score=85
 ```
 
-### EXCLUDE NO OTHERS
+#### EXCLUDE NO OTHERS
 Default behavior - no exclusions.
 
 ```sql
@@ -232,9 +264,18 @@ SELECT SUM(x) OVER (ORDER BY x) FROM t;
 SELECT SUM(x) OVER (ORDER BY x EXCLUDE NO OTHERS) FROM t;
 ```
 
-## Frame Validation Rules
 
-### Valid Frame Specifications
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Frame Validation Rules
+
+The system MUST implement the following functionality.
+
+
+#### Valid Frame Specifications
 
 1. **Start bound must not come after end bound**
    ```sql
@@ -273,11 +314,20 @@ SELECT SUM(x) OVER (ORDER BY x EXCLUDE NO OTHERS) FROM t;
    SELECT * FROM t ORDER BY name RANGE BETWEEN 5 PRECEDING AND CURRENT ROW;
    ```
 
-## Implementation Details
 
-### Frame Boundary Computation
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
 
-#### ROWS Algorithm
+### Requirement: Implementation Details
+
+The system MUST implement the following functionality.
+
+
+#### Frame Boundary Computation
+
+##### ROWS Algorithm
 ```go
 func computeRowsBounds(partition []Row, rowIdx int, startBound, endBound Bound) (int, int) {
     partitionSize := len(partition)
@@ -324,7 +374,7 @@ func computeRowsBounds(partition []Row, rowIdx int, startBound, endBound Bound) 
 }
 ```
 
-#### RANGE Algorithm
+##### RANGE Algorithm
 ```go
 func computeRangeBounds(partition []Row, rowIdx int, startBound, endBound Bound,
                        orderByExpr Expression) (int, int) {
@@ -368,7 +418,7 @@ func computeRangeBounds(partition []Row, rowIdx int, startBound, endBound Bound,
 }
 ```
 
-#### GROUPS Algorithm
+##### GROUPS Algorithm
 ```go
 func computeGroupsBounds(partition []Row, rowIdx int, startBound, endBound Bound,
                         peerBoundaries []int) (int, int) {
@@ -422,7 +472,7 @@ func computeGroupsBounds(partition []Row, rowIdx int, startBound, endBound Bound
 }
 ```
 
-### EXCLUDE Implementation
+#### EXCLUDE Implementation
 
 ```go
 func applyExclude(frame FrameBounds, exclude ExcludeMode, partition []Row,
@@ -461,9 +511,9 @@ func applyExclude(frame FrameBounds, exclude ExcludeMode, partition []Row,
 }
 ```
 
-### Performance Optimizations
+#### Performance Optimizations
 
-#### Incremental Frame Updates
+##### Incremental Frame Updates
 For sliding windows:
 
 ```go
@@ -499,7 +549,7 @@ func (s *SlidingFrameComputer) UpdateFrame(
 }
 ```
 
-#### Binary Search for RANGE
+##### Binary Search for RANGE
 Pre-sort and binary search for efficiency:
 
 ```go
@@ -532,9 +582,18 @@ func (r *RangeSearchIndex) FindLastLEQ(target any) int {
 }
 ```
 
-## Edge Cases
 
-### Empty Frames
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Edge Cases
+
+The system MUST implement the following functionality.
+
+
+#### Empty Frames
 Frames that contain no rows:
 
 ```sql
@@ -544,7 +603,7 @@ ROWS BETWEEN 10 PRECEDING AND 5 PRECEDING  -- After all data
 RANGE BETWEEN 100 FOLLOWING AND 200 FOLLOWING  -- No matching values
 ```
 
-### Single Row Partitions
+#### Single Row Partitions
 ```sql
 -- All frames are equivalent for single row
 SELECT
@@ -554,7 +613,7 @@ FROM single_row_table;
 -- Result: sum_all = value (only current row in frame)
 ```
 
-### NULL ORDER BY Values
+#### NULL ORDER BY Values
 ```sql
 -- NULL values in ORDER BY
 SELECT
@@ -567,7 +626,7 @@ FROM data;
 -- Default is NULLS FIRST for ASC, NULLS LAST for DESC
 ```
 
-### Overflow in RANGE Offsets
+#### Overflow in RANGE Offsets
 ```sql
 -- Handle overflow gracefully
 SELECT
@@ -579,9 +638,18 @@ SELECT
 FROM big_int_table;
 ```
 
-## Testing Scenarios
 
-### 1. Basic Frame Tests
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+
+### Requirement: Testing Scenarios
+
+The system MUST implement the following functionality.
+
+
+#### 1. Basic Frame Tests
 ```sql
 -- Test all frame types
 SELECT
@@ -593,7 +661,7 @@ SELECT
 FROM test_data;
 ```
 
-### 2. Boundary Validation
+#### 2. Boundary Validation
 ```sql
 -- Test boundary conditions
 SELECT
@@ -604,7 +672,7 @@ SELECT
 FROM small_table;
 ```
 
-### 3. EXCLUDE Tests
+#### 3. EXCLUDE Tests
 ```sql
 -- Test all EXCLUDE modes
 SELECT
@@ -616,7 +684,7 @@ SELECT
 FROM test_scores;
 ```
 
-### 4. Performance Tests
+#### 4. Performance Tests
 ```sql
 -- Large sliding window
 SELECT
@@ -639,3 +707,9 @@ FROM table_with_many_duplicates;
 ```
 
 This specification provides comprehensive coverage of window frame implementation, ensuring correct behavior for all frame types, boundaries, and edge cases while maintaining good performance through optimization strategies."}
+
+#### Scenario: General Validation
+- **Given** the system is operational
+- **When** this feature is accessed
+- **Then** it MUST function as defined
+

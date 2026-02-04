@@ -69,11 +69,8 @@ func shouldSkipForDatabaseError(err error) bool {
 		return false
 	}
 	errStr := err.Error()
+	// Only skip if no backend is registered - format issues should now be handled
 	if strings.Contains(errStr, "no backend registered") {
-		return true
-	}
-	// Database file format not yet fully supported - skip rather than fail
-	if strings.Contains(errStr, "failed to import") || strings.Contains(errStr, "failed to read") {
 		return true
 	}
 	return false
