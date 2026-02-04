@@ -27,7 +27,7 @@ func NewSettings() *Settings {
 			"integer_datetimes":             "on",
 			"standard_conforming_strings":   "on",
 			"application_name":              "",
-			"search_path":                   "main, pg_catalog",
+			"search_path":                   "main, pg_catalog, information_schema",
 			"default_transaction_isolation": "read committed",
 			"transaction_isolation":         "read committed",
 			"default_transaction_read_only": "off",

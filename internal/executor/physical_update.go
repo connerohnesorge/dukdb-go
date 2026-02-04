@@ -282,6 +282,10 @@ func (e *Executor) executeUpdate(
 		}
 	}
 
+	if len(updates) > 0 {
+		e.invalidateQueryCache(plan.Table)
+	}
+
 	// Handle RETURNING clause - use the after values
 	if len(plan.Returning) > 0 {
 		return e.evaluateReturning(ctx, plan.Returning, allAfterValues, plan.TableDef)

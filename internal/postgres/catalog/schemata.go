@@ -221,9 +221,8 @@ func (is *InformationSchema) queryKeyColumnUsage(filters []Filter) *QueryResult 
 	return result
 }
 
-// sequencesColumns defines the columns for information_schema.sequences.
-// Reference: https://www.postgresql.org/docs/current/infoschema-sequences.html
-var sequencesColumns = []string{
+// sequencesViewColumns defines the columns for information_schema.sequences.
+var sequencesViewColumns = []string{
 	"sequence_catalog",
 	"sequence_schema",
 	"sequence_name",
@@ -237,6 +236,10 @@ var sequencesColumns = []string{
 	"increment",
 	"cycle_option",
 }
+
+// sequencesColumns defines the columns for information_schema.sequences.
+// Reference: https://www.postgresql.org/docs/current/infoschema-sequences.html
+var sequencesColumns = sequencesViewColumns
 
 // querySequences returns data for information_schema.sequences.
 func (is *InformationSchema) querySequences(filters []Filter) *QueryResult {

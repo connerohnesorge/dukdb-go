@@ -40,6 +40,13 @@ var sqlKeywords = []string{
 	"PRECEDING", "FOLLOWING", "CURRENT", "ROW", "UNBOUNDED",
 }
 
+// SQLKeywords returns the list of known SQL keywords.
+func SQLKeywords() []string {
+	keywords := make([]string, len(sqlKeywords))
+	copy(keywords, sqlKeywords)
+	return keywords
+}
+
 // levenshteinDistance calculates the edit distance between two strings.
 // This is used to find similar keywords for typo suggestions.
 func levenshteinDistance(s1, s2 string) int {

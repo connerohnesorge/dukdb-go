@@ -46,6 +46,12 @@ type CTEBinding struct {
 	RecursiveQuery *BoundSelectStmt
 	// Recursive indicates this is a recursive CTE.
 	Recursive bool
+	// UsingKey specifies USING KEY columns for recursive cycle detection.
+	UsingKey []string
+	// SetOp captures UNION vs UNION ALL for recursive CTE semantics.
+	SetOp parser.SetOpType
+	// MaxRecursion is the recursion limit from OPTION (MAX_RECURSION N).
+	MaxRecursion int
 }
 
 // BoundTableRef represents a bound table reference.

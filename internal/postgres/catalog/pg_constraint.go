@@ -3,32 +3,36 @@ package catalog
 // pg_constraint columns - PostgreSQL constraint catalog
 // Reference: https://www.postgresql.org/docs/current/catalog-pg-constraint.html
 var pgConstraintColumns = []string{
-	"oid",            // Row identifier
-	"conname",        // Constraint name
-	"connamespace",   // OID of namespace containing this constraint
-	"contype",        // c = check, f = foreign key, p = primary key, u = unique, t = trigger, x = exclusion
-	"condeferrable",  // Is constraint deferrable
-	"condeferred",    // Is constraint deferred by default
-	"convalidated",   // Has constraint been validated
-	"conrelid",       // Table this constraint is on; 0 if not a table constraint
-	"contypid",       // Domain this constraint is on; 0 if not a domain constraint
-	"conindid",       // Index supporting this constraint, if any
-	"conparentid",    // Parent constraint of partitioned constraint
-	"confrelid",      // If FK, table referenced; else 0
-	"confupdtype",    // FK update action code
-	"confdeltype",    // FK delete action code
-	"confmatchtype",  // FK match type
-	"conislocal",     // Constraint is local
-	"coninhcount",    // Number of inheritance ancestors
-	"connoinherit",   // Constraint is non-inheritable
-	"conkey",         // Constrained columns (for table constraints)
-	"confkey",        // Referenced columns (for foreign keys)
-	"conpfeqop",      // Equality operators for comparison (for FK)
-	"conppeqop",      // Equality operators for comparison (for FK)
-	"conffeqop",      // Equality operators for comparison (for FK)
-	"confdelsetcols", // Columns to set to default on delete
-	"conexclop",      // Exclusion operator OIDs
-	"conbin",         // If check constraint, pg_node_tree representation
+	"oid",           // Row identifier
+	"conname",       // Constraint name
+	"connamespace",  // OID of namespace containing this constraint
+	"contype",       // c = check, f = foreign key, p = primary key, u = unique, t = trigger, x = exclusion
+	"condeferrable", // Is constraint deferrable
+	"condeferred",   // Is constraint deferred by default
+	"convalidated",  // Has constraint been validated
+	"conrelid",      // Table this constraint is on; 0 if not a table constraint
+	"contypid",      // Domain this constraint is on; 0 if not a domain constraint
+	"conindid",      // Index supporting this constraint, if any
+	"conpfeqop",     // Equality operators for comparison (for FK)
+	"conppeqop",     // Equality operators for comparison (for FK)
+	"conffeqop",     // Equality operators for comparison (for FK)
+	"conexclop",     // Exclusion operator OIDs
+	"conparentid",   // Parent constraint of partitioned constraint
+	"confupdtype",   // FK update action code
+	"confdeltype",   // FK delete action code
+	"confmatchtype", // FK match type
+	"conperiod",     // Constraint includes period
+	"conislocal",    // Constraint is local
+	"coninhcount",   // Number of inheritance ancestors
+	"connoinherit",  // Constraint is non-inheritable
+	"conkey",        // Constrained columns (for table constraints)
+	"confkey",       // Referenced columns (for foreign keys)
+	"conbin",        // If check constraint, pg_node_tree representation
+	"consrc",        // Constraint definition
+	"conpfeqop_v",   // Equality operators for comparison (vector)
+	"conppeqop_v",   // Equality operators for comparison (vector)
+	"conffeqop_v",   // Equality operators for comparison (vector)
+	"conexclop_v",   // Exclusion operator OIDs (vector)
 }
 
 // queryPgConstraint returns data for pg_catalog.pg_constraint.
@@ -57,32 +61,36 @@ func (pg *PgCatalog) queryPgConstraint(filters []Filter) *QueryResult {
 				conkey := buildConKey(table.PrimaryKey)
 
 				row := map[string]any{
-					"oid":            constraintOID,
-					"conname":        table.Name + "_pkey",
-					"connamespace":   namespaceOID,
-					"contype":        "p", // primary key
-					"condeferrable":  false,
-					"condeferred":    false,
-					"convalidated":   true,
-					"conrelid":       tableOID,
-					"contypid":       int64(0),
-					"conindid":       indexOID,
-					"conparentid":    int64(0),
-					"confrelid":      int64(0),
-					"confupdtype":    " ",
-					"confdeltype":    " ",
-					"confmatchtype":  " ",
-					"conislocal":     true,
-					"coninhcount":    int64(0),
-					"connoinherit":   false,
-					"conkey":         conkey,
-					"confkey":        nil,
-					"conpfeqop":      nil,
-					"conppeqop":      nil,
-					"conffeqop":      nil,
-					"confdelsetcols": nil,
-					"conexclop":      nil,
-					"conbin":         nil,
+					"oid":           constraintOID,
+					"conname":       table.Name + "_pkey",
+					"connamespace":  namespaceOID,
+					"contype":       "p", // primary key
+					"condeferrable": false,
+					"condeferred":   false,
+					"convalidated":  true,
+					"conrelid":      tableOID,
+					"contypid":      int64(0),
+					"conindid":      indexOID,
+					"conpfeqop":     nil,
+					"conppeqop":     nil,
+					"conffeqop":     nil,
+					"conexclop":     nil,
+					"conparentid":   int64(0),
+					"confupdtype":   " ",
+					"confdeltype":   " ",
+					"confmatchtype": " ",
+					"conperiod":     false,
+					"conislocal":    true,
+					"coninhcount":   int64(0),
+					"connoinherit":  false,
+					"conkey":        conkey,
+					"confkey":       nil,
+					"conbin":        nil,
+					"consrc":        nil,
+					"conpfeqop_v":   nil,
+					"conppeqop_v":   nil,
+					"conffeqop_v":   nil,
+					"conexclop_v":   nil,
 				}
 
 				if matchesFilters(row, filters) {
@@ -110,32 +118,36 @@ func (pg *PgCatalog) queryPgConstraint(filters []Filter) *QueryResult {
 					conkey := buildConKey(colIndices)
 
 					row := map[string]any{
-						"oid":            constraintOID,
-						"conname":        idx.Name,
-						"connamespace":   namespaceOID,
-						"contype":        "u", // unique
-						"condeferrable":  false,
-						"condeferred":    false,
-						"convalidated":   true,
-						"conrelid":       tableOID,
-						"contypid":       int64(0),
-						"conindid":       indexOID,
-						"conparentid":    int64(0),
-						"confrelid":      int64(0),
-						"confupdtype":    " ",
-						"confdeltype":    " ",
-						"confmatchtype":  " ",
-						"conislocal":     true,
-						"coninhcount":    int64(0),
-						"connoinherit":   false,
-						"conkey":         conkey,
-						"confkey":        nil,
-						"conpfeqop":      nil,
-						"conppeqop":      nil,
-						"conffeqop":      nil,
-						"confdelsetcols": nil,
-						"conexclop":      nil,
-						"conbin":         nil,
+						"oid":           constraintOID,
+						"conname":       idx.Name,
+						"connamespace":  namespaceOID,
+						"contype":       "u", // unique
+						"condeferrable": false,
+						"condeferred":   false,
+						"convalidated":  true,
+						"conrelid":      tableOID,
+						"contypid":      int64(0),
+						"conindid":      indexOID,
+						"conpfeqop":     nil,
+						"conppeqop":     nil,
+						"conffeqop":     nil,
+						"conexclop":     nil,
+						"conparentid":   int64(0),
+						"confupdtype":   " ",
+						"confdeltype":   " ",
+						"confmatchtype": " ",
+						"conperiod":     false,
+						"conislocal":    true,
+						"coninhcount":   int64(0),
+						"connoinherit":  false,
+						"conkey":        conkey,
+						"confkey":       nil,
+						"conbin":        nil,
+						"consrc":        nil,
+						"conpfeqop_v":   nil,
+						"conppeqop_v":   nil,
+						"conffeqop_v":   nil,
+						"conexclop_v":   nil,
 					}
 
 					if matchesFilters(row, filters) {

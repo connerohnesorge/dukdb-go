@@ -10,22 +10,23 @@ import (
 
 // BoundSelectStmt represents a bound SELECT statement.
 type BoundSelectStmt struct {
-	CTEs       []*BoundCTE // Common Table Expressions (WITH clause)
-	Distinct   bool
-	DistinctOn []BoundExpr // DISTINCT ON expressions (select first row per group)
-	Columns    []*BoundSelectColumn
-	From       []*BoundTableRef
-	Joins      []*BoundJoin
-	Where      BoundExpr
-	GroupBy    []BoundExpr
-	Having     BoundExpr
-	Qualify    BoundExpr // QUALIFY clause (filter after window functions)
-	OrderBy    []*BoundOrderBy
-	Limit      BoundExpr
-	Offset     BoundExpr
-	Sample     *BoundSampleOptions // SAMPLE clause options
-	SetOp      parser.SetOpType    // Type of set operation (UNION, INTERSECT, EXCEPT)
-	Right      *BoundSelectStmt    // Right side of set operation
+	CTEs            []*BoundCTE // Common Table Expressions (WITH clause)
+	Distinct        bool
+	DistinctOn      []BoundExpr // DISTINCT ON expressions (select first row per group)
+	Columns         []*BoundSelectColumn
+	From            []*BoundTableRef
+	Joins           []*BoundJoin
+	Where           BoundExpr
+	GroupBy         []BoundExpr
+	Having          BoundExpr
+	Qualify         BoundExpr // QUALIFY clause (filter after window functions)
+	OrderBy         []*BoundOrderBy
+	Limit           BoundExpr
+	Offset          BoundExpr
+	Sample          *BoundSampleOptions // SAMPLE clause options
+	RecursionOption *parser.RecursionOption
+	SetOp           parser.SetOpType // Type of set operation (UNION, INTERSECT, EXCEPT)
+	Right           *BoundSelectStmt // Right side of set operation
 }
 
 func (*BoundSelectStmt) boundStmtNode() {}
@@ -423,6 +424,12 @@ type BoundCTE struct {
 	RecursiveQuery *BoundSelectStmt
 	// Recursive is true if this is a WITH RECURSIVE CTE.
 	Recursive bool
+	// UsingKey specifies USING KEY columns for cycle detection.
+	UsingKey []string
+	// SetOp captures UNION vs UNION ALL for recursive CTE semantics.
+	SetOp parser.SetOpType
+	// MaxRecursion is the recursion limit from OPTION (MAX_RECURSION N).
+	MaxRecursion int
 	// ResultTypes are the inferred types of the CTE columns.
 	ResultTypes []dukdb.Type
 	// ResultNames are the column names (either from aliases or inferred from query).

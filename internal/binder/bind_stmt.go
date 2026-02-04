@@ -18,6 +18,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/io/parquet"
 	"github.com/dukdb/dukdb-go/internal/io/xlsx"
+	"github.com/dukdb/dukdb-go/internal/metadata"
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
@@ -25,7 +26,8 @@ func (b *Binder) bindSelect(
 	s *parser.SelectStmt,
 ) (*BoundSelectStmt, error) {
 	bound := &BoundSelectStmt{
-		Distinct: s.Distinct,
+		Distinct:        s.Distinct,
+		RecursionOption: s.Options,
 	}
 
 	// Push new scope
@@ -357,36 +359,38 @@ func (b *Binder) bindTableRef(
 		}
 	}
 
-	// First check for virtual tables (they take precedence in the main schema)
-	if schema == "main" {
-		if vtDef, ok := b.catalog.GetVirtualTableDef(ref.TableName); ok {
-			boundRef := &BoundTableRef{
-				Schema:       schema,
-				TableName:    ref.TableName,
-				Alias:        alias,
-				VirtualTable: vtDef,
-				TableDef:     vtDef.ToTableDef(),
-			}
-
-			// Create bound columns from virtual table
-			for i, col := range vtDef.Columns() {
-				boundRef.Columns = append(
-					boundRef.Columns,
-					&BoundColumn{
-						Table:      alias,
-						Column:     col.Name,
-						ColumnIdx:  i,
-						Type:       col.Type,
-						SourceType: "virtual",
-					},
-				)
-			}
-
-			b.scope.tables[alias] = boundRef
-			b.scope.aliases[alias] = ref.TableName
-
-			return boundRef, nil
+	// First check for virtual tables (they take precedence over regular tables)
+	virtualTableName := ref.TableName
+	if schema != "main" {
+		virtualTableName = schema + "." + ref.TableName
+	}
+	if vtDef, ok := b.catalog.GetVirtualTableDef(virtualTableName); ok {
+		boundRef := &BoundTableRef{
+			Schema:       schema,
+			TableName:    ref.TableName,
+			Alias:        alias,
+			VirtualTable: vtDef,
+			TableDef:     vtDef.ToTableDef(),
 		}
+
+		// Create bound columns from virtual table
+		for i, col := range vtDef.Columns() {
+			boundRef.Columns = append(
+				boundRef.Columns,
+				&BoundColumn{
+					Table:      alias,
+					Column:     col.Name,
+					ColumnIdx:  i,
+					Type:       col.Type,
+					SourceType: "virtual",
+				},
+			)
+		}
+
+		b.scope.tables[alias] = boundRef
+		b.scope.aliases[alias] = ref.TableName
+
+		return boundRef, nil
 	}
 
 	// Check for views (takes precedence over regular tables)
@@ -445,6 +449,9 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 	funcNameLower := strings.ToLower(tableFunc.Name)
 	if funcNameLower == "which_secret" || funcNameLower == "duckdb_secrets" {
 		return b.bindSecretSystemFunction(ref)
+	}
+	if isSystemTableFunction(funcNameLower) {
+		return b.bindSystemTableFunction(ref)
 	}
 
 	// Check for UNNEST table function
@@ -646,6 +653,111 @@ func (b *Binder) bindSecretSystemFunction(ref parser.TableRef) (*BoundTableRef, 
 	return boundRef, nil
 }
 
+func isSystemTableFunction(name string) bool {
+	switch name {
+	case "duckdb_settings",
+		"duckdb_tables",
+		"duckdb_columns",
+		"duckdb_views",
+		"duckdb_functions",
+		"duckdb_constraints",
+		"duckdb_indexes",
+		"duckdb_databases",
+		"duckdb_sequences",
+		"duckdb_dependencies",
+		"duckdb_optimizers",
+		"duckdb_keywords",
+		"duckdb_extensions",
+		"duckdb_memory_usage",
+		"duckdb_temp_directory":
+		return true
+	default:
+		return false
+	}
+}
+
+func (b *Binder) bindSystemTableFunction(ref parser.TableRef) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	funcNameLower := strings.ToLower(tableFunc.Name)
+
+	alias := ref.Alias
+	if alias == "" {
+		alias = tableFunc.Name
+	}
+
+	if len(tableFunc.Args) > 0 || len(tableFunc.NamedArgs) > 0 {
+		return nil, b.errorf("table function %s does not accept arguments", tableFunc.Name)
+	}
+
+	var columns []*catalog.ColumnDef
+	switch funcNameLower {
+	case "duckdb_settings":
+		columns = metadata.DuckDBSettingsColumns()
+	case "duckdb_tables":
+		columns = metadata.DuckDBTablesColumns()
+	case "duckdb_columns":
+		columns = metadata.DuckDBColumnsColumns()
+	case "duckdb_views":
+		columns = metadata.DuckDBViewsColumns()
+	case "duckdb_functions":
+		columns = metadata.DuckDBFunctionsColumns()
+	case "duckdb_constraints":
+		columns = metadata.DuckDBConstraintsColumns()
+	case "duckdb_indexes":
+		columns = metadata.DuckDBIndexesColumns()
+	case "duckdb_databases":
+		columns = metadata.DuckDBDatabasesColumns()
+	case "duckdb_sequences":
+		columns = metadata.DuckDBSequencesColumns()
+	case "duckdb_dependencies":
+		columns = metadata.DuckDBDependenciesColumns()
+	case "duckdb_optimizers":
+		columns = metadata.DuckDBOptimizersColumns()
+	case "duckdb_keywords":
+		columns = metadata.DuckDBKeywordsColumns()
+	case "duckdb_extensions":
+		columns = metadata.DuckDBExtensionsColumns()
+	case "duckdb_memory_usage":
+		columns = metadata.DuckDBMemoryUsageColumns()
+	case "duckdb_temp_directory":
+		columns = metadata.DuckDBTempDirectoryColumns()
+	default:
+		return nil, b.errorf("unknown system table function: %s", tableFunc.Name)
+	}
+
+	boundFunc := &BoundTableFunctionRef{
+		Name:    tableFunc.Name,
+		Path:    "",
+		Options: map[string]any{},
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     tableFunc.Name,
+		Alias:         alias,
+		TableFunction: boundFunc,
+		Lateral:       ref.Lateral,
+	}
+
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = tableFunc.Name
+
+	return boundRef, nil
+}
+
 // bindUnnestTableFunction binds an UNNEST table function call.
 // UNNEST expands arrays/lists into rows, producing one row per element.
 //
@@ -790,6 +902,36 @@ func (b *Binder) inferTableFunctionSchema(
 		return b.inferIcebergSnapshotsSchema()
 	case "duckdb_iceberg_tables":
 		return b.inferIcebergTablesSchema()
+	case "duckdb_settings":
+		return metadata.DuckDBSettingsColumns(), nil
+	case "duckdb_tables":
+		return metadata.DuckDBTablesColumns(), nil
+	case "duckdb_columns":
+		return metadata.DuckDBColumnsColumns(), nil
+	case "duckdb_views":
+		return metadata.DuckDBViewsColumns(), nil
+	case "duckdb_functions":
+		return metadata.DuckDBFunctionsColumns(), nil
+	case "duckdb_constraints":
+		return metadata.DuckDBConstraintsColumns(), nil
+	case "duckdb_indexes":
+		return metadata.DuckDBIndexesColumns(), nil
+	case "duckdb_databases":
+		return metadata.DuckDBDatabasesColumns(), nil
+	case "duckdb_sequences":
+		return metadata.DuckDBSequencesColumns(), nil
+	case "duckdb_dependencies":
+		return metadata.DuckDBDependenciesColumns(), nil
+	case "duckdb_optimizers":
+		return metadata.DuckDBOptimizersColumns(), nil
+	case "duckdb_keywords":
+		return metadata.DuckDBKeywordsColumns(), nil
+	case "duckdb_extensions":
+		return metadata.DuckDBExtensionsColumns(), nil
+	case "duckdb_memory_usage":
+		return metadata.DuckDBMemoryUsageColumns(), nil
+	case "duckdb_temp_directory":
+		return metadata.DuckDBTempDirectoryColumns(), nil
 	default:
 		// For unknown table functions, return no columns
 		// The executor will handle the error
@@ -2800,6 +2942,13 @@ func (b *Binder) bindCTE(cte parser.CTE) (*BoundCTE, error) {
 
 // bindNonRecursiveCTE binds a non-recursive CTE.
 func (b *Binder) bindNonRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
+	if len(cte.UsingKey) > 0 {
+		return nil, b.errorf(
+			"CTE %s cannot use USING KEY without RECURSIVE",
+			cte.Name,
+		)
+	}
+
 	// Bind the CTE query
 	boundQuery, err := b.bindSelect(cte.Query)
 	if err != nil {
@@ -2853,16 +3002,22 @@ func (b *Binder) bindNonRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 		Names:           names,
 		IsSelfReference: false,
 		Query:           boundQuery,
+		UsingKey:        nil,
+		SetOp:           parser.SetOpNone,
+		MaxRecursion:    -1,
 	}
 	b.scope.addCTE(cteBinding)
 
 	return &BoundCTE{
-		Name:        cte.Name,
-		Columns:     cte.Columns,
-		Query:       boundQuery,
-		Recursive:   false,
-		ResultTypes: types,
-		ResultNames: names,
+		Name:         cte.Name,
+		Columns:      cte.Columns,
+		Query:        boundQuery,
+		Recursive:    false,
+		UsingKey:     nil,
+		SetOp:        parser.SetOpNone,
+		MaxRecursion: -1,
+		ResultTypes:  types,
+		ResultNames:  names,
 	}, nil
 }
 
@@ -2872,8 +3027,15 @@ func (b *Binder) bindNonRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 // 2. The CTE query must have a UNION ALL structure with base case and recursive case
 // 3. Bind the query with the placeholder, then update with final types
 func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
-	// Validate that the recursive CTE has a UNION ALL structure
-	if cte.Query.SetOp != parser.SetOpUnionAll {
+	// Validate that the recursive CTE has the expected set operation
+	if len(cte.UsingKey) > 0 {
+		if cte.Query.SetOp != parser.SetOpUnion {
+			return nil, b.errorf(
+				"recursive CTE %s using USING KEY must use UNION (not UNION ALL)",
+				cte.Name,
+			)
+		}
+	} else if cte.Query.SetOp != parser.SetOpUnionAll {
 		return nil, b.errorf(
 			"recursive CTE %s must use UNION ALL between base case and recursive case",
 			cte.Name,
@@ -2918,6 +3080,22 @@ func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 		types = append(types, col.Expr.ResultType())
 	}
 
+	if len(cte.UsingKey) > 0 {
+		nameSet := make(map[string]struct{}, len(names))
+		for _, name := range names {
+			nameSet[name] = struct{}{}
+		}
+		for _, key := range cte.UsingKey {
+			if _, ok := nameSet[key]; !ok {
+				return nil, b.errorf(
+					"recursive CTE %s USING KEY column %s not found in CTE output",
+					cte.Name,
+					key,
+				)
+			}
+		}
+	}
+
 	// Create bound columns for the CTE placeholder
 	var columns []*BoundColumn
 	for i, name := range names {
@@ -2938,6 +3116,12 @@ func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 		Names:           names,
 		IsSelfReference: true, // Mark as self-reference placeholder
 		Query:           nil,  // Query will be set after full binding
+		UsingKey:        cte.UsingKey,
+		SetOp:           cte.Query.SetOp,
+		MaxRecursion:    -1,
+	}
+	if cte.Query.Options != nil {
+		placeholderBinding.MaxRecursion = cte.Query.Options.MaxRecursion
 	}
 	b.scope.addCTE(placeholderBinding)
 
@@ -2969,6 +3153,9 @@ func (b *Binder) bindRecursiveCTE(cte parser.CTE) (*BoundCTE, error) {
 		Query:          baseCaseQuery,
 		RecursiveQuery: recursiveCaseQuery,
 		Recursive:      true,
+		UsingKey:       cte.UsingKey,
+		SetOp:          cte.Query.SetOp,
+		MaxRecursion:   placeholderBinding.MaxRecursion,
 		ResultTypes:    types,
 		ResultNames:    names,
 	}, nil

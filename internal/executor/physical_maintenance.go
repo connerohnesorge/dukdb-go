@@ -7,6 +7,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
@@ -50,6 +51,22 @@ func (e *Executor) executePragma(
 		return e.pragmaTempDirectory(ctx, plan)
 	case "checkpoint_threshold":
 		return e.pragmaCheckpointThreshold(ctx, plan)
+	case "query_cache_enabled":
+		return e.pragmaQueryCacheEnabled(ctx, plan)
+	case "enable_query_cache":
+		return e.pragmaToggleQueryCache(ctx, true)
+	case "disable_query_cache":
+		return e.pragmaToggleQueryCache(ctx, false)
+	case "query_cache_max_bytes":
+		return e.pragmaQueryCacheMaxBytes(ctx, plan)
+	case "query_cache_ttl":
+		return e.pragmaQueryCacheTTL(ctx, plan)
+	case "query_cache_parameter_mode":
+		return e.pragmaQueryCacheParameterMode(ctx, plan)
+	case "cache_status":
+		return e.pragmaCacheStatus(ctx)
+	case "clear_cache":
+		return e.pragmaClearCache(ctx)
 
 	// Profiling pragmas
 	case "enable_profiling":
@@ -439,6 +456,280 @@ func (e *Executor) pragmaCheckpointThreshold(
 		Columns: []string{"checkpoint_threshold"},
 		Rows:    []map[string]any{{"checkpoint_threshold": thresholdValue}},
 	}, nil
+}
+
+func (e *Executor) pragmaQueryCacheEnabled(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
+	if plan.Value != nil {
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+		enabled, err := parseBoolSetting(valueStr)
+		if err != nil {
+			return nil, err
+		}
+		if ctx.conn != nil {
+			ctx.conn.SetSetting("query_cache_enabled", boolToString(enabled))
+		}
+		return &ExecutionResult{
+			Columns: []string{"success"},
+			Rows:    []map[string]any{{"success": true}},
+		}, nil
+	}
+
+	value := "false"
+	if ctx.conn != nil {
+		if setting := ctx.conn.GetSetting("query_cache_enabled"); setting != "" {
+			value = setting
+		}
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"query_cache_enabled"},
+		Rows:    []map[string]any{{"query_cache_enabled": value}},
+	}, nil
+}
+
+func (e *Executor) pragmaToggleQueryCache(
+	ctx *ExecutionContext,
+	enabled bool,
+) (*ExecutionResult, error) {
+	if ctx.conn != nil {
+		ctx.conn.SetSetting("query_cache_enabled", boolToString(enabled))
+	}
+	return &ExecutionResult{
+		Columns: []string{"success"},
+		Rows:    []map[string]any{{"success": true}},
+	}, nil
+}
+
+func (e *Executor) pragmaQueryCacheMaxBytes(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
+	if plan.Value != nil {
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := parseCacheBytes(valueStr); err != nil {
+			return nil, err
+		}
+		if ctx.conn != nil {
+			ctx.conn.SetSetting("query_cache_max_bytes", valueStr)
+		}
+		return &ExecutionResult{
+			Columns: []string{"success"},
+			Rows:    []map[string]any{{"success": true}},
+		}, nil
+	}
+
+	value := ""
+	if ctx.conn != nil {
+		value = ctx.conn.GetSetting("query_cache_max_bytes")
+	}
+	if value == "" {
+		value = fmt.Sprintf("%d", cache.DefaultMaxBytes)
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"query_cache_max_bytes"},
+		Rows:    []map[string]any{{"query_cache_max_bytes": value}},
+	}, nil
+}
+
+func (e *Executor) pragmaQueryCacheTTL(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
+	if plan.Value != nil {
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := parseCacheTTL(valueStr); err != nil {
+			return nil, err
+		}
+		if ctx.conn != nil {
+			ctx.conn.SetSetting("query_cache_ttl", valueStr)
+		}
+		return &ExecutionResult{
+			Columns: []string{"success"},
+			Rows:    []map[string]any{{"success": true}},
+		}, nil
+	}
+
+	value := ""
+	if ctx.conn != nil {
+		value = ctx.conn.GetSetting("query_cache_ttl")
+	}
+	if value == "" {
+		value = cache.DefaultTTL.String()
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"query_cache_ttl"},
+		Rows:    []map[string]any{{"query_cache_ttl": value}},
+	}, nil
+}
+
+func (e *Executor) pragmaQueryCacheParameterMode(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPragma,
+) (*ExecutionResult, error) {
+	if plan.Value != nil {
+		valueStr, err := evalExprToString(ctx, plan.Value)
+		if err != nil {
+			return nil, err
+		}
+		mode := strings.ToLower(strings.TrimSpace(valueStr))
+		switch mode {
+		case "exact", "structure":
+			if ctx.conn != nil {
+				ctx.conn.SetSetting("query_cache_parameter_mode", mode)
+			}
+			return &ExecutionResult{
+				Columns: []string{"success"},
+				Rows:    []map[string]any{{"success": true}},
+			}, nil
+		default:
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("invalid query_cache_parameter_mode: %s", valueStr),
+			}
+		}
+	}
+
+	value := ""
+	if ctx.conn != nil {
+		value = ctx.conn.GetSetting("query_cache_parameter_mode")
+	}
+	if value == "" {
+		value = "exact"
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"query_cache_parameter_mode"},
+		Rows:    []map[string]any{{"query_cache_parameter_mode": value}},
+	}, nil
+}
+
+func (e *Executor) pragmaCacheStatus(ctx *ExecutionContext) (*ExecutionResult, error) {
+	stats := cache.CacheStats{}
+	if e.queryCache != nil {
+		stats = e.queryCache.Stats()
+	}
+
+	enabled := false
+	if ctx.conn != nil {
+		value := strings.ToLower(strings.TrimSpace(ctx.conn.GetSetting("query_cache_enabled")))
+		enabled = value == "1" || value == "true" || value == "on" || value == "yes"
+	}
+
+	maxBytes := int64(cache.DefaultMaxBytes)
+	if ctx.conn != nil {
+		if value := ctx.conn.GetSetting("query_cache_max_bytes"); value != "" {
+			if parsed, err := parseCacheBytes(value); err == nil {
+				maxBytes = parsed
+			}
+		}
+	}
+
+	ttlValue := cache.DefaultTTL.String()
+	if ctx.conn != nil {
+		if value := ctx.conn.GetSetting("query_cache_ttl"); value != "" {
+			ttlValue = value
+		}
+	}
+
+	parameterMode := "exact"
+	if ctx.conn != nil {
+		if value := ctx.conn.GetSetting("query_cache_parameter_mode"); value != "" {
+			parameterMode = value
+		}
+	}
+
+	return &ExecutionResult{
+		Columns: []string{"enabled", "entries", "bytes", "hits", "misses", "evictions", "max_bytes", "ttl", "parameter_mode"},
+		Rows: []map[string]any{{
+			"enabled":        enabled,
+			"entries":        int64(stats.Entries),
+			"bytes":          stats.Bytes,
+			"hits":           int64(stats.Hits),
+			"misses":         int64(stats.Misses),
+			"evictions":      int64(stats.Evictions),
+			"max_bytes":      maxBytes,
+			"ttl":            ttlValue,
+			"parameter_mode": parameterMode,
+		}},
+	}, nil
+}
+
+func (e *Executor) pragmaClearCache(ctx *ExecutionContext) (*ExecutionResult, error) {
+	if e.queryCache != nil {
+		e.queryCache.Clear()
+	}
+	return &ExecutionResult{
+		Columns: []string{"success"},
+		Rows:    []map[string]any{{"success": true}},
+	}, nil
+}
+
+func parseBoolSetting(value string) (bool, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "1", "true", "on", "yes":
+		return true, nil
+	case "0", "false", "off", "no":
+		return false, nil
+	default:
+		return false, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("invalid boolean value: %s", value),
+		}
+	}
+}
+
+func boolToString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
+
+func parseCacheBytes(value string) (int64, error) {
+	bytes, err := dukdb.ParseThreshold(value)
+	if err == nil {
+		return bytes, nil
+	}
+	parsed, parseErr := parseInt64(value)
+	if parseErr != nil {
+		return 0, parseErr
+	}
+	return parsed, nil
+}
+
+func parseCacheTTL(value string) (time.Duration, error) {
+	if parsed, err := time.ParseDuration(value); err == nil {
+		if parsed <= 0 {
+			return 0, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "query_cache_ttl must be positive"}
+		}
+		return parsed, nil
+	}
+	seconds, err := parseInt64(value)
+	if err != nil {
+		return 0, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("invalid query_cache_ttl: %s", value),
+		}
+	}
+	if seconds <= 0 {
+		return 0, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "query_cache_ttl must be positive"}
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 // Profiling pragma stubs

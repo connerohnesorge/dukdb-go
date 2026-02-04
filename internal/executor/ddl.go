@@ -56,6 +56,8 @@ func (e *Executor) executeCreateView(
 		}
 	}
 
+	e.invalidateQueryCache(plan.View)
+
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
 
@@ -113,6 +115,8 @@ func (e *Executor) executeDropView(
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
 	}
+
+	e.invalidateQueryCache(plan.View)
 
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
@@ -624,6 +628,8 @@ func (e *Executor) executeAlterTable(
 			Msg:  fmt.Sprintf("unsupported ALTER TABLE operation: %d", plan.Operation),
 		}
 	}
+
+	e.invalidateQueryCache(plan.Table)
 
 	return &ExecutionResult{RowsAffected: 0}, nil
 }

@@ -8,15 +8,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/coder/quartz"
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/persistence"
+	pgcatalog "github.com/dukdb/dukdb-go/internal/postgres/catalog"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/storage/duckdb"
 	"github.com/dukdb/dukdb-go/internal/wal"
@@ -36,6 +39,7 @@ type Engine struct {
 	path          string
 	persistent    bool // true if not :memory:
 	closed        bool
+	queryCache    *cache.QueryResultCache
 
 	// SERIALIZABLE isolation level support
 	conflictDetector *storage.ConflictDetector // Shared conflict detector for all connections
@@ -52,7 +56,13 @@ func NewEngine() *Engine {
 		optimizer:        optimizer.NewCostBasedOptimizer(cat),
 		conflictDetector: storage.NewConflictDetector(),
 		lockManager:      storage.NewLockManager(),
+		queryCache:       cache.NewQueryResultCache(cache.DefaultMaxBytes, cache.DefaultTTL),
 	}
+}
+
+// QueryCache returns the shared query result cache.
+func (e *Engine) QueryCache() *cache.QueryResultCache {
+	return e.queryCache
 }
 
 // Open opens a connection to the database at the given path.
@@ -74,6 +84,9 @@ func (e *Engine) Open(
 			}
 		}
 		isolatedEngine.persistent = false
+		if err := registerInformationSchema(isolatedEngine, path); err != nil {
+			return nil, err
+		}
 
 		// Initialize glob settings from config
 		maxFilesPerGlob := dukdb.DefaultMaxFilesPerGlob
@@ -194,6 +207,9 @@ func (e *Engine) Open(
 			uint64(thresholdBytes),
 		)
 	}
+	if err := registerInformationSchema(e, path); err != nil {
+		return nil, err
+	}
 
 	// Initialize glob settings from config
 	maxFilesPerGlob := dukdb.DefaultMaxFilesPerGlob
@@ -217,6 +233,28 @@ func (e *Engine) Open(
 	}
 
 	return conn, nil
+}
+
+func registerInformationSchema(engine *Engine, path string) error {
+	if engine == nil || engine.catalog == nil {
+		return nil
+	}
+
+	dbName := "dukdb"
+	if path == ":memory:" {
+		dbName = "memory"
+	} else if path != "" {
+		dbName = filepath.Base(path)
+		if dbName == "" {
+			dbName = path
+		}
+	}
+
+	return pgcatalog.RegisterInformationSchemaVirtualTables(
+		engine.catalog,
+		engine.catalog,
+		dbName,
+	)
 }
 
 // Close closes the engine and releases all resources.

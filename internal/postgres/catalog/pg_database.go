@@ -13,6 +13,7 @@ var pgDatabaseColumns = []string{
 	"datconnlimit",   // Maximum concurrent connections (-1 = no limit)
 	"datfrozenxid",   // All rows with xmax < this are frozen
 	"datminmxid",     // All rows with xmax < this are frozen
+	"datchecksum",    // Checksums enabled
 	"dattablespace",  // Default tablespace OID
 	"datcollate",     // LC_COLLATE for this database
 	"datctype",       // LC_CTYPE for this database
@@ -42,6 +43,7 @@ func (pg *PgCatalog) queryPgDatabase(filters []Filter) *QueryResult {
 		"datconnlimit":   int64(-1), // No limit
 		"datfrozenxid":   int64(0),
 		"datminmxid":     int64(1),
+		"datchecksum":    false,
 		"dattablespace":  int64(1663), // pg_default
 		"datcollate":     "en_US.UTF-8",
 		"datctype":       "en_US.UTF-8",
@@ -78,6 +80,7 @@ func (pg *PgCatalog) queryPgDatabase(filters []Filter) *QueryResult {
 			"datconnlimit":   int64(-1),
 			"datfrozenxid":   int64(0),
 			"datminmxid":     int64(1),
+			"datchecksum":    false,
 			"dattablespace":  int64(1663),
 			"datcollate":     "en_US.UTF-8",
 			"datctype":       "en_US.UTF-8",

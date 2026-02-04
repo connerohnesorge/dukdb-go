@@ -84,10 +84,10 @@ func detectCatalogFormat(data []byte) CatalogFormat {
 
 ## Tasks
 
-- [ ] **Task 1**: Apply the fix to `internal/engine/engine.go` - reorder the format detection checks
-- [ ] **Task 2**: Run the failing tests to verify the fix
-- [ ] **Task 3**: Verify no regressions by running the full engine test suite
-- [ ] **Task 4**: Commit the fix with an appropriate message
+- [x] **Task 1**: Apply the fix to `internal/engine/engine.go` - reorder the format detection checks
+- [x] **Task 2**: Run the failing tests to verify the fix
+- [x] **Task 3**: Verify no regressions by running the full engine test suite
+- [x] **Task 4**: Commit the fix with an appropriate message
 
 ## Technical Context
 

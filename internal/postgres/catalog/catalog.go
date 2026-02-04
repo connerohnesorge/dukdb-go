@@ -150,6 +150,18 @@ func (is *InformationSchema) Query(query string) *QueryResult {
 		return is.queryTableConstraints(filters)
 	case "key_column_usage":
 		return is.queryKeyColumnUsage(filters)
+	case "referential_constraints":
+		return is.queryReferentialConstraints(filters)
+	case "constraint_column_usage":
+		return is.queryConstraintColumnUsage(filters)
+	case "check_constraints":
+		return is.queryCheckConstraints(filters)
+	case "triggers":
+		return is.queryTriggers(filters)
+	case "routines":
+		return is.queryRoutines(filters)
+	case "parameters":
+		return is.queryParameters(filters)
 	case "sequences":
 		return is.querySequences(filters)
 	default:
@@ -319,4 +331,54 @@ func intToString(n int64) string {
 	}
 
 	return string(buf[i:])
+}
+
+// Stub implementations for missing query methods
+
+func (is *InformationSchema) queryReferentialConstraints(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"constraint_catalog", "constraint_schema", "constraint_name", "unique_constraint_catalog", "unique_constraint_schema", "unique_constraint_name", "match_option", "update_rule", "delete_rule"},
+		Rows:    []map[string]any{},
+	}
+}
+
+func (is *InformationSchema) queryConstraintColumnUsage(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"table_catalog", "table_schema", "table_name", "column_name", "constraint_catalog", "constraint_schema", "constraint_name"},
+		Rows:    []map[string]any{},
+	}
+}
+
+func (is *InformationSchema) queryCheckConstraints(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"constraint_catalog", "constraint_schema", "constraint_name", "check_clause"},
+		Rows:    []map[string]any{},
+	}
+}
+
+func (is *InformationSchema) queryTriggers(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"trigger_catalog", "trigger_schema", "trigger_name", "event_manipulation", "event_object_catalog", "event_object_schema", "event_object_table"},
+		Rows:    []map[string]any{},
+	}
+}
+
+func (is *InformationSchema) queryRoutines(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"specific_catalog", "specific_schema", "specific_name", "routine_catalog", "routine_schema", "routine_name", "routine_type", "data_type"},
+		Rows:    []map[string]any{},
+	}
+}
+
+func (is *InformationSchema) queryParameters(filters []Filter) *QueryResult {
+	return &QueryResult{
+		Columns: []string{"specific_catalog", "specific_schema", "specific_name", "ordinal_position", "parameter_mode", "parameter_name", "data_type"},
+		Rows:    []map[string]any{},
+	}
+}
+
+// RegisterInformationSchemaVirtualTables registers information_schema virtual tables
+func RegisterInformationSchemaVirtualTables(catalog CatalogProvider, catalog2 CatalogProvider, dbName string) error {
+	// Stub implementation - information_schema views are handled elsewhere
+	return nil
 }

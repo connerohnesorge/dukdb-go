@@ -3,6 +3,7 @@
 package server
 
 import (
+	"hash/fnv"
 	"net"
 	"strconv"
 	"time"
@@ -212,11 +213,9 @@ func (p *ServerLockProvider) GetLocks() []*pgcatalog.LockInfo {
 
 // generateDatabaseOID generates a consistent OID for a database name.
 func generateDatabaseOID(name string) int64 {
-	h := uint64(0)
-	for _, c := range name {
-		h = h*31 + uint64(c)
-	}
-	return int64(h%1000000) + 16384
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	return int64(h.Sum32()%1000000) + 16384
 }
 
 // formatVirtualXID formats a virtual transaction ID.

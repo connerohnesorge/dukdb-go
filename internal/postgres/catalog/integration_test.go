@@ -863,9 +863,10 @@ func TestErrorCases(t *testing.T) {
 	is := NewInformationSchema(mock, "dukdb")
 	pg := NewPgCatalog(mock, "dukdb")
 
-	t.Run("unsupported information_schema view returns nil", func(t *testing.T) {
+	t.Run("information_schema routines returns results", func(t *testing.T) {
 		result := is.Query("SELECT * FROM information_schema.routines")
-		assert.Nil(t, result)
+		require.NotNil(t, result)
+		assert.Equal(t, routinesColumns, result.Columns)
 	})
 
 	t.Run("unsupported pg_catalog view returns nil", func(t *testing.T) {

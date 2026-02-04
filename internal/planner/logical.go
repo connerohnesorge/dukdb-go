@@ -5,6 +5,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
 // LogicalPlan represents a node in the logical query plan.
@@ -825,6 +826,12 @@ type LogicalRecursiveCTE struct {
 	RecursivePlan LogicalPlan
 	// Columns contains the output column information from the CTE
 	Columns []ColumnBinding
+	// UsingKey specifies USING KEY columns for recursive cycle detection.
+	UsingKey []string
+	// SetOp captures UNION vs UNION ALL for recursive CTE semantics.
+	SetOp parser.SetOpType
+	// MaxRecursion is the recursion limit from OPTION (MAX_RECURSION N).
+	MaxRecursion int
 }
 
 func (*LogicalRecursiveCTE) logicalPlanNode() {}

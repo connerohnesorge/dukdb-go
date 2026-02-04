@@ -109,6 +109,37 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeWhichSecret(ctx, plan)
 	case "duckdb_secrets":
 		return e.executeDuckDBSecrets(ctx, plan)
+	// Catalog system functions
+	case "duckdb_settings":
+		return e.executeDuckDBSettings(ctx, plan)
+	case "duckdb_tables":
+		return e.executeDuckDBTables(ctx, plan)
+	case "duckdb_columns":
+		return e.executeDuckDBColumns(ctx, plan)
+	case "duckdb_views":
+		return e.executeDuckDBViews(ctx, plan)
+	case "duckdb_functions":
+		return e.executeDuckDBFunctions(ctx, plan)
+	case "duckdb_constraints":
+		return e.executeDuckDBConstraints(ctx, plan)
+	case "duckdb_indexes":
+		return e.executeDuckDBIndexes(ctx, plan)
+	case "duckdb_databases":
+		return e.executeDuckDBDatabases(ctx, plan)
+	case "duckdb_sequences":
+		return e.executeDuckDBSequences(ctx, plan)
+	case "duckdb_dependencies":
+		return e.executeDuckDBDependencies(ctx, plan)
+	case "duckdb_optimizers":
+		return e.executeDuckDBOptimizers(ctx, plan)
+	case "duckdb_keywords":
+		return e.executeDuckDBKeywords(ctx, plan)
+	case "duckdb_extensions":
+		return e.executeDuckDBExtensions(ctx, plan)
+	case "duckdb_memory_usage":
+		return e.executeDuckDBMemoryUsage(ctx, plan)
+	case "duckdb_temp_directory":
+		return e.executeDuckDBTempDirectory(ctx, plan)
 	// Array/list expansion functions
 	case "unnest":
 		return e.executeUnnest(ctx, plan)

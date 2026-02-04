@@ -32,6 +32,7 @@ type PhysicalRecursiveCTEOperator struct {
 	resultChunks []*storage.DataChunk
 	resultIndex  int
 	executed     bool
+	limitErr     error
 }
 
 // NewPhysicalRecursiveCTEOperator creates a new PhysicalRecursiveCTEOperator.
@@ -60,6 +61,7 @@ func NewPhysicalRecursiveCTEOperator(
 		resultChunks: make([]*storage.DataChunk, 0),
 		resultIndex:  0,
 		executed:     false,
+		limitErr:     nil,
 	}, nil
 }
 
@@ -75,6 +77,11 @@ func (op *PhysicalRecursiveCTEOperator) Next() (*storage.DataChunk, error) {
 
 	// Return results one chunk at a time
 	if op.resultIndex >= len(op.resultChunks) {
+		if op.limitErr != nil {
+			err := op.limitErr
+			op.limitErr = nil
+			return nil, err
+		}
 		return nil, nil
 	}
 
@@ -120,7 +127,7 @@ func (op *PhysicalRecursiveCTEOperator) execute() error {
 	// Step 2: Iteratively execute the recursive plan
 	iteration := 0
 	maxRecursion := op.plan.MaxRecursion
-	if maxRecursion <= 0 {
+	if maxRecursion < 0 {
 		maxRecursion = 1000 // Default max recursion
 	}
 
@@ -154,10 +161,10 @@ func (op *PhysicalRecursiveCTEOperator) execute() error {
 	}
 
 	// Check if we hit max recursion limit
-	if iteration >= maxRecursion {
-		return &dukdb.Error{
+	if maxRecursion >= 0 && iteration >= maxRecursion {
+		op.limitErr = &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("recursive CTE exceeded maximum recursion depth of %d", maxRecursion),
+			Msg:  fmt.Sprintf("recursion limit exceeded: max %d iterations", maxRecursion),
 		}
 	}
 

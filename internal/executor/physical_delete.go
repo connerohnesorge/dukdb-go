@@ -199,6 +199,10 @@ func (e *Executor) executeDelete(
 		}
 	}
 
+	if len(deletedRows) > 0 {
+		e.invalidateQueryCache(plan.Table)
+	}
+
 	// Handle RETURNING clause - use the before (deleted) values
 	if len(plan.Returning) > 0 {
 		return e.evaluateReturning(ctx, plan.Returning, deletedData, plan.TableDef)

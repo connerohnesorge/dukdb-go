@@ -16,6 +16,7 @@ var pgProcColumns = []string{
 	"prosecdef",       // Function is a security definer
 	"proleakproof",    // Function has no side effects
 	"proisstrict",     // Function returns null on null input
+	"proiscachable",   // Function is considered cachable
 	"proretset",       // Function returns a set
 	"provolatile",     // Volatility (i = immutable, s = stable, v = volatile)
 	"proparallel",     // Parallel safety (s = safe, r = restricted, u = unsafe)
@@ -133,6 +134,7 @@ func (pg *PgCatalog) queryPgProc(filters []Filter) *QueryResult {
 			"prosecdef":       false,
 			"proleakproof":    false,
 			"proisstrict":     false,
+			"proiscachable":   false,
 			"proretset":       false,
 			"provolatile":     "v", // volatile by default
 			"proparallel":     "u", // unsafe by default

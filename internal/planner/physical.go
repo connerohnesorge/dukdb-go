@@ -1037,6 +1037,10 @@ type PhysicalRecursiveCTE struct {
 	RecursivePlan PhysicalPlan
 	// Columns contains the output column information from the CTE
 	Columns []ColumnBinding
+	// UsingKey specifies USING KEY columns for recursive cycle detection.
+	UsingKey []string
+	// SetOp captures UNION vs UNION ALL for recursive CTE semantics.
+	SetOp parser.SetOpType
 	// MaxRecursion is the maximum number of recursion iterations (default 1000)
 	MaxRecursion int
 }
@@ -1225,14 +1229,15 @@ func (u *PhysicalUnpivot) OutputColumns() []ColumnBinding {
 
 // Planner converts bound statements to physical plans.
 type Planner struct {
-	catalog   *catalog.Catalog
-	hints     *OptimizationHints // Optional optimization hints from CBO
-	joinIndex int                // Counter for generating join hint keys
+	catalog       *catalog.Catalog
+	hints         *OptimizationHints // Optional optimization hints from CBO
+	joinIndex     int                // Counter for generating join hint keys
+	rewriteConfig RewriteConfig
 }
 
 // NewPlanner creates a new Planner.
 func NewPlanner(cat *catalog.Catalog) *Planner {
-	return &Planner{catalog: cat}
+	return &Planner{catalog: cat, rewriteConfig: DefaultRewriteConfig()}
 }
 
 // SetHints sets optimization hints for physical plan selection.
@@ -1252,6 +1257,10 @@ func (p *Planner) Plan(
 	logical, err := p.createLogicalPlan(stmt)
 	if err != nil {
 		return nil, err
+	}
+
+	if rewritten, _ := p.applyRewrites(logical); rewritten != nil {
+		logical = rewritten
 	}
 
 	return p.createPhysicalPlan(logical)
@@ -2019,6 +2028,9 @@ func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalP
 				BasePlan:      basePlan,
 				RecursivePlan: recursivePlan,
 				Columns:       columns,
+				UsingKey:      ref.CTERef.UsingKey,
+				SetOp:         ref.CTERef.SetOp,
+				MaxRecursion:  ref.CTERef.MaxRecursion,
 			}
 		}
 
@@ -2590,7 +2602,9 @@ func (p *Planner) createPhysicalPlan(
 			BasePlan:      basePlan,
 			RecursivePlan: recursivePlan,
 			Columns:       l.Columns,
-			MaxRecursion:  1000, // Default max recursion limit
+			UsingKey:      l.UsingKey,
+			SetOp:         l.SetOp,
+			MaxRecursion:  l.MaxRecursion,
 		}, nil
 
 	case *LogicalCTEScan:

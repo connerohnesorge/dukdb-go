@@ -24,6 +24,7 @@ type CTE struct {
 	Columns   []string    // Optional column names
 	Query     *SelectStmt // The CTE query
 	Recursive bool        // True for WITH RECURSIVE (allows self-referencing in the CTE query)
+	UsingKey  []string    // Optional USING KEY columns for recursive CTE cycle detection
 }
 
 // SelectStmt represents a SELECT statement.
@@ -41,9 +42,16 @@ type SelectStmt struct {
 	Limit      Expr
 	Offset     Expr
 	Sample     *SampleOptions // SAMPLE clause - for sampling a subset of rows
+	Options    *RecursionOption
 	IsSubquery bool
 	SetOp      SetOpType   // Type of set operation (UNION, INTERSECT, EXCEPT)
 	Right      *SelectStmt // Right side of set operation
+}
+
+// RecursionOption represents recursion control options for a SELECT query.
+// Currently supports OPTION (MAX_RECURSION N).
+type RecursionOption struct {
+	MaxRecursion int
 }
 
 func (*SelectStmt) stmtNode() {}

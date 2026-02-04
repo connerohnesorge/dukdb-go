@@ -110,6 +110,10 @@ func (e *Executor) executeCopyFrom(
 		rowsAffected += int64(count)
 	}
 
+	if rowsAffected > 0 {
+		e.invalidateQueryCache(plan.Table)
+	}
+
 	return &ExecutionResult{
 		RowsAffected: rowsAffected,
 	}, nil

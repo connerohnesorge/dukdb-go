@@ -9,6 +9,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
@@ -26,8 +27,8 @@ type ConnectionInterface interface {
 type ExecutionContext struct {
 	Context          context.Context
 	Args             []driver.NamedValue
-	CorrelatedValues map[string]any         // Values from outer scope for LATERAL/correlated subqueries
-	conn             ConnectionInterface    // Connection for accessing session-level settings
+	CorrelatedValues map[string]any      // Values from outer scope for LATERAL/correlated subqueries
+	conn             ConnectionInterface // Connection for accessing session-level settings
 }
 
 // ExecutionResult holds the result of query execution.
@@ -186,6 +187,8 @@ type Executor struct {
 
 	// Connection for accessing session-level settings
 	conn ConnectionInterface // Connection interface for settings (optional, may be nil)
+
+	queryCache *cache.QueryResultCache
 }
 
 // NewExecutor creates a new Executor.
@@ -260,6 +263,18 @@ func (e *Executor) SetLockManager(lm *storage.LockManager) {
 // If set to nil, settings will not be accessible.
 func (e *Executor) SetConnection(conn ConnectionInterface) {
 	e.conn = conn
+}
+
+// SetQueryCache sets the shared query result cache.
+func (e *Executor) SetQueryCache(queryCache *cache.QueryResultCache) {
+	e.queryCache = queryCache
+}
+
+func (e *Executor) invalidateQueryCache(tables ...string) {
+	if e.queryCache == nil || len(tables) == 0 {
+		return
+	}
+	e.queryCache.InvalidateTables(tables)
 }
 
 // recordUndo records an undo operation if we're in a transaction.
@@ -1906,6 +1921,10 @@ func (e *Executor) executeInsert(
 		}
 	}
 
+	if rowsAffected > 0 {
+		e.invalidateQueryCache(plan.Table)
+	}
+
 	// Handle RETURNING clause
 	if len(plan.Returning) > 0 {
 		return e.evaluateReturning(ctx, plan.Returning, allInsertedValues, plan.TableDef)
@@ -2056,6 +2075,8 @@ func (e *Executor) executeCreateTable(
 		}
 	}
 
+	e.invalidateQueryCache(plan.Table)
+
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
 
@@ -2117,6 +2138,8 @@ func (e *Executor) executeDropTable(
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
 	}
+
+	e.invalidateQueryCache(plan.Table)
 
 	return &ExecutionResult{RowsAffected: 0}, nil
 }

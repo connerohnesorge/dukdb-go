@@ -164,8 +164,16 @@ func TestQueryPgClass(t *testing.T) {
 	t.Run("filter by relkind view", func(t *testing.T) {
 		result := pgCat.Query("SELECT * FROM pg_catalog.pg_class WHERE relkind = 'v'")
 		require.NotNil(t, result)
-		assert.Len(t, result.Rows, 1)
-		assert.Equal(t, "active_users", result.Rows[0]["relname"])
+		assert.GreaterOrEqual(t, len(result.Rows), 1)
+
+		found := false
+		for _, row := range result.Rows {
+			if row["relname"] == "active_users" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "expected active_users view")
 	})
 
 	t.Run("filter by relkind index", func(t *testing.T) {

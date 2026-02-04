@@ -12,6 +12,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/executor"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
@@ -181,6 +182,8 @@ func (c *EngineConn) Execute(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set shared query cache for invalidation
+	exec.SetQueryCache(c.engine.QueryCache())
 	// Set WAL writer for persistent databases
 	if c.engine.WAL() != nil {
 		exec.SetWAL(c.engine.WAL())
@@ -677,6 +680,11 @@ func (c *EngineConn) Query(
 		c.txn.BeginStatement()
 	}
 
+	queryCache := c.engine.QueryCache()
+	if queryCache != nil {
+		c.cacheConfigChanged(queryCache)
+	}
+
 	// Parse the query
 	stmt, err := parser.Parse(query)
 	if err != nil {
@@ -693,6 +701,23 @@ func (c *EngineConn) Query(
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	cacheKey := ""
+	cacheable := false
+	if queryCache != nil && c.cacheEnabled() && !c.inTxn {
+		if selectStmt, isSelect := boundStmt.(*binder.BoundSelectStmt); isSelect {
+			if isCacheableSelect(selectStmt) {
+				key, keyErr := cacheKeyForQuery(query, args, c.cacheParameterMode())
+				if keyErr == nil {
+					cacheKey = key
+					cacheable = true
+					if cached, ok := queryCache.Get(cacheKey); ok {
+						return cached.Rows, cached.Columns, nil
+					}
+				}
+			}
+		}
 	}
 
 	// Plan the statement with optional optimization hints
@@ -729,6 +754,8 @@ func (c *EngineConn) Query(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set shared query cache for invalidation
+	exec.SetQueryCache(queryCache)
 	// Set WAL writer for persistent databases
 	if c.engine.WAL() != nil {
 		exec.SetWAL(c.engine.WAL())
@@ -747,6 +774,15 @@ func (c *EngineConn) Query(
 	result, err := exec.Execute(ctx, plan, args)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if cacheable && queryCache != nil {
+		tables := collectPlanTables(plan)
+		queryCache.Put(cacheKey, cache.QueryResult{
+			Rows:         result.Rows,
+			Columns:      result.Columns,
+			RowsAffected: result.RowsAffected,
+		}, 0, 0, tables)
 	}
 
 	return result.Rows, result.Columns, nil

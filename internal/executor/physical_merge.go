@@ -323,6 +323,10 @@ func (e *Executor) executeMerge(
 		}
 	}
 
+	if rowsAffected > 0 {
+		e.invalidateQueryCache(plan.TargetTable)
+	}
+
 	return &ExecutionResult{
 		RowsAffected: rowsAffected,
 	}, nil

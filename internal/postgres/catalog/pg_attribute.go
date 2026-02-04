@@ -34,6 +34,7 @@ var pgAttributeColumns = []string{
 	"attoptions",     // Options
 	"attfdwoptions",  // Foreign data wrapper options
 	"attmissingval",  // Missing value
+	"attfdw",         // Foreign data wrapper
 }
 
 // queryPgAttribute returns data for pg_catalog.pg_attribute.
@@ -82,6 +83,7 @@ func (pg *PgCatalog) queryPgAttribute(filters []Filter) *QueryResult {
 					"attoptions":     nil,
 					"attfdwoptions":  nil,
 					"attmissingval":  nil,
+					"attfdw":         nil,
 				}
 
 				if matchesFilters(row, filters) {

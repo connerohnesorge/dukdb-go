@@ -32,7 +32,7 @@ type CurrentSchemas struct {
 // NewCurrentSchemas creates a CurrentSchemas function with default search path.
 func NewCurrentSchemas() *CurrentSchemas {
 	return &CurrentSchemas{
-		Schemas: []string{"main", schemaPgCatalog},
+		Schemas: []string{"main", schemaPgCatalog, "information_schema"},
 	}
 }
 

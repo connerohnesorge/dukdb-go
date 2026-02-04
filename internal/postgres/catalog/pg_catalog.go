@@ -202,21 +202,103 @@ func (pg *PgCatalog) queryPgLocks(filters []Filter) *QueryResult {
 	return view.Query(filters)
 }
 
-// generateOID generates a synthetic OID from a string using FNV hash.
-// This provides consistent OIDs for objects based on their names.
-func generateOID(s string) int64 {
-	h := fnv.New32a()
-	h.Write([]byte(s))
-	// Use a base of 16384 to avoid conflicts with PostgreSQL built-in OIDs
-	return int64(h.Sum32())%1000000 + 16384
-}
-
-// Well-known PostgreSQL OIDs for built-in namespaces
 const (
-	pgCatalogNamespaceOID         int64 = 11
-	informationSchemaNamespaceOID int64 = 13
+	// OID ranges (per spec)
+	systemTableOIDBase int64 = 1000
+	systemTableOIDSpan int64 = 1000
+
+	namespaceOIDBase int64 = 2000
+	namespaceOIDSpan int64 = 1000
+
+	userTypeOIDBase int64 = 10000
+	userTypeOIDSpan int64 = 1000000
+
+	userRelationOIDBase int64 = 16000
+	userRelationOIDSpan int64 = 1000000
+
+	userIndexOIDBase int64 = 26000
+	userIndexOIDSpan int64 = 1000000
+
+	userSequenceOIDBase int64 = 36000
+	userSequenceOIDSpan int64 = 1000000
+
+	userViewOIDBase int64 = 46000
+	userViewOIDSpan int64 = 1000000
+
+	userConstraintOIDBase int64 = 56000
+	userConstraintOIDSpan int64 = 1000000
+
+	databaseOIDBase int64 = 16384
+	databaseOIDSpan int64 = 1000000
+)
+
+// Well-known namespace OIDs (kept in the namespace range)
+const (
+	pgCatalogNamespaceOID         int64 = 2000
+	informationSchemaNamespaceOID int64 = 2001
 	publicNamespaceOID            int64 = 2200
 )
+
+func hashToRange(value string, base, span int64) int64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(value))
+	return base + int64(h.Sum32()%uint32(span))
+}
+
+func hashToRangeAvoiding(value string, base, span int64, reserved map[int64]struct{}) int64 {
+	start := hashToRange(value, base, span)
+	if _, ok := reserved[start]; !ok {
+		return start
+	}
+
+	for i := int64(1); i < span; i++ {
+		candidate := base + ((start - base + i) % span)
+		if _, ok := reserved[candidate]; !ok {
+			return candidate
+		}
+	}
+
+	return start
+}
+
+// generateOID generates a synthetic OID from a string using FNV hash.
+// Prefixes select deterministic ranges for different object categories.
+func generateOID(s string) int64 {
+	prefix := s
+	if idx := strings.Index(s, ":"); idx != -1 {
+		prefix = s[:idx]
+	}
+
+	switch prefix {
+	case "namespace":
+		reserved := map[int64]struct{}{
+			pgCatalogNamespaceOID:         {},
+			informationSchemaNamespaceOID: {},
+			publicNamespaceOID:            {},
+		}
+		return hashToRangeAvoiding(s, namespaceOIDBase, namespaceOIDSpan, reserved)
+	case "table":
+		return hashToRange(s, userRelationOIDBase, userRelationOIDSpan)
+	case "view":
+		return hashToRange(s, userViewOIDBase, userViewOIDSpan)
+	case "index":
+		return hashToRange(s, userIndexOIDBase, userIndexOIDSpan)
+	case "sequence":
+		return hashToRange(s, userSequenceOIDBase, userSequenceOIDSpan)
+	case "type":
+		return hashToRange(s, userTypeOIDBase, userTypeOIDSpan)
+	case "constraint":
+		return hashToRange(s, userConstraintOIDBase, userConstraintOIDSpan)
+	case "database":
+		return hashToRange(s, databaseOIDBase, databaseOIDSpan)
+	default:
+		return hashToRange(s, userRelationOIDBase, userRelationOIDSpan)
+	}
+}
+
+func getSystemRelationOID(name string) int64 {
+	return hashToRange(name, systemTableOIDBase, systemTableOIDSpan)
+}
 
 // getNamespaceOID returns the OID for a schema name.
 // Uses well-known OIDs for system schemas, synthetic OIDs for user schemas.

@@ -22,6 +22,7 @@ var pgClassColumns = []string{
 	"relkind",             // r = table, i = index, S = sequence, v = view, etc.
 	"relnatts",            // Number of user columns
 	"relchecks",           // Number of CHECK constraints
+	"relhasoids",          // True if has OIDs
 	"relhasrules",         // True if has any rules
 	"relhastriggers",      // True if has any triggers
 	"relhassubclass",      // True if has any inheritance children
@@ -88,6 +89,7 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 				"relkind":             relKindTable,
 				"relnatts":            int64(len(table.Columns)),
 				"relchecks":           int64(0),
+				"relhasoids":          false,
 				"relhasrules":         false,
 				"relhastriggers":      false,
 				"relhassubclass":      false,
@@ -134,6 +136,7 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 				"relkind":             relKindView,
 				"relnatts":            int64(0), // Unknown without parsing query
 				"relchecks":           int64(0),
+				"relhasoids":          false,
 				"relhasrules":         true, // Views have rules
 				"relhastriggers":      false,
 				"relhassubclass":      false,
@@ -181,6 +184,7 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 					"relkind":             relKindIndex,
 					"relnatts":            int64(len(idx.Columns)),
 					"relchecks":           int64(0),
+					"relhasoids":          false,
 					"relhasrules":         false,
 					"relhastriggers":      false,
 					"relhassubclass":      false,
@@ -228,6 +232,7 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 				"relkind":             relKindSequence,
 				"relnatts":            int64(3), // Sequences have 3 system columns
 				"relchecks":           int64(0),
+				"relhasoids":          false,
 				"relhasrules":         false,
 				"relhastriggers":      false,
 				"relhassubclass":      false,
@@ -250,5 +255,102 @@ func (pg *PgCatalog) queryPgClass(filters []Filter) *QueryResult {
 		}
 	}
 
+	addSystemRelations(result, filters)
+
 	return result
+}
+
+type systemRelationDef struct {
+	schema  string
+	name    string
+	relkind string
+	columns []string
+}
+
+var systemRelations = []systemRelationDef{
+	{schema: "pg_catalog", name: "pg_namespace", relkind: relKindTable, columns: pgNamespaceColumns},
+	{schema: "pg_catalog", name: "pg_class", relkind: relKindTable, columns: pgClassColumns},
+	{schema: "pg_catalog", name: "pg_attribute", relkind: relKindTable, columns: pgAttributeColumns},
+	{schema: "pg_catalog", name: "pg_type", relkind: relKindTable, columns: pgTypeColumns},
+	{schema: "pg_catalog", name: "pg_index", relkind: relKindTable, columns: pgIndexColumns},
+	{schema: "pg_catalog", name: "pg_constraint", relkind: relKindTable, columns: pgConstraintColumns},
+	{schema: "pg_catalog", name: "pg_database", relkind: relKindTable, columns: pgDatabaseColumns},
+	{schema: "pg_catalog", name: "pg_proc", relkind: relKindTable, columns: pgProcColumns},
+	{schema: "pg_catalog", name: "pg_operator", relkind: relKindTable, columns: pgOperatorColumns},
+	{schema: "pg_catalog", name: "pg_aggregate", relkind: relKindTable, columns: pgAggregateColumns},
+	{schema: "pg_catalog", name: "pg_extension", relkind: relKindTable, columns: pgExtensionColumns},
+	{schema: "pg_catalog", name: "pg_trigger", relkind: relKindTable, columns: pgTriggerColumns},
+	{schema: "pg_catalog", name: "pg_tables", relkind: relKindView, columns: pgTablesColumns},
+	{schema: "pg_catalog", name: "pg_views", relkind: relKindView, columns: pgViewsColumns},
+	{schema: "pg_catalog", name: "pg_settings", relkind: relKindView, columns: pgSettingsColumns},
+	{schema: "pg_catalog", name: "pg_roles", relkind: relKindView, columns: pgRolesColumns},
+	{schema: "pg_catalog", name: "pg_user", relkind: relKindView, columns: pgUserColumns},
+	{schema: "pg_catalog", name: "pg_stat_activity", relkind: relKindView, columns: pgStatActivityColumns},
+	{schema: "pg_catalog", name: "pg_stat_statements", relkind: relKindView, columns: pgStatStatementsColumns},
+	{schema: "pg_catalog", name: "pg_locks", relkind: relKindView, columns: pgLocksColumns},
+	{schema: "information_schema", name: "tables", relkind: relKindView, columns: tablesColumns},
+	{schema: "information_schema", name: "columns", relkind: relKindView, columns: columnsColumns},
+	{schema: "information_schema", name: "schemata", relkind: relKindView, columns: schemataColumns},
+	{schema: "information_schema", name: "views", relkind: relKindView, columns: viewsColumns},
+	{schema: "information_schema", name: "table_constraints", relkind: relKindView, columns: tableConstraintsColumns},
+	{schema: "information_schema", name: "key_column_usage", relkind: relKindView, columns: keyColumnUsageColumns},
+	{schema: "information_schema", name: "sequences", relkind: relKindView, columns: sequencesColumns},
+}
+
+func addSystemRelations(result *QueryResult, filters []Filter) {
+	for _, rel := range systemRelations {
+		name := rel.schema + "." + rel.name
+		relOID := getSystemRelationOID(name)
+		namespaceOID := getNamespaceOID(rel.schema)
+
+		relam := int64(2)
+		relfilenode := relOID
+		relhasrules := false
+		if rel.relkind == relKindView {
+			relam = 0
+			relfilenode = int64(0)
+			relhasrules = true
+		}
+
+		row := map[string]any{
+			"oid":                 relOID,
+			"relname":             rel.name,
+			"relnamespace":        namespaceOID,
+			"reltype":             generateOID("type:" + name),
+			"reloftype":           int64(0),
+			"relowner":            int64(10),
+			"relam":               relam,
+			"relfilenode":         relfilenode,
+			"reltablespace":       int64(0),
+			"relpages":            int64(0),
+			"reltuples":           float64(-1),
+			"relallvisible":       int64(0),
+			"reltoastrelid":       int64(0),
+			"relhasindex":         false,
+			"relisshared":         false,
+			"relpersistence":      "p",
+			"relkind":             rel.relkind,
+			"relnatts":            int64(len(rel.columns)),
+			"relchecks":           int64(0),
+			"relhasoids":          false,
+			"relhasrules":         relhasrules,
+			"relhastriggers":      false,
+			"relhassubclass":      false,
+			"relrowsecurity":      false,
+			"relforcerowsecurity": false,
+			"relispopulated":      true,
+			"relreplident":        "n",
+			"relispartition":      false,
+			"relrewrite":          int64(0),
+			"relfrozenxid":        int64(0),
+			"relminmxid":          int64(1),
+			"relacl":              nil,
+			"reloptions":          nil,
+			"relpartbound":        nil,
+		}
+
+		if matchesFilters(row, filters) {
+			result.Rows = append(result.Rows, row)
+		}
+	}
 }

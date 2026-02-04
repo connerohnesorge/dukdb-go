@@ -200,6 +200,42 @@ func (p *parser) parseWithSelect() (*SelectStmt, error) {
 			return nil, err
 		}
 
+		// Optional USING KEY clause for recursive CTEs
+		if p.isKeyword("USING") {
+			p.advance()
+			if err := p.expectKeyword("KEY"); err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(tokenLParen); err != nil {
+				return nil, err
+			}
+			for {
+				if p.current().typ != tokenIdent {
+					return nil, p.errorf("expected column name in USING KEY clause")
+				}
+				cte.UsingKey = append(cte.UsingKey, p.advance().value)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance()
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+		}
+
+		// Optional recursion options after the CTE query
+		option, err := p.parseRecursionOption()
+		if err != nil {
+			return nil, err
+		}
+		if option != nil {
+			if cte.Query.Options != nil {
+				return nil, p.errorf("duplicate recursion options")
+			}
+			cte.Query.Options = option
+		}
+
 		ctes = append(ctes, cte)
 
 		// Check for more CTEs (comma-separated)
@@ -412,7 +448,38 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 		stmt.Right = right
 	}
 
+	option, err := p.parseRecursionOption()
+	if err != nil {
+		return nil, err
+	}
+	stmt.Options = option
+
 	return stmt, nil
+}
+
+func (p *parser) parseRecursionOption() (*RecursionOption, error) {
+	if !p.isKeyword("OPTION") {
+		return nil, nil
+	}
+
+	p.advance()
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+	if err := p.expectKeyword("MAX_RECURSION"); err != nil {
+		return nil, err
+	}
+	if p.current().typ != tokenNumber {
+		return nil, p.errorf("expected numeric value for MAX_RECURSION")
+	}
+	maxRecursion, err := parseIntLiteral(p.advance().value)
+	if err != nil {
+		return nil, p.errorf("invalid MAX_RECURSION value")
+	}
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+	return &RecursionOption{MaxRecursion: maxRecursion}, nil
 }
 
 func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
@@ -540,14 +607,10 @@ func (p *parser) parseFrom() (*FromClause, error) {
 func (p *parser) parseTableRef() (TableRef, error) {
 	var ref TableRef
 
-	// Check for LATERAL keyword before subquery
+	// Check for LATERAL keyword before subquery or table function
 	if p.isKeyword("LATERAL") {
 		p.advance()
 		ref.Lateral = true
-		// LATERAL must be followed by a subquery in parentheses
-		if p.current().typ != tokenLParen {
-			return ref, p.errorf("expected subquery after LATERAL")
-		}
 	}
 
 	if p.current().typ == tokenLParen {
@@ -1074,6 +1137,10 @@ func (p *parser) parseOrderBy() ([]OrderByExpr, error) {
 	}
 
 	return orderBy, nil
+}
+
+func parseIntLiteral(value string) (int, error) {
+	return strconv.Atoi(value)
 }
 
 func (p *parser) parseInsert() (*InsertStmt, error) {

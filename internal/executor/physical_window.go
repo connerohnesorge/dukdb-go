@@ -971,6 +971,7 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 	frame FrameBounds,
 ) any {
 	funcName := strings.ToUpper(windowExpr.FunctionName)
+	rowMap := w.buildRowMap(partition.Rows[rowIdx].Values)
 
 	switch funcName {
 	// Ranking functions (Tasks 4.35-4.38)
@@ -983,7 +984,7 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 	case "NTILE":
 		buckets := int64(1)
 		if len(windowExpr.Args) > 0 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[0], nil); err == nil &&
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[0], rowMap); err == nil &&
 				val != nil {
 				buckets = toInt64Value(val)
 			}
@@ -995,13 +996,13 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 		offset := 1
 		var defaultVal any
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], rowMap); err == nil &&
 				val != nil {
 				offset = int(toInt64Value(val))
 			}
 		}
 		if len(windowExpr.Args) > 2 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[2], nil); err == nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[2], rowMap); err == nil {
 				defaultVal = val
 			}
 		}
@@ -1015,13 +1016,13 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 		offset := 1
 		var defaultVal any
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], rowMap); err == nil &&
 				val != nil {
 				offset = int(toInt64Value(val))
 			}
 		}
 		if len(windowExpr.Args) > 2 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[2], nil); err == nil {
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[2], rowMap); err == nil {
 				defaultVal = val
 			}
 		}
@@ -1048,7 +1049,7 @@ func (w *PhysicalWindowExecutor) evaluateWindowFunction(
 	case "NTH_VALUE":
 		n := 1
 		if len(windowExpr.Args) > 1 {
-			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], nil); err == nil &&
+			if val, err := w.executor.evaluateExpr(w.ctx, windowExpr.Args[1], rowMap); err == nil &&
 				val != nil {
 				n = int(toInt64Value(val))
 			}
