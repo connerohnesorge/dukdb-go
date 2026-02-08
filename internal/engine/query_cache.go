@@ -20,16 +20,20 @@ const (
 	settingQueryCacheParameterMode = "query_cache_parameter_mode"
 )
 
+// cacheEnabled returns whether query caching is enabled.
+// Safe to call with or without lock held.
 func (c *EngineConn) cacheEnabled() bool {
-	value := strings.ToLower(strings.TrimSpace(c.GetSetting(settingQueryCacheEnabled)))
+	value := strings.ToLower(strings.TrimSpace(c.getSettingUnsafe(settingQueryCacheEnabled)))
 	if value == "" {
 		return false
 	}
 	return value == "1" || value == "true" || value == "on" || value == "yes"
 }
 
+// cacheMaxBytes returns the maximum cache size in bytes.
+// Safe to call with or without lock held.
 func (c *EngineConn) cacheMaxBytes() int64 {
-	value := strings.TrimSpace(c.GetSetting(settingQueryCacheMaxBytes))
+	value := strings.TrimSpace(c.getSettingUnsafe(settingQueryCacheMaxBytes))
 	if value == "" {
 		return cache.DefaultMaxBytes
 	}
@@ -44,8 +48,10 @@ func (c *EngineConn) cacheMaxBytes() int64 {
 	return cache.DefaultMaxBytes
 }
 
+// cacheTTL returns the cache TTL duration.
+// Safe to call with or without lock held.
 func (c *EngineConn) cacheTTL() time.Duration {
-	value := strings.TrimSpace(c.GetSetting(settingQueryCacheTTL))
+	value := strings.TrimSpace(c.getSettingUnsafe(settingQueryCacheTTL))
 	if value == "" {
 		return cache.DefaultTTL
 	}
@@ -60,20 +66,34 @@ func (c *EngineConn) cacheTTL() time.Duration {
 	return cache.DefaultTTL
 }
 
+// cacheParameterMode returns the parameter mode for cache keys.
+// Safe to call with or without lock held.
 func (c *EngineConn) cacheParameterMode() cache.ParameterMode {
-	value := strings.ToLower(strings.TrimSpace(c.GetSetting(settingQueryCacheParameterMode)))
+	value := strings.ToLower(strings.TrimSpace(c.getSettingUnsafe(settingQueryCacheParameterMode)))
 	if value == string(cache.ParameterModeStructure) {
 		return cache.ParameterModeStructure
 	}
 	return cache.ParameterModeExact
 }
 
+// cacheConfigChanged updates the query cache configuration.
+// Must be called with c.mu lock held.
 func (c *EngineConn) cacheConfigChanged(queryCache *cache.QueryResultCache) {
 	if queryCache == nil {
 		return
 	}
 	queryCache.SetMaxBytes(c.cacheMaxBytes())
 	queryCache.SetTTL(c.cacheTTL())
+}
+
+// getSettingUnsafe retrieves a setting value without acquiring the lock.
+// Must be called with c.mu lock held, or when it's known no other goroutine
+// will modify settings.
+func (c *EngineConn) getSettingUnsafe(key string) string {
+	if c.settings == nil {
+		return ""
+	}
+	return c.settings[key]
 }
 
 func isCacheableSelect(stmt *binder.BoundSelectStmt) bool {

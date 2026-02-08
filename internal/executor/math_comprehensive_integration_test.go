@@ -980,7 +980,7 @@ func TestComprehensive_ScientificCalculations_Trigonometry(t *testing.T) {
 		// cos(theta) = (a . b) / (|a| * |b|)
 		// For vectors (3,4) and (1,0): dot = 3, |a| = 5, |b| = 1
 		result, err := executeComprehensiveQuery(t, exec, cat,
-			"SELECT DEGREES(ACOS(3 / (5 * 1)))")
+			"SELECT DEGREES(ACOS(3.0 / (5.0 * 1.0)))")
 		require.NoError(t, err)
 		require.Len(t, result.Rows, 1)
 		val := getComprehensiveFirstValue(result.Rows[0]).(float64)

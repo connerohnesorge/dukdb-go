@@ -8,6 +8,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite"
 )
 
 // PhysicalPlan represents a node in the physical query plan.
@@ -1232,12 +1233,12 @@ type Planner struct {
 	catalog       *catalog.Catalog
 	hints         *OptimizationHints // Optional optimization hints from CBO
 	joinIndex     int                // Counter for generating join hint keys
-	rewriteConfig RewriteConfig
+	rewriteConfig rewrite.Config
 }
 
 // NewPlanner creates a new Planner.
 func NewPlanner(cat *catalog.Catalog) *Planner {
-	return &Planner{catalog: cat, rewriteConfig: DefaultRewriteConfig()}
+	return &Planner{catalog: cat, rewriteConfig: rewrite.DefaultConfig()}
 }
 
 // SetHints sets optimization hints for physical plan selection.
@@ -2664,8 +2665,9 @@ func (p *Planner) createPhysicalPlan(
 			return nil, err
 		}
 		return &PhysicalExplain{
-			Child:   child,
-			Analyze: l.Analyze,
+			Child:        child,
+			Analyze:      l.Analyze,
+			RewriteStats: l.RewriteStats,
 		}, nil
 
 	case *LogicalVacuum:
@@ -3353,8 +3355,9 @@ func (*PhysicalPragma) OutputColumns() []ColumnBinding {
 
 // PhysicalExplain represents a physical EXPLAIN operation.
 type PhysicalExplain struct {
-	Child   PhysicalPlan // The plan to explain
-	Analyze bool         // true for EXPLAIN ANALYZE
+	Child        PhysicalPlan // The plan to explain
+	Analyze      bool         // true for EXPLAIN ANALYZE
+	RewriteStats *rewrite.Stats
 }
 
 func (*PhysicalExplain) physicalPlanNode() {}

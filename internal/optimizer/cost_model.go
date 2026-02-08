@@ -161,9 +161,10 @@ type PhysicalLimitNode interface {
 // It uses configurable cost constants and cardinality estimates to
 // compute realistic costs for plan comparison.
 type CostModel struct {
-	constants CostConstants
-	estimator *CardinalityEstimator
-	learner   *CardinalityLearner // Optional cardinality learner for adaptive optimization
+	constants  CostConstants
+	estimator  *CardinalityEstimator
+	learner    *CardinalityLearner // Optional cardinality learner for adaptive optimization
+	calibrator *CostCalibrator
 }
 
 // NewCostModel creates a new CostModel with the given constants and estimator.
@@ -174,7 +175,8 @@ func NewCostModel(constants CostConstants, estimator *CardinalityEstimator) *Cos
 		// Initialize learner for adaptive cardinality correction
 		// maxHistorySize=1000: Track up to 1000 unique operator signatures
 		// observationThreshold=100: Only apply corrections after 100+ observations
-		learner: NewCardinalityLearner(1000, 100),
+		learner:    NewCardinalityLearner(1000, 100),
+		calibrator: NewCostCalibrator(),
 	}
 }
 
@@ -189,32 +191,41 @@ func (m *CostModel) EstimateCost(plan PhysicalPlanNode) PlanCost {
 		return PlanCost{}
 	}
 
+	var cost PlanCost
 	switch plan.PhysicalPlanType() {
 	case "PhysicalScan":
-		return m.estimateScanCost(plan)
+		cost = m.estimateScanCost(plan)
 	case "PhysicalFilter":
-		return m.estimateFilterCost(plan)
+		cost = m.estimateFilterCost(plan)
 	case "PhysicalProject":
-		return m.estimateProjectCost(plan)
+		cost = m.estimateProjectCost(plan)
 	case "PhysicalHashJoin":
-		return m.estimateHashJoinCost(plan)
+		cost = m.estimateHashJoinCost(plan)
 	case "PhysicalNestedLoopJoin":
-		return m.estimateNLJCost(plan)
+		cost = m.estimateNLJCost(plan)
 	case "PhysicalSort":
-		return m.estimateSortCost(plan)
+		cost = m.estimateSortCost(plan)
 	case "PhysicalHashAggregate":
-		return m.estimateAggregateCost(plan)
+		cost = m.estimateAggregateCost(plan)
 	case "PhysicalLimit":
-		return m.estimateLimitCost(plan)
+		cost = m.estimateLimitCost(plan)
 	case "PhysicalDistinct":
-		return m.costDistinctFromChildren(plan)
+		cost = m.costDistinctFromChildren(plan)
 	case "PhysicalWindow":
-		return m.costWindowFromChildren(plan)
+		cost = m.costWindowFromChildren(plan)
 	case "PhysicalDummyScan":
-		return m.dummyScanCost()
+		cost = m.dummyScanCost()
 	default:
-		return m.costFromChildren(plan)
+		cost = m.costFromChildren(plan)
 	}
+
+	return m.applyAdaptiveCorrection(plan, cost)
+}
+
+// PhysicalAdaptiveNode allows plan nodes to provide a stable signature for learning.
+type PhysicalAdaptiveNode interface {
+	PhysicalPlanNode
+	AdaptiveSignature() string
 }
 
 // estimateScanCost handles PhysicalScan cost estimation.
@@ -1200,6 +1211,20 @@ func (m *CostModel) GetCardinalityLearner() *CardinalityLearner {
 	return m.learner
 }
 
+// GetCostCalibrator returns the cost calibrator.
+func (m *CostModel) GetCostCalibrator() *CostCalibrator {
+	return m.calibrator
+}
+
+// RecordCostSample updates cost constants based on actual vs estimated cost.
+func (m *CostModel) RecordCostSample(estimated, actual float64) {
+	if m.calibrator == nil {
+		return
+	}
+	m.calibrator.RecordSample(estimated, actual)
+	m.constants = m.calibrator.Apply(m.constants)
+}
+
 // RecordObservation records an actual vs estimated cardinality observation for learning.
 // This should be called during query execution to improve future estimates.
 //
@@ -1248,4 +1273,33 @@ func (m *CostModel) GetCorrectedCardinality(
 	}
 
 	return corrected, factor
+}
+
+func (m *CostModel) applyAdaptiveCorrection(plan PhysicalPlanNode, cost PlanCost) PlanCost {
+	adaptive, ok := plan.(PhysicalAdaptiveNode)
+	if !ok {
+		return cost
+	}
+
+	signature := adaptive.AdaptiveSignature()
+	if signature == "" {
+		return cost
+	}
+
+	if cost.OutputRows < 1 {
+		cost.OutputRows = 1
+	}
+
+	corrected, factor := m.GetCorrectedCardinality(signature, int64(cost.OutputRows))
+	if factor == 1.0 {
+		return cost
+	}
+
+	scale := float64(corrected) / cost.OutputRows
+	cost.OutputRows = float64(corrected)
+	cost.TotalCost = cost.TotalCost * scale
+	if cost.StartupCost > 0 {
+		cost.StartupCost = cost.StartupCost * scale
+	}
+	return cost
 }

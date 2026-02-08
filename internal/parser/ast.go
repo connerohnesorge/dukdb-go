@@ -20,11 +20,14 @@ type Expr interface {
 
 // CTE represents a Common Table Expression (WITH clause).
 type CTE struct {
-	Name      string      // CTE name (e.g., "tmp" in WITH tmp AS ...)
-	Columns   []string    // Optional column names
-	Query     *SelectStmt // The CTE query
-	Recursive bool        // True for WITH RECURSIVE (allows self-referencing in the CTE query)
-	UsingKey  []string    // Optional USING KEY columns for recursive CTE cycle detection
+	Name           string      // CTE name (e.g., "tmp" in WITH tmp AS ...)
+	Columns        []string    // Optional column names
+	Query          *SelectStmt // The CTE query (anchor/base case for recursive CTEs)
+	RecursiveQuery *SelectStmt // The recursive case query (only for recursive CTEs)
+	Recursive      bool        // True for WITH RECURSIVE (allows self-referencing in the CTE query)
+	UsingKey       []string    // Optional USING KEY columns for recursive CTE cycle detection
+	SetOp          SetOpType   // Type of set operation (UNION vs UNION ALL) for recursive CTE
+	MaxRecursion   int         // Maximum recursion iterations (-1 means use default of 1000)
 }
 
 // SelectStmt represents a SELECT statement.
@@ -342,6 +345,7 @@ func (s *CreateTableStmt) Accept(v Visitor) {
 type ColumnDefClause struct {
 	Name       string
 	DataType   dukdb.Type
+	TypeInfo   dukdb.TypeInfo
 	NotNull    bool
 	Default    Expr
 	PrimaryKey bool
@@ -1152,6 +1156,7 @@ const (
 type FuncParam struct {
 	Name string     // Parameter name (e.g., "a", "b")
 	Type dukdb.Type // Parameter type (e.g., INTEGER, VARCHAR)
+	Info dukdb.TypeInfo
 }
 
 // CreateFunctionStmt represents a CREATE FUNCTION statement for scalar UDFs.
@@ -1162,11 +1167,12 @@ type FuncParam struct {
 //	    [PARALLEL SAFE|UNSAFE|RESTRICTED]
 //	    AS 'body' | AS $$body$$
 type CreateFunctionStmt struct {
-	Schema       string         // Optional schema name
-	Name         string         // Function name
-	OrReplace    bool           // OR REPLACE clause
-	Params       []FuncParam    // Function parameters
-	Returns      dukdb.Type     // Return type
+	Schema       string      // Optional schema name
+	Name         string      // Function name
+	OrReplace    bool        // OR REPLACE clause
+	Params       []FuncParam // Function parameters
+	Returns      dukdb.Type  // Return type
+	ReturnsInfo  dukdb.TypeInfo
 	Language     string         // Language (default "sql")
 	Body         string         // Function body
 	Volatility   VolatilityType // VOLATILE, STABLE, or IMMUTABLE

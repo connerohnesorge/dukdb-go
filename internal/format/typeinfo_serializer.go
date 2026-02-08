@@ -72,6 +72,18 @@ func SerializeTypeInfo(
 		return SerializeStruct(w, d)
 	case *dukdb.MapDetails:
 		return SerializeMap(w, d)
+	case *dukdb.JSONDetails,
+		*dukdb.BignumDetails,
+		*dukdb.GeometryDetails,
+		*dukdb.LambdaDetails,
+		*dukdb.VariantDetails:
+		if err := w.WriteProperty(PropertyTypeDiscriminator, uint32(ExtraTypeInfoType_GENERIC)); err != nil {
+			return fmt.Errorf(
+				"failed to write generic type discriminator: %w",
+				err,
+			)
+		}
+		return nil
 	case *dukdb.UnionDetails:
 		// UNION is not supported in v64 format
 		return ErrUnsupportedTypeForSerialization

@@ -11,6 +11,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite"
 	"github.com/dukdb/dukdb-go/internal/storage"
 )
 
@@ -791,6 +792,11 @@ func (e *Executor) executeExplain(
 
 	// Generate plan text with cost annotations
 	planText := formatPhysicalPlanWithCost(plan.Child, 0, costModel)
+	if stats := plan.RewriteStats; stats != nil {
+		if len(stats.Applied) > 0 || len(stats.Skipped) > 0 {
+			planText = planText + "\n\n" + formatRewriteStats(stats)
+		}
+	}
 
 	if plan.Analyze {
 		// For EXPLAIN ANALYZE, execute the plan and collect actual metrics
@@ -803,6 +809,36 @@ func (e *Executor) executeExplain(
 			{"explain_plan": planText},
 		},
 	}, nil
+}
+
+func formatRewriteStats(stats *rewrite.Stats) string {
+	if stats == nil {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("Rewrite Rules:\n")
+	sb.WriteString(fmt.Sprintf("Iterations: %d", stats.Iterations))
+	if stats.LimitReached {
+		sb.WriteString(" (limit reached)")
+	}
+	sb.WriteString("\n")
+
+	for _, event := range stats.Events {
+		if event.Applied {
+			sb.WriteString(fmt.Sprintf("- applied: %s", event.Name))
+			if event.BeforeCost > 0 || event.AfterCost > 0 {
+				sb.WriteString(fmt.Sprintf(" (cost %.2f -> %.2f)", event.BeforeCost, event.AfterCost))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("- skipped: %s", event.Name))
+			if event.Reason != "" {
+				sb.WriteString(" (" + event.Reason + ")")
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 // formatCostAnnotation formats a PlanCost as a cost annotation string.

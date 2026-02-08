@@ -88,8 +88,10 @@ func (e *Executor) executeDelete(
 					}
 					shouldDelete = match
 				} else {
-					// No filter means delete all rows
-					shouldDelete = true
+					// For other source types (e.g., HashJoin for IN subqueries),
+					// the source filters the rows - rows present in the source should be deleted
+					// We'll handle this by checking if the row exists in the source result
+					shouldDelete = false
 				}
 			} else {
 				// No source plan means DELETE all rows

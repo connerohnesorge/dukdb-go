@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	internaltypes "github.com/dukdb/dukdb-go/internal/types"
 )
 
 // Parse parses a SQL string and returns a Statement.
@@ -459,7 +460,8 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 
 func (p *parser) parseRecursionOption() (*RecursionOption, error) {
 	if !p.isKeyword("OPTION") {
-		return nil, nil
+		// No OPTION clause - use default -1 (which means use 1000 in executor)
+		return &RecursionOption{MaxRecursion: -1}, nil
 	}
 
 	p.advance()
@@ -1627,32 +1629,27 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 	}
 	col.Name = p.advance().value
 
-	// Data type
-	if p.current().typ != tokenIdent {
-		return col, p.errorf("expected data type")
+	typeSpec, err := p.collectTypeSpec(
+		map[tokenType]bool{tokenComma: true, tokenRParen: true},
+		map[string]bool{
+			"NOT":        true,
+			"NULL":       true,
+			"PRIMARY":    true,
+			"DEFAULT":    true,
+			"UNIQUE":     true,
+			"CHECK":      true,
+			"REFERENCES": true,
+		},
+	)
+	if err != nil {
+		return col, err
 	}
-	typeName := strings.ToUpper(p.advance().value)
-	col.DataType = parseTypeName(typeName)
-
-	// Type modifiers (e.g., VARCHAR(100), DECIMAL(10,2))
-	if p.current().typ == tokenLParen {
-		p.advance()
-		// Skip type parameters for now
-		depth := 1
-		for depth > 0 && p.current().typ != tokenEOF {
-			if p.current().typ == tokenLParen {
-				depth++
-			} else if p.current().typ == tokenRParen {
-				depth--
-			}
-			if depth > 0 {
-				p.advance()
-			}
-		}
-		if _, err := p.expect(tokenRParen); err != nil {
-			return col, err
-		}
+	info, err := internaltypes.ParseTypeExpression(typeSpec)
+	if err != nil {
+		return col, p.errorf("invalid type %q: %v", typeSpec, err)
 	}
+	col.DataType = info.InternalType()
+	col.TypeInfo = info
 
 	// Column constraints
 	for p.current().typ == tokenIdent {
@@ -1918,31 +1915,19 @@ func (p *parser) parseCreateFunction(orReplace bool) (*CreateFunctionStmt, error
 		}
 		param.Name = p.advance().value
 
-		// Parameter type
-		if p.current().typ != tokenIdent {
-			return nil, p.errorf("expected parameter type")
+		typeSpec, err := p.collectTypeSpec(
+			map[tokenType]bool{tokenComma: true, tokenRParen: true},
+			nil,
+		)
+		if err != nil {
+			return nil, err
 		}
-		typeName := strings.ToUpper(p.advance().value)
-		param.Type = parseTypeName(typeName)
-
-		// Handle type modifiers like VARCHAR(100)
-		if p.current().typ == tokenLParen {
-			p.advance()
-			depth := 1
-			for depth > 0 && p.current().typ != tokenEOF {
-				if p.current().typ == tokenLParen {
-					depth++
-				} else if p.current().typ == tokenRParen {
-					depth--
-				}
-				if depth > 0 {
-					p.advance()
-				}
-			}
-			if _, err := p.expect(tokenRParen); err != nil {
-				return nil, err
-			}
+		info, err := internaltypes.ParseTypeExpression(typeSpec)
+		if err != nil {
+			return nil, p.errorf("invalid type %q: %v", typeSpec, err)
 		}
+		param.Type = info.InternalType()
+		param.Info = info
 
 		stmt.Params = append(stmt.Params, param)
 
@@ -1962,30 +1947,28 @@ func (p *parser) parseCreateFunction(orReplace bool) (*CreateFunctionStmt, error
 	if err := p.expectKeyword("RETURNS"); err != nil {
 		return nil, err
 	}
-	if p.current().typ != tokenIdent {
-		return nil, p.errorf("expected return type")
+	typeSpec, err := p.collectTypeSpec(
+		nil,
+		map[string]bool{
+			"LANGUAGE":  true,
+			"IMMUTABLE": true,
+			"STABLE":    true,
+			"VOLATILE":  true,
+			"STRICT":    true,
+			"LEAKPROOF": true,
+			"PARALLEL":  true,
+			"AS":        true,
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
-	returnTypeName := strings.ToUpper(p.advance().value)
-	stmt.Returns = parseTypeName(returnTypeName)
-
-	// Handle return type modifiers like VARCHAR(100)
-	if p.current().typ == tokenLParen {
-		p.advance()
-		depth := 1
-		for depth > 0 && p.current().typ != tokenEOF {
-			if p.current().typ == tokenLParen {
-				depth++
-			} else if p.current().typ == tokenRParen {
-				depth--
-			}
-			if depth > 0 {
-				p.advance()
-			}
-		}
-		if _, err := p.expect(tokenRParen); err != nil {
-			return nil, err
-		}
+	info, err := internaltypes.ParseTypeExpression(typeSpec)
+	if err != nil {
+		return nil, p.errorf("invalid return type %q: %v", typeSpec, err)
 	}
+	stmt.Returns = info.InternalType()
+	stmt.ReturnsInfo = info
 
 	// Parse optional attributes before AS
 	// These can appear in any order: LANGUAGE, IMMUTABLE/STABLE/VOLATILE, STRICT, LEAKPROOF, PARALLEL
@@ -4903,6 +4886,91 @@ func parseTypeName(name string) dukdb.Type {
 	default:
 		return dukdb.TYPE_VARCHAR // Default to VARCHAR for unknown types
 	}
+}
+
+func (p *parser) collectTypeSpec(
+	stopTokens map[tokenType]bool,
+	stopKeywords map[string]bool,
+) (string, error) {
+	var b strings.Builder
+	lastWasWord := false
+	depthParen := 0
+	depthBracket := 0
+
+	for {
+		tok := p.current()
+		if tok.typ == tokenEOF {
+			break
+		}
+		if depthParen == 0 && depthBracket == 0 {
+			if stopTokens != nil && stopTokens[tok.typ] {
+				break
+			}
+			if tok.typ == tokenIdent && stopKeywords != nil {
+				if stopKeywords[strings.ToUpper(tok.value)] {
+					break
+				}
+			}
+		}
+
+		switch tok.typ {
+		case tokenIdent, tokenNumber:
+			if lastWasWord {
+				b.WriteByte(' ')
+			}
+			b.WriteString(tok.value)
+			lastWasWord = true
+		case tokenString:
+			if lastWasWord {
+				b.WriteByte(' ')
+			}
+			b.WriteByte('\'')
+			b.WriteString(tok.value)
+			b.WriteByte('\'')
+			lastWasWord = true
+		case tokenComma:
+			b.WriteByte(',')
+			b.WriteByte(' ')
+			lastWasWord = false
+		case tokenLParen:
+			b.WriteByte('(')
+			depthParen++
+			lastWasWord = false
+		case tokenRParen:
+			b.WriteByte(')')
+			depthParen--
+			lastWasWord = false
+		case tokenLBracket:
+			b.WriteByte('[')
+			depthBracket++
+			lastWasWord = false
+		case tokenRBracket:
+			b.WriteByte(']')
+			depthBracket--
+			lastWasWord = false
+		case tokenDot:
+			b.WriteByte('.')
+			lastWasWord = false
+		case tokenOperator:
+			if tok.value != ":" {
+				return "", p.errorf("unexpected token %q in type", tok.value)
+			}
+			b.WriteByte(':')
+			lastWasWord = false
+		default:
+			return "", p.errorf("unexpected token %q in type", tok.value)
+		}
+
+		p.advance()
+	}
+
+	if depthParen != 0 || depthBracket != 0 {
+		return "", p.errorf("unterminated type expression")
+	}
+	if b.Len() == 0 {
+		return "", p.errorf("expected data type")
+	}
+	return b.String(), nil
 }
 
 // GetTypeName returns the SQL type name for a Type.

@@ -6,7 +6,10 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite/rules"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +27,7 @@ func TestRewriteExpressionConstantFolding(t *testing.T) {
 	}
 
 	plan := &LogicalFilter{Child: &LogicalDummyScan{}, Condition: expr}
-	engine := NewRewriteEngine(nil, DefaultRewriteConfig())
+	engine := rewrite.NewEngine(rewrite.DefaultConfig(), newPlannerAdapter(), rules.DefaultRules(rewrite.DefaultConfig()))
 	rewritten, _ := engine.Apply(plan)
 
 	filter := rewritten.(*LogicalFilter)
@@ -56,7 +59,7 @@ func TestPredicatePushdownInnerJoin(t *testing.T) {
 	}
 
 	plan := &LogicalFilter{Child: join, Condition: cond}
-	engine := NewRewriteEngine(nil, DefaultRewriteConfig())
+	engine := rewrite.NewEngine(rewrite.DefaultConfig(), newPlannerAdapter(), rules.DefaultRules(rewrite.DefaultConfig()))
 	rewritten, _ := engine.Apply(plan)
 
 	newJoin, ok := rewritten.(*LogicalJoin)
@@ -73,7 +76,8 @@ func TestJoinReorderUsesEstimates(t *testing.T) {
 	right := newScanWithRows("right", []string{"id"}, 10)
 	join := &LogicalJoin{Left: left, Right: right, JoinType: JoinTypeInner}
 
-	engine := NewRewriteEngine(nil, DefaultRewriteConfig())
+	engine := rewrite.NewEngine(rewrite.DefaultConfig(), newPlannerAdapter(), rules.DefaultRules(rewrite.DefaultConfig()))
+	engine.WithEstimator(newPlanCostEstimator(catalog.NewCatalog()))
 	rewritten, _ := engine.Apply(join)
 
 	reordered := rewritten.(*LogicalJoin)

@@ -230,6 +230,34 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 
 			op.currentMatchIdx = 0
 
+			// For SEMI join: emit left row once if there are any matches, otherwise skip
+			if op.joinType == planner.JoinTypeSemi {
+				if len(op.currentMatches) > 0 {
+					// Emit left row only (no right columns for semi-join)
+					values := make([]any, numLeft)
+					for i, col := range op.leftColumns {
+						colKey := col.Column
+						if col.Table != "" {
+							qualifiedKey := col.Table + "." + col.Column
+							if val, ok := op.currentLeftRow[qualifiedKey]; ok {
+								values[i] = val
+							} else {
+								values[i] = op.currentLeftRow[colKey]
+							}
+						} else {
+							values[i] = op.currentLeftRow[colKey]
+						}
+					}
+					outputChunk.AppendRow(values)
+
+					if outputChunk.Count() >= outputChunk.Capacity() {
+						return outputChunk, nil
+					}
+				}
+				// Move to next left row (don't process all matches for semi-join)
+				continue
+			}
+
 			// If no matches and it's an INNER join, skip this left row
 			if len(op.currentMatches) == 0 &&
 				op.joinType == planner.JoinTypeInner {

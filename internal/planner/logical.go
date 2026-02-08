@@ -6,6 +6,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite"
 )
 
 // LogicalPlan represents a node in the logical query plan.
@@ -1079,8 +1080,9 @@ func (p *LogicalPragma) OutputColumns() []ColumnBinding {
 
 // LogicalExplain represents an EXPLAIN operation.
 type LogicalExplain struct {
-	Child   LogicalPlan // The plan to explain
-	Analyze bool        // true for EXPLAIN ANALYZE
+	Child        LogicalPlan // The plan to explain
+	Analyze      bool        // true for EXPLAIN ANALYZE
+	RewriteStats *rewrite.Stats
 }
 
 func (*LogicalExplain) logicalPlanNode() {}

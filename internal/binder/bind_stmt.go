@@ -2499,6 +2499,9 @@ func (b *Binder) bindCreateTable(
 			col.Name,
 			col.DataType,
 		)
+		if col.TypeInfo != nil {
+			colDef.TypeInfo = col.TypeInfo
+		}
 		colDef.Nullable = !col.NotNull
 		if col.Default != nil {
 			// For now, just mark that there's a default

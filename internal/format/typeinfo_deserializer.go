@@ -50,10 +50,23 @@ func DeserializeTypeInfo(
 
 	// If discriminator is GENERIC, this is a primitive type
 	if discriminator == ExtraTypeInfoType_GENERIC {
-		// Create primitive TypeInfo using the LogicalTypeId
-		return dukdb.NewTypeInfo(
-			dukdb.Type(typeId),
-		)
+		switch dukdb.Type(typeId) {
+		case dukdb.TYPE_JSON:
+			return dukdb.NewJSONInfo()
+		case dukdb.TYPE_BIGNUM:
+			return dukdb.NewBignumInfo()
+		case dukdb.TYPE_GEOMETRY:
+			return dukdb.NewGeometryInfo()
+		case dukdb.TYPE_VARIANT:
+			return dukdb.NewVariantInfo()
+		case dukdb.TYPE_LAMBDA:
+			return dukdb.NewLambdaInfo()
+		default:
+			// Create primitive TypeInfo using the LogicalTypeId
+			return dukdb.NewTypeInfo(
+				dukdb.Type(typeId),
+			)
+		}
 	}
 
 	// Dispatch to type-specific deserializers based on discriminator

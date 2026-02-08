@@ -399,6 +399,7 @@ func TestSystemFunctions(t *testing.T) {
 		"pg_typeof", "pg_backend_pid", "current_schema", "current_schemas",
 		"has_table_privilege", "has_schema_privilege", "has_database_privilege",
 		"pg_is_in_recovery", "pg_is_wal_replay_paused",
+		"current_setting", "set_config", "show_all_settings",
 	}
 
 	for _, name := range systemFuncs {

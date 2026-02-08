@@ -2460,6 +2460,8 @@ func toNumber(v any) (float64, bool) {
 		return float64(val), true
 	case uint8:
 		return float64(val), true
+	case dukdb.Decimal:
+		return val.Float64(), true
 	default:
 		return 0, false
 	}

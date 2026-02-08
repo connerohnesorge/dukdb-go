@@ -191,6 +191,8 @@ func (r *FunctionAliasRegistry) registerSystemSession() {
 			MinArgs: 1, MaxArgs: 2, Description: "Get setting value"},
 		{PostgreSQLName: "set_config", DuckDBName: "set_config", Category: SystemFunction,
 			MinArgs: argsMaxSysThree, MaxArgs: argsMaxSysThree, Description: "Set configuration"},
+		{PostgreSQLName: "show_all_settings", DuckDBName: "show_all_settings", Category: SystemFunction,
+			MinArgs: 0, MaxArgs: 0, Description: "Show all settings"},
 		{
 			PostgreSQLName: "pg_is_in_recovery",
 			DuckDBName:     "pg_is_in_recovery",

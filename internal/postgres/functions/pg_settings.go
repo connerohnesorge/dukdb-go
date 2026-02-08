@@ -2,6 +2,7 @@ package functions
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -9,6 +10,12 @@ import (
 type Settings struct {
 	mu       sync.RWMutex
 	settings map[string]string
+}
+
+// SettingEntry represents a configuration setting value.
+type SettingEntry struct {
+	Name  string
+	Value string
 }
 
 // NewSettings creates a new Settings instance with defaults.
@@ -53,6 +60,28 @@ func (s *Settings) Set(name, value string) {
 	s.settings[name] = value
 }
 
+// All returns all settings as a sorted list.
+func (s *Settings) All() []SettingEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	keys := make([]string, 0, len(s.settings))
+	for key := range s.settings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	result := make([]SettingEntry, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, SettingEntry{
+			Name:  key,
+			Value: s.settings[key],
+		})
+	}
+
+	return result
+}
+
 // CurrentSetting returns the value of a configuration setting.
 type CurrentSetting struct {
 	Settings *Settings
@@ -80,11 +109,30 @@ func (f *CurrentSetting) EvaluateStrict(name string) (string, error) {
 }
 
 // EvaluateOptional returns the value of a setting.
-// Returns empty string for missing settings.
-func (f *CurrentSetting) EvaluateOptional(name string) string {
-	val, _ := f.Settings.Get(name)
+// Returns nil for missing settings.
+func (f *CurrentSetting) EvaluateOptional(name string) *string {
+	val, ok := f.Settings.Get(name)
+	if !ok {
+		return nil
+	}
 
-	return val
+	return &val
+}
+
+// Evaluate returns the value of a setting with missing-ok support.
+// When missingOk is false, missing settings return an error.
+// When missingOk is true, missing settings return nil without error.
+func (f *CurrentSetting) Evaluate(name string, missingOk bool) (*string, error) {
+	if missingOk {
+		return f.EvaluateOptional(name), nil
+	}
+
+	val, err := f.EvaluateStrict(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &val, nil
 }
 
 // SetConfig sets a configuration setting and returns the new value.
@@ -109,6 +157,26 @@ func (f *SetConfig) Evaluate(name, value string, isLocal bool) string {
 	f.Settings.Set(name, value)
 
 	return value
+}
+
+// ShowAllSettings returns all configuration settings.
+type ShowAllSettings struct {
+	Settings *Settings
+}
+
+// NewShowAllSettings creates a ShowAllSettings function.
+func NewShowAllSettings(settings *Settings) *ShowAllSettings {
+	s := settings
+	if s == nil {
+		s = NewSettings()
+	}
+
+	return &ShowAllSettings{Settings: s}
+}
+
+// Evaluate returns all settings.
+func (f *ShowAllSettings) Evaluate() []SettingEntry {
+	return f.Settings.All()
 }
 
 // Global default settings instance.

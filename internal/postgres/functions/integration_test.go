@@ -487,6 +487,7 @@ func TestSystemFunctionRegistration(t *testing.T) {
 		{"pg_is_wal_replay_paused", SystemFunction},
 		{"current_setting", SystemFunction},
 		{"set_config", SystemFunction},
+		{"show_all_settings", SystemFunction},
 	}
 
 	for _, sf := range systemFuncs {

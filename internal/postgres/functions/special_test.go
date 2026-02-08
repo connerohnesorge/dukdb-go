@@ -313,15 +313,24 @@ func TestCurrentSetting(t *testing.T) {
 	}
 
 	// Test missing setting with optional mode
-	val = f.EvaluateOptional("nonexistent")
-	if val != "" {
-		t.Errorf("EvaluateOptional(nonexistent) = %q, want empty", val)
+	optional := f.EvaluateOptional("nonexistent")
+	if optional != nil {
+		t.Errorf("EvaluateOptional(nonexistent) = %v, want nil", optional)
 	}
 
 	// Test missing setting with strict mode
 	_, err = f.EvaluateStrict("nonexistent")
 	if err == nil {
 		t.Error("EvaluateStrict(nonexistent) should return error")
+	}
+
+	// Test missing-ok path
+	optional, err = f.Evaluate("nonexistent", true)
+	if err != nil {
+		t.Errorf("Evaluate(missingOk=true) error: %v", err)
+	}
+	if optional != nil {
+		t.Errorf("Evaluate(missingOk=true) = %v, want nil", optional)
 	}
 }
 
@@ -367,6 +376,28 @@ func TestSetConfigWithNilSettings(t *testing.T) {
 	result := f.Evaluate("test", "value", false)
 	if result != "value" {
 		t.Errorf("SetConfig.Evaluate with nil settings = %q, want value", result)
+	}
+}
+
+func TestShowAllSettings(t *testing.T) {
+	settings := NewSettings()
+	settings.Set("custom", "value")
+
+	f := NewShowAllSettings(settings)
+	entries := f.Evaluate()
+	if len(entries) == 0 {
+		t.Fatal("ShowAllSettings.Evaluate() returned empty list")
+	}
+
+	foundCustom := false
+	for _, entry := range entries {
+		if entry.Name == "custom" && entry.Value == "value" {
+			foundCustom = true
+			break
+		}
+	}
+	if !foundCustom {
+		t.Error("ShowAllSettings.Evaluate() did not include custom setting")
 	}
 }
 
@@ -423,6 +454,32 @@ func TestPgDatabaseSize(t *testing.T) {
 
 	if f.EvaluateByOID(12345) != 0 {
 		t.Error("PgDatabaseSize.EvaluateByOID() != 0")
+	}
+}
+
+func TestPgDatabaseSizeLookup(t *testing.T) {
+	f := &PgDatabaseSize{
+		Lookup: SizeLookup{
+			ByName: func(name string) (int64, bool) {
+				if name == "testdb" {
+					return 42, true
+				}
+				return 0, false
+			},
+			ByOID: func(oid uint32) (int64, bool) {
+				if oid == 7 {
+					return 99, true
+				}
+				return 0, false
+			},
+		},
+	}
+
+	if f.Evaluate("testdb") != 42 {
+		t.Error("PgDatabaseSize.Evaluate() did not use lookup")
+	}
+	if f.EvaluateByOID(7) != 99 {
+		t.Error("PgDatabaseSize.EvaluateByOID() did not use lookup")
 	}
 }
 
@@ -483,5 +540,55 @@ func TestPgTablespaceSize(t *testing.T) {
 
 	if f.EvaluateByOID(12345) != 0 {
 		t.Error("PgTablespaceSize.EvaluateByOID() != 0")
+	}
+}
+
+func TestPgColumnSize(t *testing.T) {
+	f := &PgColumnSize{}
+
+	if f.Evaluate(nil) != nil {
+		t.Error("PgColumnSize.Evaluate(nil) should return nil")
+	}
+
+	strSize := f.Evaluate("abc")
+	if strSize == nil || *strSize != 3 {
+		t.Errorf("PgColumnSize.Evaluate("+`"abc"`+") = %v, want 3", strSize)
+	}
+
+	boolSize := f.Evaluate(true)
+	if boolSize == nil || *boolSize != 1 {
+		t.Errorf("PgColumnSize.Evaluate(true) = %v, want 1", boolSize)
+	}
+}
+
+func TestObjDescription(t *testing.T) {
+	f := &ObjDescription{}
+	if f.Evaluate(123, "pg_class") != nil {
+		t.Error("ObjDescription.Evaluate() should return nil")
+	}
+}
+
+func TestColDescription(t *testing.T) {
+	f := &ColDescription{}
+	if f.Evaluate(123, 1) != nil {
+		t.Error("ColDescription.Evaluate() should return nil")
+	}
+}
+
+func TestShobjDescription(t *testing.T) {
+	f := &ShobjDescription{}
+	if f.Evaluate(123, "pg_database") != nil {
+		t.Error("ShobjDescription.Evaluate() should return nil")
+	}
+}
+
+func TestVersion(t *testing.T) {
+	f := NewVersion("16.0")
+	result := f.Evaluate()
+	if result == "" {
+		t.Fatal("Version.Evaluate() returned empty string")
+	}
+	if result[:10] != "PostgreSQL" {
+		t.Errorf("Version.Evaluate() = %q, want PostgreSQL prefix", result)
 	}
 }

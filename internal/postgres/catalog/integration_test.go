@@ -21,6 +21,8 @@ const (
 	pgNullableNo  = "NO"
 )
 
+var routinesColumns = []string{"specific_catalog", "specific_schema", "specific_name", "routine_catalog", "routine_schema", "routine_name", "routine_type", "data_type"}
+
 // =============================================================================
 // Test Data Setup
 // =============================================================================

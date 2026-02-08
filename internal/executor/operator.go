@@ -1167,10 +1167,16 @@ func (e *Executor) performJoin(
 			}
 
 			matched = true
-			result.Rows = append(
-				result.Rows,
-				combinedRow,
-			)
+			// For SEMI join, only output left columns (no right columns)
+			if joinType == planner.JoinTypeSemi {
+				result.Rows = append(result.Rows, leftRow)
+				break // Only need one match for semi-join
+			} else {
+				result.Rows = append(
+					result.Rows,
+					combinedRow,
+				)
+			}
 		}
 
 		// Handle left/full outer join - add left row with NULLs for right

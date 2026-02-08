@@ -387,6 +387,9 @@ func (b *Binder) bindAlterTable(
 		}
 		// Convert parser column def to catalog column def
 		colDef := catalog.NewColumnDef(s.AddColumn.Name, s.AddColumn.DataType)
+		if s.AddColumn.TypeInfo != nil {
+			colDef.TypeInfo = s.AddColumn.TypeInfo
+		}
 		colDef.Nullable = !s.AddColumn.NotNull
 		colDef.HasDefault = s.AddColumn.Default != nil
 		bound.AddColumn = colDef
