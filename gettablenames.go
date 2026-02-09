@@ -15,20 +15,20 @@ import (
 // # Supported Statement Types
 //
 // The following statement types are fully supported:
-//   - SELECT (including JOINs, subqueries in WHERE/HAVING, scalar subqueries)
+//   - SELECT (including JOINs, subqueries in WHERE/HAVING, scalar subqueries, CTEs)
 //   - INSERT (target table and SELECT subquery if present)
 //   - UPDATE (target table and WHERE clause subqueries)
 //   - DELETE (target table and WHERE clause subqueries)
 //   - CREATE TABLE (the table being created)
 //   - DROP TABLE (the table being dropped)
+//   - CREATE TABLE AS SELECT (target table and SELECT source tables, including CTEs)
 //
 // # Not Supported
 //
 // The following features are NOT currently supported:
-//   - Common Table Expressions (CTEs / WITH clauses) - requires AST enhancement
 //   - UNION/INTERSECT/EXCEPT queries - parsed as single SELECT
-//   - CREATE TABLE AS SELECT - only extracts target table, not SELECT source tables
 //   - UPDATE ... FROM - requires AST enhancement for FROM clause in UPDATE
+//   - Recursive CTEs - backend limitation
 //
 // # Edge Cases
 //

@@ -460,8 +460,8 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 
 func (p *parser) parseRecursionOption() (*RecursionOption, error) {
 	if !p.isKeyword("OPTION") {
-		// No OPTION clause - use default -1 (which means use 1000 in executor)
-		return &RecursionOption{MaxRecursion: -1}, nil
+		// No OPTION clause - return nil, executor will use default of 1000
+		return nil, nil
 	}
 
 	p.advance()

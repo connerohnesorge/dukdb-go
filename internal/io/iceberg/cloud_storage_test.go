@@ -4,13 +4,35 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go/modules/compose"
 )
+
+func isDockerAvailable() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "docker", "version").Run(); err != nil {
+		return false
+	}
+
+	testNetwork := "docker-avail-test"
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	if err := exec.CommandContext(ctx2, "docker", "network", "create", testNetwork).Run(); err != nil {
+		return false
+	}
+
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel3()
+	exec.CommandContext(ctx3, "docker", "network", "rm", testNetwork).Run()
+
+	return true
+}
 
 // setupCloudTestcontainers starts the Docker Compose stack using testcontainers-go.
 func setupCloudTestcontainers(t *testing.T, ctx context.Context) (compose.ComposeStack, error) {
@@ -36,6 +58,9 @@ func setupCloudTestcontainers(t *testing.T, ctx context.Context) (compose.Compos
 func TestCloudStorage_MinIO(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping cloud storage test in short mode")
+	}
+	if !isDockerAvailable() {
+		t.Skip("Docker not available or not responding")
 	}
 
 	ctx := context.Background()
@@ -91,6 +116,9 @@ func TestCloudStorage_MinIO(t *testing.T) {
 func TestCloudStorage_GCS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping cloud storage test in short mode")
+	}
+	if !isDockerAvailable() {
+		t.Skip("Docker not available or not responding")
 	}
 
 	ctx := context.Background()
@@ -148,6 +176,9 @@ func parseTableLocation(path string) (map[string]string, error) {
 func TestCloudStorage_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
+	}
+	if !isDockerAvailable() {
+		t.Skip("Docker not available or not responding")
 	}
 
 	ctx := context.Background()

@@ -8,15 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go/modules/compose"
 )
 
 // TestSparkGenerated_Compatibility tests reading Spark-generated Iceberg tables.
 func TestSparkGenerated_Compatibility(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Spark compatibility test in short mode")
+	}
+	if !isDockerAvailable() {
+		t.Skip("Docker not available or not responding")
 	}
 
 	ctx := context.Background()
@@ -199,6 +202,9 @@ func TestSparkGenerated_Compatibility(t *testing.T) {
 func TestFlinkGenerated_Compatibility(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Flink compatibility test in short mode")
+	}
+	if !isDockerAvailable() {
+		t.Skip("Docker not available or not responding")
 	}
 
 	ctx := context.Background()

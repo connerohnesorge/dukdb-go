@@ -5,6 +5,7 @@ import (
 	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/wal"
@@ -52,7 +53,61 @@ func (e *Executor) executeDelete(
 	}
 	var deletedRows []deletedRow
 
-	// Iterate through all rows in the table
+	// Handle IN subqueries and other complex sources that have been converted to joins
+	// by executing the source plan first to get matching rows
+	if plan.Source != nil {
+		if _, isFilter := plan.Source.(*planner.PhysicalFilter); !isFilter {
+			// Source is a join (e.g., for IN subquery) - execute it to get matching rows
+			sourceResult, err := e.executeWithContext(ctx, plan.Source)
+			if err != nil {
+				return nil, err
+			}
+
+			// Build a map of matching row keys from the source result
+			matchingKeys := make(map[string]bool)
+			for _, row := range sourceResult.Rows {
+				key := buildRowKey(row, plan.TableDef.Columns)
+				matchingKeys[key] = true
+			}
+
+			// Now scan the table and delete matching rows
+			for {
+				chunk := scanner.Next()
+				if chunk == nil {
+					break
+				}
+
+				for i := 0; i < chunk.Count(); i++ {
+					rowData := make([]any, len(plan.TableDef.Columns))
+					rowMap := make(map[string]any)
+					for j, col := range plan.TableDef.Columns {
+						if j < chunk.ColumnCount() {
+							value := chunk.GetValue(i, j)
+							rowData[j] = value
+							rowMap[col.Name] = value
+						}
+					}
+
+					// Check if this row matches any key from the source result
+					key := buildRowKey(rowMap, plan.TableDef.Columns)
+					if matchingKeys[key] {
+						rowID := scanner.GetRowID(i)
+						if rowID != nil {
+							deletedRows = append(deletedRows, deletedRow{
+								rowID: *rowID,
+								data:  rowData,
+							})
+						}
+					}
+				}
+			}
+
+			// Skip the normal scan loop since we've already processed all rows
+			goto doneScanning
+		}
+	}
+
+	// Iterate through all rows in the table (for simple filters or no filter)
 	for {
 		chunk := scanner.Next()
 		if chunk == nil {
@@ -76,23 +131,17 @@ func (e *Executor) executeDelete(
 			// Evaluate WHERE clause (three-valued logic: NULL comparisons return NULL/false)
 			var shouldDelete bool
 			if plan.Source != nil {
-				// Check if source is a filter (WHERE clause)
-				if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
-					match, err := e.evaluateExprAsBool(
-						ctx,
-						filter.Condition,
-						rowMap,
-					)
-					if err != nil {
-						return nil, err
-					}
-					shouldDelete = match
-				} else {
-					// For other source types (e.g., HashJoin for IN subqueries),
-					// the source filters the rows - rows present in the source should be deleted
-					// We'll handle this by checking if the row exists in the source result
-					shouldDelete = false
+				// Source must be a filter (we handled joins above)
+				filter := plan.Source.(*planner.PhysicalFilter)
+				match, err := e.evaluateExprAsBool(
+					ctx,
+					filter.Condition,
+					rowMap,
+				)
+				if err != nil {
+					return nil, err
 				}
+				shouldDelete = match
 			} else {
 				// No source plan means DELETE all rows
 				shouldDelete = true
@@ -113,6 +162,8 @@ func (e *Executor) executeDelete(
 			}
 		}
 	}
+
+doneScanning:
 
 	// Extract RowIDs for deletion
 	deletedRowIDs := make([]storage.RowID, len(deletedRows))
@@ -213,4 +264,15 @@ func (e *Executor) executeDelete(
 	return &ExecutionResult{
 		RowsAffected: int64(len(deletedRows)),
 	}, nil
+}
+
+// buildRowKey creates a unique key for a row based on its column values
+func buildRowKey(row map[string]any, columns []*catalog.ColumnDef) string {
+	key := ""
+	for _, col := range columns {
+		if val, ok := row[col.Name]; ok {
+			key += fmt.Sprintf("%v:", val)
+		}
+	}
+	return key
 }

@@ -127,7 +127,7 @@ func (op *PhysicalRecursiveCTEOperator) execute() error {
 	// Step 2: Iteratively execute the recursive plan
 	iteration := 0
 	maxRecursion := op.plan.MaxRecursion
-	if maxRecursion < 0 {
+	if maxRecursion <= 0 {
 		maxRecursion = 1000 // Default max recursion
 	}
 
