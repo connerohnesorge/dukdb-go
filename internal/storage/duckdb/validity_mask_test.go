@@ -55,7 +55,6 @@ func TestValidityMaskBasic(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get the table catalog entry
 	tableCat, ok := cat.GetTableInSchema("main", "nulls_basic")
@@ -169,7 +168,6 @@ func TestValidityMaskAllNull(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get table metadata
 	duckTable := storage.catalog.GetTable("all_nulls")
@@ -235,7 +233,6 @@ func TestValidityMaskNoNulls(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get table metadata
 	duckTable := storage.catalog.GetTable("no_nulls")
@@ -305,7 +302,6 @@ func TestValidityMaskBitOrdering(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get table metadata
 	duckTable := storage.catalog.GetTable("bit_order")
@@ -385,7 +381,6 @@ func TestValidityMaskMultipleWords(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get table metadata
 	duckTable := storage.catalog.GetTable("many_nulls")
@@ -473,7 +468,6 @@ func TestValidityMaskMultipleColumns(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get table metadata
 	duckTable := storage.catalog.GetTable("multi_col")

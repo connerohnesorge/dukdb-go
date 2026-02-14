@@ -41,7 +41,6 @@ func TestStringHeapSingleString(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "single_string")
@@ -98,7 +97,6 @@ func TestStringHeapMultipleStrings(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "multi_string")
@@ -163,7 +161,6 @@ func TestStringHeapEmptyStrings(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "empty_strings")
@@ -228,7 +225,6 @@ func TestStringHeapRawFormat(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Get the table
 	table, ok := cat.GetTableInSchema("main", "raw_strings")
@@ -339,7 +335,6 @@ func TestStringHeapUnicodeStrings(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "unicode_strings")
@@ -442,7 +437,6 @@ func TestStringHeapConstantCompression(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "constant_varchar")
@@ -505,7 +499,6 @@ func TestStringHeapWithNulls(t *testing.T) {
 	cat, err := storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
-	skipOnEmptyCatalog(t, cat)
 
 	// Verify the table exists
 	table, ok := cat.GetTableInSchema("main", "varchar_nulls")

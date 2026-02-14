@@ -1,0 +1,509 @@
+=== RUN   TestAggregateFuncConfig
+--- PASS: TestAggregateFuncConfig (0.00s)
+=== RUN   TestAggregateFuncExecutor
+--- PASS: TestAggregateFuncExecutor (0.00s)
+=== RUN   TestAggregateRegistryValidation
+--- PASS: TestAggregateRegistryValidation (0.00s)
+=== RUN   TestAggregateRegistryLookup
+--- PASS: TestAggregateRegistryLookup (0.00s)
+=== RUN   TestAggregateRegistryVariadic
+--- PASS: TestAggregateRegistryVariadic (0.00s)
+=== RUN   TestAggregateExecutionStateBasic
+    aggregate_udf_test.go:418: Mock Clock - Set(2024-01-01 00:00:00 +0000 UTC)
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestAggregateExecutionStateBasic (0.00s)
+=== RUN   TestAggregateExecutionStateCombine
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestAggregateExecutionStateCombine (0.00s)
+=== RUN   TestAggregateExecutionStateNullHandling
+--- PASS: TestAggregateExecutionStateNullHandling (0.00s)
+=== RUN   TestAggregateFuncContextWithClock
+    aggregate_udf_test.go:692: Mock Clock - Set(2024-01-01 12:00:00 +0000 UTC)
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    aggregate_udf_test.go:729: Mock Clock - Set(2025-06-15 00:00:00 +0000 UTC)
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestAggregateFuncContextWithClock (0.00s)
+=== RUN   TestAggregateFuncContextGroupKey
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestAggregateFuncContextGroupKey (0.00s)
+=== RUN   TestAggregateFuncContextDefaultClock
+--- PASS: TestAggregateFuncContextDefaultClock (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryUpdate
+--- PASS: TestAggregateUDFPanicRecoveryUpdate (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryUpdateContext
+--- PASS: TestAggregateUDFPanicRecoveryUpdateContext (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryCombine
+--- PASS: TestAggregateUDFPanicRecoveryCombine (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryFinalize
+--- PASS: TestAggregateUDFPanicRecoveryFinalize (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryFinalizeContext
+--- PASS: TestAggregateUDFPanicRecoveryFinalizeContext (0.00s)
+=== RUN   TestAggregateUDFPanicRecoveryDestroy
+--- PASS: TestAggregateUDFPanicRecoveryDestroy (0.00s)
+=== RUN   TestAggregateFuncContextTimeout
+    aggregate_udf_test.go:918: Mock Clock - Set(2024-01-01 12:00:00 +0000 UTC)
+    mock.go:196: Mock Clock - Until(2026-02-09 19:05:42.223050749 -0600 CST m=+3600.001668149, []) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Until(2024-01-01 11:59:59.9 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestAggregateFuncContextTimeout (0.00s)
+=== RUN   TestAggregateFuncContextCancellation
+--- PASS: TestAggregateFuncContextCancellation (0.00s)
+=== RUN   TestSerializeGroupKey
+=== RUN   TestSerializeGroupKey/empty_key
+=== RUN   TestSerializeGroupKey/single_string
+=== RUN   TestSerializeGroupKey/single_int
+=== RUN   TestSerializeGroupKey/multiple_values
+=== RUN   TestSerializeGroupKey/nil_value
+--- PASS: TestSerializeGroupKey (0.00s)
+    --- PASS: TestSerializeGroupKey/empty_key (0.00s)
+    --- PASS: TestSerializeGroupKey/single_string (0.00s)
+    --- PASS: TestSerializeGroupKey/single_int (0.00s)
+    --- PASS: TestSerializeGroupKey/multiple_values (0.00s)
+    --- PASS: TestSerializeGroupKey/nil_value (0.00s)
+=== RUN   TestMatchesTypesForAggregate
+=== RUN   TestMatchesTypesForAggregate/exact_match_single
+=== RUN   TestMatchesTypesForAggregate/exact_match_multiple
+=== RUN   TestMatchesTypesForAggregate/type_mismatch
+=== RUN   TestMatchesTypesForAggregate/too_few_args
+=== RUN   TestMatchesTypesForAggregate/too_many_args_non-variadic
+=== RUN   TestMatchesTypesForAggregate/variadic_match
+=== RUN   TestMatchesTypesForAggregate/variadic_type_mismatch
+=== RUN   TestMatchesTypesForAggregate/variadic_any_type
+--- PASS: TestMatchesTypesForAggregate (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/exact_match_single (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/exact_match_multiple (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/type_mismatch (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/too_few_args (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/too_many_args_non-variadic (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/variadic_match (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/variadic_type_mismatch (0.00s)
+    --- PASS: TestMatchesTypesForAggregate/variadic_any_type (0.00s)
+=== RUN   TestAllCallbackTypesWork
+--- PASS: TestAllCallbackTypesWork (0.00s)
+=== RUN   TestContextAwareCallbacks
+    aggregate_udf_test.go:1253: Mock Clock - Set(2024-06-15 10:30:00 +0000 UTC)
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestContextAwareCallbacks (0.00s)
+=== RUN   TestAppenderStruct
+--- PASS: TestAppenderStruct (0.00s)
+=== RUN   TestNewAppenderFromConn
+--- PASS: TestNewAppenderFromConn (0.00s)
+=== RUN   TestNewAppender
+--- PASS: TestNewAppender (0.00s)
+=== RUN   TestNewAppenderWithThreshold
+--- PASS: TestNewAppenderWithThreshold (0.00s)
+=== RUN   TestAppendRow
+--- PASS: TestAppendRow (0.00s)
+=== RUN   TestAppendRowNullHandling
+--- PASS: TestAppendRowNullHandling (0.00s)
+=== RUN   TestFlush
+--- PASS: TestFlush (0.00s)
+=== RUN   TestClose
+--- PASS: TestClose (0.00s)
+=== RUN   TestAutoFlushThreshold
+--- PASS: TestAutoFlushThreshold (0.00s)
+=== RUN   TestTableNotFoundError
+--- PASS: TestTableNotFoundError (0.00s)
+=== RUN   TestColumnCountMismatchError
+--- PASS: TestColumnCountMismatchError (0.00s)
+=== RUN   TestAppendAfterCloseError
+--- PASS: TestAppendAfterCloseError (0.00s)
+=== RUN   TestFlushErrorPreservation
+--- PASS: TestFlushErrorPreservation (0.00s)
+=== RUN   TestTypeConversion
+--- PASS: TestTypeConversion (0.00s)
+=== RUN   TestConcurrentAccess
+--- PASS: TestConcurrentAccess (0.00s)
+=== RUN   TestParseDataType
+=== RUN   TestParseDataType/BOOLEAN
+=== RUN   TestParseDataType/BOOL
+=== RUN   TestParseDataType/INTEGER
+=== RUN   TestParseDataType/INT
+=== RUN   TestParseDataType/INT4
+=== RUN   TestParseDataType/BIGINT
+=== RUN   TestParseDataType/INT8
+=== RUN   TestParseDataType/VARCHAR
+=== RUN   TestParseDataType/TEXT
+=== RUN   TestParseDataType/STRING
+=== RUN   TestParseDataType/DOUBLE
+=== RUN   TestParseDataType/FLOAT8
+=== RUN   TestParseDataType/FLOAT
+=== RUN   TestParseDataType/FLOAT4
+=== RUN   TestParseDataType/REAL
+=== RUN   TestParseDataType/TIMESTAMP
+=== RUN   TestParseDataType/TIMESTAMPTZ
+=== RUN   TestParseDataType/DATE
+=== RUN   TestParseDataType/TIME
+=== RUN   TestParseDataType/TIMETZ
+=== RUN   TestParseDataType/BLOB
+=== RUN   TestParseDataType/BYTEA
+=== RUN   TestParseDataType/UUID
+=== RUN   TestParseDataType/DECIMAL
+=== RUN   TestParseDataType/DECIMAL(10,2)
+=== RUN   TestParseDataType/VARCHAR(255)
+=== RUN   TestParseDataType/INTERVAL
+=== RUN   TestParseDataType/HUGEINT
+=== RUN   TestParseDataType/UHUGEINT
+=== RUN   TestParseDataType/LIST
+=== RUN   TestParseDataType/STRUCT
+=== RUN   TestParseDataType/MAP
+=== RUN   TestParseDataType/ARRAY
+=== RUN   TestParseDataType/UNION
+=== RUN   TestParseDataType/ENUM
+=== RUN   TestParseDataType/UNKNOWN_TYPE
+=== RUN   TestParseDataType/#00
+--- PASS: TestParseDataType (0.00s)
+    --- PASS: TestParseDataType/BOOLEAN (0.00s)
+    --- PASS: TestParseDataType/BOOL (0.00s)
+    --- PASS: TestParseDataType/INTEGER (0.00s)
+    --- PASS: TestParseDataType/INT (0.00s)
+    --- PASS: TestParseDataType/INT4 (0.00s)
+    --- PASS: TestParseDataType/BIGINT (0.00s)
+    --- PASS: TestParseDataType/INT8 (0.00s)
+    --- PASS: TestParseDataType/VARCHAR (0.00s)
+    --- PASS: TestParseDataType/TEXT (0.00s)
+    --- PASS: TestParseDataType/STRING (0.00s)
+    --- PASS: TestParseDataType/DOUBLE (0.00s)
+    --- PASS: TestParseDataType/FLOAT8 (0.00s)
+    --- PASS: TestParseDataType/FLOAT (0.00s)
+    --- PASS: TestParseDataType/FLOAT4 (0.00s)
+    --- PASS: TestParseDataType/REAL (0.00s)
+    --- PASS: TestParseDataType/TIMESTAMP (0.00s)
+    --- PASS: TestParseDataType/TIMESTAMPTZ (0.00s)
+    --- PASS: TestParseDataType/DATE (0.00s)
+    --- PASS: TestParseDataType/TIME (0.00s)
+    --- PASS: TestParseDataType/TIMETZ (0.00s)
+    --- PASS: TestParseDataType/BLOB (0.00s)
+    --- PASS: TestParseDataType/BYTEA (0.00s)
+    --- PASS: TestParseDataType/UUID (0.00s)
+    --- PASS: TestParseDataType/DECIMAL (0.00s)
+    --- PASS: TestParseDataType/DECIMAL(10,2) (0.00s)
+    --- PASS: TestParseDataType/VARCHAR(255) (0.00s)
+    --- PASS: TestParseDataType/INTERVAL (0.00s)
+    --- PASS: TestParseDataType/HUGEINT (0.00s)
+    --- PASS: TestParseDataType/UHUGEINT (0.00s)
+    --- PASS: TestParseDataType/LIST (0.00s)
+    --- PASS: TestParseDataType/STRUCT (0.00s)
+    --- PASS: TestParseDataType/MAP (0.00s)
+    --- PASS: TestParseDataType/ARRAY (0.00s)
+    --- PASS: TestParseDataType/UNION (0.00s)
+    --- PASS: TestParseDataType/ENUM (0.00s)
+    --- PASS: TestParseDataType/UNKNOWN_TYPE (0.00s)
+    --- PASS: TestParseDataType/#00 (0.00s)
+=== RUN   TestQuoteIdentifier
+=== RUN   TestQuoteIdentifier/simple
+=== RUN   TestQuoteIdentifier/with_space
+=== RUN   TestQuoteIdentifier/with"quote
+=== RUN   TestQuoteIdentifier/#00
+--- PASS: TestQuoteIdentifier (0.00s)
+    --- PASS: TestQuoteIdentifier/simple (0.00s)
+    --- PASS: TestQuoteIdentifier/with_space (0.00s)
+    --- PASS: TestQuoteIdentifier/with"quote (0.00s)
+    --- PASS: TestQuoteIdentifier/#00 (0.00s)
+=== RUN   TestBuildInsert
+--- PASS: TestBuildInsert (0.00s)
+=== RUN   TestAppenderColumns
+--- PASS: TestAppenderColumns (0.00s)
+=== RUN   TestAppenderColumnTypes
+--- PASS: TestAppenderColumnTypes (0.00s)
+=== RUN   TestNewQueryAppender_EmptyQuery
+--- PASS: TestNewQueryAppender_EmptyQuery (0.00s)
+=== RUN   TestNewQueryAppender_EmptyColTypes
+--- PASS: TestNewQueryAppender_EmptyColTypes (0.00s)
+=== RUN   TestNewQueryAppender_ColNamesMismatch
+--- PASS: TestNewQueryAppender_ColNamesMismatch (0.00s)
+=== RUN   TestNewQueryAppender_DefaultTableName
+--- PASS: TestNewQueryAppender_DefaultTableName (0.00s)
+=== RUN   TestNewQueryAppender_DefaultColumnNames
+--- PASS: TestNewQueryAppender_DefaultColumnNames (0.00s)
+=== RUN   TestNewQueryAppender_Valid
+--- PASS: TestNewQueryAppender_Valid (0.00s)
+=== RUN   TestQueryAppender_FlushWithInsert
+--- PASS: TestQueryAppender_FlushWithInsert (0.00s)
+=== RUN   TestQueryAppender_Close
+--- PASS: TestQueryAppender_Close (0.00s)
+=== RUN   TestQueryAppender_AutoFlush
+--- PASS: TestQueryAppender_AutoFlush (0.00s)
+=== RUN   TestQueryAppender_NestedTypesSchema
+--- PASS: TestQueryAppender_NestedTypesSchema (0.00s)
+=== RUN   TestQueryAppender_InvalidConnection
+--- PASS: TestQueryAppender_InvalidConnection (0.00s)
+=== RUN   TestFlushWithContext_Timeout
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    appender_test.go:1811: Mock Clock - Advance(2s)
+    mock.go:196: Mock Clock - Until(2024-01-01 00:00:01 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestFlushWithContext_Timeout (0.00s)
+=== RUN   TestFlushWithContext_Success
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestFlushWithContext_Success (0.00s)
+=== RUN   TestFlushWithContext_BeforeDeadline
+    mock.go:196: Mock Clock - Until(2026-02-09 19:05:42.226535646 -0600 CST m=+3600.005153034, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestFlushWithContext_BeforeDeadline (0.00s)
+=== RUN   TestFlushWithContext_QueryAppenderTimeout
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    appender_test.go:1979: Mock Clock - Advance(2s)
+    mock.go:196: Mock Clock - Until(2024-01-01 00:00:01 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestFlushWithContext_QueryAppenderTimeout (0.00s)
+=== RUN   TestAppenderContext_NilClock
+--- PASS: TestAppenderContext_NilClock (0.00s)
+=== RUN   TestDataChunkToRecordBatch_Primitives
+=== PAUSE TestDataChunkToRecordBatch_Primitives
+=== RUN   TestDataChunkToRecordBatch_WithNulls
+=== PAUSE TestDataChunkToRecordBatch_WithNulls
+=== RUN   TestDataChunkToRecordBatch_AllNumericTypes
+=== PAUSE TestDataChunkToRecordBatch_AllNumericTypes
+=== RUN   TestDataChunkToRecordBatch_Timestamps
+=== PAUSE TestDataChunkToRecordBatch_Timestamps
+=== RUN   TestRecordBatchToDataChunk_Primitives
+=== PAUSE TestRecordBatchToDataChunk_Primitives
+=== RUN   TestRecordBatchToDataChunk_WithNulls
+=== PAUSE TestRecordBatchToDataChunk_WithNulls
+=== RUN   TestRoundTrip_DataChunk_RecordBatch
+=== PAUSE TestRoundTrip_DataChunk_RecordBatch
+=== RUN   TestSchemaFromTypes
+=== PAUSE TestSchemaFromTypes
+=== RUN   TestTypesFromSchema
+=== PAUSE TestTypesFromSchema
+=== RUN   TestDataChunkToRecordBatch_List
+=== PAUSE TestDataChunkToRecordBatch_List
+=== RUN   TestDataChunkToRecordBatch_ErrorCases
+=== PAUSE TestDataChunkToRecordBatch_ErrorCases
+=== RUN   TestRecordBatchToDataChunk_ErrorCases
+=== PAUSE TestRecordBatchToDataChunk_ErrorCases
+=== RUN   TestDataChunkToRecordBatch_UUID
+=== PAUSE TestDataChunkToRecordBatch_UUID
+=== RUN   TestDataChunkToRecordBatch_Decimal
+=== PAUSE TestDataChunkToRecordBatch_Decimal
+=== RUN   TestArrowTypeToDuckDBRoundTrip
+=== PAUSE TestArrowTypeToDuckDBRoundTrip
+=== RUN   TestNewArrowFromConnInvalidType
+=== PAUSE TestNewArrowFromConnInvalidType
+=== RUN   TestArrowWithClock
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestArrowWithClock (0.00s)
+=== RUN   TestArrowWithAllocator
+--- PASS: TestArrowWithAllocator (0.00s)
+=== RUN   TestArrowContextDeadlineExceeded
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    mock.go:196: Mock Clock - Until(2023-12-31 23:59:59 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestArrowContextDeadlineExceeded (0.00s)
+=== RUN   TestDuckDBTypeToArrowPrimitives
+=== PAUSE TestDuckDBTypeToArrowPrimitives
+=== RUN   TestDuckDBTypeToArrowTimestamps
+=== PAUSE TestDuckDBTypeToArrowTimestamps
+=== RUN   TestDuckDBTypeToArrowTime
+=== PAUSE TestDuckDBTypeToArrowTime
+=== RUN   TestDuckDBTypeToArrowUUID
+=== PAUSE TestDuckDBTypeToArrowUUID
+=== RUN   TestDuckDBTypeToArrowHugeInt
+=== PAUSE TestDuckDBTypeToArrowHugeInt
+=== RUN   TestDuckDBTypeToArrowDecimal
+=== PAUSE TestDuckDBTypeToArrowDecimal
+=== RUN   TestDuckDBTypeToArrowList
+=== PAUSE TestDuckDBTypeToArrowList
+=== RUN   TestDuckDBTypeToArrowArray
+=== PAUSE TestDuckDBTypeToArrowArray
+=== RUN   TestDuckDBTypeToArrowStruct
+=== PAUSE TestDuckDBTypeToArrowStruct
+=== RUN   TestDuckDBTypeToArrowMap
+=== PAUSE TestDuckDBTypeToArrowMap
+=== RUN   TestDuckDBTypeToArrowEnum
+=== PAUSE TestDuckDBTypeToArrowEnum
+=== RUN   TestDuckDBTypeToArrowBit
+=== PAUSE TestDuckDBTypeToArrowBit
+=== RUN   TestDuckDBTypeToArrowUnion
+=== PAUSE TestDuckDBTypeToArrowUnion
+=== RUN   TestDuckDBTypeToArrowUnsupported
+=== PAUSE TestDuckDBTypeToArrowUnsupported
+=== RUN   TestArrowRecordReaderInterface
+=== PAUSE TestArrowRecordReaderInterface
+=== RUN   TestBignumTypeInfo
+--- PASS: TestBignumTypeInfo (0.00s)
+=== RUN   TestBignumVector
+--- PASS: TestBignumVector (0.00s)
+=== RUN   TestBignumVectorReset
+--- PASS: TestBignumVectorReset (0.00s)
+=== RUN   TestBignumInvalidInput
+--- PASS: TestBignumInvalidInput (0.00s)
+=== RUN   TestListValue
+=== RUN   TestListValue/int_slice
+=== RUN   TestListValue/string_slice
+=== RUN   TestListValue/empty_slice
+=== RUN   TestListValue/nil_slice
+=== RUN   TestListValue/float64_slice
+--- PASS: TestListValue (0.00s)
+    --- PASS: TestListValue/int_slice (0.00s)
+    --- PASS: TestListValue/string_slice (0.00s)
+    --- PASS: TestListValue/empty_slice (0.00s)
+    --- PASS: TestListValue/nil_slice (0.00s)
+    --- PASS: TestListValue/float64_slice (0.00s)
+=== RUN   TestStructValue
+=== RUN   TestStructValue/simple_struct
+=== RUN   TestStructValue/struct_with_custom_tags
+=== RUN   TestStructValue/struct_without_tags_uses_field_name
+=== RUN   TestStructValue/nil_pointer_to_struct
+=== RUN   TestStructValue/pointer_to_struct
+--- PASS: TestStructValue (0.00s)
+    --- PASS: TestStructValue/simple_struct (0.00s)
+    --- PASS: TestStructValue/struct_with_custom_tags (0.00s)
+    --- PASS: TestStructValue/struct_without_tags_uses_field_name (0.00s)
+    --- PASS: TestStructValue/nil_pointer_to_struct (0.00s)
+    --- PASS: TestStructValue/pointer_to_struct (0.00s)
+=== RUN   TestMapValue
+=== RUN   TestMapValue/string_to_int_map
+=== RUN   TestMapValue/int_to_string_map
+=== RUN   TestMapValue/empty_map
+=== RUN   TestMapValue/nil_map
+--- PASS: TestMapValue (0.00s)
+    --- PASS: TestMapValue/string_to_int_map (0.00s)
+    --- PASS: TestMapValue/int_to_string_map (0.00s)
+    --- PASS: TestMapValue/empty_map (0.00s)
+    --- PASS: TestMapValue/nil_map (0.00s)
+=== RUN   TestArrayValue
+=== RUN   TestArrayValue/int_array
+=== RUN   TestArrayValue/string_array
+=== RUN   TestArrayValue/fixed_size_validation_in_usage
+--- PASS: TestArrayValue (0.00s)
+    --- PASS: TestArrayValue/int_array (0.00s)
+    --- PASS: TestArrayValue/string_array (0.00s)
+    --- PASS: TestArrayValue/fixed_size_validation_in_usage (0.00s)
+=== RUN   TestJSONValue
+=== RUN   TestJSONValue/struct_value
+=== RUN   TestJSONValue/map_value
+--- PASS: TestJSONValue (0.00s)
+    --- PASS: TestJSONValue/struct_value (0.00s)
+    --- PASS: TestJSONValue/map_value (0.00s)
+=== RUN   TestRoundTrip
+=== RUN   TestRoundTrip/list_round_trip
+=== RUN   TestRoundTrip/map_round_trip
+=== RUN   TestRoundTrip/struct_round_trip
+--- PASS: TestRoundTrip (0.00s)
+    --- PASS: TestRoundTrip/list_round_trip (0.00s)
+    --- PASS: TestRoundTrip/map_round_trip (0.00s)
+    --- PASS: TestRoundTrip/struct_round_trip (0.00s)
+=== RUN   TestBind
+=== RUN   TestBind/valid_bind
+=== RUN   TestBind/invalid_index
+=== RUN   TestBind/out_of_range_index
+=== RUN   TestBind/closed_statement
+--- PASS: TestBind (0.00s)
+    --- PASS: TestBind/valid_bind (0.00s)
+    --- PASS: TestBind/invalid_index (0.00s)
+    --- PASS: TestBind/out_of_range_index (0.00s)
+    --- PASS: TestBind/closed_statement (0.00s)
+=== RUN   TestExecBound
+--- PASS: TestExecBound (0.00s)
+=== RUN   TestQueryBound
+--- PASS: TestQueryBound (0.00s)
+=== RUN   TestClearBound
+--- PASS: TestClearBound (0.00s)
+=== RUN   TestExecBoundContextClockTimeout
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    bound_execution_test.go:195: Mock Clock - Advance(2s)
+    mock.go:196: Mock Clock - Until(2024-01-01 00:00:01 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestExecBoundContextClockTimeout (0.00s)
+=== RUN   TestQueryBoundContextClockTimeout
+    mock.go:196: Mock Clock - Now([]) call, matched 0 traps
+    bound_execution_test.go:239: Mock Clock - Advance(2s)
+    mock.go:196: Mock Clock - Until(2024-01-01 00:00:01 +0000 UTC, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestQueryBoundContextClockTimeout (0.00s)
+=== RUN   TestExecBoundContextClockSuccess
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestExecBoundContextClockSuccess (0.00s)
+=== RUN   TestQueryBoundContextClockSuccess
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestQueryBoundContextClockSuccess (0.00s)
+=== RUN   TestExecBoundContextClockBeforeDeadline
+    mock.go:196: Mock Clock - Until(2026-02-09 19:05:42.230297183 -0600 CST m=+3600.008914577, []) call, matched 0 traps
+    mock.go:484: Mock Clock - test cleanup; will no longer log clock events
+--- PASS: TestExecBoundContextClockBeforeDeadline (0.00s)
+=== RUN   TestGlobSettingsDefaults
+--- PASS: TestGlobSettingsDefaults (0.00s)
+=== RUN   TestGlobSettingsDSNParsing
+=== RUN   TestGlobSettingsDSNParsing/default_values
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_minimum
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_typical_value
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_maximum
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_below_minimum
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_above_maximum
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_non-integer
+=== RUN   TestGlobSettingsDSNParsing/max_files_per_glob_negative
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_minimum
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_typical_value
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_maximum
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_below_minimum
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_above_maximum
+=== RUN   TestGlobSettingsDSNParsing/file_glob_timeout_non-integer
+=== RUN   TestGlobSettingsDSNParsing/both_glob_settings
+=== RUN   TestGlobSettingsDSNParsing/glob_settings_with_other_options
+--- PASS: TestGlobSettingsDSNParsing (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/default_values (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_minimum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_typical_value (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_maximum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_below_minimum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_above_maximum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_non-integer (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/max_files_per_glob_negative (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_minimum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_typical_value (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_maximum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_below_minimum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_above_maximum (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/file_glob_timeout_non-integer (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/both_glob_settings (0.00s)
+    --- PASS: TestGlobSettingsDSNParsing/glob_settings_with_other_options (0.00s)
+=== RUN   TestGlobSettingsParseMaxFilesPerGlob
+--- PASS: TestGlobSettingsParseMaxFilesPerGlob (0.00s)
+=== RUN   TestGlobSettingsParseFileGlobTimeout
+--- PASS: TestGlobSettingsParseFileGlobTimeout (0.00s)
+=== RUN   TestGlobSettingsDefaultConstants
+--- PASS: TestGlobSettingsDefaultConstants (0.00s)
+=== RUN   TestParseDSNConfig
+=== RUN   TestParseDSNConfig/empty_DSN
+=== RUN   TestParseDSNConfig/memory_DSN
+=== RUN   TestParseDSNConfig/memory_DSN_with_options
+=== RUN   TestParseDSNConfig/query_only_DSN
+=== RUN   TestParseDSNConfig/simple_file_path
+=== RUN   TestParseDSNConfig/file_path_with_options
+=== RUN   TestParseDSNConfig/file_path_with_all_options
+=== RUN   TestParseDSNConfig/access_mode_automatic
+=== RUN   TestParseDSNConfig/access_mode_read_only
+=== RUN   TestParseDSNConfig/access_mode_read_write
+=== RUN   TestParseDSNConfig/invalid_access_mode
+=== RUN   TestParseDSNConfig/access_mode_uppercase_rejected
+=== RUN   TestParseDSNConfig/threads_minimum
+=== RUN   TestParseDSNConfig/threads_maximum
+=== RUN   TestParseDSNConfig/threads_below_minimum
+=== RUN   TestParseDSNConfig/threads_above_maximum
+=== RUN   TestParseDSNConfig/threads_non-integer
+=== RUN   TestParseDSNConfig/max_memory_bytes
+=== RUN   TestParseDSNConfig/max_memory_KB
+=== RUN   TestParseDSNConfig/max_memory_MB
+=== RUN   TestParseDSNConfig/max_memory_GB
+=== RUN   TestParseDSNConfig/max_memory_TB
+=== RUN   TestParseDSNConfig/max_memory_percentage
+=== RUN   TestParseDSNConfig/max_memory_lowercase
+=== RUN   TestParseDSNConfig/

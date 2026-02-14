@@ -64,20 +64,6 @@ func skipOnFormatError(t *testing.T, err error) {
 	}
 }
 
-// skipOnEmptyCatalog skips the test if the catalog is empty.
-// This is used when catalog deserialization from DuckDB files is not yet implemented.
-func skipOnEmptyCatalog(t *testing.T, cat *catalog.Catalog) {
-	t.Helper()
-	if cat == nil {
-		t.Skip("Catalog deserialization not yet implemented: catalog is nil")
-	}
-	// Check if catalog has any tables in main schema
-	schema, ok := cat.GetSchema("main")
-	if !ok || schema == nil || len(schema.ListTables()) == 0 {
-		t.Skip("Catalog deserialization not yet implemented: catalog is empty")
-	}
-}
-
 // runDuckDBCommand executes a DuckDB CLI command and returns the output.
 func runDuckDBCommand(t *testing.T, dbPath, sql string) string {
 	t.Helper()
@@ -158,9 +144,7 @@ func TestReadDuckDBCLIFile(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
 		require.NotNil(t, cat)
-		skipOnEmptyCatalog(t, cat)
 
 		// Verify table exists
 		table, ok := cat.GetTableInSchema("main", "test")
@@ -193,8 +177,6 @@ func TestReadDuckDBCLIFile(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
-		skipOnEmptyCatalog(t, cat)
 		table, ok := cat.GetTableInSchema("main", "nulltest")
 		require.True(t, ok)
 		require.NotNil(t, table)
@@ -220,8 +202,6 @@ func TestReadDuckDBCLIFile(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
-		skipOnEmptyCatalog(t, cat)
 
 		// Verify both tables exist
 		users, usersOk := cat.GetTableInSchema("main", "users")
@@ -256,8 +236,6 @@ func TestReadDuckDBCLIFile(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "numbers")
 		require.True(t, ok)
@@ -369,8 +347,6 @@ func TestRoundTripDataIntegrity(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
-		skipOnEmptyCatalog(t, cat)
 		testTable, testOk := cat.GetTableInSchema("main", "test")
 		require.True(t, testOk)
 		require.NotNil(t, testTable)
@@ -399,8 +375,6 @@ func TestRoundTripDataIntegrity(t *testing.T) {
 		cat, err := storage.LoadCatalog()
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
-		skipOnEmptyCatalog(t, cat)
-		skipOnEmptyCatalog(t, cat)
 		strTable, strOk := cat.GetTableInSchema("main", "strings")
 		require.True(t, strOk)
 		require.NotNil(t, strTable)
@@ -441,9 +415,7 @@ func TestRoundTripDataIntegrity(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
-		skipOnEmptyCatalog(t, cat)
 
 		// Verify structure
 		users, usersOk := cat.GetTableInSchema("main", "users")
@@ -495,7 +467,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "int_types")
 		require.True(t, ok)
@@ -523,7 +494,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "float_types")
 		require.True(t, ok)
@@ -551,7 +521,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "str_types")
 		require.True(t, ok)
@@ -581,7 +550,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "temporal_types")
 		require.True(t, ok)
@@ -608,7 +576,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "bool_types")
 		require.True(t, ok)
@@ -635,7 +602,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "decimal_types")
 		require.True(t, ok)
@@ -661,7 +627,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "uuid_types")
 		require.True(t, ok)
@@ -687,7 +652,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "list_types")
 		require.True(t, ok)
@@ -713,7 +677,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "struct_types")
 		require.True(t, ok)
@@ -739,7 +702,6 @@ func TestAllTypesRoundTrip(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "map_types")
 		require.True(t, ok)
@@ -777,7 +739,6 @@ func TestLargeFileHandling(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "large_table")
 		require.True(t, ok)
@@ -808,7 +769,6 @@ func TestLargeFileHandling(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "wide_table")
 		require.True(t, ok)
@@ -841,7 +801,6 @@ func TestInteropEdgeCases(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "empty_table")
 		require.True(t, ok)
@@ -867,7 +826,6 @@ here');
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "special_chars")
 		require.True(t, ok)
@@ -891,7 +849,6 @@ here');
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "unicode_table")
 		require.True(t, ok)
@@ -919,7 +876,6 @@ here');
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "constrained")
 		require.True(t, ok)
@@ -1010,7 +966,6 @@ func TestCompressionInterop(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "compressed_data")
 		require.True(t, ok)
@@ -1039,7 +994,6 @@ func TestCompressionInterop(t *testing.T) {
 		skipOnFormatError(t, err)
 		require.NoError(t, err)
 
-		skipOnEmptyCatalog(t, cat)
 
 		table, ok := cat.GetTableInSchema("main", "dict_data")
 		require.True(t, ok)
