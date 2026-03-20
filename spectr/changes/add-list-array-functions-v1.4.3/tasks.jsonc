@@ -78,7 +78,7 @@
       "id": "7",
       "section": "",
       "description": "Comprehensive integration tests — Write tests for all 11 function names (6 functions + 5 aliases) covering: happy path, NULL propagation, empty lists, edge cases (negative indices, zero size, single element), type handling (integer/string/mixed lists), and DuckDB CLI compatibility. Verify no regressions in existing list function tests.",
-      "status": "in_progress"
+      "status": "completed"
     }
   ]
 }
