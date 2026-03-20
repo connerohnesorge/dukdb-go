@@ -159,6 +159,7 @@ All eight proposals touch different parts of the codebase and can be implemented
 Week 1:     Quick wins + start long-running work
              ├── Utility functions (2-3 days)          ← quick win
              ├── List/array functions (2-3 days)        ← quick win
+             ├── Replacement scans (2-3 days)           ← quick win
              ├── JSON functions (3-4 days)              ← start early
              ├── SELECT * modifiers (4-5 days)          ← start early
              └── Columnar compression (8-10 days)       ← longest, start day 1
