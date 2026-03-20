@@ -101,7 +101,7 @@ func keywordToStmtType(keyword string) StmtType {
 		return STATEMENT_TYPE_INSERT
 	case "UPDATE":
 		return STATEMENT_TYPE_UPDATE
-	case "DELETE":
+	case "DELETE", "TRUNCATE":
 		return STATEMENT_TYPE_DELETE
 	case "CREATE":
 		return STATEMENT_TYPE_CREATE
