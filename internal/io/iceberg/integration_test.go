@@ -128,6 +128,9 @@ func updateMetadataLocations(t *testing.T, tablePath string) {
 
 // TestIntegrationSimpleTableRead tests reading a simple unpartitioned Iceberg table.
 func TestIntegrationSimpleTableRead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -162,6 +165,9 @@ func TestIntegrationSimpleTableRead(t *testing.T) {
 
 // TestIntegrationSimpleTableColumnProjection tests reading specific columns.
 func TestIntegrationSimpleTableColumnProjection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -241,6 +247,9 @@ func TestIntegrationTimeTravelTableSnapshots(t *testing.T) {
 
 // TestIntegrationTimeTravelBySnapshotID tests time travel to a specific snapshot.
 func TestIntegrationTimeTravelBySnapshotID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getTimeTravelTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -299,6 +308,9 @@ func TestIntegrationTimeTravelBySnapshotID(t *testing.T) {
 
 // TestIntegrationTimeTravelByTimestamp tests time travel using timestamps.
 func TestIntegrationTimeTravelByTimestamp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getTimeTravelTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -356,6 +368,9 @@ func TestIntegrationSnapshotNotFound(t *testing.T) {
 
 // TestIntegrationReadWithLimit tests reading with a row limit.
 func TestIntegrationReadWithLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -382,6 +397,9 @@ func TestIntegrationReadWithLimit(t *testing.T) {
 
 // TestIntegrationDataFiles tests reading data file metadata.
 func TestIntegrationDataFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -405,6 +423,9 @@ func TestIntegrationDataFiles(t *testing.T) {
 
 // TestIntegrationManifests tests reading manifest metadata.
 func TestIntegrationManifests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -427,6 +448,9 @@ func TestIntegrationManifests(t *testing.T) {
 
 // TestIntegrationRowCount tests the row count estimation.
 func TestIntegrationRowCount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 
@@ -444,6 +468,9 @@ func TestIntegrationRowCount(t *testing.T) {
 
 // TestIntegrationFileCount tests the file count.
 func TestIntegrationFileCount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that reads AVRO manifests in short mode")
+	}
 	tablePath := getSimpleTablePath(t)
 	updateMetadataLocations(t, tablePath)
 

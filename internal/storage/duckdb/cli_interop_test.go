@@ -8,6 +8,9 @@ import (
 )
 
 func TestDuckDBCLIInterop(t *testing.T) {
+	if _, err := exec.LookPath("duckdb"); err != nil {
+		t.Skip("duckdb CLI not available")
+	}
 	tmpDir := t.TempDir()
 	ourPath := filepath.Join(tmpDir, "ours.duckdb")
 
