@@ -1,206 +1,221 @@
-# JSON Nested Example
+# JSON Nested Structures Example
 
-This example demonstrates working with complex nested JSON structures in dukdb-go, including parsing nested objects, arrays, and multi-level hierarchies.
+This example demonstrates working with deeply nested JSON structures containing objects, arrays, and complex types.
 
 ## Overview
 
-Real-world JSON data often contains deeply nested structures with objects, arrays, and mixed data types. This example shows how to work with such complex data structures effectively.
+DuckDB can handle complex nested JSON with objects (structs) and arrays. Nested structures are automatically converted to appropriate DuckDB types.
 
-## Key Concepts
+## What You'll Learn
 
-### Nested JSON Structure
-Nested JSON can contain:
-- Objects within objects
-- Arrays of objects
-- Mixed data types
-- Multiple levels of nesting
-
-### Handling in SQL
-- Nested objects are returned as JSON strings
-- Arrays are returned as JSON strings
-- Can be parsed using application code
-
-## Examples Included
-
-1. **Reading Nested JSON Structure**: Understanding the flattened output
-2. **Parsing Nested JSON in Go**: Using Go's json package to parse structures
-3. **Creating Flattened Views**: Working with denormalized data
-4. **Aggregating Nested Data**: Calculating statistics from nested structures
-5. **Extracting Specific Values**: Navigating to specific nested fields
-6. **Working with Arrays**: Processing JSON arrays
-7. **Creating Summary Reports**: Generating reports from nested data
+1. **Nested Objects**: Working with STRUCT types from JSON
+2. **Arrays in JSON**: Handling ARRAY types
+3. **Type Conversion**: How DuckDB maps JSON to types
+4. **Accessing Nested Data**: Using JSON functions
+5. **Querying Complex Structures**: SQL operations on nested data
 
 ## Running the Example
 
 ```bash
-cd json-nested
+cd examples/json-nested
 go run main.go
 ```
 
-## Sample Data
+### Expected Output
+```
+=== JSON Nested Structures Example ===
 
-The example creates sample company data with multiple levels of nesting:
-- Company information
-- Employee arrays with nested address and project data
-- Department objects
-- Financial data with quarterly breakdowns
+1. Reading nested JSON structure:
+Columns: [id profile tags user]
+(Note: profile is a STRUCT containing age, city, active)
+(Note: tags is an ARRAY of strings)
 
-## Data Structure
+2. Accessing nested data through JSON functions:
+DuckDB automatically converts nested structures to proper types
 
+...
+
+5. JSON Structure Information:
+Nested JSON contains:
+  - id: INTEGER
+  - user: VARCHAR
+  - profile: STRUCT with fields (age: INT, city: VARCHAR, active: BOOL)
+  - tags: ARRAY of VARCHAR
+
+6. Counting records from nested JSON:
+Total records: 4
+
+7. Listing users from nested JSON:
+  - alice
+  - bob
+  - charlie
+  - diana
+
+✓ JSON nested structures example completed successfully!
+```
+
+## Type Mapping
+
+JSON to DuckDB Type Mapping:
+
+| JSON | DuckDB |
+|------|--------|
+| `"string"` | VARCHAR |
+| `123` | INTEGER |
+| `123.45` | DOUBLE |
+| `true/false` | BOOLEAN |
+| `[1, 2, 3]` | INTEGER[] |
+| `{"key": "value"}` | STRUCT |
+| `null` | NULL |
+
+## Nested Structure Examples
+
+### JSON Object (becomes STRUCT)
+```json
+{
+  "name": "Alice",
+  "profile": {
+    "age": 28,
+    "city": "New York"
+  }
+}
+```
+
+Maps to:
+```
+name: VARCHAR
+profile: STRUCT(age INTEGER, city VARCHAR)
+```
+
+### JSON Array
+```json
+{
+  "id": 1,
+  "tags": ["python", "golang", "rust"]
+}
+```
+
+Maps to:
+```
+id: INTEGER
+tags: VARCHAR[]
+```
+
+### Complex Nesting
 ```json
 {
   "company": "TechCorp",
   "employees": [
     {
-      "id": 101,
-      "name": "Alice Johnson",
-      "department": "Engineering",
-      "skills": ["Go", "Python", "Kubernetes"],
-      "address": {
-        "street": "123 Tech St",
-        "city": "San Francisco",
-        "state": "CA",
-        "zip": "94105"
-      },
-      "projects": [
-        {
-          "name": "Cloud Migration",
-          "status": "completed",
-          "budget": 500000,
-          "timeline": {
-            "start": "2023-01-01",
-            "end": "2023-06-30"
-          }
-        }
-      ]
+      "name": "Alice",
+      "skills": ["Go", "Python"],
+      "contact": {"email": "alice@tech.com", "phone": "555-0001"}
     }
-  ],
-  "departments": {
-    "Engineering": {
-      "head": "Alice Johnson",
-      "budget": 2000000,
-      "locations": ["San Francisco", "Seattle"]
-    }
-  },
-  "financials": {
-    "revenue": 10000000,
-    "expenses": 7500000,
-    "profit": 2500000,
-    "quarters": [
-      {"q": "Q1", "revenue": 2000000, "profit": 400000}
-    ]
+  ]
+}
+```
+
+## Working with Nested Data
+
+### Access STRUCT Fields (if supported)
+```sql
+SELECT profile.age, profile.city FROM read_json_auto('data.json')
+```
+
+### Access ARRAY Elements
+```sql
+SELECT tags[1] FROM read_json_auto('data.json')
+```
+
+### Filter by Nested Fields
+```sql
+SELECT name FROM read_json_auto('data.json') WHERE profile.age > 25
+```
+
+## Complex Queries
+
+### Flatten and Unnest Arrays
+```sql
+SELECT name, unnest(tags) as tag
+FROM read_json_auto('data.json')
+```
+
+### Join with Nested Data
+```sql
+SELECT e.name, d.name as department
+FROM employees e
+CROSS JOIN unnest(e.departments) as d
+```
+
+## Real-World Examples
+
+### API Response with Nested Data
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {"id": 1, "name": "Alice"},
+    "posts": [{"id": 101, "title": "Post 1"}]
   }
 }
 ```
 
-## SQL Output
-
-When queried, nested structures are flattened:
-- Columns: `company`, `employees`, `departments`, `financials`
-- Nested objects become JSON strings
-- Arrays become JSON strings
-
-## Parsing Examples
-
-### Parsing Employee Data
-```go
-var empData []map[string]interface{}
-json.Unmarshal([]byte(employees), &empData)
-for _, emp := range empData {
-    fmt.Printf("%s works in %s\n", emp["name"], emp["department"])
+### Log Entry with Nested Metadata
+```json
+{
+  "timestamp": "2024-01-01T10:00:00Z",
+  "level": "error",
+  "message": "Connection failed",
+  "metadata": {
+    "host": "server1",
+    "port": 5432,
+    "retry_count": 3
+  }
 }
 ```
 
-### Extracting Nested Values
-```go
-var finData map[string]interface{}
-json.Unmarshal([]byte(financials), &finData)
-revenue := finData["revenue"].(float64)
-```
-
-### Working with Arrays
-```go
-if quarters, ok := finData["quarters"].([]interface{}); ok {
-    for _, q := range quarters {
-        quarter := q.(map[string]interface{})
-        fmt.Printf("%s: $%.0f\n", quarter["q"], quarter["revenue"])
-    }
+### E-Commerce Product with Variations
+```json
+{
+  "id": "SKU-123",
+  "name": "T-Shirt",
+  "variants": [
+    {"color": "red", "size": "M", "stock": 10},
+    {"color": "blue", "size": "L", "stock": 5}
+  ]
 }
 ```
 
-## Best Practices
+## Performance Considerations
 
-1. **Understand the Structure**: Know your JSON schema before querying
-2. **Use Type Assertions**: Safely extract values with type checking
-3. **Handle Errors**: Always check for JSON parsing errors
-4. **Consider Performance**: Large nested structures may be slow to parse
-5. **Create Helper Functions**: Reuse parsing logic across your application
+- **Flattening**: Consider flattening deeply nested structures for better performance
+- **Indexing**: Regular columns perform better than nested fields
+- **Memory**: Nested structures require more memory during processing
+- **Unnesting**: Use carefully on large arrays (can multiply rows)
 
-## Common Patterns
+## Important Notes
 
-### Counting Array Elements
-```go
-var items []interface{}
-json.Unmarshal([]byte(jsonArray), &items)
-count := len(items)
-```
+- Nested data types depend on JSON structure
+- Null values in JSON become SQL NULL
+- Empty arrays/objects are preserved
+- Deep nesting (3+ levels) may require special handling
+- Some backends may have limitations on nesting depth
 
-### Accessing Deeply Nested Values
-```go
-if level1, ok := data["level1"].(map[string]interface{}); ok {
-    if level2, ok := level1["level2"].(map[string]interface{}); ok {
-        value := level2["value"]
-    }
-}
-```
+## Next Steps
 
-### Filtering Arrays
-```go
-var filtered []map[string]interface{}
-for _, item := range items {
-    if item["status"] == "active" {
-        filtered = append(filtered, item)
-    }
-}
-```
+- See [json-querying](../json-querying) for query examples
+- See [json-transformation](../json-transformation) for data transformation
+- See [json-schema](../json-schema) for schema inference
 
-## Limitations
+## Related Functions
 
-- No direct SQL access to nested fields
-- All parsing must be done in application code
-- Type assertions required for type safety
-- Memory usage increases with nested depth
+- `read_json()` - Read JSON arrays
+- `read_ndjson()` - Read NDJSON
+- `json_extract()` - Extract nested values
+- `json_keys()` - Get object keys
+- `json_typeof()` - Get value type
+- `unnest()` - Flatten arrays
 
-## Performance Tips
+## Documentation
 
-1. **Parse Only What You Need**: Don't parse entire structures if you only need parts
-2. **Use Structs**: Define Go structs for better performance and type safety
-3. **Stream Large Files**: For very large files, consider streaming parsers
-4. **Cache Parsed Data**: Cache frequently accessed parsed data
-
-## Advanced Usage
-
-For production applications:
-1. Define strict Go structs matching your JSON schema
-2. Use json tags for field mapping
-3. Implement custom unmarshaling for complex types
-4. Consider using JSONPath libraries for complex queries
-5. Validate JSON against schemas before parsing
-
-## Output
-
-The program will output:
-- Column information showing flattened structure
-- Parsed employee details
-- Financial summaries
-- Department heads
-- Employee skills
-- Aggregate statistics
-- Summary report
-
-## Notes
-
-- This example demonstrates parsing in Go; other languages have similar JSON libraries
-- For very complex queries, consider using specialized JSON databases
-- The example shows manual parsing; in production, use proper error handling
-- Consider the trade-off between flexibility (map[string]interface{}) and type safety (structs)
+https://duckdb.org/docs/data/json/overview

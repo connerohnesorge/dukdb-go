@@ -5,283 +5,188 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 
 	_ "github.com/dukdb/dukdb-go"
+	// Import engine to register backend
 	_ "github.com/dukdb/dukdb-go/internal/engine"
 )
 
 func main() {
-	// Create a sample NDJSON file
-	ndjsonData := `{"id": 1, "name": "Alice", "age": 30, "city": "New York", "timestamp": "2024-01-15T10:00:00Z"}
-{"id": 2, "name": "Bob", "age": 25, "city": "San Francisco", "timestamp": "2024-01-15T11:00:00Z"}
-{"id": 3, "name": "Charlie", "age": 35, "city": "Chicago", "timestamp": "2024-01-15T12:00:00Z"}
-{"id": 4, "name": "Diana", "age": 28, "city": "Boston", "timestamp": "2024-01-15T13:00:00Z"}
-{"id": 5, "name": "Eve", "age": 32, "city": "Seattle", "timestamp": "2024-01-15T14:00:00Z"}`
-
-	// Write sample data to file
-	sampleFile := "events.ndjson"
-	err := os.WriteFile(sampleFile, []byte(ndjsonData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write sample NDJSON file: %v", err)
-	}
-	defer os.Remove(sampleFile)
-
-	// Connect to in-memory database
+	// Create a new database connection
 	db, err := sql.Open("dukdb", "")
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
 
-	// Example 1: Basic NDJSON reading using read_ndjson()
-	fmt.Println("=== Example 1: Basic NDJSON Reading (SQL) ===")
-	query := fmt.Sprintf("SELECT * FROM read_ndjson('%s')", sampleFile)
-	rows, err := db.Query(query)
+	// Create sample NDJSON (newline-delimited JSON) data
+	// Each line is a separate JSON object
+	sampleNDJSON := `{"id": 1, "name": "Alice", "age": 25, "city": "New York", "salary": 75000}
+{"id": 2, "name": "Bob", "age": 30, "city": "San Francisco", "salary": 95000}
+{"id": 3, "name": "Charlie", "age": 28, "city": "Chicago", "salary": 85000}
+{"id": 4, "name": "Diana", "age": 35, "city": "Boston", "salary": 105000}
+{"id": 5, "name": "Eve", "age": 22, "city": "Seattle", "salary": 70000}`
+
+	// Write sample NDJSON to file
+	ndjsonPath := "sample_data.ndjson"
+	err = os.WriteFile(ndjsonPath, []byte(sampleNDJSON), 0644)
 	if err != nil {
-		log.Fatalf("Failed to read NDJSON: %v", err)
+		log.Fatal("Failed to write NDJSON file:", err)
+	}
+	defer os.Remove(ndjsonPath) // Clean up after example
+
+	fmt.Println("=== NDJSON Reading Example ===")
+	fmt.Println("\nNDJSON Format (Newline-Delimited JSON):")
+	fmt.Println("Each line contains a complete JSON object")
+	fmt.Println(strings.Repeat("-", 50))
+
+	fmt.Println("\n1. Reading NDJSON using SQL:")
+
+	// Read NDJSON using SQL query
+	rows, err := db.Query("SELECT * FROM read_ndjson('sample_data.ndjson')")
+	if err != nil {
+		log.Fatal("Failed to read NDJSON:", err)
 	}
 	defer rows.Close()
 
 	// Print column information
 	columns, err := rows.Columns()
 	if err != nil {
-		log.Fatalf("Failed to get columns: %v", err)
+		log.Fatal("Failed to get columns:", err)
 	}
-	fmt.Printf("Columns: %v\n\n", columns)
+	fmt.Printf("Columns: %v\n", columns)
 
-	// Print data
-	fmt.Println("Data:")
+	// Read and display data
+	fmt.Println("\nAll Records:")
 	for rows.Next() {
-		var age int
-		var city string
 		var id int
 		var name string
-		var timestamp string
+		var age int
+		var city string
+		var salary int
 
-		err := rows.Scan(&age, &city, &id, &name, &timestamp)
+		// Note: DuckDB orders columns alphabetically
+		err := rows.Scan(&age, &city, &id, &name, &salary)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf(
-			"ID: %d, Name: %s, Age: %d, City: %s, Time: %s\n",
-			id,
-			name,
-			age,
-			city,
-			timestamp,
-		)
+
+		fmt.Printf("ID: %d | Name: %-10s | Age: %d | City: %-15s | Salary: $%d\n",
+			id, name, age, city, salary)
 	}
+
 	if err = rows.Err(); err != nil {
-		log.Fatalf("Error reading rows: %v", err)
+		log.Fatal("Error reading rows:", err)
 	}
 
-	// Example 2: Reading NDJSON with format option using read_json()
-	fmt.Println("\n=== Example 2: Using read_json() with NDJSON format ===")
-	query = fmt.Sprintf("SELECT * FROM read_json('%s', format = 'newline_delimited')", sampleFile)
-	rows, err = db.Query(query)
+	fmt.Println("\n2. Reading NDJSON with Filtering:")
+
+	// Read NDJSON with filtering
+	rows, err = db.Query("SELECT * FROM read_ndjson('sample_data.ndjson') WHERE age > 28")
 	if err != nil {
-		log.Fatalf("Failed to read NDJSON: %v", err)
+		log.Fatal("Failed to query NDJSON:", err)
 	}
 	defer rows.Close()
 
-	fmt.Println("Data (using read_json with format option):")
+	fmt.Println("Employees older than 28:")
 	for rows.Next() {
-		var age int
-		var city string
 		var id int
 		var name string
-		var timestamp string
-
-		err := rows.Scan(&age, &city, &id, &name, &timestamp)
-		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
-		}
-		fmt.Printf("ID: %d, Name: %s, Age: %d, City: %s\n", id, name, age, city)
-	}
-
-	// Example 3: Querying NDJSON data with time-based filters
-	fmt.Println("\n=== Example 3: Time-based Queries ===")
-	query = fmt.Sprintf(
-		"SELECT name, city, timestamp FROM read_ndjson('%s') WHERE timestamp \u003e '2024-01-15T11:30:00Z' ORDER BY timestamp",
-		sampleFile,
-	)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to query NDJSON: %v", err)
-	}
-	defer rows.Close()
-
-	fmt.Println("Users after 11:30 AM:")
-	for rows.Next() {
-		var name string
+		var age int
 		var city string
-		var timestamp string
+		var salary int
 
-		err := rows.Scan(&name, &city, &timestamp)
+		// Note: DuckDB orders columns alphabetically
+		err := rows.Scan(&age, &city, &id, &name, &salary)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("  %s from %s at %s\n", name, city, timestamp)
+
+		fmt.Printf("- %s, age %d, earning $%d\n", name, age, salary)
 	}
 
-	// Example 4: Aggregating NDJSON data
-	fmt.Println("\n=== Example 4: Aggregating NDJSON Data ===")
-	query = fmt.Sprintf(
-		"SELECT city, COUNT(*), AVG(age) FROM read_ndjson('%s') GROUP BY city ORDER BY COUNT(*) DESC",
-		sampleFile,
-	)
-	rows, err = db.Query(query)
+	if err = rows.Err(); err != nil {
+		log.Fatal("Error reading rows:", err)
+	}
+
+	fmt.Println("\n3. NDJSON Statistics:")
+
+	// Get statistics about the NDJSON data
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM read_ndjson('sample_data.ndjson')").Scan(&count)
 	if err != nil {
-		log.Fatalf("Failed to aggregate NDJSON: %v", err)
+		log.Fatal("Failed to count rows:", err)
+	}
+	fmt.Printf("Total records: %d\n", count)
+
+	// Calculate average salary
+	var avgSalary float64
+	err = db.QueryRow("SELECT AVG(salary) FROM read_ndjson('sample_data.ndjson')").Scan(&avgSalary)
+	if err != nil {
+		log.Fatal("Failed to calculate average salary:", err)
+	}
+	fmt.Printf("Average salary: $%.2f\n", avgSalary)
+
+	// Find highest paid employee
+	var topName string
+	var topSalary int
+	err = db.QueryRow("SELECT name, salary FROM read_ndjson('sample_data.ndjson') ORDER BY salary DESC LIMIT 1").Scan(&topName, &topSalary)
+	if err != nil {
+		log.Fatal("Failed to get top salary:", err)
+	}
+	fmt.Printf("Highest paid: %s ($%d)\n", topName, topSalary)
+
+	// Group by city
+	fmt.Println("\nSalary information by city:")
+	rows, err = db.Query("SELECT city, COUNT(*) as emp_count, AVG(salary) as avg_sal FROM read_ndjson('sample_data.ndjson') GROUP BY city ORDER BY AVG(salary) DESC")
+	if err != nil {
+		log.Fatal("Failed to query city stats:", err)
 	}
 	defer rows.Close()
 
-	fmt.Println("City statistics:")
 	for rows.Next() {
 		var city string
 		var count int
-		var avgAge float64
+		var avgSal float64
 
-		err := rows.Scan(&city, &count, &avgAge)
+		// Column order: city, emp_count, avg_sal
+		err := rows.Scan(&city, &count, &avgSal)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("  %s: %d users, average age %.1f\n", city, count, avgAge)
+
+		fmt.Printf("  %s: %d employees, avg salary: $%.2f\n", city, count, avgSal)
 	}
 
-	// Example 5: Querying NDJSON with complex conditions
-	fmt.Println("\n=== Example 5: Complex Queries on NDJSON ===")
-	query = fmt.Sprintf(`SELECT name, city,
-		CASE
-			WHEN age < 30 THEN 'Young'
-			WHEN age < 35 THEN 'Middle'
-			ELSE 'Senior'
-		END as age_group
-	FROM read_ndjson('%s')
-	ORDER BY age DESC`, sampleFile)
-	rows, err = db.Query(query)
+	fmt.Println("\n4. NDJSON Advanced Query:")
+
+	// More complex query using a calculated average
+	fmt.Println("Employees earning more than $85000:")
+	rows, err = db.Query(`
+		SELECT age, name, salary 
+		FROM read_ndjson('sample_data.ndjson') 
+		WHERE salary > 85000
+		ORDER BY salary DESC
+	`)
 	if err != nil {
-		log.Fatalf("Failed to query NDJSON: %v", err)
+		log.Fatal("Failed to execute advanced query:", err)
 	}
 	defer rows.Close()
 
-	fmt.Println("Users by age group:")
 	for rows.Next() {
+		var age int
 		var name string
-		var city string
-		var ageGroup string
+		var salary int
 
-		err := rows.Scan(&name, &city, &ageGroup)
+		// Column order matches SELECT (age, name, salary)
+		err := rows.Scan(&age, &name, &salary)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("  %s from %s: %s\n", name, city, ageGroup)
+
+		fmt.Printf("- %s (%d years old): $%d\n", name, age, salary)
 	}
 
-	// Example 6: Working with large NDJSON files (simulated)
-	fmt.Println("\n=== Example 6: Processing Large NDJSON Files ===")
-
-	// Create a larger NDJSON file
-	largeFile := "large_events.ndjson"
-	file, err := os.Create(largeFile)
-	if err != nil {
-		log.Fatalf("Failed to create large file: %v", err)
-	}
-
-	// Write 1000 records
-	for i := 0; i < 1000; i++ {
-		record := fmt.Sprintf(
-			`{"id": %d, "event_type": "click", "user_id": %d, "timestamp": "2024-01-15T%02d:%02d:%02dZ"}`,
-			i+1,
-			(i%100)+1,
-			(i/60)%24,
-			i%60,
-			i%60,
-		)
-		file.WriteString(record + "\n")
-	}
-	file.Close()
-	defer os.Remove(largeFile)
-
-	// Query with LIMIT
-	query = fmt.Sprintf("SELECT COUNT(*) as total FROM read_ndjson('%s')", largeFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to count large NDJSON: %v", err)
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var total int
-		err := rows.Scan(&total)
-		if err != nil {
-			log.Fatalf("Failed to scan count: %v", err)
-		}
-		fmt.Printf("Total events in large file: %d\n", total)
-	}
-
-	// Example 7: Error handling for malformed NDJSON
-	fmt.Println("\n=== Example 7: Error Handling ===")
-
-	// Create a malformed NDJSON file
-	malformedFile := "malformed.ndjson"
-	malformedData := `{"id": 1, "name": "Alice"}
-{"id": 2, "name": "Bob"}
-This is not valid JSON
-{"id": 3, "name": "Charlie"}`
-
-	err = os.WriteFile(malformedFile, []byte(malformedData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write malformed file: %v", err)
-	}
-	defer os.Remove(malformedFile)
-
-	// Try to read with ignore_errors option
-	query = fmt.Sprintf("SELECT * FROM read_ndjson('%s', ignore_errors = true)", malformedFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		fmt.Printf("Error reading malformed NDJSON: %v\n", err)
-	} else {
-		defer rows.Close()
-		count := 0
-		for rows.Next() {
-			count++
-			var id int
-			var name string
-			err := rows.Scan(&id, &name)
-			if err != nil {
-				continue
-			}
-		}
-		fmt.Printf("Successfully read %d valid records from malformed file\n", count)
-	}
-
-	// Example 8: Working with compressed NDJSON
-	fmt.Println("\n=== Example 8: Working with File Paths ===")
-	absPath, err := filepath.Abs(sampleFile)
-	if err != nil {
-		log.Fatalf("Failed to get absolute path: %v", err)
-	}
-
-	query = fmt.Sprintf(
-		"SELECT COUNT(DISTINCT city) as unique_cities FROM read_ndjson('%s')",
-		absPath,
-	)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read with absolute path: %v", err)
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var uniqueCities int
-		err := rows.Scan(&uniqueCities)
-		if err != nil {
-			log.Fatalf("Failed to scan count: %v", err)
-		}
-		fmt.Printf("Unique cities: %d\n", uniqueCities)
-	}
-
-	fmt.Println("\nAll examples completed successfully!")
+	fmt.Println("\n✓ NDJSON reading example completed successfully!")
 }

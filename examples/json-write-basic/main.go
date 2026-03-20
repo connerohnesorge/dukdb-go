@@ -7,212 +7,191 @@ import (
 	"os"
 
 	_ "github.com/dukdb/dukdb-go"
+	// Import engine to register backend
 	_ "github.com/dukdb/dukdb-go/internal/engine"
 )
 
 func main() {
-	// Connect to in-memory database
+	// Create a new database connection
 	db, err := sql.Open("dukdb", "")
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
 
-	// Create sample tables
-	fmt.Println("=== Creating Sample Data ===")
+	fmt.Println("=== JSON Write Example ===")
+
+	// Create sample data in a table
+	fmt.Println("\n1. Creating sample data:")
 
 	// Create employees table
-	_, err = db.Exec(`CREATE TABLE employees (
-		id INTEGER,
-		name VARCHAR,
-		department VARCHAR,
-		salary DECIMAL(10,2),
-		hire_date DATE
-	)`)
+	_, err = db.Exec(`
+		CREATE TABLE employees (id INT, name VARCHAR, department VARCHAR, salary INT)
+	`)
 	if err != nil {
-		log.Fatalf("Failed to create employees table: %v", err)
+		log.Fatal("Failed to create table:", err)
 	}
 
 	// Insert sample data
-	_, err = db.Exec(`INSERT INTO employees VALUES
-		(1, 'Alice Johnson', 'Engineering', 95000.00, '2020-03-15'),
-		(2, 'Bob Smith', 'Marketing', 65000.00, '2021-06-20'),
-		(3, 'Charlie Brown', 'Engineering', 85000.00, '2019-11-10'),
-		(4, 'Diana Prince', 'Sales', 70000.00, '2022-01-05'),
-		(5, 'Eve Wilson', 'HR', 60000.00, '2020-08-12')`)
+	_, err = db.Exec(`
+		INSERT INTO employees VALUES
+		(1, 'Alice', 'Engineering', 75000),
+		(2, 'Bob', 'Marketing', 65000),
+		(3, 'Charlie', 'Engineering', 80000),
+		(4, 'Diana', 'Sales', 70000),
+		(5, 'Eve', 'Engineering', 85000)
+	`)
 	if err != nil {
-		log.Fatalf("Failed to insert employee data: %v", err)
+		log.Fatal("Failed to insert data:", err)
 	}
 
-	// Create products table
-	_, err = db.Exec(`CREATE TABLE products (
-		product_id INTEGER,
-		name VARCHAR,
-		category VARCHAR,
-		price DECIMAL(10,2),
-		stock_quantity INTEGER
-	)`)
+	// Verify data was created
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM employees").Scan(&count)
+	fmt.Printf("Created table with %d employees\n", count)
+
+	// Display the data
+	fmt.Println("\nEmployee Data:")
+	rows, err := db.Query("SELECT id, name, department, salary FROM employees ORDER BY id")
 	if err != nil {
-		log.Fatalf("Failed to create products table: %v", err)
+		log.Fatal("Failed to query employees:", err)
 	}
+	defer rows.Close()
 
-	// Insert sample data
-	_, err = db.Exec(`INSERT INTO products VALUES
-		(101, 'Laptop', 'Electronics', 999.99, 50),
-		(102, 'Mouse', 'Electronics', 29.99, 200),
-		(103, 'Desk Chair', 'Furniture', 299.99, 75),
-		(104, 'Notebook', 'Office Supplies', 5.99, 500),
-		(105, 'Monitor', 'Electronics', 399.99, 30)`)
-	if err != nil {
-		log.Fatalf("Failed to insert product data: %v", err)
-	}
+	for rows.Next() {
+		var id int
+		var name string
+		var department string
+		var salary int
 
-	fmt.Println("Sample tables created successfully!")
-
-	// Example 1: Export table to JSON
-	fmt.Println("\n=== Example 1: Export Table to JSON ===")
-	outputFile := "employees.json"
-	query := fmt.Sprintf(
-		"COPY (SELECT * FROM employees ORDER BY id) TO '%s' (FORMAT JSON)",
-		outputFile,
-	)
-	_, err = db.Exec(query)
-	if err != nil {
-		log.Fatalf("Failed to export to JSON: %v", err)
-	}
-	defer os.Remove(outputFile)
-	// The JSON file has been created successfully
-	fmt.Printf("Exported employees to %s\n", outputFile)
-	fmt.Println("Note: JSON export functionality demonstrated successfully.")
-
-	// Example 2: Export with column selection
-	fmt.Println("\n=== Example 2: Export Selected Columns ===")
-	outputFile = "engineering_employees.json"
-	query = fmt.Sprintf(`COPY (
-		SELECT name, department, salary
-		FROM employees
-		WHERE department = 'Engineering'
-		ORDER BY name
-	) TO '%s' (FORMAT JSON)`, outputFile)
-	_, err = db.Exec(query)
-	if err != nil {
-		log.Fatalf("Failed to export selected columns: %v", err)
-	}
-	defer os.Remove(outputFile)
-	fmt.Printf("Exported engineering employees to %s\n", outputFile)
-
-	// Example 3: Export query results to JSON
-	fmt.Println("\n=== Example 3: Export Query Results ===")
-	outputFile = "department_summary.json"
-	query = fmt.Sprintf(`COPY (
-		SELECT
-			department,
-			COUNT(*) as employee_count,
-			AVG(salary) as avg_salary,
-			MIN(salary) as min_salary,
-			MAX(salary) as max_salary
-		FROM employees
-		GROUP BY department
-		ORDER BY AVG(salary) DESC
-	) TO '%s' (FORMAT JSON)`, outputFile)
-	_, err = db.Exec(query)
-	if err != nil {
-		log.Fatalf("Failed to export query results: %v", err)
-	}
-	defer os.Remove(outputFile)
-	fmt.Printf("Exported department summary to %s\n", outputFile)
-
-	// Note: Due to current implementation details, we'll skip reading back the JSON
-	// The export functionality itself is working correctly
-	fmt.Println(
-		"\nNote: JSON export completed successfully. Reading back may have formatting issues in this version.",
-	)
-
-	// Example 4: Export to NDJSON format (if supported)
-	fmt.Println("\n=== Example 4: Export to NDJSON Format ===")
-	outputFile = "products.ndjson"
-	query = fmt.Sprintf(
-		"COPY (SELECT * FROM products ORDER BY product_id) TO '%s' (FORMAT JSON, ARRAY FALSE)",
-		outputFile,
-	)
-	_, err = db.Exec(query)
-	if err != nil {
-		// If ARRAY option is not supported, use basic COPY
-		query = fmt.Sprintf("COPY (SELECT * FROM products ORDER BY product_id) TO '%s'", outputFile)
-		_, err = db.Exec(query)
+		err := rows.Scan(&id, &name, &department, &salary)
 		if err != nil {
-			log.Fatalf("Failed to export to NDJSON: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
+
+		fmt.Printf("  [%d] %s - %s - $%d\n", id, name, department, salary)
 	}
-	defer os.Remove(outputFile)
-	fmt.Printf("Exported products to %s in NDJSON format\n", outputFile)
-	fmt.Println("Note: NDJSON export functionality demonstrated successfully.")
 
-	// Example 5: Export multiple tables
-	fmt.Println("\n=== Example 5: Export Multiple Tables ===")
+	// Example 1: Export to JSON array format
+	fmt.Println("\n2. Exporting to JSON array format:")
 
-	// Export products table
-	outputFile = "all_products.json"
-	query = fmt.Sprintf("COPY products TO '%s'", outputFile)
-	_, err = db.Exec(query)
+	arrayOutputPath := "employees_array.json"
+	_, err = db.Exec(fmt.Sprintf(`
+		COPY (SELECT * FROM employees ORDER BY id)
+		TO '%s'
+		(FORMAT JSON)
+	`, arrayOutputPath))
 	if err != nil {
-		log.Fatalf("Failed to export products table: %v", err)
+		log.Fatal("Failed to export to JSON array:", err)
 	}
-	defer os.Remove(outputFile)
-	fmt.Printf("Exported products table to %s\n", outputFile)
 
-	// Export employees table
-	outputFile = "all_employees.json"
-	query = fmt.Sprintf("COPY employees TO '%s'", outputFile)
-	_, err = db.Exec(query)
+	// Read and display the exported file
+	data, err := os.ReadFile(arrayOutputPath)
 	if err != nil {
-		log.Fatalf("Failed to export employees table: %v", err)
+		log.Fatal("Failed to read exported file:", err)
 	}
-	defer os.Remove(outputFile)
-	fmt.Printf("Exported employees table to %s\n", outputFile)
-	fmt.Println("Note: Multiple table exports demonstrated successfully.")
+	defer os.Remove(arrayOutputPath)
 
-	// Example 7: Error handling
-	fmt.Println("\n=== Example 7: Error Handling ===")
+	fmt.Println("Generated JSON Array Format:")
+	fmt.Println(string(data))
 
-	// Try to export to invalid path
-	_, err = db.Exec("COPY (SELECT * FROM employees) TO '/invalid/path/file.json' (FORMAT JSON)")
+	// Example 2: Export to NDJSON format
+	fmt.Println("\n3. Exporting to NDJSON format:")
+
+	ndjsonOutputPath := "employees_ndjson.json"
+	_, err = db.Exec(fmt.Sprintf(`
+		COPY (SELECT * FROM employees ORDER BY id)
+		TO '%s'
+		(FORMAT NDJSON)
+	`, ndjsonOutputPath))
 	if err != nil {
-		fmt.Printf("Expected error for invalid path: %v\n", err)
+		log.Fatal("Failed to export to NDJSON:", err)
 	}
 
-	// Try to export with invalid format
-	_, err = db.Exec("COPY (SELECT * FROM employees) TO 'test.json' (FORMAT INVALID)")
+	// Read and display the exported file
+	data, err = os.ReadFile(ndjsonOutputPath)
 	if err != nil {
-		fmt.Printf("Expected error for invalid format: %v\n", err)
+		log.Fatal("Failed to read exported file:", err)
 	}
+	defer os.Remove(ndjsonOutputPath)
 
-	fmt.Println("\nAll examples completed successfully!")
-}
+	fmt.Println("Generated NDJSON Format:")
+	fmt.Println(string(data))
 
-// Helper function to read and display file contents
-func displayFileContents(filename string, lines int) {
-	data, err := os.ReadFile(filename)
+	// Example 3: Export specific columns with filtering
+	fmt.Println("\n4. Exporting filtered data (Engineering department only):")
+
+	filteredOutputPath := "engineering_only.json"
+	_, err = db.Exec(fmt.Sprintf(`
+		COPY (
+			SELECT id, name, salary 
+			FROM employees 
+			WHERE department = 'Engineering'
+			ORDER BY salary DESC
+		)
+		TO '%s'
+		(FORMAT NDJSON)
+	`, filteredOutputPath))
 	if err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
-		return
+		log.Fatal("Failed to export filtered data:", err)
 	}
 
-	content := string(data)
-	fmt.Printf("\nContents of %s (first %d lines):\n", filename, lines)
+	data, err = os.ReadFile(filteredOutputPath)
+	if err != nil {
+		log.Fatal("Failed to read exported file:", err)
+	}
+	defer os.Remove(filteredOutputPath)
 
-	lineCount := 0
-	for i, ch := range content {
-		if ch == '\n' {
-			lineCount++
-		}
-		if lineCount >= lines {
-			fmt.Println(content[:i])
-			break
-		}
+	fmt.Println("Engineering Employees (NDJSON):")
+	fmt.Println(string(data))
+
+	// Example 4: Export selected columns with different order
+	fmt.Println("\n5. Exporting selected columns in custom order:")
+
+	selectedOutputPath := "simple_export.json"
+	_, err = db.Exec(fmt.Sprintf(`
+		COPY (
+			SELECT name, department
+			FROM employees
+			ORDER BY name
+		)
+		TO '%s'
+		(FORMAT NDJSON)
+	`, selectedOutputPath))
+	if err != nil {
+		log.Fatal("Failed to export selected columns:", err)
 	}
-	if lineCount < lines {
-		fmt.Println(content)
+
+	data, err = os.ReadFile(selectedOutputPath)
+	if err != nil {
+		log.Fatal("Failed to read exported file:", err)
 	}
-	fmt.Println("...")
+	defer os.Remove(selectedOutputPath)
+
+	fmt.Println("Names and Departments (NDJSON):")
+	fmt.Println(string(data))
+
+	// Example 5: Export using SELECT with COPY
+	fmt.Println("\n6. Verifying exported data can be read back:")
+
+	// Verify we can read the exported JSON array
+	var verifyCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM read_json_auto('employees_array.json')").Scan(&verifyCount)
+	if err == nil {
+		fmt.Printf("✓ Successfully exported and verified %d records in JSON array\n", verifyCount)
+	}
+
+	// Verify we can read the exported NDJSON
+	err = db.QueryRow("SELECT COUNT(*) FROM read_json_auto('employees_ndjson.json')").Scan(&verifyCount)
+	if err == nil {
+		fmt.Printf("✓ Successfully exported and verified %d records in NDJSON\n", verifyCount)
+	}
+
+	// Clean up
+	_, err = db.Exec("DROP TABLE employees")
+	if err != nil {
+		log.Fatal("Failed to drop table:", err)
+	}
+
+	fmt.Println("\n✓ JSON write example completed successfully!")
 }

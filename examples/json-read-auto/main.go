@@ -5,361 +5,157 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	_ "github.com/dukdb/dukdb-go"
+	// Import engine to register backend
 	_ "github.com/dukdb/dukdb-go/internal/engine"
 )
 
 func main() {
-	// Create sample JSON files with different formats
-
-	// Sample 1: JSON Array format
-	jsonArrayData := `[
-		{"product_id": 1, "name": "Laptop", "price": 999.99, "category": "Electronics"},
-		{"product_id": 2, "name": "Mouse", "price": 29.99, "category": "Electronics"},
-		{"product_id": 3, "name": "Desk", "price": 299.99, "category": "Furniture"}
-	]`
-
-	// Sample 2: NDJSON format
-	ndjsonData := `{"product_id": 1, "name": "Laptop", "price": 999.99, "category": "Electronics"}
-{"product_id": 2, "name": "Mouse", "price": 29.99, "category": "Electronics"}
-{"product_id": 3, "name": "Desk", "price": 299.99, "category": "Furniture"}`
-
-	// Write sample data to files
-	arrayFile := "products_array.json"
-	ndjsonFile := "products_ndjson.json"
-
-	err := os.WriteFile(arrayFile, []byte(jsonArrayData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write JSON array file: %v", err)
-	}
-	defer os.Remove(arrayFile)
-
-	err = os.WriteFile(ndjsonFile, []byte(ndjsonData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write NDJSON file: %v", err)
-	}
-	defer os.Remove(ndjsonFile)
-
-	// Connect to in-memory database
+	// Create a new database connection
 	db, err := sql.Open("dukdb", "")
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
 
-	// Example 1: Using read_json_auto() on JSON Array
-	fmt.Println("=== Example 1: read_json_auto() on JSON Array ===")
-	query := fmt.Sprintf("SELECT * FROM read_json_auto('%s')", arrayFile)
-	rows, err := db.Query(query)
+	fmt.Println("=== JSON Auto Format Detection Example ===")
+
+	// Example 1: JSON Array format
+	fmt.Println("\n1. JSON Array Format (Automatic Detection):")
+
+	jsonArrayData := `[
+  {"id": 1, "name": "Alice", "age": 25, "city": "New York"},
+  {"id": 2, "name": "Bob", "age": 30, "city": "San Francisco"},
+  {"id": 3, "name": "Charlie", "age": 28, "city": "Chicago"}
+]`
+
+	jsonArrayPath := "data_array.json"
+	err = os.WriteFile(jsonArrayPath, []byte(jsonArrayData), 0644)
 	if err != nil {
-		log.Fatalf("Failed to read JSON array with auto-detection: %v", err)
+		log.Fatal("Failed to write JSON array file:", err)
+	}
+	defer os.Remove(jsonArrayPath)
+
+	fmt.Println("Reading JSON Array with read_json_auto():")
+	rows, err := db.Query("SELECT * FROM read_json_auto('data_array.json')")
+	if err != nil {
+		log.Fatal("Failed to read JSON array:", err)
 	}
 	defer rows.Close()
 
-	// Print column information
 	columns, err := rows.Columns()
 	if err != nil {
-		log.Fatalf("Failed to get columns: %v", err)
+		log.Fatal("Failed to get columns:", err)
 	}
-	fmt.Printf("Columns: %v\n\n", columns)
+	fmt.Printf("Columns: %v\n", columns)
 
-	// Print data
-	fmt.Println("Data from JSON array:")
+	fmt.Println("Data from JSON Array:")
 	for rows.Next() {
-		var category string
-		var name string
-		var price float64
-		var productID int
-
-		err := rows.Scan(&category, &name, &price, &productID)
-		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
-		}
-		fmt.Printf(
-			"ID: %d, Name: %s, Price: $%.2f, Category: %s\n",
-			productID,
-			name,
-			price,
-			category,
-		)
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatalf("Error reading rows: %v", err)
-	}
-
-	// Example 2: Using read_json_auto() on NDJSON
-	fmt.Println("\n=== Example 2: read_json_auto() on NDJSON ===")
-	query = fmt.Sprintf("SELECT * FROM read_json_auto('%s')", ndjsonFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read NDJSON with auto-detection: %v", err)
-	}
-	defer rows.Close()
-
-	fmt.Println("Data from NDJSON (auto-detected):")
-	for rows.Next() {
-		var category string
-		var name string
-		var price float64
-		var productID int
-
-		err := rows.Scan(&category, &name, &price, &productID)
-		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
-		}
-		fmt.Printf(
-			"ID: %d, Name: %s, Price: $%.2f, Category: %s\n",
-			productID,
-			name,
-			price,
-			category,
-		)
-	}
-
-	// Example 3: Comparing read_json_auto() with explicit format
-	fmt.Println("\n=== Example 3: Comparison with Explicit Format ===")
-
-	// Using explicit format
-	query = fmt.Sprintf(
-		"SELECT COUNT(*) as count FROM read_json('%s', format = 'array')",
-		arrayFile,
-	)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read with explicit format: %v", err)
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var count int
-		err := rows.Scan(&count)
-		if err != nil {
-			log.Fatalf("Failed to scan count: %v", err)
-		}
-		fmt.Printf("Explicit 'array' format count: %d\n", count)
-	}
-
-	// Using auto-detection
-	query = fmt.Sprintf("SELECT COUNT(*) as count FROM read_json_auto('%s')", arrayFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read with auto-detection: %v", err)
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var count int
-		err := rows.Scan(&count)
-		if err != nil {
-			log.Fatalf("Failed to scan count: %v", err)
-		}
-		fmt.Printf("Auto-detection count: %d\n", count)
-	}
-
-	// Example 4: Auto-detection with different data types
-	fmt.Println("\n=== Example 4: Auto-detection with Mixed Data Types ===")
-
-	// Create a file with various data types
-	mixedData := `[
-		{"id": 1, "text": "Hello", "number": 42, "decimal": 3.14, "flag": true, "date": "2024-01-15"},
-		{"id": 2, "text": "World", "number": 100, "decimal": 2.71, "flag": false, "date": "2024-01-16"},
-		{"id": 3, "text": "Test", "number": 7, "decimal": 1.41, "flag": true, "date": "2024-01-17"}
-	]`
-
-	mixedFile := "mixed_types.json"
-	err = os.WriteFile(mixedFile, []byte(mixedData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write mixed types file: %v", err)
-	}
-	defer os.Remove(mixedFile)
-
-	query = fmt.Sprintf("SELECT * FROM read_json_auto('%s')", mixedFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read mixed types: %v", err)
-	}
-	defer rows.Close()
-
-	columns, err = rows.Columns()
-	if err != nil {
-		log.Fatalf("Failed to get columns: %v", err)
-	}
-	fmt.Printf("Mixed types columns: %v\n", columns)
-
-	fmt.Println("Data with mixed types:")
-	for rows.Next() {
-		var date string
-		var decimal float64
-		var flag bool
 		var id int
-		var number int
-		var text string
+		var name string
+		var age int
+		var city string
 
-		err := rows.Scan(&date, &decimal, &flag, &id, &number, &text)
+		err := rows.Scan(&age, &city, &id, &name)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("ID: %d, Text: '%s', Number: %d, Decimal: %.2f, Flag: %t, Date: %s\n",
-			id, text, number, decimal, flag, date)
+		fmt.Printf("  - %s (age %d) from %s\n", name, age, city)
 	}
 
-	// Example 5: Auto-detection with nested structures
-	fmt.Println("\n=== Example 5: Auto-detection with Nested JSON ===")
+	// Example 2: NDJSON format
+	fmt.Println("\n2. NDJSON Format (Automatic Detection):")
 
-	// Create a file with nested structures
-	nestedData := `[
-		{
-			"user": {
-				"id": 1,
-				"name": "Alice"
-			},
-			"location": {
-				"city": "New York",
-				"country": "USA"
-			},
-			"score": 95.5
-		},
-		{
-			"user": {
-				"id": 2,
-				"name": "Bob"
-			},
-			"location": {
-				"city": "London",
-				"country": "UK"
-			},
-			"score": 87.3
-		}
-	]`
+	ndjsonData := `{"id": 1, "product": "Laptop", "price": 999.99, "stock": 15}
+{"id": 2, "product": "Mouse", "price": 29.99, "stock": 150}
+{"id": 3, "product": "Keyboard", "price": 79.99, "stock": 75}`
 
-	nestedFile := "nested_data.json"
-	err = os.WriteFile(nestedFile, []byte(nestedData), 0644)
+	ndjsonPath := "data_ndjson.json"
+	err = os.WriteFile(ndjsonPath, []byte(ndjsonData), 0644)
 	if err != nil {
-		log.Fatalf("Failed to write nested data file: %v", err)
+		log.Fatal("Failed to write NDJSON file:", err)
 	}
-	defer os.Remove(nestedFile)
+	defer os.Remove(ndjsonPath)
 
-	query = fmt.Sprintf("SELECT * FROM read_json_auto('%s')", nestedFile)
-	rows, err = db.Query(query)
+	fmt.Println("Reading NDJSON with read_json_auto():")
+	rows, err = db.Query("SELECT * FROM read_json_auto('data_ndjson.json')")
 	if err != nil {
-		log.Fatalf("Failed to read nested data: %v", err)
+		log.Fatal("Failed to read NDJSON:", err)
 	}
 	defer rows.Close()
 
 	columns, err = rows.Columns()
 	if err != nil {
-		log.Fatalf("Failed to get columns: %v", err)
+		log.Fatal("Failed to get columns:", err)
 	}
-	fmt.Printf("Nested data columns: %v\n", columns)
+	fmt.Printf("Columns: %v\n", columns)
 
-	fmt.Println("Nested data (as JSON strings):")
+	fmt.Println("Data from NDJSON:")
 	for rows.Next() {
-		var location string
-		var score float64
-		var user string
+		var id int
+		var product string
+		var price float64
+		var stock int
 
-		err := rows.Scan(&location, &score, &user)
+		err := rows.Scan(&id, &price, &product, &stock)
 		if err != nil {
-			log.Fatalf("Failed to scan row: %v", err)
+			log.Fatal("Failed to scan row:", err)
 		}
-		fmt.Printf("User: %s, Location: %s, Score: %.1f\n", user, location, score)
+		fmt.Printf("  - %s: $%.2f (stock: %d)\n", product, price, stock)
 	}
 
-	// Example 6: Error handling with auto-detection
-	fmt.Println("\n=== Example 6: Error Handling ===")
+	// Example 3: Comparison of both formats with same data structure
+	fmt.Println("\n3. Comparing Both Formats:")
 
-	// Test with invalid JSON
-	invalidFile := "invalid.json"
-	invalidData := `{"invalid": json content}`
-	err = os.WriteFile(invalidFile, []byte(invalidData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write invalid file: %v", err)
-	}
-	defer os.Remove(invalidFile)
+	// Create both format versions
+	arrayFormat := `[
+  {"id": 1, "name": "Product A", "price": 100},
+  {"id": 2, "name": "Product B", "price": 200},
+  {"id": 3, "name": "Product C", "price": 150}
+]`
 
-	query = fmt.Sprintf("SELECT * FROM read_json_auto('%s')", invalidFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		fmt.Printf("Expected error for invalid JSON: %v\n", err)
-	} else {
-		rows.Close()
-	}
+	ndjsonFormat := `{"id": 1, "name": "Product A", "price": 100}
+{"id": 2, "name": "Product B", "price": 200}
+{"id": 3, "name": "Product C", "price": 150}`
 
-	// Example 7: Performance comparison
-	fmt.Println("\n=== Example 7: Performance Comparison ===")
+	arrayPath := "products_array.json"
+	ndjsonPath2 := "products_ndjson.json"
 
-	// Create a larger file
-	largeData := "[\n"
-	for i := 0; i < 1000; i++ {
-		if i > 0 {
-			largeData += ",\n"
-		}
-		largeData += fmt.Sprintf(`  {"id": %d, "value": "item_%d", "number": %d}`, i, i, i*10)
-	}
-	largeData += "\n]"
+	os.WriteFile(arrayPath, []byte(arrayFormat), 0644)
+	os.WriteFile(ndjsonPath2, []byte(ndjsonFormat), 0644)
 
-	largeFile := "large_array.json"
-	err = os.WriteFile(largeFile, []byte(largeData), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write large file: %v", err)
-	}
-	defer os.Remove(largeFile)
+	defer os.Remove(arrayPath)
+	defer os.Remove(ndjsonPath2)
 
-	// Time explicit format
-	fmt.Println("Processing large file with explicit format...")
-	query = fmt.Sprintf("SELECT COUNT(*) FROM read_json('%s', format = 'array')", largeFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read large file with explicit format: %v", err)
-	}
-	if rows.Next() {
-		var count int
-		rows.Scan(&count)
-		fmt.Printf("Explicit format count: %d\n", count)
-	}
-	rows.Close()
+	// Read from both and compare
+	fmt.Println("\nArray format row count:")
+	var arrayCount int
+	db.QueryRow("SELECT COUNT(*) FROM read_json_auto('products_array.json')").Scan(&arrayCount)
+	fmt.Printf("  Count: %d\n", arrayCount)
 
-	// Time auto-detection
-	fmt.Println("Processing large file with auto-detection...")
-	query = fmt.Sprintf("SELECT COUNT(*) FROM read_json_auto('%s')", largeFile)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read large file with auto-detection: %v", err)
-	}
-	if rows.Next() {
-		var count int
-		rows.Scan(&count)
-		fmt.Printf("Auto-detection count: %d\n", count)
-	}
-	rows.Close()
+	fmt.Println("NDJSON format row count:")
+	var ndjsonCount int
+	db.QueryRow("SELECT COUNT(*) FROM read_json_auto('products_ndjson.json')").Scan(&ndjsonCount)
+	fmt.Printf("  Count: %d\n", ndjsonCount)
 
-	// Example 8: Working with file paths
-	fmt.Println("\n=== Example 8: Working with File Paths ===")
-	absPath, err := filepath.Abs(arrayFile)
-	if err != nil {
-		log.Fatalf("Failed to get absolute path: %v", err)
-	}
+	// Get average price from both
+	fmt.Println("\nAverage price from Array format:")
+	var arrayAvgPrice float64
+	db.QueryRow("SELECT AVG(price) FROM read_json_auto('products_array.json')").Scan(&arrayAvgPrice)
+	fmt.Printf("  Average: $%.2f\n", arrayAvgPrice)
 
-	query = fmt.Sprintf(
-		"SELECT COUNT(DISTINCT category) as unique_categories FROM read_json_auto('%s')",
-		absPath,
-	)
-	rows, err = db.Query(query)
-	if err != nil {
-		log.Fatalf("Failed to read with absolute path: %v", err)
-	}
-	defer rows.Close()
+	fmt.Println("Average price from NDJSON format:")
+	var ndjsonAvgPrice float64
+	db.QueryRow("SELECT AVG(price) FROM read_json_auto('products_ndjson.json')").Scan(&ndjsonAvgPrice)
+	fmt.Printf("  Average: $%.2f\n", ndjsonAvgPrice)
 
-	if rows.Next() {
-		var uniqueCategories int
-		err := rows.Scan(&uniqueCategories)
-		if err != nil {
-			log.Fatalf("Failed to scan count: %v", err)
-		}
-		fmt.Printf("Unique categories: %d\n", uniqueCategories)
-	}
+	fmt.Println("\n4. Auto-Detection Features:")
+	fmt.Println("✓ Automatically detects JSON array vs NDJSON format")
+	fmt.Println("✓ Infers column types from data")
+	fmt.Println("✓ Supports both compact and pretty-printed JSON")
+	fmt.Println("✓ Handles both formats transparently")
+	fmt.Println("✓ Same SQL interface regardless of format")
 
-	fmt.Println("\nAll examples completed successfully!")
+	fmt.Println("\n✓ JSON auto-detection example completed successfully!")
 }

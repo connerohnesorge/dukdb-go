@@ -1,74 +1,140 @@
 # JSON Read Basic Example
 
-This example demonstrates basic JSON reading capabilities in dukdb-go using the `read_json()` function.
+This example demonstrates how to read basic JSON array files using dukdb-go's `read_json()` function.
 
 ## Overview
 
-The `read_json()` function allows you to read JSON array files directly as database tables. Each object in the JSON array becomes a row in the result set, with object properties mapped to columns.
+JSON is a widely-used data format for storing and exchanging structured data. DuckDB provides the `read_json()` function to query JSON arrays directly without requiring data transformation.
+
+## What You'll Learn
+
+1. **Reading JSON Arrays**: Load and query JSON array data directly from files
+2. **Column Inference**: Understand how DuckDB automatically infers column types from JSON structure
+3. **SQL Queries**: Apply SQL queries to JSON data (WHERE, SELECT, aggregations)
+4. **Data Filtering**: Filter and query JSON data using standard SQL syntax
+5. **Aggregations**: Perform calculations like COUNT() and AVG() on JSON data
 
 ## Key Concepts
 
-### JSON Array Format
-The `read_json()` function expects a JSON file containing an array of objects:
+### JSON Arrays
+JSON arrays contain multiple objects with consistent structure:
 ```json
 [
-  {"id": 1, "name": "Alice", "age": 30},
-  {"id": 2, "name": "Bob", "age": 25}
+  {"id": 1, "name": "Alice", "age": 25},
+  {"id": 2, "name": "Bob", "age": 30}
 ]
 ```
 
-### Basic Usage
-```sql
-SELECT * FROM read_json('file.json')
-```
+### read_json() Function
+- Reads JSON arrays from files
+- Automatically infers column types
+- Supports standard SQL queries
+- Works with filtering and aggregations
 
-## Examples Included
-
-1. **Basic JSON Reading**: Reading a simple JSON array file
-2. **Column Selection**: Querying specific columns from JSON data
-3. **Creating Views**: Creating database views from JSON data
-4. **Go API Usage**: Using the database driver from Go code
-5. **Error Handling**: Handling missing files and other errors
-6. **Absolute Paths**: Working with absolute file paths
+### Common Use Cases
+- Loading API responses that return JSON arrays
+- Reading exported JSON data from other systems
+- Querying JSON exports from databases
+- Processing structured JSON data files
 
 ## Running the Example
 
 ```bash
-cd json-read-basic
+cd examples/json-read-basic
 go run main.go
 ```
 
-## Sample Data
+### Expected Output
+```
+=== Basic JSON Reading Example ===
 
-The example creates a sample JSON file (`users.json`) with user data containing:
-- id (integer)
-- name (string)
-- age (integer)
-- city (string)
+1. Reading JSON Array using SQL:
+Columns: [id name age city]
 
-## SQL Functions Used
+Data:
+ID: 1, Name: Alice, Age: 25, City: New York
+ID: 2, Name: Bob, Age: 30, City: San Francisco
+...
 
-- `read_json(path)`: Reads a JSON array file and returns it as a table
+2. Reading JSON with Filtering:
+People older than 25:
+- Bob (30 years old) from San Francisco
+...
 
-## Error Handling
+3. JSON Statistics:
+Total records: 5
+Average age: 28.00
 
-The example demonstrates proper error handling for:
-- Missing files
-- Invalid JSON format
-- Database connection issues
+People per city:
+  Boston: 1
+  Chicago: 1
+  New York: 1
+  San Francisco: 1
+  Seattle: 1
 
-## Output
+✓ JSON reading example completed successfully!
+```
 
-The program will output:
-- Column information from the JSON file
-- All records from the JSON file
-- Filtered results (users older than 30)
-- Aggregated results (users per city)
-- Proper error messages for missing files
+## Code Walkthrough
 
-## Notes
+### 1. Basic Reading
+```go
+rows, err := db.Query("SELECT * FROM read_json('sample_data.json')")
+```
 
-- JSON files must contain an array of objects
-- Each object in the array should have the same structure for consistent column types
-- Column types are automatically inferred from the JSON data
-- The function returns NULL for missing properties in objects
+### 2. Column Inspection
+```go
+columns, err := rows.Columns()
+fmt.Printf("Columns: %v\n", columns)
+```
+
+### 3. Data Scanning
+```go
+for rows.Next() {
+    var id int
+    var name string
+    var age int
+    var city string
+    
+    err := rows.Scan(&id, &name, &age, &city)
+    // Use the values...
+}
+```
+
+### 4. Filtering
+```go
+rows, err := db.Query("SELECT * FROM read_json('sample_data.json') WHERE age > 25")
+```
+
+### 5. Aggregations
+```go
+var avgAge float64
+err = db.QueryRow("SELECT AVG(age) FROM read_json('sample_data.json')").Scan(&avgAge)
+```
+
+## Important Notes
+
+- **Type Inference**: DuckDB infers JSON field types automatically based on values
+- **Consistent Structure**: JSON objects should have consistent field names and types
+- **File Format**: Use proper JSON array format `[{...}, {...}]`
+- **Error Handling**: Always check errors from SQL operations
+- **Memory**: Large JSON files are processed efficiently by DuckDB
+
+## Next Steps
+
+- See [json-read-ndjson](../json-read-ndjson) for NDJSON (newline-delimited JSON)
+- See [json-read-auto](../json-read-auto) for automatic format detection
+- See [json-querying](../json-querying) for advanced JSON queries
+
+## Related Functions
+
+- `read_json()` - Read JSON arrays
+- `read_ndjson()` - Read newline-delimited JSON
+- `read_json_auto()` - Automatically detect JSON format
+- `json_extract()` - Extract values from JSON
+- `json_keys()` - Get keys from JSON objects
+
+## Documentation
+
+For more information about JSON functions in DuckDB, visit:
+https://duckdb.org/docs/data/json/overview

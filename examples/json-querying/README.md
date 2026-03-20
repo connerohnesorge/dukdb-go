@@ -1,147 +1,131 @@
 # JSON Querying Example
 
-This example demonstrates advanced querying and analysis of JSON data in dukdb-go, including filtering, aggregation, and working with nested structures.
+This example demonstrates querying and analyzing JSON data using SQL functions and aggregations.
 
 ## Overview
 
-JSON querying allows you to perform SQL operations on JSON data directly, without needing to transform it into a traditional relational format first. This is particularly useful for semi-structured data where the schema might vary.
+JSON data can be queried just like regular tables using DuckDB's SQL engine. You can filter, aggregate, and join JSON data without transformation.
 
-## Key Concepts
+## What You'll Learn
 
-### Direct JSON Querying
-You can query JSON files directly using table functions:
-```sql
-SELECT * FROM read_json('file.json') WHERE column = 'value'
-```
-
-### Nested Data Handling
-Nested JSON objects are returned as JSON strings that can be processed further.
-
-## Examples Included
-
-1. **Basic JSON Querying**: Reading and displaying JSON data
-2. **Filtering JSON Data**: Using WHERE clauses on JSON fields
-3. **Aggregating JSON Data**: GROUP BY and aggregate functions
-4. **Working with Date Fields**: Date-based filtering and sorting
-5. **Creating Views from JSON**: Creating persistent views over JSON data
-6. **Complex Queries**: CASE statements and advanced filtering
-7. **Export Query Results**: Saving query results back to JSON
-8. **Working with Nested Fields**: Handling deeply nested JSON structures
+1. **Filtering JSON**: Use WHERE clauses on JSON data
+2. **Aggregations**: COUNT, AVG, MAX, MIN on JSON fields
+3. **GROUP BY**: Group and aggregate JSON data
+4. **ORDER BY**: Sort JSON results
+5. **JOINs**: Combine multiple JSON sources
 
 ## Running the Example
 
 ```bash
-cd json-querying
+cd examples/json-querying
 go run main.go
 ```
 
-## Sample Data
+### Expected Output
+```
+=== JSON Querying Example ===
 
-The example creates sample order data with nested structures:
-- Order information (id, date, status, total)
-- Customer details (nested object)
-- Items array (multiple products per order)
-- Shipping information (nested with address)
+1. All employees from JSON:
+Columns: [company email employee_id name salary skill_count]
+  - Alice (ID:1, Email: alice@tech.com, Salary: $75000, Skills: 3)
+  - Bob (ID:2, Email: bob@tech.com, Salary: $85000, Skills: 2)
+  - Charlie (ID:3, Email: charlie@tech.com, Salary: $95000, Skills: 3)
 
-## SQL Functions Used
+2. Employees with salary > 80000:
+  - Charlie: $95000
+  - Bob: $85000
 
-- `read_json(path)`: Read JSON array files
-- `read_json_auto(path)`: Auto-detect format and read
-- `COPY (query) TO 'file'`: Export query results
+3. Salary statistics:
+  - Count: 3 employees
+  - Average salary: $85000.00
+  - Max salary: $95000
+  - Min salary: $75000
 
-## Query Examples
+4. Employees grouped by skill count:
+  - 3 skills: 2 employee(s)
+  - 2 skills: 1 employee(s)
+
+✓ JSON querying example completed successfully!
+```
+
+## Code Examples
 
 ### Basic Filtering
-```sql
-SELECT * FROM read_json('orders.json') WHERE total > 500
+```go
+rows, err := db.Query("SELECT * FROM read_json_auto('employees.json') WHERE salary > 80000")
 ```
 
 ### Aggregation
-```sql
-SELECT status, COUNT(*), AVG(total), SUM(total) as revenue
-FROM read_json('orders.json')
-GROUP BY status
-ORDER BY revenue DESC
+```go
+var count int
+var avgSalary float64
+err := db.QueryRow("SELECT COUNT(*), AVG(salary) FROM read_json_auto('employees.json')").
+    Scan(&count, &avgSalary)
 ```
 
-### Date Filtering
-```sql
-SELECT order_id, order_date, total
-FROM read_json('orders.json')
-WHERE order_date >= '2024-01-15'
-ORDER BY order_date
+### GROUP BY
+```go
+rows, err := db.Query(`
+    SELECT department, COUNT(*) as count
+    FROM read_json_auto('employees.json')
+    GROUP BY department
+`)
 ```
 
-### Complex Queries with CASE
-```sql
-SELECT order_id, total,
-       CASE
-           WHEN total > 1000 THEN 'High Value'
-           WHEN total > 500 THEN 'Medium Value'
-           ELSE 'Low Value'
-       END as value_category
-FROM read_json('orders.json')
-WHERE status IN ('shipped', 'delivered')
-ORDER BY total DESC
+### ORDER BY
+```go
+rows, err := db.Query(`
+    SELECT name, salary
+    FROM read_json_auto('employees.json')
+    ORDER BY salary DESC
+`)
 ```
 
-## Working with Nested Data
+## Supported SQL Operations
 
-Nested objects are flattened as JSON strings:
-```json
-{
-  "customer": {
-    "id": 1,
-    "name": "Alice Johnson"
-  }
-}
-```
-Results in a column named `customer` containing the JSON string.
+| Operation | Example |
+|-----------|---------|
+| SELECT | `SELECT name, salary FROM ...` |
+| WHERE | `WHERE salary > 50000` |
+| ORDER BY | `ORDER BY salary DESC` |
+| GROUP BY | `GROUP BY department` |
+| LIMIT | `LIMIT 10` |
+| COUNT | `COUNT(*)` |
+| AVG | `AVG(salary)` |
+| MAX/MIN | `MAX(salary)` |
+| SUM | `SUM(amount)` |
+| LIKE | `WHERE name LIKE 'A%'` |
+| IN | `WHERE id IN (1,2,3)` |
+| BETWEEN | `WHERE age BETWEEN 25 AND 35` |
 
-## Performance Considerations
+## Nested JSON Handling
 
-- JSON querying is suitable for small to medium datasets
-- For large datasets, consider importing to tables first
-- Views can improve performance for repeated queries
-- Indexing is not available on JSON files directly
+For deeply nested JSON:
+- Flatten complex structures before querying
+- Use JSON extraction functions if needed
+- Consider NDJSON for array data
 
-## Error Handling
+## Performance Tips
 
-The example demonstrates:
-- Handling missing files
-- Invalid JSON format errors
-- Query syntax errors
-- Export failures
+- Filter early with WHERE clauses
+- Use specific columns in SELECT
+- Aggregate before returning large result sets
+- Use LIMIT for result pagination
 
-## Output
+## Related Functions
 
-The program will output:
-- Column information from JSON files
-- Filtered and aggregated results
-- Date-based query results
-- Customer spending summaries
-- Value category analysis
-- Nested data structure information
+- `read_json()` - Read JSON arrays
+- `read_ndjson()` - Read NDJSON
+- `read_json_auto()` - Auto-detect JSON format
+- `json_extract()` - Extract JSON values
+- `json_keys()` - Get object keys
 
-## Notes
+## Next Steps
 
-- Column order is alphabetical based on JSON keys
-- All values from JSON are initially strings and may need casting
-- Complex nested queries might require multiple steps
-- JSON export may have limitations with complex expressions
-- For production use, consider validating JSON structure first
+- See [json-nested](../json-nested) for complex nested JSON
+- See [json-write-basic](../json-write-basic) for exporting JSON
+- See [json-transformation](../json-transformation) for data transformation
 
-## Advanced Usage
+## Documentation
 
-For more complex analysis:
-1. Import JSON to temporary tables for better performance
-2. Use JSON functions to extract specific nested values
-3. Combine multiple JSON files using UNION
-4. Create materialized views for frequently accessed JSON data
-
-## Limitations
-
-- No direct indexing on JSON file queries
-- Nested objects returned as JSON strings
-- Complex subqueries in COPY statements may not be supported
-- Performance depends on file size and query complexity
+https://duckdb.org/docs/data/json/overview
