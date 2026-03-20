@@ -42,7 +42,7 @@
       "id": "1",
       "section": "Parser: FK AST and Parsing",
       "description": "Parser: FK AST and Parsing tasks",
-      "status": "in_progress",
+      "status": "completed",
       "children": "$ref:tasks-1.jsonc"
     },
     {
