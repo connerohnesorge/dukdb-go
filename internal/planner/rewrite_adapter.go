@@ -135,7 +135,7 @@ func (plannerAdapter) RewriteExpressions(plan rewrite.Plan, rewriter rewrite.Exp
 		if !childChanged && !limitChanged && !offsetChanged {
 			return plan, false
 		}
-		return &LogicalLimit{Child: child, Limit: node.Limit, Offset: node.Offset, LimitExpr: limitExpr, OffsetExpr: offsetExpr}, true
+		return &LogicalLimit{Child: child, Limit: node.Limit, Offset: node.Offset, LimitExpr: limitExpr, OffsetExpr: offsetExpr, WithTies: node.WithTies, OrderBy: node.OrderBy}, true
 	case *LogicalDistinctOn:
 		child, childChanged := rewritePlanExpressions(node.Child, rewriter)
 		exprs, exprChanged := rewriteExprSlice(node.DistinctOn, rewriter)
@@ -396,7 +396,7 @@ func replaceChildren(plan LogicalPlan, children []LogicalPlan) LogicalPlan {
 	case *LogicalSort:
 		return &LogicalSort{Child: children[0], OrderBy: node.OrderBy}
 	case *LogicalLimit:
-		return &LogicalLimit{Child: children[0], Limit: node.Limit, Offset: node.Offset, LimitExpr: node.LimitExpr, OffsetExpr: node.OffsetExpr}
+		return &LogicalLimit{Child: children[0], Limit: node.Limit, Offset: node.Offset, LimitExpr: node.LimitExpr, OffsetExpr: node.OffsetExpr, WithTies: node.WithTies, OrderBy: node.OrderBy}
 	case *LogicalDistinct:
 		return &LogicalDistinct{Child: children[0]}
 	case *LogicalDistinctOn:

@@ -93,6 +93,19 @@ func (s *LogicalScan) OutputColumns() []ColumnBinding {
 	return s.columns
 }
 
+// LogicalValues represents a VALUES clause that produces inline rows.
+type LogicalValues struct {
+	Rows    [][]binder.BoundExpr // Bound expressions per row
+	Columns []ColumnBinding      // Output column names and types
+	Alias   string
+}
+
+func (*LogicalValues) logicalPlanNode() {}
+
+func (*LogicalValues) Children() []LogicalPlan { return nil }
+
+func (v *LogicalValues) OutputColumns() []ColumnBinding { return v.Columns }
+
 // LogicalFilter represents a filter (WHERE clause).
 type LogicalFilter struct {
 	Child     LogicalPlan
@@ -335,6 +348,8 @@ type LogicalLimit struct {
 	Offset     int64            // Static offset value (-1 means use OffsetExpr)
 	LimitExpr  binder.BoundExpr // Dynamic limit expression (for LATERAL joins)
 	OffsetExpr binder.BoundExpr // Dynamic offset expression (for LATERAL joins)
+	WithTies   bool             // true when FETCH ... WITH TIES was used
+	OrderBy    []*binder.BoundOrderBy // ORDER BY columns for WITH TIES comparison
 }
 
 func (*LogicalLimit) logicalPlanNode() {}
@@ -461,6 +476,18 @@ func (*LogicalDropTable) logicalPlanNode() {}
 func (*LogicalDropTable) Children() []LogicalPlan { return nil }
 
 func (*LogicalDropTable) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalTruncate represents a TRUNCATE TABLE operation.
+type LogicalTruncate struct {
+	Schema string
+	Table  string
+}
+
+func (*LogicalTruncate) logicalPlanNode() {}
+
+func (*LogicalTruncate) Children() []LogicalPlan { return nil }
+
+func (*LogicalTruncate) OutputColumns() []ColumnBinding { return nil }
 
 // LogicalDummyScan represents a scan that produces a single row with no columns.
 // Used for queries like "SELECT 1" that don't reference any table.

@@ -493,6 +493,8 @@ type PhysicalLimit struct {
 	Offset     int64            // Static offset value (-1 means use OffsetExpr)
 	LimitExpr  binder.BoundExpr // Dynamic limit expression (for LATERAL joins)
 	OffsetExpr binder.BoundExpr // Dynamic offset expression (for LATERAL joins)
+	WithTies   bool             // true when FETCH ... WITH TIES was used
+	OrderBy    []*binder.BoundOrderBy // ORDER BY columns for WITH TIES comparison
 }
 
 func (*PhysicalLimit) physicalPlanNode() {}
@@ -623,6 +625,18 @@ func (*PhysicalDropTable) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalDropTable) OutputColumns() []ColumnBinding { return nil }
 
+// PhysicalTruncate represents a physical TRUNCATE TABLE operation.
+type PhysicalTruncate struct {
+	Schema string
+	Table  string
+}
+
+func (*PhysicalTruncate) physicalPlanNode() {}
+
+func (*PhysicalTruncate) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalTruncate) OutputColumns() []ColumnBinding { return nil }
+
 // PhysicalDummyScan represents a physical dummy scan.
 type PhysicalDummyScan struct{}
 
@@ -631,6 +645,19 @@ func (*PhysicalDummyScan) physicalPlanNode() {}
 func (*PhysicalDummyScan) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalDummyScan) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalValues represents a VALUES clause that produces inline rows.
+// Example: VALUES (1, 'a'), (2, 'b') produces two rows with two columns.
+type PhysicalValues struct {
+	Rows    [][]binder.BoundExpr // Bound expressions per row
+	Columns []ColumnBinding      // Output column names and types
+}
+
+func (*PhysicalValues) physicalPlanNode() {}
+
+func (*PhysicalValues) Children() []PhysicalPlan { return nil }
+
+func (v *PhysicalValues) OutputColumns() []ColumnBinding { return v.Columns }
 
 // PhysicalBegin represents a physical BEGIN TRANSACTION plan.
 type PhysicalBegin struct{}
@@ -1414,6 +1441,11 @@ func (p *Planner) createLogicalPlan(
 		return p.planCreateTable(s)
 	case *binder.BoundDropTableStmt:
 		return p.planDropTable(s)
+	case *binder.BoundTruncateStmt:
+		return &LogicalTruncate{
+			Schema: s.Schema,
+			Table:  s.Table,
+		}, nil
 	case *binder.BoundBeginStmt:
 		return &LogicalBegin{}, nil
 	case *binder.BoundCommitStmt:
@@ -1694,6 +1726,8 @@ func (p *Planner) planSelect(
 			Offset:     offset,
 			LimitExpr:  limitExpr,
 			OffsetExpr: offsetExpr,
+			WithTies:   s.WithTies,
+			OrderBy:    s.OrderBy,
 		}
 	}
 
@@ -2243,6 +2277,23 @@ func (p *Planner) createScanForBoundTableRef(ref *binder.BoundTableRef) LogicalP
 		return plan
 	}
 
+	// Handle VALUES clause
+	if ref.ValuesRows != nil {
+		var columns []ColumnBinding
+		for _, col := range ref.Columns {
+			columns = append(columns, ColumnBinding{
+				Table:  ref.Alias,
+				Column: col.Column,
+				Type:   col.Type,
+			})
+		}
+		return &LogicalValues{
+			Rows:    ref.ValuesRows,
+			Columns: columns,
+			Alias:   ref.Alias,
+		}
+	}
+
 	// Handle views by expanding the view query
 	if ref.ViewDef != nil && ref.ViewQuery != nil {
 		// Plan the view's bound query directly
@@ -2356,6 +2407,12 @@ func (p *Planner) createPhysicalPlan(
 			Alias:       l.Alias,
 			TableDef:    l.TableDef,
 			Projections: l.Projections,
+		}, nil
+
+	case *LogicalValues:
+		return &PhysicalValues{
+			Rows:    l.Rows,
+			Columns: l.Columns,
 		}, nil
 
 	case *LogicalFilter:
@@ -2512,6 +2569,8 @@ func (p *Planner) createPhysicalPlan(
 			Offset:     l.Offset,
 			LimitExpr:  l.LimitExpr,
 			OffsetExpr: l.OffsetExpr,
+			WithTies:   l.WithTies,
+			OrderBy:    l.OrderBy,
 		}, nil
 
 	case *LogicalDistinct:
@@ -2607,6 +2666,12 @@ func (p *Planner) createPhysicalPlan(
 			Schema:   l.Schema,
 			Table:    l.Table,
 			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalTruncate:
+		return &PhysicalTruncate{
+			Schema: l.Schema,
+			Table:  l.Table,
 		}, nil
 
 	case *LogicalDummyScan:
@@ -3299,6 +3364,8 @@ func isAggregateFunction(name string) bool {
 		"APPROX_COUNT_DISTINCT", "APPROX_MEDIAN", "APPROX_QUANTILE",
 		// String/list aggregates
 		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
+		// JSON aggregates
+		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
 		// Regression aggregates
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
 		"CORR", "COVAR_POP", "COVAR_SAMP":
