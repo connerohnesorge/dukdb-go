@@ -9,37 +9,37 @@
       "id": "8.1",
       "section": "View and Expression Rewrites",
       "description": "Implement column alias consolidation",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "View and Expression Rewrites",
       "description": "Implement removal of unused columns in projection",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
       "section": "View and Expression Rewrites",
       "description": "Implement tautology elimination (always true conditions)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.4",
       "section": "View and Expression Rewrites",
       "description": "Implement contradiction elimination (always false conditions)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.5",
       "section": "View and Expression Rewrites",
       "description": "Implement common subexpression extraction",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.6",
       "section": "View and Expression Rewrites",
       "description": "Write tests for view and expression rewrites",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"

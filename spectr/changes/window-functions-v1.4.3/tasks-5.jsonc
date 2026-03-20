@@ -9,31 +9,31 @@
       "id": "5.1",
       "section": "Phase 5: Planner \u0026 Optimizer Enhancements",
       "description": "**Task 5.1**: Update `internal/parser/` to support the `WINDOW` clause and named window specifications.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Phase 5: Planner \u0026 Optimizer Enhancements",
       "description": "**Task 5.2**: Update `internal/binder/` to handle named window resolution and inheritance rules.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Phase 5: Planner \u0026 Optimizer Enhancements",
       "description": "**Task 5.3**: Implement `WindowRegistry` to manage and validate named windows during binding.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Phase 5: Planner \u0026 Optimizer Enhancements",
       "description": "**Task 5.4**: Create `internal/planner/window_optimizer.go` and implement `WindowPushdownRule` to push window functions through joins where possible.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Phase 5: Planner \u0026 Optimizer Enhancements",
       "description": "**Task 5.5**: Implement `PartitionPruningRule` to eliminate unnecessary partition processing based on query predicates.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

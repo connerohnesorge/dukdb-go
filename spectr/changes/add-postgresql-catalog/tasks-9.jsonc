@@ -9,37 +9,37 @@
       "id": "9.1",
       "section": "OID Join Validation",
       "description": "Test JOINs: pg_class JOIN pg_namespace on relnamespace = oid",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "OID Join Validation",
       "description": "Test JOINs: pg_attribute JOIN pg_class on attrelid = oid",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",
       "section": "OID Join Validation",
       "description": "Test JOINs: pg_attribute JOIN pg_type on atttypid = oid",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "OID Join Validation",
       "description": "Test JOINs: pg_index JOIN pg_class on indexrelid = oid",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.5",
       "section": "OID Join Validation",
       "description": "Test JOINs: pg_constraint JOIN pg_class on conrelid = oid",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.6",
       "section": "OID Join Validation",
       "description": "Verify all OID-based relationships work correctly",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "9"

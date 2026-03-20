@@ -803,6 +803,18 @@ func (a *ParallelExplainAnnotator) annotatePlan(
 		sb.WriteString("\n")
 		a.annotatePlan(sb, p.Right, indent+1)
 
+	case *planner.PhysicalPositionalJoin:
+		sb.WriteString(fmt.Sprintf("%sPositionalJoin (seq_cost=%.2f)\n", prefix, seqCost))
+		a.annotatePlan(sb, p.Left, indent+1)
+		sb.WriteString("\n")
+		a.annotatePlan(sb, p.Right, indent+1)
+
+	case *planner.PhysicalAsOfJoin:
+		sb.WriteString(fmt.Sprintf("%sAsOfJoin (seq_cost=%.2f)\n", prefix, seqCost))
+		a.annotatePlan(sb, p.Left, indent+1)
+		sb.WriteString("\n")
+		a.annotatePlan(sb, p.Right, indent+1)
+
 	case *planner.PhysicalHashAggregate:
 		sb.WriteString(fmt.Sprintf("%s", prefix))
 		if isParallel {

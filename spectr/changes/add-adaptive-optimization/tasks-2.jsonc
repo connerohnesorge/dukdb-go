@@ -9,43 +9,43 @@
       "id": "2.1",
       "section": "Execution Profile Collection",
       "description": "Add actual cardinality tracking to all operators",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Execution Profile Collection",
       "description": "Implement execution timeline collection",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Execution Profile Collection",
       "description": "Collect CPU time per operator",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Execution Profile Collection",
       "description": "Collect memory usage per operator",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.5",
       "section": "Execution Profile Collection",
       "description": "Collect I/O statistics if applicable",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.6",
       "section": "Execution Profile Collection",
       "description": "Implement low-overhead profiling (minimal overhead)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.7",
       "section": "Execution Profile Collection",
       "description": "Write tests for profile collection",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

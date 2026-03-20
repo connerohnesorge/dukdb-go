@@ -9,25 +9,25 @@
       "id": "2.1",
       "section": "pg_catalog Infrastructure",
       "description": "Create/extend `internal/postgres/catalog/pg_catalog.go`",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "pg_catalog Infrastructure",
       "description": "Implement pg_catalog schema creation at engine init",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "pg_catalog Infrastructure",
       "description": "Register all views in virtual table registry",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "pg_catalog Infrastructure",
       "description": "Add pg_catalog to default search paths",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

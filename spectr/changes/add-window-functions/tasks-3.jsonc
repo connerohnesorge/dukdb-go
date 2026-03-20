@@ -9,253 +9,253 @@
       "id": "3.1",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.1.1 Implement evaluatePercentRank (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.1.2 Write unit tests for PERCENT_RANK with ties",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.1.3 Write unit tests for PERCENT_RANK edge cases (1 row, 2 rows)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.1.4 Verify PERCENT_RANK formula: (rank - 1) / (n - 1)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.5",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.2.1 Implement evaluateCumeDist (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.6",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.2.2 Write unit tests for CUME_DIST with peer groups",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.7",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.2.3 Write unit tests for CUME_DIST monotonic progression",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.8",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.2.4 Verify CUME_DIST respects peer group boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.9",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.1 Implement evaluateWindowSum (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.10",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.2 Implement SUM with frame boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.11",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.3 Implement SUM with FILTER clause support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.12",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.4 Implement SUM with DISTINCT support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.13",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.5 Write unit tests for SUM with sliding window",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.14",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.3.6 Write tests for SUM with NULL handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.15",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.1 Implement evaluateWindowCount (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.16",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.2 Implement COUNT(expr) with NULL exclusion",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.17",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.3 Implement COUNT(*) with full row counting",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.18",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.4 Implement COUNT with FILTER clause support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.19",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.5 Implement COUNT with DISTINCT support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.20",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.4.6 Write unit tests for COUNT vs COUNT(*)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.21",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.1 Implement evaluateWindowAvg (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.22",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.2 Implement AVG with frame boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.23",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.3 Implement AVG with FILTER clause support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.24",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.4 Implement AVG with DISTINCT support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.25",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.5 Write unit tests for AVG precision (float vs integer)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.26",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.5.6 Write tests for AVG with NULL handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.27",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.6.1 Implement evaluateWindowMin (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.28",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.6.2 Implement MIN with frame boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.29",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.6.3 Implement MIN with FILTER clause support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.30",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.6.4 Write unit tests for MIN with various types (int, float, string, date)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.31",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.6.5 Write tests for MIN with NULL handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.32",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.7.1 Implement evaluateWindowMax (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.33",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.7.2 Implement MAX with frame boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.34",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.7.3 Implement MAX with FILTER clause support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.35",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.7.4 Write unit tests for MAX with various types",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.36",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.7.5 Write tests for MAX with NULL handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.37",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.1 Run complete test suite for distribution functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.38",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.2 Run complete test suite for aggregate window functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.39",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.3 Compare all results with DuckDB reference behavior",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.40",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.4 Test complex queries with multiple window functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.41",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.5 Performance check: verify Phase 3 doesn't degrade performance",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.42",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "3.8.6 Documentation: Complete examples for all window functions",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

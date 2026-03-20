@@ -8,6 +8,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/cache"
+	"github.com/dukdb/dukdb-go/internal/collation"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
@@ -80,6 +81,12 @@ func (e *Executor) executePragma(
 		return e.pragmaEnableProgressBar(ctx)
 	case "disable_progress_bar":
 		return e.pragmaDisableProgressBar(ctx)
+
+	// Full-text search pragmas
+	case "create_fts_index":
+		return e.pragmaCreateFTSIndex(ctx, plan)
+	case "drop_fts_index":
+		return e.pragmaDropFTSIndex(ctx, plan)
 
 	default:
 		// Unknown pragma - return empty result
@@ -284,15 +291,16 @@ func (e *Executor) pragmaDatabaseList(ctx *ExecutionContext) (*ExecutionResult, 
 	}, nil
 }
 
-// pragmaCollations returns available collations.
+// pragmaCollations returns available collations from the collation registry.
 func (e *Executor) pragmaCollations(ctx *ExecutionContext) (*ExecutionResult, error) {
+	names := collation.DefaultRegistry.ListCollations()
+	rows := make([]map[string]any, len(names))
+	for i, name := range names {
+		rows[i] = map[string]any{"collation_name": name}
+	}
 	return &ExecutionResult{
 		Columns: []string{"collation_name"},
-		Rows: []map[string]any{
-			{"collation_name": "NOCASE"},
-			{"collation_name": "NOACCENT"},
-			{"collation_name": "NFC"},
-		},
+		Rows:    rows,
 	}, nil
 }
 
@@ -1062,7 +1070,11 @@ func formatFilterExpression(expr binder.BoundExpr) string {
 
 	case *binder.BoundCastExpr:
 		operand := formatFilterExpression(e.Expr)
-		return fmt.Sprintf("CAST(%s AS %s)", operand, e.TargetType.String())
+		keyword := "CAST"
+		if e.TryCast {
+			keyword = "TRY_CAST"
+		}
+		return fmt.Sprintf("%s(%s AS %s)", keyword, operand, e.TargetType.String())
 
 	case *binder.BoundCaseExpr:
 		// Simplified CASE representation
@@ -1206,6 +1218,20 @@ func formatPhysicalPlanWithAnalyze(
 		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
 		sb.WriteString("\n")
 		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalPositionalJoin:
+		sb.WriteString(fmt.Sprintf("%sPositionalJoin (actual rows=%d time=%.2fms)",
+			prefix, actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalAsOfJoin:
+		sb.WriteString(fmt.Sprintf("%sAsOfJoin (actual rows=%d time=%.2fms)",
+			prefix, actualRows, float64(actualTime.Microseconds())/1000))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
 	case *planner.PhysicalHashAggregate:
 		sb.WriteString(fmt.Sprintf("%sHashAggregate %s (actual rows=%d time=%.2fms)",
 			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
@@ -1264,6 +1290,10 @@ func (a *physicalPlanAdapter) PhysicalPlanType() string {
 		return "PhysicalHashJoin"
 	case *planner.PhysicalNestedLoopJoin:
 		return "PhysicalNestedLoopJoin"
+	case *planner.PhysicalPositionalJoin:
+		return "PhysicalPositionalJoin"
+	case *planner.PhysicalAsOfJoin:
+		return "PhysicalAsOfJoin"
 	case *planner.PhysicalHashAggregate:
 		return "PhysicalHashAggregate"
 	case *planner.PhysicalSort:
@@ -1406,6 +1436,18 @@ func formatPhysicalPlanWithCost(
 		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
 		sb.WriteString("\n")
 		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalPositionalJoin:
+		sb.WriteString(fmt.Sprintf("%sPositionalJoin %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
+	case *planner.PhysicalAsOfJoin:
+		sb.WriteString(fmt.Sprintf("%sAsOfJoin %s", prefix, formatCostAnnotation(cost)))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Left, indent+1, costModel))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlanWithCost(p.Right, indent+1, costModel))
 	case *planner.PhysicalHashAggregate:
 		sb.WriteString(fmt.Sprintf("%sHashAggregate %s", prefix, formatCostAnnotation(cost)))
 		sb.WriteString("\n")
@@ -1484,6 +1526,18 @@ func formatPhysicalPlan(plan planner.PhysicalPlan, indent int) string {
 		sb.WriteString(formatPhysicalPlan(p.Right, indent+1))
 	case *planner.PhysicalNestedLoopJoin:
 		sb.WriteString(fmt.Sprintf("%sNestedLoopJoin", prefix))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlan(p.Left, indent+1))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlan(p.Right, indent+1))
+	case *planner.PhysicalPositionalJoin:
+		sb.WriteString(fmt.Sprintf("%sPositionalJoin", prefix))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlan(p.Left, indent+1))
+		sb.WriteString("\n")
+		sb.WriteString(formatPhysicalPlan(p.Right, indent+1))
+	case *planner.PhysicalAsOfJoin:
+		sb.WriteString(fmt.Sprintf("%sAsOfJoin", prefix))
 		sb.WriteString("\n")
 		sb.WriteString(formatPhysicalPlan(p.Left, indent+1))
 		sb.WriteString("\n")

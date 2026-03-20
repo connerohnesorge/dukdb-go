@@ -9,25 +9,25 @@
       "id": "6.1",
       "section": "Database and User Views (Part 4)",
       "description": "Implement pg_catalog.pg_database view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Database and User Views (Part 4)",
       "description": "Implement pg_catalog.pg_user view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Database and User Views (Part 4)",
       "description": "Implement pg_catalog.pg_roles view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Database and User Views (Part 4)",
       "description": "Add tests for 6.1-6.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

@@ -159,6 +159,7 @@ type JoinClause struct {
 	Type      JoinType
 	Table     TableRef
 	Condition Expr
+	Using     []string // USING (col1, col2)
 }
 
 // JoinType represents the type of join.
@@ -170,6 +171,13 @@ const (
 	JoinTypeRight
 	JoinTypeFull
 	JoinTypeCross
+	JoinTypeNatural     // NATURAL JOIN
+	JoinTypeNaturalLeft // NATURAL LEFT JOIN
+	JoinTypeNaturalRight // NATURAL RIGHT JOIN
+	JoinTypeNaturalFull // NATURAL FULL JOIN
+	JoinTypeAsOf        // ASOF JOIN
+	JoinTypeAsOfLeft    // ASOF LEFT JOIN
+	JoinTypePositional  // POSITIONAL JOIN
 )
 
 // SetOpType represents the type of set operation.
@@ -183,6 +191,8 @@ const (
 	SetOpIntersectAll
 	SetOpExcept
 	SetOpExceptAll
+	SetOpUnionByName
+	SetOpUnionAllByName
 )
 
 // IsolationLevel represents the transaction isolation level.
@@ -231,22 +241,46 @@ func (il IsolationLevel) String() string {
 type OrderByExpr struct {
 	Expr       Expr
 	Desc       bool
-	NullsFirst *bool // nil = default, true = NULLS FIRST, false = NULLS LAST
+	NullsFirst *bool  // nil = default, true = NULLS FIRST, false = NULLS LAST
+	Collation  string // COLLATE collation_name (empty = default)
+}
+
+// OnConflictAction specifies what to do when an INSERT conflicts.
+type OnConflictAction int
+
+const (
+	// OnConflictDoNothing skips the conflicting row.
+	OnConflictDoNothing OnConflictAction = iota
+	// OnConflictDoUpdate updates the existing row with new values.
+	OnConflictDoUpdate
+)
+
+// OnConflictClause represents the ON CONFLICT clause of an INSERT statement.
+type OnConflictClause struct {
+	ConflictColumns []string         // Columns that define conflict target (empty = infer from PK)
+	Action          OnConflictAction // DO NOTHING or DO UPDATE
+	UpdateSet       []SetClause      // SET assignments for DO UPDATE
+	UpdateWhere     Expr             // Optional WHERE for DO UPDATE
 }
 
 // InsertStmt represents an INSERT statement.
-// Supports the optional RETURNING clause to return values from inserted rows.
+// Supports the optional ON CONFLICT and RETURNING clauses.
 //
 // Example:
 //
 //	INSERT INTO t (a, b) VALUES (1, 2) RETURNING *;
 //	INSERT INTO t (a, b) VALUES (1, 2) RETURNING id, a, b;
+//	INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO NOTHING;
+//	INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b;
 type InsertStmt struct {
 	Schema  string
 	Table   string
 	Columns []string
 	Values  [][]Expr
 	Select  *SelectStmt
+	// OnConflict specifies the upsert behavior when a primary key conflict occurs.
+	// nil when no ON CONFLICT clause is present.
+	OnConflict *OnConflictClause
 	// Returning specifies columns to return after the insert operation.
 	// If non-empty, the INSERT becomes a query that returns the specified columns
 	// from the newly inserted rows. Use Star=true in SelectColumn for RETURNING *.
@@ -322,6 +356,14 @@ func (s *DeleteStmt) Accept(v Visitor) {
 	v.VisitDeleteStmt(s)
 }
 
+// TableConstraint represents a table-level constraint in CREATE TABLE.
+type TableConstraint struct {
+	Name       string   // Optional CONSTRAINT name
+	Type       string   // "UNIQUE", "CHECK"
+	Columns    []string // Column names (for UNIQUE)
+	Expression Expr     // For CHECK constraints
+}
+
 // CreateTableStmt represents a CREATE TABLE statement.
 type CreateTableStmt struct {
 	Schema      string
@@ -329,7 +371,8 @@ type CreateTableStmt struct {
 	IfNotExists bool
 	Columns     []ColumnDefClause
 	PrimaryKey  []string
-	AsSelect    *SelectStmt // For CREATE TABLE ... AS SELECT
+	Constraints []TableConstraint // Table-level constraints (UNIQUE, CHECK)
+	AsSelect    *SelectStmt       // For CREATE TABLE ... AS SELECT
 }
 
 func (*CreateTableStmt) stmtNode() {}
@@ -349,6 +392,9 @@ type ColumnDefClause struct {
 	NotNull    bool
 	Default    Expr
 	PrimaryKey bool
+	Unique     bool   // Column-level UNIQUE constraint
+	Check      Expr   // Column-level CHECK expression
+	Collation  string // COLLATE collation_name (empty = default)
 }
 
 // DropTableStmt represents a DROP TABLE statement.
@@ -478,6 +524,42 @@ func (s *DropSequenceStmt) Accept(v Visitor) {
 	v.VisitDropSequenceStmt(s)
 }
 
+// ---------- Type DDL Statements ----------
+
+// CreateTypeStmt represents CREATE TYPE name AS ENUM (...).
+type CreateTypeStmt struct {
+	Name        string
+	Schema      string
+	TypeKind    string   // "ENUM"
+	EnumValues  []string
+	IfNotExists bool
+}
+
+func (*CreateTypeStmt) stmtNode() {}
+
+func (*CreateTypeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateTypeStmt.
+func (s *CreateTypeStmt) Accept(v Visitor) {
+	v.VisitCreateTypeStmt(s)
+}
+
+// DropTypeStmt represents DROP TYPE [IF EXISTS] name.
+type DropTypeStmt struct {
+	Name     string
+	Schema   string
+	IfExists bool
+}
+
+func (*DropTypeStmt) stmtNode() {}
+
+func (*DropTypeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropTypeStmt.
+func (s *DropTypeStmt) Accept(v Visitor) {
+	v.VisitDropTypeStmt(s)
+}
+
 // ---------- Schema DDL Statements ----------
 
 // CreateSchemaStmt represents a CREATE SCHEMA statement.
@@ -583,6 +665,25 @@ type BinaryExpr struct {
 
 func (*BinaryExpr) exprNode() {}
 
+// LambdaExpr represents a lambda expression: x -> expr or (x, y) -> expr.
+// Lambda expressions are only valid as function arguments (e.g., list_transform, list_filter).
+type LambdaExpr struct {
+	Params []string // Parameter names
+	Body   Expr     // Body expression
+}
+
+func (*LambdaExpr) exprNode() {}
+
+// SimilarToExpr represents a SIMILAR TO expression with optional ESCAPE clause.
+type SimilarToExpr struct {
+	Expr    Expr   // Left-hand expression
+	Pattern Expr   // The SQL regex pattern
+	Escape  string // Escape character (empty means default '\')
+	Not     bool   // true for NOT SIMILAR TO
+}
+
+func (*SimilarToExpr) exprNode() {}
+
 // BinaryOp represents a binary operator.
 type BinaryOp int
 
@@ -611,6 +712,8 @@ const (
 	OpILike
 	OpNotLike
 	OpNotILike
+	OpSimilarTo
+	OpNotSimilarTo
 
 	// Other operators
 	OpIn
@@ -653,19 +756,29 @@ const (
 
 // FunctionCall represents a function call.
 type FunctionCall struct {
-	Name     string
-	Args     []Expr
-	Distinct bool          // for aggregate functions like COUNT(DISTINCT x)
-	Star     bool          // for COUNT(*)
-	OrderBy  []OrderByExpr // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
+	Name      string
+	Args      []Expr
+	NamedArgs map[string]Expr // Named arguments for functions like struct_pack(name := 'Alice')
+	Distinct  bool            // for aggregate functions like COUNT(DISTINCT x)
+	Star      bool            // for COUNT(*)
+	OrderBy   []OrderByExpr   // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
 }
 
 func (*FunctionCall) exprNode() {}
+
+// NamedArgExpr represents a named argument in a function call (e.g., name := 'Alice' in struct_pack).
+type NamedArgExpr struct {
+	Name  string // The argument name
+	Value Expr   // The argument value expression
+}
+
+func (*NamedArgExpr) exprNode() {}
 
 // CastExpr represents a CAST expression.
 type CastExpr struct {
 	Expr       Expr
 	TargetType dukdb.Type
+	TryCast    bool
 }
 
 func (*CastExpr) exprNode() {}
@@ -893,6 +1006,38 @@ func (s *ReleaseSavepointStmt) Accept(v Visitor) {
 	v.VisitReleaseSavepointStmt(s)
 }
 
+// ---------- Prepared Statement Types ----------
+
+// PrepareStmt represents PREPARE name AS statement.
+type PrepareStmt struct {
+	Name  string    // Prepared statement name
+	Inner Statement // The statement to prepare
+}
+
+func (*PrepareStmt) stmtNode() {}
+
+func (*PrepareStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_PREPARE }
+
+// ExecuteStmt represents EXECUTE name or EXECUTE name(param1, param2, ...).
+type ExecuteStmt struct {
+	Name   string // Prepared statement name
+	Params []Expr // Parameter values
+}
+
+func (*ExecuteStmt) stmtNode() {}
+
+func (*ExecuteStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_EXECUTE }
+
+// DeallocateStmt represents DEALLOCATE [PREPARE] name or DEALLOCATE ALL.
+type DeallocateStmt struct {
+	Name string // Empty string means DEALLOCATE ALL
+	All  bool   // True for DEALLOCATE ALL
+}
+
+func (*DeallocateStmt) stmtNode() {}
+
+func (*DeallocateStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DEALLOCATE }
+
 // ---------- Window Function Types ----------
 
 // WindowExpr represents a window function expression.
@@ -1048,6 +1193,39 @@ type SampleOptions struct {
 	Seed       *int64       // Optional seed for reproducible sampling
 }
 
+// ---------- Export/Import Database Statements ----------
+
+// ExportDatabaseStmt represents an EXPORT DATABASE 'path' (OPTIONS) statement.
+// Exports all tables, views, and schemas to a directory for full backup.
+type ExportDatabaseStmt struct {
+	Path    string
+	Options map[string]string // FORMAT, DELIMITER, etc.
+}
+
+func (*ExportDatabaseStmt) stmtNode() {}
+
+func (*ExportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_EXPORT }
+
+// Accept implements the Visitor pattern for ExportDatabaseStmt.
+func (s *ExportDatabaseStmt) Accept(v Visitor) {
+	v.VisitExportDatabaseStmt(s)
+}
+
+// ImportDatabaseStmt represents an IMPORT DATABASE 'path' statement.
+// Imports a previously exported database from a directory.
+type ImportDatabaseStmt struct {
+	Path string
+}
+
+func (*ImportDatabaseStmt) stmtNode() {}
+
+func (*ImportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY }
+
+// Accept implements the Visitor pattern for ImportDatabaseStmt.
+func (s *ImportDatabaseStmt) Accept(v Visitor) {
+	v.VisitImportDatabaseStmt(s)
+}
+
 // ---------- Database Maintenance Statements ----------
 
 // PragmaStmt represents a PRAGMA statement.
@@ -1134,6 +1312,54 @@ func (s *CheckpointStmt) Accept(v Visitor) {
 	v.VisitCheckpointStmt(s)
 }
 
+// ---------- Macro DDL Statements ----------
+
+// MacroParam represents a macro parameter (parser-level).
+type MacroParam struct {
+	Name       string
+	Default    Expr   // Parsed default expression (nil if no default)
+	DefaultSQL string // Raw SQL default for storage
+}
+
+// CreateMacroStmt represents a CREATE MACRO statement.
+type CreateMacroStmt struct {
+	Schema       string
+	Name         string
+	Params       []MacroParam
+	IsTableMacro bool
+	OrReplace    bool
+	Body         Expr        // Expression body for scalar macros
+	BodySQL      string      // Raw SQL body string
+	Query        *SelectStmt // Query body for table macros
+	QuerySQL     string      // Raw SQL query string
+}
+
+func (*CreateMacroStmt) stmtNode() {}
+
+func (*CreateMacroStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateMacroStmt.
+func (s *CreateMacroStmt) Accept(v Visitor) {
+	v.VisitCreateMacroStmt(s)
+}
+
+// DropMacroStmt represents a DROP MACRO statement.
+type DropMacroStmt struct {
+	Schema       string
+	Name         string
+	IfExists     bool
+	IsTableMacro bool
+}
+
+func (*DropMacroStmt) stmtNode() {}
+
+func (*DropMacroStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropMacroStmt.
+func (s *DropMacroStmt) Accept(v Visitor) {
+	v.VisitDropMacroStmt(s)
+}
+
 // ---------- Function DDL Statements ----------
 
 // VolatilityType represents the volatility of a user-defined function.
@@ -1188,6 +1414,115 @@ func (*CreateFunctionStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_C
 // Accept implements the Visitor pattern for CreateFunctionStmt.
 func (s *CreateFunctionStmt) Accept(v Visitor) {
 	v.VisitCreateFunctionStmt(s)
+}
+
+// ---------- Extension Statements ----------
+
+// InstallStmt represents an INSTALL extension_name statement.
+type InstallStmt struct {
+	Name string
+}
+
+func (*InstallStmt) stmtNode() {}
+
+func (*InstallStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_LOAD }
+
+// Accept implements the Visitor pattern for InstallStmt.
+func (s *InstallStmt) Accept(v Visitor) {
+	v.VisitInstallStmt(s)
+}
+
+// LoadStmt represents a LOAD extension_name statement.
+type LoadStmt struct {
+	Name string
+}
+
+func (*LoadStmt) stmtNode() {}
+
+func (*LoadStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_LOAD }
+
+// Accept implements the Visitor pattern for LoadStmt.
+func (s *LoadStmt) Accept(v Visitor) {
+	v.VisitLoadStmt(s)
+}
+
+// ---------- Database Management Statements ----------
+
+// AttachStmt represents ATTACH [DATABASE] 'path' [AS alias] [(options)].
+type AttachStmt struct {
+	Path     string
+	Alias    string
+	ReadOnly bool
+	Options  map[string]string
+}
+
+func (*AttachStmt) stmtNode() {}
+
+func (*AttachStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ATTACH }
+
+// Accept implements the Visitor pattern for AttachStmt.
+func (s *AttachStmt) Accept(v Visitor) {
+	v.VisitAttachStmt(s)
+}
+
+// DetachStmt represents DETACH [DATABASE] [IF EXISTS] name.
+type DetachStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (*DetachStmt) stmtNode() {}
+
+func (*DetachStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DETACH }
+
+// Accept implements the Visitor pattern for DetachStmt.
+func (s *DetachStmt) Accept(v Visitor) {
+	v.VisitDetachStmt(s)
+}
+
+// UseStmt represents USE database[.schema].
+type UseStmt struct {
+	Database string
+	Schema   string
+}
+
+func (*UseStmt) stmtNode() {}
+
+func (*UseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SET }
+
+// Accept implements the Visitor pattern for UseStmt.
+func (s *UseStmt) Accept(v Visitor) {
+	v.VisitUseStmt(s)
+}
+
+// CreateDatabaseStmt represents CREATE DATABASE [IF NOT EXISTS] name.
+type CreateDatabaseStmt struct {
+	Name        string
+	IfNotExists bool
+}
+
+func (*CreateDatabaseStmt) stmtNode() {}
+
+func (*CreateDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// Accept implements the Visitor pattern for CreateDatabaseStmt.
+func (s *CreateDatabaseStmt) Accept(v Visitor) {
+	v.VisitCreateDatabaseStmt(s)
+}
+
+// DropDatabaseStmt represents DROP DATABASE [IF EXISTS] name.
+type DropDatabaseStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (*DropDatabaseStmt) stmtNode() {}
+
+func (*DropDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// Accept implements the Visitor pattern for DropDatabaseStmt.
+func (s *DropDatabaseStmt) Accept(v Visitor) {
+	v.VisitDropDatabaseStmt(s)
 }
 
 // ---------- SET/SHOW Statements ----------

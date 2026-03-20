@@ -29,6 +29,10 @@ type TableDef struct {
 	// columnIndex maps column names to their indices for fast lookup.
 	columnIndex map[string]int
 
+	// Constraints holds UNIQUE and CHECK constraint definitions.
+	// Each element is a *UniqueConstraintDef or *CheckConstraintDef.
+	Constraints []any
+
 	// Statistics contains optimizer statistics for this table.
 	// May be nil if table has not been analyzed.
 	Statistics *optimizer.TableStatistics
@@ -150,6 +154,21 @@ func (t *TableDef) Clone() *TableDef {
 			len(t.PrimaryKey),
 		)
 		copy(newTable.PrimaryKey, t.PrimaryKey)
+	}
+
+	// Clone constraints
+	if len(t.Constraints) > 0 {
+		newTable.Constraints = make([]any, len(t.Constraints))
+		for i, c := range t.Constraints {
+			switch ct := c.(type) {
+			case *UniqueConstraintDef:
+				newTable.Constraints[i] = ct.Clone()
+			case *CheckConstraintDef:
+				newTable.Constraints[i] = ct.Clone()
+			default:
+				newTable.Constraints[i] = c
+			}
+		}
 	}
 
 	// Clone statistics if present

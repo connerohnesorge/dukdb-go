@@ -283,15 +283,22 @@ func (e *Executor) executeDuckDBExtensions(
 	_ *ExecutionContext,
 	_ *planner.PhysicalTableFunctionScan,
 ) (*ExecutionResult, error) {
-	extensions := metadata.GetExtensions()
-	rows := make([]map[string]any, 0, len(extensions))
-	for _, ext := range extensions {
-		rows = append(rows, map[string]any{
-			"extension_name": ext.ExtensionName,
-			"loaded":         ext.Loaded,
-			"installed":      ext.Installed,
-			"description":    ext.Description,
-		})
+	var rows []map[string]any
+
+	// Use extension registry if available
+	if e.extRegistry != nil {
+		exts := e.extRegistry.ListExtensions()
+		rows = make([]map[string]any, 0, len(exts))
+		for _, ext := range exts {
+			rows = append(rows, map[string]any{
+				"extension_name": ext.Name,
+				"loaded":         ext.Loaded,
+				"installed":      ext.Installed,
+				"description":    ext.Description,
+			})
+		}
+	} else {
+		rows = []map[string]any{}
 	}
 
 	return &ExecutionResult{

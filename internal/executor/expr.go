@@ -8,6 +8,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
+	"github.com/dukdb/dukdb-go/internal/collation"
 	geomutil "github.com/dukdb/dukdb-go/internal/io/geometry"
 	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
@@ -66,6 +67,16 @@ func (e *Executor) evaluateExpr(
 
 		return ctx.Args[ex.Position-1].Value, nil
 
+	case *binder.BoundExcludedColumnRef:
+		// EXCLUDED values are stored in the row map under "EXCLUDED.column" keys
+		if row != nil {
+			key := "EXCLUDED." + ex.ColumnName
+			if val, ok := row[key]; ok {
+				return val, nil
+			}
+		}
+		return nil, nil
+
 	case *binder.BoundBinaryExpr:
 		return e.evaluateBinaryExpr(ctx, ex, row)
 
@@ -78,10 +89,20 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundCastExpr:
 		val, err := e.evaluateExpr(ctx, ex.Expr, row)
 		if err != nil {
+			if ex.TryCast {
+				return nil, nil
+			}
 			return nil, err
 		}
 
-		return castValue(val, ex.TargetType)
+		result, err := castValue(val, ex.TargetType)
+		if err != nil {
+			if ex.TryCast {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return result, nil
 
 	case *binder.BoundCaseExpr:
 		return e.evaluateCaseExpr(ctx, ex, row)
@@ -151,6 +172,95 @@ func (e *Executor) evaluateExpr(
 
 	case *binder.BoundArrayExpr:
 		return e.evaluateArrayExpr(ctx, ex, row)
+
+	case *binder.BoundSimilarToExpr:
+		leftVal, err := e.evaluateExpr(ctx, ex.Expr, row)
+		if err != nil {
+			return nil, err
+		}
+		rightVal, err := e.evaluateExpr(ctx, ex.Pattern, row)
+		if err != nil {
+			return nil, err
+		}
+		escape := ex.Escape
+		if escape == 0 {
+			escape = '\\'
+		}
+		result, err := matchSimilarTo(toString(leftVal), toString(rightVal), escape)
+		if err != nil {
+			return nil, err
+		}
+		if ex.Not {
+			return !result.(bool), nil
+		}
+		return result, nil
+
+	// Parser AST expression types - used for CHECK constraint evaluation
+	case *parser.ColumnRef:
+		if row != nil {
+			// Try with table prefix
+			if ex.Table != "" {
+				key := ex.Table + "." + ex.Column
+				if val, ok := row[key]; ok {
+					return val, nil
+				}
+			}
+			// Try column name directly
+			if val, ok := row[ex.Column]; ok {
+				return val, nil
+			}
+			// Try case-insensitive
+			lower := strings.ToLower(ex.Column)
+			if val, ok := row[lower]; ok {
+				return val, nil
+			}
+		}
+		return nil, nil
+
+	case *parser.Literal:
+		return ex.Value, nil
+
+	case *parser.BinaryExpr:
+		leftVal, err := e.evaluateExpr(ctx, ex.Left, row)
+		if err != nil {
+			return nil, err
+		}
+		rightVal, err := e.evaluateExpr(ctx, ex.Right, row)
+		if err != nil {
+			return nil, err
+		}
+		return e.evaluateParserBinaryOp(ex.Op, leftVal, rightVal)
+
+	case *parser.UnaryExpr:
+		val, err := e.evaluateExpr(ctx, ex.Expr, row)
+		if err != nil {
+			return nil, err
+		}
+		switch ex.Op {
+		case parser.OpNot:
+			if val == nil {
+				return nil, nil
+			}
+			if b, ok := val.(bool); ok {
+				return !b, nil
+			}
+			return nil, nil
+		case parser.OpNeg:
+			return negateValue(val)
+		case parser.OpIsNull:
+			return val == nil, nil
+		case parser.OpIsNotNull:
+			return val != nil, nil
+		}
+		return nil, nil
+
+	case *binder.BoundLambdaExpr:
+		// Lambda expressions should not be evaluated directly; they are passed to
+		// lambda-accepting functions (list_transform, list_filter, etc.)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "lambda expressions cannot be evaluated directly",
+		}
 
 	default:
 		return nil, &dukdb.Error{
@@ -309,6 +419,14 @@ func (e *Executor) evaluateBinaryExpr(
 			strings.ToLower(toString(right)),
 			true,
 		), nil
+	case parser.OpSimilarTo:
+		return matchSimilarTo(toString(left), toString(right), '\\')
+	case parser.OpNotSimilarTo:
+		result, err := matchSimilarTo(toString(left), toString(right), '\\')
+		if err != nil {
+			return nil, err
+		}
+		return !result.(bool), nil
 	case parser.OpConcat:
 		return toString(
 			left,
@@ -342,6 +460,77 @@ func (e *Executor) evaluateBinaryExpr(
 				expr.Op,
 			),
 		}
+	}
+}
+
+// evaluateParserBinaryOp evaluates a parser binary operation on two already-evaluated values.
+// Used for CHECK constraint evaluation where expressions are parser AST nodes.
+func (e *Executor) evaluateParserBinaryOp(op parser.BinaryOp, left, right any) (any, error) {
+	// Handle NULL propagation
+	if left == nil || right == nil {
+		switch op {
+		case parser.OpAnd:
+			if left == nil && right != nil {
+				if !toBool(right) {
+					return false, nil
+				}
+			}
+			if right == nil && left != nil {
+				if !toBool(left) {
+					return false, nil
+				}
+			}
+			return nil, nil
+		case parser.OpOr:
+			if left == nil && right != nil {
+				if toBool(right) {
+					return true, nil
+				}
+			}
+			if right == nil && left != nil {
+				if toBool(left) {
+					return true, nil
+				}
+			}
+			return nil, nil
+		case parser.OpIs:
+			return left == nil && right == nil, nil
+		case parser.OpIsNot:
+			return left != nil || right != nil, nil
+		default:
+			return nil, nil
+		}
+	}
+
+	switch op {
+	case parser.OpAdd:
+		return addValues(left, right)
+	case parser.OpSub:
+		return subValues(left, right)
+	case parser.OpMul:
+		return mulValues(left, right)
+	case parser.OpDiv:
+		return divValues(left, right)
+	case parser.OpMod:
+		return modValues(left, right)
+	case parser.OpEq:
+		return compareValues(left, right) == 0, nil
+	case parser.OpNe:
+		return compareValues(left, right) != 0, nil
+	case parser.OpLt:
+		return compareValues(left, right) < 0, nil
+	case parser.OpLe:
+		return compareValues(left, right) <= 0, nil
+	case parser.OpGt:
+		return compareValues(left, right) > 0, nil
+	case parser.OpGe:
+		return compareValues(left, right) >= 0, nil
+	case parser.OpAnd:
+		return toBool(left) && toBool(right), nil
+	case parser.OpOr:
+		return toBool(left) || toBool(right), nil
+	default:
+		return nil, fmt.Errorf("unsupported parser binary operator: %d", op)
 	}
 }
 
@@ -396,6 +585,48 @@ func (e *Executor) evaluateFunctionCall(
 	fn *binder.BoundFunctionCall,
 	row map[string]any,
 ) (any, error) {
+	// Lambda-accepting functions must intercept BEFORE eager argument evaluation,
+	// because lambda arguments (BoundLambdaExpr) cannot be evaluated as regular expressions.
+	switch fn.Name {
+	case "LIST_TRANSFORM", "ARRAY_APPLY", "APPLY":
+		return e.handleListLambdaFunction(ctx, fn, row, "list_transform")
+	case "LIST_FILTER", "ARRAY_FILTER", "FILTER":
+		return e.handleListLambdaFunction(ctx, fn, row, "list_filter")
+	case "LIST_SORT", "ARRAY_SORT":
+		// list_sort may or may not have a lambda; check if any arg is a lambda
+		hasLambda := false
+		for _, arg := range fn.Args {
+			if _, ok := arg.(*binder.BoundLambdaExpr); ok {
+				hasLambda = true
+				break
+			}
+		}
+		if hasLambda || len(fn.Args) >= 1 {
+			return e.handleListLambdaFunction(ctx, fn, row, "list_sort")
+		}
+	case "STRUCT_PACK":
+		// struct_pack uses named arguments which must be evaluated from fn.NamedArgs
+		result := make(map[string]any)
+		if fn.NamedArgs != nil {
+			for name, argExpr := range fn.NamedArgs {
+				val, err := e.evaluateExpr(ctx, argExpr, row)
+				if err != nil {
+					return nil, err
+				}
+				result[name] = val
+			}
+		}
+		// Also evaluate any positional args
+		for i, arg := range fn.Args {
+			val, err := e.evaluateExpr(ctx, arg, row)
+			if err != nil {
+				return nil, err
+			}
+			result[fmt.Sprintf("v%d", i+1)] = val
+		}
+		return result, nil
+	}
+
 	// Evaluate arguments
 	args := make([]any, len(fn.Args))
 	for i, arg := range fn.Args {
@@ -1530,6 +1761,144 @@ func (e *Executor) evaluateFunctionCall(
 	case "ST_MAKEPOLYGON":
 		return executeSTMakePolygon(args)
 
+	// ---- Struct functions ----
+	case "STRUCT_EXTRACT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "struct_extract requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		structVal, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("struct_extract: first argument must be a struct, got %T", args[0]),
+			}
+		}
+		fieldName := toString(args[1])
+		val, exists := structVal[fieldName]
+		if !exists {
+			return nil, nil
+		}
+		return val, nil
+
+	// ---- Map functions ----
+	case "MAP":
+		// MAP(keys_array, values_array)
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "MAP requires 2 arguments (keys array, values array)",
+			}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		keys, ok1 := toSlice(args[0])
+		vals, ok2 := toSlice(args[1])
+		if !ok1 || !ok2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "MAP requires two array arguments",
+			}
+		}
+		if len(keys) != len(vals) {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "MAP key and value arrays must have the same length",
+			}
+		}
+		result := make(map[string]any, len(keys))
+		for i := 0; i < len(keys); i++ {
+			result[toString(keys[i])] = vals[i]
+		}
+		return result, nil
+
+	case "MAP_KEYS":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_keys requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_keys: argument must be a map, got %T", args[0]),
+			}
+		}
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		result := make([]any, len(keys))
+		for i, k := range keys {
+			result[i] = k
+		}
+		return result, nil
+
+	case "MAP_VALUES":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_values requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_values: argument must be a map, got %T", args[0]),
+			}
+		}
+		// Get values in key-sorted order for determinism
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		vals := make([]any, len(keys))
+		for i, k := range keys {
+			vals[i] = m[k]
+		}
+		return vals, nil
+
+	case "ELEMENT_AT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "element_at requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("element_at: first argument must be a map, got %T", args[0]),
+			}
+		}
+		key := toString(args[1])
+		val, exists := m[key]
+		if !exists {
+			return nil, nil
+		}
+		return val, nil
+
 	default:
 		// For aggregate functions called in scalar context, return NULL
 		// The main fix for aggregate functions in projections is in executeProject
@@ -2269,7 +2638,7 @@ func (e *Executor) compareRows(
 			return 0, err
 		}
 
-		cmp := compareValues(valA, valB)
+		cmp := compareWithCollation(valA, valB, order.Collation)
 		if cmp != 0 {
 			if order.Desc {
 				return -cmp, nil
@@ -2280,6 +2649,26 @@ func (e *Executor) compareRows(
 	}
 
 	return 0, nil
+}
+
+// compareWithCollation compares two values, using the specified collation for
+// string values. If collationName is empty, falls back to default comparison.
+func compareWithCollation(a, b any, collationName string) int {
+	if collationName == "" {
+		return compareValues(a, b)
+	}
+
+	// Only apply collation to string values.
+	strA, okA := a.(string)
+	strB, okB := b.(string)
+	if okA && okB {
+		c, ok := collation.DefaultRegistry.Get(collationName)
+		if ok {
+			return c.Compare(strA, strB)
+		}
+	}
+
+	return compareValues(a, b)
 }
 
 // Helper functions

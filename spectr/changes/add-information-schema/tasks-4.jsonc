@@ -9,25 +9,25 @@
       "id": "4.1",
       "section": "View and Function Views (Part 3)",
       "description": "Implement information_schema.views view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "View and Function Views (Part 3)",
       "description": "Implement information_schema.routines view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.3",
       "section": "View and Function Views (Part 3)",
       "description": "Implement information_schema.parameters view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "View and Function Views (Part 3)",
       "description": "Add tests for 4.1-4.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "4"

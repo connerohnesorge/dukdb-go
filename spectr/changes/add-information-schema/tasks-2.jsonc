@@ -9,25 +9,25 @@
       "id": "2.1",
       "section": "Core Views Implementation (Part 1)",
       "description": "Implement information_schema.schemata view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Core Views Implementation (Part 1)",
       "description": "Implement information_schema.tables view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Core Views Implementation (Part 1)",
       "description": "Implement information_schema.columns view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Core Views Implementation (Part 1)",
       "description": "Add tests for 2.1-2.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

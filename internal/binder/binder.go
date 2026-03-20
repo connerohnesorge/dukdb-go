@@ -238,6 +238,54 @@ func (b *Binder) Bind(
 		return b.bindAnalyze(s)
 	case *parser.CheckpointStmt:
 		return b.bindCheckpoint(s)
+	case *parser.CreateTypeStmt:
+		return &BoundCreateTypeStmt{
+			Name:        s.Name,
+			Schema:      s.Schema,
+			TypeKind:    s.TypeKind,
+			EnumValues:  s.EnumValues,
+			IfNotExists: s.IfNotExists,
+		}, nil
+	case *parser.DropTypeStmt:
+		return &BoundDropTypeStmt{
+			Name:     s.Name,
+			Schema:   s.Schema,
+			IfExists: s.IfExists,
+		}, nil
+	case *parser.CreateMacroStmt:
+		// Convert parser params to catalog params
+		params := make([]catalog.MacroParam, len(s.Params))
+		for i, mp := range s.Params {
+			params[i] = catalog.MacroParam{
+				Name:        mp.Name,
+				DefaultExpr: mp.DefaultSQL,
+				HasDefault:  mp.Default != nil,
+			}
+		}
+		schema := s.Schema
+		if schema == "" {
+			schema = "main"
+		}
+		return &BoundCreateMacroStmt{
+			Schema:       schema,
+			Name:         s.Name,
+			Params:       params,
+			IsTableMacro: s.IsTableMacro,
+			OrReplace:    s.OrReplace,
+			BodySQL:      s.BodySQL,
+			QuerySQL:     s.QuerySQL,
+		}, nil
+	case *parser.DropMacroStmt:
+		schema := s.Schema
+		if schema == "" {
+			schema = "main"
+		}
+		return &BoundDropMacroStmt{
+			Schema:       schema,
+			Name:         s.Name,
+			IfExists:     s.IfExists,
+			IsTableMacro: s.IsTableMacro,
+		}, nil
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)
 	}

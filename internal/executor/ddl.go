@@ -755,3 +755,78 @@ func (e *Executor) executeAlterSecret(
 
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
+
+// ---------- Macro DDL Execution Functions ----------
+
+// executeCreateMacro executes a CREATE MACRO statement.
+func (e *Executor) executeCreateMacro(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalCreateMacro,
+) (*ExecutionResult, error) {
+	macroDef := &catalog.MacroDef{
+		Name:   plan.Name,
+		Schema: plan.Schema,
+		Params: plan.Params,
+		Body:   plan.BodySQL,
+		Query:  plan.QuerySQL,
+	}
+
+	if plan.IsTableMacro {
+		macroDef.Type = catalog.MacroTypeTable
+	} else {
+		macroDef.Type = catalog.MacroTypeScalar
+	}
+
+	if err := e.catalog.CreateMacro(plan.Schema, macroDef, plan.OrReplace); err != nil {
+		return nil, err
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// executeDropMacro executes a DROP MACRO statement.
+func (e *Executor) executeDropMacro(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalDropMacro,
+) (*ExecutionResult, error) {
+	if err := e.catalog.DropMacro(plan.Schema, plan.Name, plan.IfExists); err != nil {
+		return nil, err
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// ---------- Type DDL Execution Functions ----------
+
+// executeCreateType executes a CREATE TYPE statement.
+func (e *Executor) executeCreateType(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalCreateType,
+) (*ExecutionResult, error) {
+	entry := &catalog.TypeEntry{
+		Name:       plan.Name,
+		Schema:     plan.Schema,
+		TypeKind:   plan.TypeKind,
+		EnumValues: plan.EnumValues,
+	}
+	err := e.catalog.CreateType(entry)
+	if err != nil {
+		if plan.IfNotExists {
+			return &ExecutionResult{RowsAffected: 0}, nil
+		}
+		return nil, err
+	}
+	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// executeDropType executes a DROP TYPE statement.
+func (e *Executor) executeDropType(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalDropType,
+) (*ExecutionResult, error) {
+	err := e.catalog.DropType(plan.Name, plan.Schema, plan.IfExists)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionResult{RowsAffected: 0}, nil
+}

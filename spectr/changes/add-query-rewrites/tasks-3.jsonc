@@ -9,43 +9,43 @@
       "id": "3.1",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement predicate pushdown (already exists, may refactor into engine)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement filter combination (merge adjacent filters on same table)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement filter hoisting (move filters before joins/unions)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement IN list simplification (convert IN to = for single element)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.5",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement BETWEEN conversion (x BETWEEN a AND b equivalent forms)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.6",
       "section": "Filter and Predicate Rewrites",
       "description": "Implement range predicate merging (x \u003e 5 AND x \u003e 10 → x \u003e 10)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.7",
       "section": "Filter and Predicate Rewrites",
       "description": "Write tests for filter rewriting with complex WHERE clauses",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

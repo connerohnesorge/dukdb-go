@@ -9,25 +9,25 @@
       "id": "6.1",
       "section": "Integration and Executor Changes",
       "description": "Extend internal/executor/table_function_*.go to dispatch system functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Integration and Executor Changes",
       "description": "Update internal/executor/operator.go for table function resolution",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Integration and Executor Changes",
       "description": "Ensure all 15 functions are registered in dispatcher",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Integration and Executor Changes",
       "description": "Add end-to-end integration tests",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

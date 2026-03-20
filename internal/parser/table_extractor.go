@@ -422,6 +422,86 @@ func (te *TableExtractor) VisitShowStmt(stmt *ShowStmt) {
 	// No table references in SHOW statements
 }
 
+// VisitPrepareStmt is a no-op for PREPARE statements (no table references at this level).
+func (te *TableExtractor) VisitPrepareStmt(stmt *PrepareStmt) {
+	// No table references in PREPARE statements
+}
+
+// VisitExecuteStmt is a no-op for EXECUTE statements (no table references).
+func (te *TableExtractor) VisitExecuteStmt(stmt *ExecuteStmt) {
+	// No table references in EXECUTE statements
+}
+
+// VisitDeallocateStmt is a no-op for DEALLOCATE statements (no table references).
+func (te *TableExtractor) VisitDeallocateStmt(stmt *DeallocateStmt) {
+	// No table references in DEALLOCATE statements
+}
+
+// VisitCreateTypeStmt is a no-op for CREATE TYPE statements (no table references).
+func (te *TableExtractor) VisitCreateTypeStmt(stmt *CreateTypeStmt) {
+	// No table references in CREATE TYPE statements
+}
+
+// VisitDropTypeStmt is a no-op for DROP TYPE statements (no table references).
+func (te *TableExtractor) VisitDropTypeStmt(stmt *DropTypeStmt) {
+	// No table references in DROP TYPE statements
+}
+
+// VisitCreateMacroStmt is a no-op for CREATE MACRO statements (no table references).
+func (te *TableExtractor) VisitCreateMacroStmt(stmt *CreateMacroStmt) {
+	// No table references in CREATE MACRO statements
+}
+
+// VisitDropMacroStmt is a no-op for DROP MACRO statements (no table references).
+func (te *TableExtractor) VisitDropMacroStmt(stmt *DropMacroStmt) {
+	// No table references in DROP MACRO statements
+}
+
+// VisitExportDatabaseStmt is a no-op for EXPORT DATABASE statements (no table references).
+func (te *TableExtractor) VisitExportDatabaseStmt(stmt *ExportDatabaseStmt) {
+	// No table references in EXPORT DATABASE statements
+}
+
+// VisitImportDatabaseStmt is a no-op for IMPORT DATABASE statements (no table references).
+func (te *TableExtractor) VisitImportDatabaseStmt(stmt *ImportDatabaseStmt) {
+	// No table references in IMPORT DATABASE statements
+}
+
+// VisitInstallStmt is a no-op for INSTALL statements (no table references).
+func (te *TableExtractor) VisitInstallStmt(stmt *InstallStmt) {
+	// No table references in INSTALL statements
+}
+
+// VisitLoadStmt is a no-op for LOAD statements (no table references).
+func (te *TableExtractor) VisitLoadStmt(stmt *LoadStmt) {
+	// No table references in LOAD statements
+}
+
+// VisitAttachStmt is a no-op for ATTACH statements (no table references).
+func (te *TableExtractor) VisitAttachStmt(stmt *AttachStmt) {
+	// No table references in ATTACH statements
+}
+
+// VisitDetachStmt is a no-op for DETACH statements (no table references).
+func (te *TableExtractor) VisitDetachStmt(stmt *DetachStmt) {
+	// No table references in DETACH statements
+}
+
+// VisitUseStmt is a no-op for USE statements (no table references).
+func (te *TableExtractor) VisitUseStmt(stmt *UseStmt) {
+	// No table references in USE statements
+}
+
+// VisitCreateDatabaseStmt is a no-op for CREATE DATABASE statements (no table references).
+func (te *TableExtractor) VisitCreateDatabaseStmt(stmt *CreateDatabaseStmt) {
+	// No table references in CREATE DATABASE statements
+}
+
+// VisitDropDatabaseStmt is a no-op for DROP DATABASE statements (no table references).
+func (te *TableExtractor) VisitDropDatabaseStmt(stmt *DropDatabaseStmt) {
+	// No table references in DROP DATABASE statements
+}
+
 // VisitMergeStmt extracts table references from MERGE INTO statements.
 func (te *TableExtractor) VisitMergeStmt(stmt *MergeStmt) {
 	// Extract the target table (INTO)
@@ -561,6 +641,10 @@ func (te *TableExtractor) visitExpr(expr Expr) {
 
 	case *CastExpr:
 		te.visitExpr(e.Expr)
+
+	case *SimilarToExpr:
+		te.visitExpr(e.Expr)
+		te.visitExpr(e.Pattern)
 
 	// Leaf expression types (no recursion needed):
 	case *ColumnRef, *Literal, *Parameter, *StarExpr:

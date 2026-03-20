@@ -9,43 +9,43 @@
       "id": "8.1",
       "section": "Testing and Validation",
       "description": "Run all existing tests to ensure no regressions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "Testing and Validation",
       "description": "Verify all system functions return correct column schemas",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
       "section": "Testing and Validation",
       "description": "Verify functions handle empty/special cases (no tables, no views)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.4",
       "section": "Testing and Validation",
       "description": "Verify functions respect schema visibility",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.5",
       "section": "Testing and Validation",
       "description": "Benchmark metadata queries for performance",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.6",
       "section": "Testing and Validation",
       "description": "Cross-validate against DuckDB v1.4.3 reference implementation",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.7",
       "section": "Testing and Validation",
       "description": "Test identifier escaping for special characters",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"

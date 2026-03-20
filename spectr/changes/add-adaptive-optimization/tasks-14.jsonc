@@ -9,31 +9,31 @@
       "id": "14.1",
       "section": "Documentation",
       "description": "Document how learning works",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "14.2",
       "section": "Documentation",
       "description": "Document best practices for enabling learning",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "14.3",
       "section": "Documentation",
       "description": "Document troubleshooting guide",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "14.4",
       "section": "Documentation",
       "description": "Create examples of learning improving performance",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "14.5",
       "section": "Documentation",
       "description": "Document EXPLAIN ANALYZE interpretation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "14"

@@ -9,19 +9,19 @@
       "id": "5.1",
       "section": "Index and Constraint Views (Part 3)",
       "description": "Implement pg_catalog.pg_index view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Index and Constraint Views (Part 3)",
       "description": "Implement pg_catalog.pg_constraint view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Index and Constraint Views (Part 3)",
       "description": "Add tests for 5.1-5.2",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

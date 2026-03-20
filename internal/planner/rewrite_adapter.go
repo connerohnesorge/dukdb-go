@@ -122,7 +122,7 @@ func (plannerAdapter) RewriteExpressions(plan rewrite.Plan, rewriter rewrite.Exp
 			if changed {
 				exprChanged = true
 			}
-			orderBy[i] = &binder.BoundOrderBy{Expr: rewritten, Desc: ob.Desc}
+			orderBy[i] = &binder.BoundOrderBy{Expr: rewritten, Desc: ob.Desc, Collation: ob.Collation}
 		}
 		if !childChanged && !exprChanged {
 			return plan, false

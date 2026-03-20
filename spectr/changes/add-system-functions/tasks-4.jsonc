@@ -9,37 +9,37 @@
       "id": "4.1",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Implement duckdb_databases() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Implement duckdb_sequences() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.3",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Implement duckdb_dependencies() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Implement duckdb_optimizers() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.5",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Implement duckdb_keywords() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.6",
       "section": "System Function Implementations (Part 3 - Advanced)",
       "description": "Add tests for 4.1-4.5",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "4"

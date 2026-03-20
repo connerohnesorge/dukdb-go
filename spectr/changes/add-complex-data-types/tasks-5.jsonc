@@ -9,37 +9,37 @@
       "id": "5.1",
       "section": "Phase 4: UNION Type Support",
       "description": "Implement UnionVector type",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Phase 4: UNION Type Support",
       "description": "Add UnionVector member management",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Phase 4: UNION Type Support",
       "description": "Implement UnionVector serialization",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Phase 4: UNION Type Support",
       "description": "Implement UnionVector deserialization",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Phase 4: UNION Type Support",
       "description": "Implement ScanUnion() generic function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Phase 4: UNION Type Support",
       "description": "Add UNION error handling",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

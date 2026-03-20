@@ -9,43 +9,43 @@
       "id": "9.1",
       "section": "Configuration and Control",
       "description": "Add PRAGMA to enable/disable learning",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "Configuration and Control",
       "description": "Add PRAGMA for learning cache size",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",
       "section": "Configuration and Control",
       "description": "Add PRAGMA for learning history retention",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "Configuration and Control",
       "description": "Add PRAGMA for correction factor weight",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.5",
       "section": "Configuration and Control",
       "description": "Add PRAGMA for anomaly detection threshold",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.6",
       "section": "Configuration and Control",
       "description": "Add diagnostic mode for learning visibility",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.7",
       "section": "Configuration and Control",
       "description": "Write tests for configuration options",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "9"

@@ -9,31 +9,31 @@
       "id": "9.1",
       "section": "Planner Integration",
       "description": "Integrate rewrite engine into logical planning phase",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "Planner Integration",
       "description": "Add rewrite configuration options (enable/disable rules)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",
       "section": "Planner Integration",
       "description": "Add PRAGMA-based rule control (e.g., PRAGMA enable_algebraic_rewrites = true)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "Planner Integration",
       "description": "Add safety mechanism to prevent runaway rewriting",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.5",
       "section": "Planner Integration",
       "description": "Add rule application stats for debugging",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "9"

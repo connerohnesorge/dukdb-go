@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
+	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
@@ -49,7 +50,7 @@ func (b *Binder) bindExpr(
 			return nil, err
 		}
 
-		return &BoundCastExpr{Expr: inner, TargetType: e.TargetType}, nil
+		return &BoundCastExpr{Expr: inner, TargetType: e.TargetType, TryCast: e.TryCast}, nil
 	case *parser.CaseExpr:
 		return b.bindCaseExpr(e, expectedType)
 	case *parser.BetweenExpr:
@@ -78,6 +79,29 @@ func (b *Binder) bindExpr(
 		return b.bindCubeExpr(e)
 	case *parser.ArrayExpr:
 		return b.bindArrayExpr(e)
+	case *parser.LambdaExpr:
+		// Lambda expressions store the raw parser body for runtime evaluation.
+		// Lambda params are not real columns -- they are bound at execution time.
+		return &BoundLambdaExpr{Params: e.Params, BodyExpr: e.Body}, nil
+	case *parser.SimilarToExpr:
+		expr, err := b.bindExpr(e.Expr, dukdb.TYPE_VARCHAR)
+		if err != nil {
+			return nil, err
+		}
+		pattern, err := b.bindExpr(e.Pattern, dukdb.TYPE_VARCHAR)
+		if err != nil {
+			return nil, err
+		}
+		var escapeRune rune
+		if e.Escape != "" {
+			escapeRune = []rune(e.Escape)[0]
+		}
+		return &BoundSimilarToExpr{
+			Expr:    expr,
+			Pattern: pattern,
+			Escape:  escapeRune,
+			Not:     e.Not,
+		}, nil
 	default:
 		return nil, b.errorf("unsupported expression type: %T", expr)
 	}
@@ -293,6 +317,18 @@ func (b *Binder) bindFunctionCall(
 		return b.bindGroupingCall(f)
 	}
 
+	// Check for scalar macro expansion before built-in function lookup
+	if b.catalog != nil {
+		funcNameLower := strings.ToLower(f.Name)
+		if macro, ok := b.catalog.GetMacro("", funcNameLower); ok && macro.Type == catalog.MacroTypeScalar {
+			expanded, err := b.expandScalarMacro(macro, f.Args, 0)
+			if err != nil {
+				return nil, err
+			}
+			return b.bindExpr(expanded, dukdb.TYPE_ANY)
+		}
+	}
+
 	// Get expected argument types from function signature if available
 	argTypes := getFunctionArgTypes(
 		f.Name,
@@ -313,6 +349,19 @@ func (b *Binder) bindFunctionCall(
 			return nil, err
 		}
 		args = append(args, bound)
+	}
+
+	// Bind named arguments (e.g., struct_pack(name := 'Alice'))
+	var namedArgs map[string]BoundExpr
+	if len(f.NamedArgs) > 0 {
+		namedArgs = make(map[string]BoundExpr, len(f.NamedArgs))
+		for name, argExpr := range f.NamedArgs {
+			bound, err := b.bindExpr(argExpr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			namedArgs[name] = bound
+		}
 	}
 
 	// Check for scalar UDF first
@@ -387,12 +436,13 @@ func (b *Binder) bindFunctionCall(
 	}
 
 	return &BoundFunctionCall{
-		Name:     f.Name,
-		Args:     args,
-		Distinct: f.Distinct,
-		Star:     f.Star,
-		OrderBy:  boundOrderBy,
-		ResType:  resType,
+		Name:      f.Name,
+		Args:      args,
+		NamedArgs: namedArgs,
+		Distinct:  f.Distinct,
+		Star:      f.Star,
+		OrderBy:   boundOrderBy,
+		ResType:   resType,
 	}, nil
 }
 

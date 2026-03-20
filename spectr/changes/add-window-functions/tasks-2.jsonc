@@ -9,211 +9,211 @@
       "id": "2.1",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.1 Implement evaluateLag (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.2 Implement LAG with offset parameter handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.3 Implement LAG with default value handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.4 Implement LAG with IGNORE NULLS support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.5",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.5 Write unit tests for LAG basic cases",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.6",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.6 Write unit tests for LAG with IGNORE NULLS",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.7",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.1.7 Verify LAG respects partition boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.8",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.1 Implement evaluateLead (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.9",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.2 Implement LEAD with offset and default parameters",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.10",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.3 Implement LEAD with IGNORE NULLS support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.11",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.4 Write unit tests for LEAD basic cases",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.12",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.5 Write unit tests for LEAD vs LAG symmetry",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.13",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.2.6 Verify LEAD respects partition boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.14",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.1 Implement evaluateFirstValue (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.15",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.2 Implement FIRST_VALUE with frame boundary handling",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.16",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.3 Implement FIRST_VALUE with IGNORE NULLS support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.17",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.4 Write unit tests for FIRST_VALUE with default frame",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.18",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.5 Write unit tests for FIRST_VALUE with explicit frame",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.19",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.3.6 Verify FIRST_VALUE handles empty frames correctly",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.20",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.1 Implement evaluateLastValue (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.21",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.2 Implement LAST_VALUE with frame boundary handling (important: default frame with ORDER BY)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.22",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.3 Implement LAST_VALUE with IGNORE NULLS support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.23",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.4 Write unit tests for LAST_VALUE with default frame",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.24",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.5 Write unit tests for LAST_VALUE with UNBOUNDED FOLLOWING",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.25",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.4.6 Verify LAST_VALUE default frame is NOT unbounded following",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.26",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.1 Implement evaluateNthValue (existing skeleton)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.27",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.2 Implement NTH_VALUE with n parameter evaluation",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.28",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.3 Implement NTH_VALUE with IGNORE NULLS support",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.29",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.4 Write unit tests for NTH_VALUE basic cases",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.30",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.5 Write unit tests for NTH_VALUE with n \u003e frame size",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.31",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.5.6 Verify NTH_VALUE handles invalid n values (0, negative, NULL)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.32",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.6.1 Run complete test suite for analytic functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.33",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.6.2 Compare results with DuckDB reference behavior",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.34",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.6.3 Test combinations of analytic functions in same query",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.35",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "2.6.4 Performance check: Phase 2 should use existing frame computation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

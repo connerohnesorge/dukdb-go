@@ -9,37 +9,37 @@
       "id": "1.1",
       "section": "OID System Implementation",
       "description": "Design OID allocation strategy (ranges: system, user, types, etc.)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.2",
       "section": "OID System Implementation",
       "description": "Implement OID generator in internal/metadata/",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.3",
       "section": "OID System Implementation",
       "description": "Create stable OID mapping for catalog objects",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.4",
       "section": "OID System Implementation",
       "description": "Implement OID persistence per connection",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.5",
       "section": "OID System Implementation",
       "description": "Add OID type support to type system if needed",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.6",
       "section": "OID System Implementation",
       "description": "Write unit tests for OID generation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "1"

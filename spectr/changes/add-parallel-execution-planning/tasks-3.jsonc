@@ -9,43 +9,43 @@
       "id": "3.1",
       "section": "Exchange Operators",
       "description": "Define Exchange operator types (Repartition, Broadcast, Gather, Round-Robin)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Exchange Operators",
       "description": "Implement PhysicalExchange operator and executor",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Exchange Operators",
       "description": "Implement Repartition executor (hash-based data distribution)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Exchange Operators",
       "description": "Implement Broadcast executor (replicate data to all workers)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.5",
       "section": "Exchange Operators",
       "description": "Implement Gather executor (collect results from workers)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.6",
       "section": "Exchange Operators",
       "description": "Write comprehensive tests for each exchange type",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.7",
       "section": "Exchange Operators",
       "description": "Add memory limit enforcement for broadcast exchange",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

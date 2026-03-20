@@ -9,25 +9,25 @@
       "id": "6.1",
       "section": "Phase 6: Executor Integration \u0026 Parallelism",
       "description": "**Task 6.1**: Refactor `PhysicalWindowExecutor` in `internal/executor/physical_window.go` to use the new vectorized evaluators and frame computers.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Phase 6: Executor Integration \u0026 Parallelism",
       "description": "**Task 6.2**: Implement `ParallelWindowProcessor` to process independent partitions concurrently using a worker pool.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Phase 6: Executor Integration \u0026 Parallelism",
       "description": "**Task 6.3**: Integrate `WindowSpillManager` into the `materialize` phase of `PhysicalWindowExecutor`.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Phase 6: Executor Integration \u0026 Parallelism",
       "description": "**Task 6.4**: Implement optimized peer group computation using vectorized comparisons.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

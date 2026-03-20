@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,7 +14,9 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/cache"
+	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/executor"
+	"github.com/dukdb/dukdb-go/internal/extension"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
@@ -97,6 +100,37 @@ type EngineConn struct {
 
 	// Settings map for storing session-level settings like checkpoint_threshold
 	settings map[string]string
+
+	// sqlPrepared stores SQL-level prepared statements (PREPARE/EXECUTE/DEALLOCATE)
+	sqlPrepared map[string]*sqlPreparedStatement
+}
+
+// sqlPreparedStatement holds a named SQL-level prepared statement.
+type sqlPreparedStatement struct {
+	name       string
+	query      string           // Original SQL for debugging
+	stmt       parser.Statement // Parsed AST
+	paramCount int              // Number of $N parameters expected
+}
+
+// extensionRegistryAdapter adapts extension.Registry to executor.ExtensionRegistryInterface.
+type extensionRegistryAdapter struct {
+	registry *extension.Registry
+}
+
+func (a *extensionRegistryAdapter) ListExtensions() []executor.ExtensionInfo {
+	infos := a.registry.ListExtensions()
+	result := make([]executor.ExtensionInfo, len(infos))
+	for i, info := range infos {
+		result[i] = executor.ExtensionInfo{
+			Name:        info.Name,
+			Description: info.Description,
+			Version:     info.Version,
+			Installed:   info.Installed,
+			Loaded:      info.Loaded,
+		}
+	}
+	return result
 }
 
 // undoRecorderAdapter adapts a Transaction to the executor.UndoRecorder interface.
@@ -159,6 +193,30 @@ func (c *EngineConn) Execute(
 		return c.handleReleaseSavepoint(s)
 	case *parser.SetStmt:
 		return c.handleSet(s)
+	case *parser.PrepareStmt:
+		return c.handlePrepare(s, query)
+	case *parser.ExecuteStmt:
+		return c.handleExecuteStmt(ctx, s, args)
+	case *parser.DeallocateStmt:
+		return c.handleDeallocate(s)
+	case *parser.ExportDatabaseStmt:
+		return c.handleExportDatabase(s)
+	case *parser.ImportDatabaseStmt:
+		return c.handleImportDatabase(ctx, s)
+	case *parser.InstallStmt:
+		return c.handleInstall(s)
+	case *parser.LoadStmt:
+		return c.handleLoad(s)
+	case *parser.AttachStmt:
+		return c.handleAttach(s)
+	case *parser.DetachStmt:
+		return c.handleDetach(s)
+	case *parser.UseStmt:
+		return c.handleUse(s)
+	case *parser.CreateDatabaseStmt:
+		return c.handleCreateDatabase(s)
+	case *parser.DropDatabaseStmt:
+		return c.handleDropDatabase(s)
 	}
 
 	// Bind the statement
@@ -182,6 +240,14 @@ func (c *EngineConn) Execute(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set extension registry for duckdb_extensions()
+	if c.engine.extensions != nil {
+		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
+	}
+	// Set FTS registry for full-text search operations
+	if c.engine.ftsRegistry != nil {
+		exec.SetFTSRegistry(&ftsRegistryAdapter{registry: c.engine.ftsRegistry})
+	}
 	// Set shared query cache for invalidation
 	exec.SetQueryCache(c.engine.QueryCache())
 	// Set WAL writer for persistent databases
@@ -591,6 +657,269 @@ func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []stri
 	return rows, columns, nil
 }
 
+// handlePrepare stores a named prepared statement on the connection.
+func (c *EngineConn) handlePrepare(stmt *parser.PrepareStmt, query string) (int64, error) {
+	name := strings.ToLower(stmt.Name)
+	if _, exists := c.sqlPrepared[name]; exists {
+		return 0, fmt.Errorf("prepared statement %q already exists", stmt.Name)
+	}
+
+	// Count parameters in the inner statement
+	paramCount := parser.CountParameters(stmt.Inner)
+
+	c.sqlPrepared[name] = &sqlPreparedStatement{
+		name:       name,
+		query:      query,
+		stmt:       stmt.Inner,
+		paramCount: paramCount,
+	}
+	return 0, nil
+}
+
+// handleExecuteStmt executes a named prepared statement (for Exec path).
+func (c *EngineConn) handleExecuteStmt(ctx context.Context, stmt *parser.ExecuteStmt, args []driver.NamedValue) (int64, error) {
+	name := strings.ToLower(stmt.Name)
+	prep, ok := c.sqlPrepared[name]
+	if !ok {
+		return 0, fmt.Errorf("prepared statement %q does not exist", stmt.Name)
+	}
+
+	// Build parameter values by evaluating the EXECUTE parameter expressions
+	execArgs, err := c.buildExecArgs(stmt.Params, prep.paramCount)
+	if err != nil {
+		return 0, err
+	}
+
+	// Re-bind, re-plan, and execute the inner statement with the parameter values
+	return c.executeInnerStmt(ctx, prep.stmt, execArgs)
+}
+
+// handleExecuteStmtQuery executes a named prepared statement (for Query path).
+func (c *EngineConn) handleExecuteStmtQuery(ctx context.Context, stmt *parser.ExecuteStmt, args []driver.NamedValue) ([]map[string]any, []string, error) {
+	name := strings.ToLower(stmt.Name)
+	prep, ok := c.sqlPrepared[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("prepared statement %q does not exist", stmt.Name)
+	}
+
+	execArgs, err := c.buildExecArgs(stmt.Params, prep.paramCount)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.queryInnerStmt(ctx, prep.stmt, execArgs)
+}
+
+// handleDeallocate removes a named prepared statement or all prepared statements.
+func (c *EngineConn) handleDeallocate(stmt *parser.DeallocateStmt) (int64, error) {
+	if stmt.All {
+		c.sqlPrepared = make(map[string]*sqlPreparedStatement)
+		return 0, nil
+	}
+
+	name := strings.ToLower(stmt.Name)
+	if _, ok := c.sqlPrepared[name]; !ok {
+		return 0, fmt.Errorf("prepared statement %q does not exist", stmt.Name)
+	}
+	delete(c.sqlPrepared, name)
+	return 0, nil
+}
+
+// handleInstall handles the INSTALL extension_name statement.
+// INSTALL is a no-op for compiled-in extensions.
+func (c *EngineConn) handleInstall(stmt *parser.InstallStmt) (int64, error) {
+	if c.engine.extensions != nil {
+		return 0, c.engine.extensions.Install(stmt.Name)
+	}
+	return 0, nil
+}
+
+// handleLoad handles the LOAD extension_name statement.
+// LOAD activates a registered extension.
+func (c *EngineConn) handleLoad(stmt *parser.LoadStmt) (int64, error) {
+	if c.engine.extensions != nil {
+		return 0, c.engine.extensions.Load(stmt.Name)
+	}
+	return 0, nil
+}
+
+// handleAttach handles the ATTACH statement by registering a new database.
+// For now, all attached databases are created as in-memory databases.
+// File-based attachment is future work.
+func (c *EngineConn) handleAttach(stmt *parser.AttachStmt) (int64, error) {
+	alias := stmt.Alias
+	if alias == "" {
+		// Derive alias from path
+		alias = stmt.Path
+		// Strip directory and extension
+		if idx := strings.LastIndexByte(alias, '/'); idx >= 0 {
+			alias = alias[idx+1:]
+		}
+		if idx := strings.LastIndexByte(alias, '\\'); idx >= 0 {
+			alias = alias[idx+1:]
+		}
+		if idx := strings.LastIndexByte(alias, '.'); idx >= 0 {
+			alias = alias[:idx]
+		}
+		if alias == "" || alias == ":memory:" {
+			alias = "db"
+		}
+	}
+	// Create a new in-memory catalog and storage for the attached database
+	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	return 0, c.engine.dbManager.Attach(alias, stmt.Path, stmt.ReadOnly, cat, stor)
+}
+
+// handleDetach handles the DETACH statement by removing an attached database.
+func (c *EngineConn) handleDetach(stmt *parser.DetachStmt) (int64, error) {
+	return 0, c.engine.dbManager.Detach(stmt.Name, stmt.IfExists)
+}
+
+// handleUse handles the USE statement by setting the default database.
+func (c *EngineConn) handleUse(stmt *parser.UseStmt) (int64, error) {
+	return 0, c.engine.dbManager.Use(stmt.Database)
+}
+
+// handleCreateDatabase handles the CREATE DATABASE statement.
+func (c *EngineConn) handleCreateDatabase(stmt *parser.CreateDatabaseStmt) (int64, error) {
+	return 0, c.engine.dbManager.CreateDatabase(stmt.Name, stmt.IfNotExists)
+}
+
+// handleDropDatabase handles the DROP DATABASE statement.
+func (c *EngineConn) handleDropDatabase(stmt *parser.DropDatabaseStmt) (int64, error) {
+	return 0, c.engine.dbManager.DropDatabase(stmt.Name, stmt.IfExists)
+}
+
+// buildExecArgs evaluates EXECUTE parameter expressions into driver.NamedValue args.
+func (c *EngineConn) buildExecArgs(params []parser.Expr, expectedCount int) ([]driver.NamedValue, error) {
+	if len(params) != expectedCount {
+		return nil, fmt.Errorf("expected %d parameters, got %d", expectedCount, len(params))
+	}
+
+	execArgs := make([]driver.NamedValue, len(params))
+	for i, paramExpr := range params {
+		val, err := c.evaluateSimpleExpr(paramExpr)
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating parameter %d: %v", i+1, err)
+		}
+		execArgs[i] = driver.NamedValue{Ordinal: i + 1, Value: val}
+	}
+	return execArgs, nil
+}
+
+// executeInnerStmt binds, plans, and executes a statement (Exec path).
+func (c *EngineConn) executeInnerStmt(ctx context.Context, stmt parser.Statement, args []driver.NamedValue) (int64, error) {
+	b := binder.NewBinder(c.engine.catalog)
+	boundStmt, err := b.Bind(stmt)
+	if err != nil {
+		return 0, err
+	}
+
+	p := planner.NewPlanner(c.engine.catalog)
+	plan, err := p.Plan(boundStmt)
+	if err != nil {
+		return 0, err
+	}
+
+	exec := executor.NewExecutor(c.engine.catalog, c.engine.storage)
+	exec.SetConnection(c)
+	if c.engine.extensions != nil {
+		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
+	}
+	// Set FTS registry for full-text search operations
+	if c.engine.ftsRegistry != nil {
+		exec.SetFTSRegistry(&ftsRegistryAdapter{registry: c.engine.ftsRegistry})
+	}
+	exec.SetQueryCache(c.engine.QueryCache())
+	if c.engine.WAL() != nil {
+		exec.SetWAL(c.engine.WAL())
+		if c.txn != nil {
+			exec.SetTxnID(c.txn.ID())
+		}
+	}
+	if c.txn != nil && c.inTxn {
+		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
+		exec.SetInTransaction(true)
+	}
+	c.configureExecutorMVCC(exec)
+
+	result, err := exec.Execute(ctx, plan, args)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected, nil
+}
+
+// queryInnerStmt binds, plans, and executes a statement (Query path).
+func (c *EngineConn) queryInnerStmt(ctx context.Context, stmt parser.Statement, args []driver.NamedValue) ([]map[string]any, []string, error) {
+	b := binder.NewBinder(c.engine.catalog)
+	boundStmt, err := b.Bind(stmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p := planner.NewPlanner(c.engine.catalog)
+	plan, err := p.Plan(boundStmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	exec := executor.NewExecutor(c.engine.catalog, c.engine.storage)
+	exec.SetConnection(c)
+	if c.engine.extensions != nil {
+		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
+	}
+	// Set FTS registry for full-text search operations
+	if c.engine.ftsRegistry != nil {
+		exec.SetFTSRegistry(&ftsRegistryAdapter{registry: c.engine.ftsRegistry})
+	}
+	exec.SetQueryCache(c.engine.QueryCache())
+	if c.engine.WAL() != nil {
+		exec.SetWAL(c.engine.WAL())
+		if c.txn != nil {
+			exec.SetTxnID(c.txn.ID())
+		}
+	}
+	if c.txn != nil && c.inTxn {
+		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
+		exec.SetInTransaction(true)
+	}
+	c.configureExecutorMVCC(exec)
+
+	result, err := exec.Execute(ctx, plan, args)
+	if err != nil {
+		return nil, nil, err
+	}
+	return result.Rows, result.Columns, nil
+}
+
+// evaluateSimpleExpr evaluates a simple expression (literal, negative literal) for EXECUTE parameters.
+func (c *EngineConn) evaluateSimpleExpr(expr parser.Expr) (any, error) {
+	switch e := expr.(type) {
+	case *parser.Literal:
+		return e.Value, nil
+	case *parser.UnaryExpr:
+		if e.Op == parser.OpNeg {
+			val, err := c.evaluateSimpleExpr(e.Expr)
+			if err != nil {
+				return nil, err
+			}
+			switch v := val.(type) {
+			case int64:
+				return -v, nil
+			case float64:
+				return -v, nil
+			default:
+				return nil, fmt.Errorf("cannot negate value of type %T", val)
+			}
+		}
+		return nil, fmt.Errorf("unsupported unary operator in EXECUTE parameter")
+	default:
+		return nil, fmt.Errorf("unsupported expression type in EXECUTE parameter: %T", expr)
+	}
+}
+
 // configureExecutorMVCC configures the executor with MVCC visibility settings
 // based on the current transaction's isolation level.
 //
@@ -696,6 +1025,63 @@ func (c *EngineConn) Query(
 		return c.handleShow(showStmt)
 	}
 
+	// Handle extension and database management statements
+	switch s := stmt.(type) {
+	case *parser.InstallStmt:
+		if _, err := c.handleInstall(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.LoadStmt:
+		if _, err := c.handleLoad(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.AttachStmt:
+		if _, err := c.handleAttach(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.DetachStmt:
+		if _, err := c.handleDetach(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.UseStmt:
+		if _, err := c.handleUse(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.CreateDatabaseStmt:
+		if _, err := c.handleCreateDatabase(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.DropDatabaseStmt:
+		if _, err := c.handleDropDatabase(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	default:
+		// not a special statement, continue
+	}
+
+	// Handle SQL-level prepared statement operations
+	switch s := stmt.(type) {
+	case *parser.PrepareStmt:
+		if _, err := c.handlePrepare(s, query); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	case *parser.ExecuteStmt:
+		return c.handleExecuteStmtQuery(ctx, s, args)
+	case *parser.DeallocateStmt:
+		if _, err := c.handleDeallocate(s); err != nil {
+			return nil, nil, err
+		}
+		return []map[string]any{}, []string{}, nil
+	}
+
 	// Bind the statement
 	b := binder.NewBinder(c.engine.catalog)
 	boundStmt, err := b.Bind(stmt)
@@ -754,6 +1140,14 @@ func (c *EngineConn) Query(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set extension registry for duckdb_extensions()
+	if c.engine.extensions != nil {
+		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
+	}
+	// Set FTS registry for full-text search operations
+	if c.engine.ftsRegistry != nil {
+		exec.SetFTSRegistry(&ftsRegistryAdapter{registry: c.engine.ftsRegistry})
+	}
 	// Set shared query cache for invalidation
 	exec.SetQueryCache(queryCache)
 	// Set WAL writer for persistent databases
@@ -1399,6 +1793,9 @@ func (c *EngineConn) Close() error {
 	}
 
 	c.closed = true
+
+	// Clean up prepared statements
+	c.sqlPrepared = nil
 
 	// Rollback any active transaction
 	if c.txn != nil && c.txn.IsActive() {

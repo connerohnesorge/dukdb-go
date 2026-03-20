@@ -9,19 +9,19 @@
       "id": "5.1",
       "section": "Extensibility Views (Part 4)",
       "description": "Implement information_schema.triggers view (initially empty, extensible)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Extensibility Views (Part 4)",
       "description": "Add documentation comment for trigger extensibility",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Extensibility Views (Part 4)",
       "description": "Add tests for 5.1",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

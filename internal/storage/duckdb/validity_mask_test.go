@@ -165,7 +165,7 @@ func TestValidityMaskAllNull(t *testing.T) {
 	defer func() { _ = storage.Close() }()
 
 	// Load catalog
-	cat, err := storage.LoadCatalog()
+	_, err = storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
 
@@ -230,7 +230,7 @@ func TestValidityMaskNoNulls(t *testing.T) {
 	defer func() { _ = storage.Close() }()
 
 	// Load catalog
-	cat, err := storage.LoadCatalog()
+	_, err = storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
 
@@ -299,7 +299,7 @@ func TestValidityMaskBitOrdering(t *testing.T) {
 	defer func() { _ = storage.Close() }()
 
 	// Load catalog
-	cat, err := storage.LoadCatalog()
+	_, err = storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
 
@@ -378,7 +378,7 @@ func TestValidityMaskMultipleWords(t *testing.T) {
 	defer func() { _ = storage.Close() }()
 
 	// Load catalog
-	cat, err := storage.LoadCatalog()
+	_, err = storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
 
@@ -465,7 +465,7 @@ func TestValidityMaskMultipleColumns(t *testing.T) {
 	defer func() { _ = storage.Close() }()
 
 	// Load catalog
-	cat, err := storage.LoadCatalog()
+	_, err = storage.LoadCatalog()
 	skipOnFormatError(t, err)
 	require.NoError(t, err)
 

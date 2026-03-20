@@ -11,6 +11,7 @@ import (
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/planner"
 	"github.com/dukdb/dukdb-go/internal/storage"
 	"github.com/dukdb/dukdb-go/internal/storage/index"
@@ -21,6 +22,44 @@ import (
 type ConnectionInterface interface {
 	GetSetting(key string) string
 	SetSetting(key string, value string)
+}
+
+// ExtensionInfo holds metadata about a registered extension.
+type ExtensionInfo struct {
+	Name        string
+	Description string
+	Version     string
+	Installed   bool
+	Loaded      bool
+}
+
+// ExtensionRegistryInterface provides access to the extension registry.
+type ExtensionRegistryInterface interface {
+	ListExtensions() []ExtensionInfo
+}
+
+// FTSSearchResult represents a single full-text search result.
+type FTSSearchResult struct {
+	DocID int64
+	Score float64
+}
+
+// FTSIndex represents a full-text search index that can be searched.
+type FTSIndex interface {
+	Search(query string) []FTSSearchResult
+	AddDocument(docID int64, text string)
+	RemoveDocument(docID int64)
+	TableName() string
+	ColumnName() string
+	DocCount() int
+}
+
+// FTSRegistryInterface provides access to the FTS index registry.
+type FTSRegistryInterface interface {
+	CreateIndex(tableName, columnName string) FTSIndex
+	GetIndex(tableName string) (FTSIndex, bool)
+	DropIndex(tableName string) bool
+	HasIndex(tableName string) bool
 }
 
 // ExecutionContext holds context for query execution.
@@ -189,6 +228,12 @@ type Executor struct {
 	conn ConnectionInterface // Connection interface for settings (optional, may be nil)
 
 	queryCache *cache.QueryResultCache
+
+	// Extension registry for duckdb_extensions() table function
+	extRegistry ExtensionRegistryInterface // Extension registry (optional, may be nil)
+
+	// Full-text search registry for FTS index operations
+	ftsRegistry FTSRegistryInterface // FTS registry (optional, may be nil)
 }
 
 // NewExecutor creates a new Executor.
@@ -270,6 +315,16 @@ func (e *Executor) SetQueryCache(queryCache *cache.QueryResultCache) {
 	e.queryCache = queryCache
 }
 
+// SetExtensionRegistry sets the extension registry for duckdb_extensions().
+func (e *Executor) SetExtensionRegistry(registry ExtensionRegistryInterface) {
+	e.extRegistry = registry
+}
+
+// SetFTSRegistry sets the full-text search registry for FTS operations.
+func (e *Executor) SetFTSRegistry(registry FTSRegistryInterface) {
+	e.ftsRegistry = registry
+}
+
 func (e *Executor) invalidateQueryCache(tables ...string) {
 	if e.queryCache == nil || len(tables) == 0 {
 		return
@@ -321,6 +376,10 @@ func (e *Executor) executeWithContext(
 		return e.executeHashJoin(execCtx, p)
 	case *planner.PhysicalNestedLoopJoin:
 		return e.executeNestedLoopJoin(execCtx, p)
+	case *planner.PhysicalPositionalJoin:
+		return e.executePositionalJoin(execCtx, p)
+	case *planner.PhysicalAsOfJoin:
+		return e.executeAsOfJoin(execCtx, p)
 	case *planner.PhysicalHashAggregate:
 		return e.executeHashAggregate(execCtx, p)
 	case *planner.PhysicalSort:
@@ -390,6 +449,16 @@ func (e *Executor) executeWithContext(
 		return e.executePivotPlan(execCtx, p)
 	case *planner.PhysicalUnpivot:
 		return e.executeUnpivotPlan(execCtx, p)
+	// Type DDL operations
+	case *planner.PhysicalCreateType:
+		return e.executeCreateType(execCtx, p)
+	case *planner.PhysicalDropType:
+		return e.executeDropType(execCtx, p)
+	// Macro DDL operations
+	case *planner.PhysicalCreateMacro:
+		return e.executeCreateMacro(execCtx, p)
+	case *planner.PhysicalDropMacro:
+		return e.executeDropMacro(execCtx, p)
 	// Secret DDL operations
 	case *planner.PhysicalCreateSecret:
 		return e.executeCreateSecret(execCtx, p)
@@ -945,6 +1014,16 @@ func (e *Executor) executeProject(
 				}
 			}
 
+			// Check if this is a GROUPING() function call
+			// GROUPING() values are pre-computed by the grouping sets aggregate operator
+			if _, ok := expr.(*binder.BoundGroupingCall); ok {
+				alias := columns[j]
+				if val, exists := row[alias]; exists {
+					projectedRow[alias] = val
+					continue
+				}
+			}
+
 			val, err := e.evaluateExpr(
 				ctx,
 				expr,
@@ -1202,6 +1281,150 @@ func (e *Executor) performJoin(
 	return result, nil
 }
 
+func (e *Executor) executePositionalJoin(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalPositionalJoin,
+) (*ExecutionResult, error) {
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
+	if err != nil {
+		return nil, err
+	}
+
+	rightResult, err := e.executeWithContext(ctx, plan.Right)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine column names
+	columns := make(
+		[]string,
+		0,
+		len(leftResult.Columns)+len(rightResult.Columns),
+	)
+	columns = append(columns, leftResult.Columns...)
+	columns = append(columns, rightResult.Columns...)
+
+	// Determine max row count
+	maxRows := len(leftResult.Rows)
+	if len(rightResult.Rows) > maxRows {
+		maxRows = len(rightResult.Rows)
+	}
+
+	result := &ExecutionResult{
+		Columns: columns,
+		Rows:    make([]map[string]any, maxRows),
+	}
+
+	for i := 0; i < maxRows; i++ {
+		row := make(map[string]any)
+		if i < len(leftResult.Rows) {
+			for k, v := range leftResult.Rows[i] {
+				row[k] = v
+			}
+		} else {
+			for _, col := range leftResult.Columns {
+				row[col] = nil
+			}
+		}
+		if i < len(rightResult.Rows) {
+			for k, v := range rightResult.Rows[i] {
+				row[k] = v
+			}
+		} else {
+			for _, col := range rightResult.Columns {
+				row[col] = nil
+			}
+		}
+		result.Rows[i] = row
+	}
+
+	return result, nil
+}
+
+func (e *Executor) executeAsOfJoin(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalAsOfJoin,
+) (*ExecutionResult, error) {
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
+	if err != nil {
+		return nil, err
+	}
+
+	rightResult, err := e.executeWithContext(ctx, plan.Right)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine column names
+	columns := make(
+		[]string,
+		0,
+		len(leftResult.Columns)+len(rightResult.Columns),
+	)
+	columns = append(columns, leftResult.Columns...)
+	columns = append(columns, rightResult.Columns...)
+
+	result := &ExecutionResult{
+		Columns: columns,
+		Rows:    make([]map[string]any, 0),
+	}
+
+	// For each left row, find the best matching right row.
+	// The ASOF join condition typically has equality parts (e.g., ticker = ticker)
+	// AND an inequality part (e.g., t.ts >= q.ts).
+	// We evaluate the condition for all right rows and pick the one that satisfies
+	// the condition AND has the closest value (the last right row that satisfies
+	// the condition when right is sorted ascending on the inequality column).
+	for _, leftRow := range leftResult.Rows {
+		var bestMatch map[string]any
+
+		for _, rightRow := range rightResult.Rows {
+			// Combine rows for condition evaluation
+			combinedRow := make(map[string]any)
+			for k, v := range leftRow {
+				combinedRow[k] = v
+			}
+			for k, v := range rightRow {
+				combinedRow[k] = v
+			}
+
+			// Check the full condition
+			if plan.Condition != nil {
+				passes, err := e.evaluateExprAsBool(
+					ctx,
+					plan.Condition,
+					combinedRow,
+				)
+				if err != nil {
+					return nil, err
+				}
+				if !passes {
+					continue
+				}
+			}
+
+			// Keep the latest matching row (ASOF semantics: closest preceding match)
+			bestMatch = combinedRow
+		}
+
+		if bestMatch != nil {
+			result.Rows = append(result.Rows, bestMatch)
+		} else if plan.JoinType == planner.JoinTypeAsOfLeft {
+			// LEFT ASOF: emit left row with NULL right side
+			combinedRow := make(map[string]any)
+			for k, v := range leftRow {
+				combinedRow[k] = v
+			}
+			for _, col := range rightResult.Columns {
+				combinedRow[col] = nil
+			}
+			result.Rows = append(result.Rows, combinedRow)
+		}
+	}
+
+	return result, nil
+}
+
 func (e *Executor) executeHashAggregate(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalHashAggregate,
@@ -1347,15 +1570,21 @@ func (e *Executor) executeHashAggregateWithGroupingSets(
 		}
 	}
 	for i := range plan.Aggregates {
-		if numGroupBy+i < len(plan.Aliases) && plan.Aliases[numGroupBy+i] != "" {
-			columns[numGroupBy+i] = plan.Aliases[numGroupBy+i]
+		idx := numGroupBy + i
+		if idx < len(plan.Aliases) && plan.Aliases[idx] != "" {
+			columns[idx] = plan.Aliases[idx]
 		} else {
-			columns[numGroupBy+i] = "col" + string(rune('0'+numGroupBy+i))
+			columns[idx] = "col" + string(rune('0'+idx))
 		}
 	}
 	// Add GROUPING() columns
 	for i := range plan.GroupingCalls {
-		columns[numGroupBy+numAgg+i] = "GROUPING"
+		idx := numGroupBy + numAgg + i
+		if idx < len(plan.Aliases) && plan.Aliases[idx] != "" {
+			columns[idx] = plan.Aliases[idx]
+		} else {
+			columns[idx] = "GROUPING"
+		}
 	}
 
 	result := &ExecutionResult{
@@ -1707,21 +1936,46 @@ func (e *Executor) executeInsert(
 		}
 	}
 
-	rowsAffected := int64(0)
+	rowsAffected := int64(0) // counts actually inserted rows
+	updatedCount := int64(0) // counts rows updated via ON CONFLICT DO UPDATE
 	var pkIndices []int
 	var pkColumns []*catalog.ColumnDef
 	if plan.TableDef != nil && plan.TableDef.HasPrimaryKey() {
 		pkIndices = plan.TableDef.PrimaryKey
 		pkColumns = plan.TableDef.Columns
 	}
+
+	// For ON CONFLICT, we need to map PK keys to RowIDs so we can find
+	// existing rows to update. For plain INSERT, we only need existence check.
+	hasOnConflict := plan.OnConflict != nil
 	var pkKeys map[string]struct{}
+	var pkToRowID map[string]storage.RowID
 	if len(pkIndices) > 0 {
-		pkKeys = loadPrimaryKeyKeys(table, pkIndices)
+		if hasOnConflict {
+			pkToRowID = loadPrimaryKeyToRowID(table, pkIndices)
+			// Also build pkKeys from pkToRowID for consistency
+			pkKeys = make(map[string]struct{}, len(pkToRowID))
+			for k := range pkToRowID {
+				pkKeys[k] = struct{}{}
+			}
+		} else {
+			pkKeys = loadPrimaryKeyKeys(table, pkIndices)
+		}
 	}
 
-	checkPrimaryKey := func(values []any) error {
+	// Use the ON CONFLICT's conflict column indices if specified, otherwise fall back to PK
+	conflictIndices := pkIndices
+	if hasOnConflict && len(plan.OnConflict.ConflictColumnIndices) > 0 {
+		conflictIndices = plan.OnConflict.ConflictColumnIndices
+	}
+
+	// checkPrimaryKey checks for PK conflicts. Returns:
+	// - (false, nil) if no conflict (row should be inserted normally)
+	// - (true, nil) if conflict handled by ON CONFLICT (row should be skipped)
+	// - (false, err) on error
+	checkPrimaryKey := func(values []any) (bool, error) {
 		if len(pkIndices) == 0 {
-			return nil
+			return false, nil
 		}
 		pkValues, hasNull := extractPrimaryKeyValues(values, pkIndices)
 		detail := formatPrimaryKeyDetail(
@@ -1730,20 +1984,230 @@ func (e *Executor) executeInsert(
 			pkColumns,
 		)
 		if hasNull {
-			return constraintErrorf(
+			return false, constraintErrorf(
 				"NULL constraint violation on primary key (%s)",
 				detail,
 			)
 		}
 		key := primaryKeyKey(pkValues)
 		if _, exists := pkKeys[key]; exists {
-			return constraintErrorf(
-				"duplicate key \"%s\" violates primary key constraint",
-				detail,
-			)
+			// Conflict detected
+			if !hasOnConflict {
+				return false, constraintErrorf(
+					"duplicate key \"%s\" violates primary key constraint",
+					detail,
+				)
+			}
+
+			// Handle ON CONFLICT
+			switch plan.OnConflict.Action {
+			case parser.OnConflictDoNothing:
+				// Skip this row
+				return true, nil
+			case parser.OnConflictDoUpdate:
+				// Find the existing row and update it
+				existingRowID, rowIDExists := pkToRowID[key]
+				if !rowIDExists {
+					return false, constraintErrorf(
+						"duplicate key \"%s\" violates primary key constraint (row not found for update)",
+						detail,
+					)
+				}
+
+				existingRow := table.GetRow(existingRowID)
+				if existingRow == nil {
+					return false, constraintErrorf(
+						"duplicate key \"%s\" violates primary key constraint (row deleted)",
+						detail,
+					)
+				}
+
+				// Build a row map with both existing values and EXCLUDED values for expression evaluation
+				rowMap := make(map[string]any)
+				for i, col := range plan.TableDef.Columns {
+					rowMap[col.Name] = existingRow[i]
+					// Add EXCLUDED pseudo-table values (the values being inserted)
+					if i < len(values) {
+						rowMap["EXCLUDED."+col.Name] = values[i]
+					}
+				}
+
+				// Check optional WHERE clause for DO UPDATE
+				if plan.OnConflict.UpdateWhere != nil {
+					whereVal, err := e.evaluateExpr(ctx, plan.OnConflict.UpdateWhere, rowMap)
+					if err != nil {
+						return false, err
+					}
+					// If WHERE evaluates to false/nil, skip the update (like DO NOTHING for this row)
+					if whereVal == nil || whereVal == false {
+						return true, nil
+					}
+					if boolVal, ok := whereVal.(bool); ok && !boolVal {
+						return true, nil
+					}
+				}
+
+				// Apply SET clause expressions
+				columnValues := make(map[int]any)
+				for _, sc := range plan.OnConflict.UpdateSet {
+					val, err := e.evaluateExpr(ctx, sc.Value, rowMap)
+					if err != nil {
+						return false, err
+					}
+					columnValues[sc.ColumnIdx] = val
+				}
+
+				// Update the existing row in storage
+				if err := table.UpdateRows([]storage.RowID{existingRowID}, columnValues); err != nil {
+					return false, fmt.Errorf("failed to update row on conflict: %w", err)
+				}
+
+				// Count as an affected row (updated, not inserted)
+				updatedCount++
+				return true, nil // skip inserting (we updated instead)
+			}
 		}
 		pkKeys[key] = struct{}{}
+		return false, nil
+	}
+	_ = conflictIndices // used only for semantic validation above
 
+	// Build UNIQUE constraint checkers from table constraints
+	type uniqueChecker struct {
+		name    string
+		indices []int
+		keys    map[string]struct{}
+	}
+	var uniqueCheckers []uniqueChecker
+	if plan.TableDef != nil {
+		for _, c := range plan.TableDef.Constraints {
+			uc, ok := c.(*catalog.UniqueConstraintDef)
+			if !ok {
+				continue
+			}
+			indices := make([]int, len(uc.Columns))
+			for i, colName := range uc.Columns {
+				for j, col := range plan.TableDef.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						indices[i] = j
+						break
+					}
+				}
+			}
+			// Load existing keys from table
+			existingKeys := loadPrimaryKeyKeys(table, indices)
+			name := uc.Name
+			if name == "" {
+				name = strings.Join(uc.Columns, ", ")
+			}
+			uniqueCheckers = append(uniqueCheckers, uniqueChecker{
+				name:    name,
+				indices: indices,
+				keys:    existingKeys,
+			})
+		}
+	}
+
+	// checkUniqueConstraints checks all UNIQUE constraints for a row
+	checkUniqueConstraints := func(values []any) error {
+		for i := range uniqueCheckers {
+			ck := &uniqueCheckers[i]
+			keyVals := make([]any, len(ck.indices))
+			hasNull := false
+			for j, idx := range ck.indices {
+				if idx < len(values) {
+					keyVals[j] = values[idx]
+				}
+				if keyVals[j] == nil {
+					hasNull = true
+				}
+			}
+			// NULL values do not violate UNIQUE per SQL standard
+			if hasNull {
+				continue
+			}
+			key := primaryKeyKey(keyVals)
+			if _, exists := ck.keys[key]; exists {
+				return constraintErrorf(
+					"duplicate key violates unique constraint on (%s)",
+					ck.name,
+				)
+			}
+			ck.keys[key] = struct{}{}
+		}
+		return nil
+	}
+
+	// Build CHECK constraint evaluators from table constraints
+	type checkEvaluator struct {
+		name string
+		expr string
+	}
+	var checkEvaluators []checkEvaluator
+	if plan.TableDef != nil {
+		for _, c := range plan.TableDef.Constraints {
+			cc, ok := c.(*catalog.CheckConstraintDef)
+			if !ok || cc.Expression == "" {
+				continue
+			}
+			name := cc.Name
+			if name == "" {
+				name = cc.Expression
+			}
+			checkEvaluators = append(checkEvaluators, checkEvaluator{
+				name: name,
+				expr: cc.Expression,
+			})
+		}
+	}
+
+	// checkCheckConstraints evaluates all CHECK constraints for a row
+	checkCheckConstraints := func(values []any) error {
+		if len(checkEvaluators) == 0 {
+			return nil
+		}
+		// Build row map for expression evaluation
+		rowMap := make(map[string]any)
+		if plan.TableDef != nil {
+			for i, col := range plan.TableDef.Columns {
+				if i < len(values) {
+					rowMap[col.Name] = values[i]
+					// Also add lowercase version for case-insensitive matching
+					rowMap[strings.ToLower(col.Name)] = values[i]
+				}
+			}
+		}
+		for _, ce := range checkEvaluators {
+			// Parse the CHECK expression by wrapping in SELECT
+			wrapSQL := "SELECT " + ce.expr
+			stmt, err := parser.Parse(wrapSQL)
+			if err != nil {
+				continue // Skip unparseable expressions
+			}
+			selectStmt, ok := stmt.(*parser.SelectStmt)
+			if !ok || len(selectStmt.Columns) == 0 {
+				continue
+			}
+			// Evaluate the expression using the row values
+			result, err := e.evaluateExpr(ctx, selectStmt.Columns[0].Expr, rowMap)
+			if err != nil {
+				continue // Skip expressions that fail to evaluate
+			}
+			// NULL result passes CHECK per SQL standard
+			if result == nil {
+				continue
+			}
+			// Check if result is false
+			switch v := result.(type) {
+			case bool:
+				if !v {
+					return constraintErrorf(
+						"CHECK constraint violation: %s",
+						ce.name,
+					)
+				}
+			}
+		}
 		return nil
 	}
 
@@ -1793,7 +2257,21 @@ func (e *Executor) executeInsert(
 			for i, col := range sourceResult.Columns {
 				values[plan.Columns[i]] = row[col]
 			}
-			if err := checkPrimaryKey(values); err != nil {
+			conflictHandled, err := checkPrimaryKey(values)
+			if err != nil {
+				return nil, err
+			}
+			if conflictHandled {
+				continue // Row was handled by ON CONFLICT (skipped or updated)
+			}
+
+			// Check UNIQUE constraints
+			if err := checkUniqueConstraints(values); err != nil {
+				return nil, err
+			}
+
+			// Check CHECK constraints
+			if err := checkCheckConstraints(values); err != nil {
 				return nil, err
 			}
 
@@ -1848,7 +2326,21 @@ func (e *Executor) executeInsert(
 				}
 				values[plan.Columns[i]] = val
 			}
-			if err := checkPrimaryKey(values); err != nil {
+			conflictHandled, err := checkPrimaryKey(values)
+			if err != nil {
+				return nil, err
+			}
+			if conflictHandled {
+				continue // Row was handled by ON CONFLICT (skipped or updated)
+			}
+
+			// Check UNIQUE constraints
+			if err := checkUniqueConstraints(values); err != nil {
+				return nil, err
+			}
+
+			// Check CHECK constraints
+			if err := checkCheckConstraints(values); err != nil {
 				return nil, err
 			}
 
@@ -1901,6 +2393,9 @@ func (e *Executor) executeInsert(
 		}
 	}
 
+	// Total affected rows = inserted rows + rows updated via ON CONFLICT DO UPDATE
+	totalAffected := rowsAffected + updatedCount
+
 	// WAL logging: Log INSERT entry AFTER successful insertion
 	// This ensures atomicity - if the insert fails, no WAL entry is written
 	if e.wal != nil && rowsAffected > 0 {
@@ -1927,7 +2422,7 @@ func (e *Executor) executeInsert(
 		}
 	}
 
-	if rowsAffected > 0 {
+	if totalAffected > 0 {
 		e.invalidateQueryCache(plan.Table)
 	}
 
@@ -1937,8 +2432,35 @@ func (e *Executor) executeInsert(
 	}
 
 	return &ExecutionResult{
-		RowsAffected: rowsAffected,
+		RowsAffected: totalAffected,
 	}, nil
+}
+
+// loadPrimaryKeyToRowID builds a map from primary key string to RowID.
+// This is used for ON CONFLICT DO UPDATE to find existing rows.
+func loadPrimaryKeyToRowID(
+	table *storage.Table,
+	indices []int,
+) map[string]storage.RowID {
+	result := make(map[string]storage.RowID)
+	scanner := table.Scan()
+	for {
+		chunk := scanner.Next()
+		if chunk == nil {
+			break
+		}
+		for row := 0; row < chunk.Count(); row++ {
+			pkValues := make([]any, len(indices))
+			for i, idx := range indices {
+				pkValues[i] = chunk.GetValue(row, idx)
+			}
+			key := primaryKeyKey(pkValues)
+			if rowID := scanner.GetRowID(row); rowID != nil {
+				result[key] = *rowID
+			}
+		}
+	}
+	return result
 }
 
 // updateIndexesForInsert updates all indexes on a table with newly inserted rows.
@@ -2036,6 +2558,11 @@ func (e *Executor) executeCreateTable(
 		if err := tableDef.SetPrimaryKey(plan.PrimaryKey); err != nil {
 			return nil, err
 		}
+	}
+
+	// Store constraints on the table definition
+	if len(plan.Constraints) > 0 {
+		tableDef.Constraints = plan.Constraints
 	}
 
 	// Add to catalog
@@ -2709,12 +3236,112 @@ func (e *Executor) executeSetOp(
 		}
 		return result, nil
 
+	case planner.SetOpUnionAllByName:
+		return e.executeUnionByName(leftResult, rightResult, false)
+
+	case planner.SetOpUnionByName:
+		return e.executeUnionByName(leftResult, rightResult, true)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  "unsupported set operation type",
 		}
 	}
+}
+
+// executeUnionByName executes UNION [ALL] BY NAME with column name matching.
+// Output columns are left columns in order, then right-only columns in order.
+// Missing columns are filled with NULL.
+func (e *Executor) executeUnionByName(
+	leftResult, rightResult *ExecutionResult,
+	distinct bool,
+) (*ExecutionResult, error) {
+	leftCols := leftResult.Columns
+	rightCols := rightResult.Columns
+
+	// Build column name -> index maps (case-insensitive)
+	leftColMap := make(map[string]int, len(leftCols))
+	for i, col := range leftCols {
+		leftColMap[strings.ToLower(col)] = i
+	}
+
+	rightColMap := make(map[string]int, len(rightCols))
+	for i, col := range rightCols {
+		rightColMap[strings.ToLower(col)] = i
+	}
+
+	// Output columns: left columns in order, then right-only columns in order
+	outputCols := make([]string, 0, len(leftCols)+len(rightCols))
+	outputCols = append(outputCols, leftCols...)
+	for _, col := range rightCols {
+		if _, exists := leftColMap[strings.ToLower(col)]; !exists {
+			outputCols = append(outputCols, col)
+		}
+	}
+
+	// Build mappings: for each output column, index in left/right result (-1 = NULL)
+	leftMapping := make([]int, len(outputCols))
+	rightMapping := make([]int, len(outputCols))
+	for i, col := range outputCols {
+		colLower := strings.ToLower(col)
+		if idx, ok := leftColMap[colLower]; ok {
+			leftMapping[i] = idx
+		} else {
+			leftMapping[i] = -1
+		}
+		if idx, ok := rightColMap[colLower]; ok {
+			rightMapping[i] = idx
+		} else {
+			rightMapping[i] = -1
+		}
+	}
+
+	// Remap rows from both sides
+	rows := make([]map[string]any, 0, len(leftResult.Rows)+len(rightResult.Rows))
+
+	for _, row := range leftResult.Rows {
+		newRow := make(map[string]any, len(outputCols))
+		for i, col := range outputCols {
+			if leftMapping[i] >= 0 {
+				newRow[col] = row[leftCols[leftMapping[i]]]
+			} else {
+				newRow[col] = nil
+			}
+		}
+		rows = append(rows, newRow)
+	}
+
+	for _, row := range rightResult.Rows {
+		newRow := make(map[string]any, len(outputCols))
+		for i, col := range outputCols {
+			if rightMapping[i] >= 0 {
+				newRow[col] = row[rightCols[rightMapping[i]]]
+			} else {
+				newRow[col] = nil
+			}
+		}
+		rows = append(rows, newRow)
+	}
+
+	// Apply distinct if needed (UNION BY NAME vs UNION ALL BY NAME)
+	if distinct {
+		seen := make(map[string]struct{})
+		distinctRows := make([]map[string]any, 0)
+		for _, row := range rows {
+			key := formatRowForSetOp(row, outputCols)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				distinctRows = append(distinctRows, row)
+			}
+		}
+		rows = distinctRows
+	}
+
+	return &ExecutionResult{
+		Columns: outputCols,
+		Rows:    rows,
+	}, nil
 }
 
 // formatRowForSetOp creates a string key for a row that can be used for set comparison.

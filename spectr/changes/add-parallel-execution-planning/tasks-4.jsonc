@@ -9,43 +9,43 @@
       "id": "4.1",
       "section": "Cost Model Enhancement",
       "description": "Add parallelism dimension to cost estimates (CPU cost, network cost for exchanges)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "Cost Model Enhancement",
       "description": "Implement parallel cost calculation for table scans",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.3",
       "section": "Cost Model Enhancement",
       "description": "Implement parallel cost calculation for joins",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "Cost Model Enhancement",
       "description": "Implement parallel cost calculation for aggregations",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.5",
       "section": "Cost Model Enhancement",
       "description": "Add exchange operator costs to cost model",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.6",
       "section": "Cost Model Enhancement",
       "description": "Compare sequential vs parallel plans and select cheaper option",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.7",
       "section": "Cost Model Enhancement",
       "description": "Write cost model tests with benchmark queries",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "4"

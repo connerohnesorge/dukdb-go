@@ -9,25 +9,25 @@
       "id": "10.1",
       "section": "Tool Compatibility Testing",
       "description": "Test with DBeaver (if available)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.2",
       "section": "Tool Compatibility Testing",
       "description": "Test with pgAdmin (if available)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.3",
       "section": "Tool Compatibility Testing",
       "description": "Verify schema tree displays correctly",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.4",
       "section": "Tool Compatibility Testing",
       "description": "Test psql-like commands (\\dt, \\dv, \\df)",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "10"

@@ -9,31 +9,31 @@
       "id": "7.1",
       "section": "Phase 7: Verification \u0026 Testing",
       "description": "**Task 7.1**: Create comprehensive unit tests for each frame computer in `internal/executor/window_frames_test.go`.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Phase 7: Verification \u0026 Testing",
       "description": "**Task 7.2**: Implement the DuckDB v1.4.3 window function test suite in `internal/executor/testdata/window/`.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Phase 7: Verification \u0026 Testing",
       "description": "**Task 7.3**: Create integration tests for named windows and inheritance.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.4",
       "section": "Phase 7: Verification \u0026 Testing",
       "description": "**Task 7.4**: Develop performance benchmarks for:",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.5",
       "section": "Phase 7: Verification \u0026 Testing",
       "description": "**Task 7.5**: Verify correct `NULL` handling across all functions and frame types.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"

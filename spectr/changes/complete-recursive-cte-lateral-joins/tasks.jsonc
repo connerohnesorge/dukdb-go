@@ -42,14 +42,14 @@
       "id": "1",
       "section": "Implementation Tasks",
       "description": "Implementation Tasks tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-1.jsonc"
     },
     {
       "id": "4",
       "section": "Validation Checklist",
       "description": "Validation Checklist tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-4.jsonc"
     }
   ],

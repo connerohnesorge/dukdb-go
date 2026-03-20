@@ -69,6 +69,8 @@ func StmtTypeName(t StmtType) string {
 		return "PIVOT"
 	case STATEMENT_TYPE_UNPIVOT:
 		return "UNPIVOT"
+	case STATEMENT_TYPE_DEALLOCATE:
+		return "DEALLOCATE"
 	default:
 		return "UNKNOWN"
 	}

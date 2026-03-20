@@ -9,31 +9,31 @@
       "id": "6.1",
       "section": "Set Operation Rewrites",
       "description": "Implement elimination of redundant UNION ALL (union with same operand)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Set Operation Rewrites",
       "description": "Implement UNION/UNION ALL conversion based on data",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Set Operation Rewrites",
       "description": "Implement EXCEPT simplification",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Set Operation Rewrites",
       "description": "Implement INTERSECT simplification",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
       "section": "Set Operation Rewrites",
       "description": "Write tests for set operation rewriting",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

@@ -191,8 +191,9 @@ func (b *Binder) bindSelect(
 		bound.OrderBy = append(
 			bound.OrderBy,
 			&BoundOrderBy{
-				Expr: expr,
-				Desc: o.Desc,
+				Expr:      expr,
+				Desc:      o.Desc,
+				Collation: o.Collation,
 			},
 		)
 	}
@@ -240,12 +241,16 @@ func (b *Binder) bindSelect(
 		}
 		bound.Right = right
 
-		// Validate that both sides have the same number of columns
-		if len(bound.Columns) != len(right.Columns) {
-			return nil, b.errorf(
-				"each %s query must have the same number of columns",
-				setOpName(s.SetOp),
-			)
+		// For BY NAME variants, skip column count validation
+		// Column matching happens at execution time
+		if s.SetOp != parser.SetOpUnionByName && s.SetOp != parser.SetOpUnionAllByName {
+			// Validate that both sides have the same number of columns
+			if len(bound.Columns) != len(right.Columns) {
+				return nil, b.errorf(
+					"each %s query must have the same number of columns",
+					setOpName(s.SetOp),
+				)
+			}
 		}
 	}
 
@@ -267,6 +272,10 @@ func setOpName(op parser.SetOpType) string {
 		return "EXCEPT"
 	case parser.SetOpExceptAll:
 		return "EXCEPT ALL"
+	case parser.SetOpUnionByName:
+		return "UNION BY NAME"
+	case parser.SetOpUnionAllByName:
+		return "UNION ALL BY NAME"
 	default:
 		return "set operation"
 	}
@@ -344,6 +353,16 @@ func (b *Binder) bindTableRef(
 	schema := ref.Schema
 	if schema == "" {
 		schema = "main"
+	}
+
+	// Intercept information_schema references
+	if strings.EqualFold(schema, "information_schema") {
+		return b.bindInformationSchemaTable(ref)
+	}
+
+	// Intercept pg_catalog references
+	if strings.EqualFold(schema, "pg_catalog") {
+		return b.bindPgCatalogTable(ref)
 	}
 
 	alias := ref.Alias
@@ -457,6 +476,23 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 	// Check for UNNEST table function
 	if funcNameLower == "unnest" {
 		return b.bindUnnestTableFunction(ref)
+	}
+
+	// Check for generate_series/range table functions
+	if funcNameLower == "generate_series" || funcNameLower == "range" {
+		return b.bindGenerateSeriesTableFunction(ref, funcNameLower)
+	}
+
+	// Check for FTS search table function
+	if funcNameLower == "fts_search" || funcNameLower == "match_bm25" {
+		return b.bindFTSSearchFunction(ref, funcNameLower)
+	}
+
+	// Check for table macro expansion
+	if b.catalog != nil {
+		if macro, ok := b.catalog.GetMacro("", funcNameLower); ok && macro.Type == catalog.MacroTypeTable {
+			return b.expandTableMacro(ref, macro)
+		}
 	}
 
 	// Extract the file path(s) from the first positional argument
@@ -852,6 +888,103 @@ func (b *Binder) bindUnnestTableFunction(ref parser.TableRef) (*BoundTableRef, e
 
 	b.scope.tables[alias] = boundRef
 	b.scope.aliases[alias] = "unnest"
+
+	return boundRef, nil
+}
+
+// bindGenerateSeriesTableFunction binds a generate_series or range table function call.
+func (b *Binder) bindGenerateSeriesTableFunction(ref parser.TableRef, funcName string) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	alias := ref.Alias
+	if alias == "" {
+		alias = funcName
+	}
+
+	// Validate argument count: 2 or 3
+	if len(tableFunc.Args) < 2 || len(tableFunc.Args) > 3 {
+		return nil, b.errorf("%s requires 2 or 3 arguments, got %d", funcName, len(tableFunc.Args))
+	}
+
+	// Bind start and stop expressions
+	startExpr, err := b.bindExpr(tableFunc.Args[0], dukdb.TYPE_INVALID)
+	if err != nil {
+		return nil, b.errorf("%s: failed to bind start expression: %v", funcName, err)
+	}
+	stopExpr, err := b.bindExpr(tableFunc.Args[1], dukdb.TYPE_INVALID)
+	if err != nil {
+		return nil, b.errorf("%s: failed to bind stop expression: %v", funcName, err)
+	}
+
+	// Determine output type from start/stop types
+	startType := startExpr.ResultType()
+	stopType := stopExpr.ResultType()
+	var outputType dukdb.Type
+
+	switch {
+	case isIntegerType(startType) && isIntegerType(stopType):
+		if startType == dukdb.TYPE_BIGINT || stopType == dukdb.TYPE_BIGINT {
+			outputType = dukdb.TYPE_BIGINT
+		} else {
+			outputType = dukdb.TYPE_INTEGER
+		}
+	case startType == dukdb.TYPE_DATE && stopType == dukdb.TYPE_DATE:
+		outputType = dukdb.TYPE_DATE
+	case startType == dukdb.TYPE_TIMESTAMP && stopType == dukdb.TYPE_TIMESTAMP:
+		outputType = dukdb.TYPE_TIMESTAMP
+	default:
+		outputType = dukdb.TYPE_BIGINT
+	}
+
+	// Build options map with bound expressions
+	options := make(map[string]any)
+	options["start"] = startExpr
+	options["stop"] = stopExpr
+
+	// Bind optional step expression
+	if len(tableFunc.Args) == 3 {
+		stepExpr, err := b.bindExpr(tableFunc.Args[2], dukdb.TYPE_INVALID)
+		if err != nil {
+			return nil, b.errorf("%s: failed to bind step expression: %v", funcName, err)
+		}
+		options["step"] = stepExpr
+	}
+
+	// Create column definition for the output
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef(funcName, outputType),
+	}
+
+	// Create bound table function reference
+	boundFunc := &BoundTableFunctionRef{
+		Name:    funcName,
+		Path:    "",
+		Options: options,
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     funcName,
+		Alias:         alias,
+		TableFunction: boundFunc,
+		Lateral:       ref.Lateral,
+	}
+
+	// Create bound columns for the table function
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = funcName
 
 	return boundRef, nil
 }
@@ -2175,27 +2308,197 @@ func (b *Binder) inferIcebergTablesSchema() ([]*catalog.ColumnDef, error) {
 func (b *Binder) bindJoin(
 	join parser.JoinClause,
 ) (*BoundJoin, error) {
+	// For NATURAL joins, collect columns from left-side tables BEFORE binding right side
+	var leftColumnNames []string
+	if join.Type == parser.JoinTypeNatural || join.Type == parser.JoinTypeNaturalLeft ||
+		join.Type == parser.JoinTypeNaturalRight || join.Type == parser.JoinTypeNaturalFull {
+		for _, tableRef := range b.scope.tables {
+			for _, col := range tableRef.Columns {
+				leftColumnNames = append(leftColumnNames, col.Column)
+			}
+		}
+	}
+
 	table, err := b.bindTableRef(join.Table)
 	if err != nil {
 		return nil, err
 	}
 
-	var cond BoundExpr
-	if join.Condition != nil {
-		cond, err = b.bindExpr(
-			join.Condition,
-			dukdb.TYPE_BOOLEAN,
-		)
-		if err != nil {
-			return nil, err
+	boundJoin := &BoundJoin{
+		Type:  join.Type,
+		Table: table,
+	}
+
+	switch join.Type {
+	case parser.JoinTypeNatural, parser.JoinTypeNaturalLeft,
+		parser.JoinTypeNaturalRight, parser.JoinTypeNaturalFull:
+		// Find common columns between left tables and the right (joined) table
+		rightColNames := make(map[string]bool)
+		for _, col := range table.Columns {
+			rightColNames[col.Column] = true
+		}
+		var commonCols []string
+		seen := make(map[string]bool)
+		for _, name := range leftColumnNames {
+			if rightColNames[name] && !seen[name] {
+				commonCols = append(commonCols, name)
+				seen[name] = true
+			}
+		}
+		if len(commonCols) == 0 {
+			return nil, b.errorf("NATURAL JOIN has no common columns")
+		}
+
+		// Build equi-join condition from common columns
+		var cond BoundExpr
+		for _, colName := range commonCols {
+			// Find the left column ref
+			var leftTable string
+			for _, tableRef := range b.scope.tables {
+				if tableRef == table {
+					continue // skip the right table
+				}
+				for _, col := range tableRef.Columns {
+					if col.Column == colName {
+						leftTable = col.Table
+						break
+					}
+				}
+				if leftTable != "" {
+					break
+				}
+			}
+			rightTable := table.Alias
+			if rightTable == "" {
+				rightTable = table.TableName
+			}
+
+			eq := &BoundBinaryExpr{
+				Left: &BoundColumnRef{
+					Table:   leftTable,
+					Column:  colName,
+					ColType: dukdb.TYPE_ANY,
+				},
+				Op: parser.OpEq,
+				Right: &BoundColumnRef{
+					Table:   rightTable,
+					Column:  colName,
+					ColType: dukdb.TYPE_ANY,
+				},
+				ResType: dukdb.TYPE_BOOLEAN,
+			}
+			if cond == nil {
+				cond = eq
+			} else {
+				cond = &BoundBinaryExpr{
+					Left:    cond,
+					Op:      parser.OpAnd,
+					Right:   eq,
+					ResType: dukdb.TYPE_BOOLEAN,
+				}
+			}
+		}
+		boundJoin.Condition = cond
+
+		// Convert NATURAL join type to base join type
+		switch join.Type {
+		case parser.JoinTypeNatural:
+			boundJoin.Type = parser.JoinTypeInner
+		case parser.JoinTypeNaturalLeft:
+			boundJoin.Type = parser.JoinTypeLeft
+		case parser.JoinTypeNaturalRight:
+			boundJoin.Type = parser.JoinTypeRight
+		case parser.JoinTypeNaturalFull:
+			boundJoin.Type = parser.JoinTypeFull
+		}
+
+	case parser.JoinTypePositional:
+		// No condition for positional join - executor handles row matching by position
+		boundJoin.Type = parser.JoinTypePositional
+
+	case parser.JoinTypeAsOf, parser.JoinTypeAsOfLeft:
+		// ASOF join has an ON condition that includes equality + inequality
+		if join.Condition != nil {
+			cond, err := b.bindExpr(
+				join.Condition,
+				dukdb.TYPE_BOOLEAN,
+			)
+			if err != nil {
+				return nil, err
+			}
+			boundJoin.Condition = cond
+		}
+
+	default:
+		// Standard joins: bind ON condition or USING clause
+		if join.Condition != nil {
+			cond, err := b.bindExpr(
+				join.Condition,
+				dukdb.TYPE_BOOLEAN,
+			)
+			if err != nil {
+				return nil, err
+			}
+			boundJoin.Condition = cond
+		} else if len(join.Using) > 0 {
+			// Build equi-join from USING columns
+			boundJoin.Using = join.Using
+			var cond BoundExpr
+			for _, colName := range join.Using {
+				// Find the left table containing this column
+				var leftTable string
+				for _, tableRef := range b.scope.tables {
+					if tableRef == table {
+						continue
+					}
+					for _, col := range tableRef.Columns {
+						if col.Column == colName {
+							leftTable = col.Table
+							break
+						}
+					}
+					if leftTable != "" {
+						break
+					}
+				}
+				if leftTable == "" {
+					return nil, b.errorf("column %q not found in left side of USING", colName)
+				}
+				rightTable := table.Alias
+				if rightTable == "" {
+					rightTable = table.TableName
+				}
+
+				eq := &BoundBinaryExpr{
+					Left: &BoundColumnRef{
+						Table:   leftTable,
+						Column:  colName,
+						ColType: dukdb.TYPE_ANY,
+					},
+					Op: parser.OpEq,
+					Right: &BoundColumnRef{
+						Table:   rightTable,
+						Column:  colName,
+						ColType: dukdb.TYPE_ANY,
+					},
+					ResType: dukdb.TYPE_BOOLEAN,
+				}
+				if cond == nil {
+					cond = eq
+				} else {
+					cond = &BoundBinaryExpr{
+						Left:    cond,
+						Op:      parser.OpAnd,
+						Right:   eq,
+						ResType: dukdb.TYPE_BOOLEAN,
+					}
+				}
+			}
+			boundJoin.Condition = cond
 		}
 	}
 
-	return &BoundJoin{
-		Type:      join.Type,
-		Table:     table,
-		Condition: cond,
-	}, nil
+	return boundJoin, nil
 }
 
 func (b *Binder) bindInsert(
@@ -2280,6 +2583,57 @@ func (b *Binder) bindInsert(
 		bound.Select = sel
 	}
 
+	// Bind ON CONFLICT clause if present
+	if s.OnConflict != nil {
+		oc := s.OnConflict
+		boundOC := &BoundOnConflictClause{
+			Action: oc.Action,
+		}
+
+		// Resolve conflict columns (or infer from PK)
+		if len(oc.ConflictColumns) > 0 {
+			for _, colName := range oc.ConflictColumns {
+				idx, ok := tableDef.GetColumnIndex(colName)
+				if !ok {
+					return nil, b.errorf("column %q not found in table %q", colName, s.Table)
+				}
+				boundOC.ConflictColumnIndices = append(boundOC.ConflictColumnIndices, idx)
+			}
+		} else if tableDef.HasPrimaryKey() {
+			boundOC.ConflictColumnIndices = tableDef.PrimaryKey
+		} else {
+			return nil, b.errorf("ON CONFLICT requires a conflict target or table with primary key")
+		}
+
+		// Bind SET clauses for DO UPDATE
+		if oc.Action == parser.OnConflictDoUpdate {
+			for _, sc := range oc.UpdateSet {
+				colIdx, ok := tableDef.GetColumnIndex(sc.Column)
+				if !ok {
+					return nil, b.errorf("column %q not found in SET clause", sc.Column)
+				}
+				// Bind the value expression, resolving EXCLUDED.col references
+				boundVal, err := b.bindExprWithExcluded(sc.Value, tableDef)
+				if err != nil {
+					return nil, err
+				}
+				boundOC.UpdateSet = append(boundOC.UpdateSet, &BoundSetClause{
+					ColumnIdx: colIdx,
+					Value:     boundVal,
+				})
+			}
+			if oc.UpdateWhere != nil {
+				boundWhere, err := b.bindExprWithExcluded(oc.UpdateWhere, tableDef)
+				if err != nil {
+					return nil, err
+				}
+				boundOC.UpdateWhere = boundWhere
+			}
+		}
+
+		bound.OnConflict = boundOC
+	}
+
 	// Bind RETURNING clause if present
 	if len(s.Returning) > 0 {
 		// Add table to scope for RETURNING clause binding
@@ -2310,6 +2664,69 @@ func (b *Binder) bindInsert(
 	}
 
 	return bound, nil
+}
+
+// bindExprWithExcluded binds an expression that may contain EXCLUDED.column references.
+// EXCLUDED is a pseudo-table that refers to the row values being inserted.
+func (b *Binder) bindExprWithExcluded(expr parser.Expr, tableDef *catalog.TableDef) (BoundExpr, error) {
+	// Check if it's a column reference to EXCLUDED or the target table
+	if colRef, ok := expr.(*parser.ColumnRef); ok {
+		if strings.EqualFold(colRef.Table, "EXCLUDED") {
+			idx, ok := tableDef.GetColumnIndex(colRef.Column)
+			if !ok {
+				return nil, b.errorf("column %q not found in EXCLUDED", colRef.Column)
+			}
+			return &BoundExcludedColumnRef{
+				ColumnIndex: idx,
+				ColumnName:  colRef.Column,
+				DataType:    tableDef.Columns[idx].Type,
+			}, nil
+		}
+		// Bare column reference or table-qualified reference to the target table:
+		// resolve against the target table definition so existing row values are accessible.
+		if colRef.Table == "" || strings.EqualFold(colRef.Table, tableDef.Name) {
+			idx, ok := tableDef.GetColumnIndex(colRef.Column)
+			if ok {
+				return &BoundColumnRef{
+					Table:     tableDef.Name,
+					Column:    colRef.Column,
+					ColumnIdx: idx,
+					ColType:   tableDef.Columns[idx].Type,
+				}, nil
+			}
+		}
+	}
+	// For binary expressions, recursively check both sides for EXCLUDED references
+	if binExpr, ok := expr.(*parser.BinaryExpr); ok {
+		left, err := b.bindExprWithExcluded(binExpr.Left, tableDef)
+		if err != nil {
+			return nil, err
+		}
+		right, err := b.bindExprWithExcluded(binExpr.Right, tableDef)
+		if err != nil {
+			return nil, err
+		}
+		return &BoundBinaryExpr{Left: left, Op: binExpr.Op, Right: right}, nil
+	}
+	// For function calls, check arguments for EXCLUDED references
+	if fnCall, ok := expr.(*parser.FunctionCall); ok {
+		var boundArgs []BoundExpr
+		for _, arg := range fnCall.Args {
+			boundArg, err := b.bindExprWithExcluded(arg, tableDef)
+			if err != nil {
+				return nil, err
+			}
+			boundArgs = append(boundArgs, boundArg)
+		}
+		return &BoundFunctionCall{
+			Name:     fnCall.Name,
+			Args:     boundArgs,
+			Distinct: fnCall.Distinct,
+			Star:     fnCall.Star,
+		}, nil
+	}
+	// Fall back to regular binding for non-EXCLUDED expressions
+	return b.bindExpr(expr, dukdb.TYPE_INVALID)
 }
 
 func (b *Binder) bindUpdate(
@@ -2517,6 +2934,42 @@ func (b *Binder) bindCreateTable(
 				bound.PrimaryKey,
 				col.Name,
 			)
+		}
+	}
+
+	// Convert table constraints to catalog constraint definitions
+	for _, tc := range s.Constraints {
+		switch tc.Type {
+		case "UNIQUE":
+			// Validate that all columns exist
+			for _, colName := range tc.Columns {
+				found := false
+				for _, col := range s.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return nil, b.errorf(
+						"column %q referenced in UNIQUE constraint does not exist",
+						colName,
+					)
+				}
+			}
+			bound.Constraints = append(bound.Constraints, &catalog.UniqueConstraintDef{
+				Name:    tc.Name,
+				Columns: tc.Columns,
+			})
+		case "CHECK":
+			exprStr := ""
+			if tc.Expression != nil {
+				exprStr = serializeExpr(tc.Expression)
+			}
+			bound.Constraints = append(bound.Constraints, &catalog.CheckConstraintDef{
+				Name:       tc.Name,
+				Expression: exprStr,
+			})
 		}
 	}
 
@@ -3396,8 +3849,9 @@ func (b *Binder) bindLateralSubquery(
 		bound.OrderBy = append(
 			bound.OrderBy,
 			&BoundOrderBy{
-				Expr: expr,
-				Desc: o.Desc,
+				Expr:      expr,
+				Desc:      o.Desc,
+				Collation: o.Collation,
 			},
 		)
 	}

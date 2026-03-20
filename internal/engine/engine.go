@@ -16,6 +16,8 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/cache"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	"github.com/dukdb/dukdb-go/internal/extension"
+	"github.com/dukdb/dukdb-go/internal/fts"
 	"github.com/dukdb/dukdb-go/internal/optimizer"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/persistence"
@@ -41,22 +43,38 @@ type Engine struct {
 	closed        bool
 	queryCache    *cache.QueryResultCache
 
+	// Extension registry for INSTALL/LOAD support
+	extensions *extension.Registry
+
 	// SERIALIZABLE isolation level support
 	conflictDetector *storage.ConflictDetector // Shared conflict detector for all connections
 	lockManager      *storage.LockManager      // Shared lock manager for all connections
+
+	// Database management
+	dbManager *DatabaseManager // Registry of attached databases
+
+	// Full-text search
+	ftsRegistry *fts.Registry // Registry of FTS indexes
 }
 
 // NewEngine creates a new Engine instance.
 func NewEngine() *Engine {
 	cat := catalog.NewCatalog()
+	stor := storage.NewStorage()
+	dbMgr := NewDatabaseManager()
+	// Register the default in-memory database
+	_ = dbMgr.Attach("memory", ":memory:", false, cat, stor)
 	return &Engine{
 		catalog:          cat,
-		storage:          storage.NewStorage(),
+		storage:          stor,
 		txnMgr:           NewTransactionManager(),
 		optimizer:        optimizer.NewCostBasedOptimizer(cat),
+		extensions:       extension.DefaultRegistry(),
 		conflictDetector: storage.NewConflictDetector(),
 		lockManager:      storage.NewLockManager(),
 		queryCache:       cache.NewQueryResultCache(cache.DefaultMaxBytes, cache.DefaultTTL),
+		dbManager:        dbMgr,
+		ftsRegistry:      fts.NewRegistry(),
 	}
 }
 
@@ -104,6 +122,7 @@ func (e *Engine) Open(
 			txn:             isolatedEngine.txnMgr.Begin(),
 			maxFilesPerGlob: maxFilesPerGlob,
 			fileGlobTimeout: fileGlobTimeout,
+			sqlPrepared:     make(map[string]*sqlPreparedStatement),
 		}
 
 		return conn, nil
@@ -230,6 +249,7 @@ func (e *Engine) Open(
 		txn:             e.txnMgr.Begin(),
 		maxFilesPerGlob: maxFilesPerGlob,
 		fileGlobTimeout: fileGlobTimeout,
+		sqlPrepared:     make(map[string]*sqlPreparedStatement),
 	}
 
 	return conn, nil
@@ -344,6 +364,11 @@ func (e *Engine) Optimizer() *optimizer.CostBasedOptimizer {
 	return e.optimizer
 }
 
+// Extensions returns the extension registry.
+func (e *Engine) Extensions() *extension.Registry {
+	return e.extensions
+}
+
 // ConflictDetector returns the shared conflict detector for SERIALIZABLE isolation.
 func (e *Engine) ConflictDetector() *storage.ConflictDetector {
 	return e.conflictDetector
@@ -352,6 +377,16 @@ func (e *Engine) ConflictDetector() *storage.ConflictDetector {
 // LockManager returns the shared lock manager for SERIALIZABLE isolation.
 func (e *Engine) LockManager() *storage.LockManager {
 	return e.lockManager
+}
+
+// DatabaseManager returns the database manager for attached databases.
+func (e *Engine) DatabaseManager() *DatabaseManager {
+	return e.dbManager
+}
+
+// FTSRegistry returns the full-text search index registry.
+func (e *Engine) FTSRegistry() *fts.Registry {
+	return e.ftsRegistry
 }
 
 // TransactionManager manages transactions for the engine.

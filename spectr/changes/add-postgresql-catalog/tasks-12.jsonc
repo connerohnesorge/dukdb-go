@@ -9,25 +9,25 @@
       "id": "12.1",
       "section": "Testing and Validation",
       "description": "Test all views return correct column schemas",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.2",
       "section": "Testing and Validation",
       "description": "Cross-validate against PostgreSQL v14 pg_catalog",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.3",
       "section": "Testing and Validation",
       "description": "Test aggregate queries on large catalogs",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.4",
       "section": "Testing and Validation",
       "description": "Run all existing tests for regressions",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "12"

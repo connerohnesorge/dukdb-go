@@ -9,37 +9,37 @@
       "id": "2.1",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.1**: Implement `RowsFrameComputer` with support for all physical boundary types.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.2**: Implement `RangeFrameComputer` with binary search optimization for value-based boundaries.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.3**: Implement `GroupsFrameComputer` for peer-group-based boundaries.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.4**: Implement `SlidingFrameComputer` to support incremental frame updates for sliding windows.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.5",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.5**: Implement vectorized `computeExcludedRows` supporting all `EXCLUDE` modes:",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.6",
       "section": "Phase 2: Frame Computation Engine",
       "description": "**Task 2.6**: Add support for `INTERVAL` offsets in `RangeFrameComputer` for temporal types.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

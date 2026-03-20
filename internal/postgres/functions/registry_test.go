@@ -30,7 +30,7 @@ func TestResolve(t *testing.T) {
 		{"array_agg", "list", false},
 		{"power", "pow", false},
 		{"ceiling", "ceil", false},
-		{"generate_series", "range", false},
+		{"generate_series", "generate_series", false},
 		{"nonexistent_function", "", true},
 	}
 
@@ -149,18 +149,18 @@ func TestTransformGenerateSeries(t *testing.T) {
 	}{
 		{
 			args:     []string{"1", "5"},
-			wantFunc: "range",
-			wantArgs: []string{"1", "6"},
+			wantFunc: "generate_series",
+			wantArgs: []string{"1", "5"},
 		},
 		{
 			args:     []string{"1", "10", "2"},
-			wantFunc: "range",
-			wantArgs: []string{"1", "11", "2"},
+			wantFunc: "generate_series",
+			wantArgs: []string{"1", "10", "2"},
 		},
 		{
 			args:     []string{"start_val", "end_val"},
-			wantFunc: "range",
-			wantArgs: []string{"start_val", "(end_val + 1)"},
+			wantFunc: "generate_series",
+			wantArgs: []string{"start_val", "end_val"},
 		},
 		{
 			args:    []string{"1"}, // Too few args

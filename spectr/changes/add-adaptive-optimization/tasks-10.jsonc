@@ -9,31 +9,31 @@
       "id": "10.1",
       "section": "Planner Integration",
       "description": "Look up and apply corrections before cost calculation",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.2",
       "section": "Planner Integration",
       "description": "Track which corrections were applied in metadata",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.3",
       "section": "Planner Integration",
       "description": "Use correction confidence in plan selection",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.4",
       "section": "Planner Integration",
       "description": "Add learned corrections to EXPLAIN output",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "10.5",
       "section": "Planner Integration",
       "description": "Handle missing corrections gracefully",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "10"

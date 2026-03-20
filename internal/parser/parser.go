@@ -91,6 +91,26 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseSet()
 	case p.isKeyword("SHOW"):
 		stmt, err = p.parseShow()
+	case p.isKeyword("PREPARE"):
+		stmt, err = p.parsePrepareStmt()
+	case p.isKeyword("EXECUTE"):
+		stmt, err = p.parseExecuteStmt()
+	case p.isKeyword("DEALLOCATE"):
+		stmt, err = p.parseDeallocateStmt()
+	case p.isKeyword("EXPORT"):
+		stmt, err = p.parseExportDatabase()
+	case p.isKeyword("IMPORT"):
+		stmt, err = p.parseImportDatabase()
+	case p.isKeyword("INSTALL"):
+		stmt, err = p.parseInstall()
+	case p.isKeyword("LOAD"):
+		stmt, err = p.parseLoad()
+	case p.isKeyword("ATTACH"):
+		stmt, err = p.parseAttach()
+	case p.isKeyword("DETACH"):
+		stmt, err = p.parseDetach()
+	case p.isKeyword("USE"):
+		stmt, err = p.parseUse()
 	default:
 		tok := p.current()
 		suggestion := suggestKeyword(tok.value)
@@ -418,7 +438,21 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			p.advance()
 			if p.isKeyword("ALL") {
 				p.advance()
-				setOp = SetOpUnionAll
+				if p.isKeyword("BY") {
+					p.advance()
+					if err := p.expectKeyword("NAME"); err != nil {
+						return nil, err
+					}
+					setOp = SetOpUnionAllByName
+				} else {
+					setOp = SetOpUnionAll
+				}
+			} else if p.isKeyword("BY") {
+				p.advance()
+				if err := p.expectKeyword("NAME"); err != nil {
+					return nil, err
+				}
+				setOp = SetOpUnionByName
 			} else {
 				setOp = SetOpUnion
 			}
@@ -536,6 +570,7 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("INNER") &&
 				!p.isKeyword("LEFT") && !p.isKeyword("RIGHT") &&
 				!p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
+				!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
 				!p.isKeyword("JOIN") && !p.isKeyword("ON") &&
 				!p.isKeyword("RETURNING") &&
 				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
@@ -592,7 +627,8 @@ func (p *parser) parseFrom() (*FromClause, error) {
 				table,
 			)
 		} else if p.isKeyword("JOIN") || p.isKeyword("INNER") || p.isKeyword("LEFT") ||
-			p.isKeyword("RIGHT") || p.isKeyword("FULL") || p.isKeyword("CROSS") {
+			p.isKeyword("RIGHT") || p.isKeyword("FULL") || p.isKeyword("CROSS") ||
+			p.isKeyword("NATURAL") || p.isKeyword("ASOF") || p.isKeyword("POSITIONAL") {
 			join, err := p.parseJoin()
 			if err != nil {
 				return nil, err
@@ -674,6 +710,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
+			!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 			// Check if this looks like a keyword typo
@@ -759,6 +796,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 		!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
+		!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
 		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
@@ -1042,36 +1080,103 @@ func (p *parser) parseJoin() (JoinClause, error) {
 
 	// Join type
 	switch {
+	case p.isKeyword("NATURAL"):
+		p.advance()
+		switch {
+		case p.isKeyword("LEFT"):
+			p.advance()
+			if p.isKeyword("OUTER") {
+				p.advance()
+			}
+			join.Type = JoinTypeNaturalLeft
+		case p.isKeyword("RIGHT"):
+			p.advance()
+			if p.isKeyword("OUTER") {
+				p.advance()
+			}
+			join.Type = JoinTypeNaturalRight
+		case p.isKeyword("FULL"):
+			p.advance()
+			if p.isKeyword("OUTER") {
+				p.advance()
+			}
+			join.Type = JoinTypeNaturalFull
+		default:
+			if p.isKeyword("INNER") {
+				p.advance()
+			}
+			join.Type = JoinTypeNatural
+		}
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
+	case p.isKeyword("ASOF"):
+		p.advance()
+		if p.isKeyword("LEFT") {
+			p.advance()
+			if p.isKeyword("OUTER") {
+				p.advance()
+			}
+			join.Type = JoinTypeAsOfLeft
+		} else {
+			if p.isKeyword("INNER") {
+				p.advance()
+			}
+			join.Type = JoinTypeAsOf
+		}
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
+	case p.isKeyword("POSITIONAL"):
+		p.advance()
+		join.Type = JoinTypePositional
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	case p.isKeyword("INNER"):
 		p.advance()
 		join.Type = JoinTypeInner
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	case p.isKeyword("LEFT"):
 		p.advance()
 		if p.isKeyword("OUTER") {
 			p.advance()
 		}
 		join.Type = JoinTypeLeft
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	case p.isKeyword("RIGHT"):
 		p.advance()
 		if p.isKeyword("OUTER") {
 			p.advance()
 		}
 		join.Type = JoinTypeRight
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	case p.isKeyword("FULL"):
 		p.advance()
 		if p.isKeyword("OUTER") {
 			p.advance()
 		}
 		join.Type = JoinTypeFull
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	case p.isKeyword("CROSS"):
 		p.advance()
 		join.Type = JoinTypeCross
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	default:
 		join.Type = JoinTypeInner
-	}
-
-	if err := p.expectKeyword("JOIN"); err != nil {
-		return join, err
+		if err := p.expectKeyword("JOIN"); err != nil {
+			return join, err
+		}
 	}
 
 	// Table
@@ -1081,16 +1186,63 @@ func (p *parser) parseJoin() (JoinClause, error) {
 	}
 	join.Table = table
 
-	// ON condition (not for CROSS JOIN)
-	if join.Type != JoinTypeCross {
-		if err := p.expectKeyword("ON"); err != nil {
-			return join, err
+	// ON/USING condition depends on join type
+	switch join.Type {
+	case JoinTypeCross, JoinTypePositional,
+		JoinTypeNatural, JoinTypeNaturalLeft, JoinTypeNaturalRight, JoinTypeNaturalFull:
+		// No ON clause for CROSS, POSITIONAL, or NATURAL joins
+		// But USING is allowed for NATURAL joins (parser supports it)
+		if p.isKeyword("USING") {
+			p.advance()
+			if _, err := p.expect(tokenLParen); err != nil {
+				return join, err
+			}
+			for {
+				if p.current().typ != tokenIdent {
+					return join, p.errorf("expected column name in USING clause")
+				}
+				col := p.advance().value
+				join.Using = append(join.Using, col)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance()
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return join, err
+			}
 		}
-		cond, err := p.parseExpr()
-		if err != nil {
-			return join, err
+	default:
+		// ON or USING clause
+		if p.isKeyword("ON") {
+			p.advance()
+			cond, err := p.parseExpr()
+			if err != nil {
+				return join, err
+			}
+			join.Condition = cond
+		} else if p.isKeyword("USING") {
+			p.advance()
+			if _, err := p.expect(tokenLParen); err != nil {
+				return join, err
+			}
+			for {
+				if p.current().typ != tokenIdent {
+					return join, p.errorf("expected column name in USING clause")
+				}
+				col := p.advance().value
+				join.Using = append(join.Using, col)
+				if p.current().typ != tokenComma {
+					break
+				}
+				p.advance()
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return join, err
+			}
+		} else {
+			return join, p.errorf("expected ON or USING after JOIN")
 		}
-		join.Condition = cond
 	}
 
 	return join, nil
@@ -1106,6 +1258,16 @@ func (p *parser) parseOrderBy() ([]OrderByExpr, error) {
 		}
 
 		order := OrderByExpr{Expr: expr}
+
+		// Parse COLLATE clause (before ASC/DESC per SQL standard)
+		if p.isKeyword("COLLATE") {
+			p.advance()
+			collName, err := p.parseCollationName()
+			if err != nil {
+				return nil, err
+			}
+			order.Collation = collName
+		}
 
 		if p.isKeyword("DESC") {
 			p.advance()
@@ -1139,6 +1301,28 @@ func (p *parser) parseOrderBy() ([]OrderByExpr, error) {
 	}
 
 	return orderBy, nil
+}
+
+// parseCollationName parses a collation name that may contain dots for chained
+// modifiers (e.g., "de_DE.NOCASE.NOACCENT").
+func (p *parser) parseCollationName() (string, error) {
+	tok := p.current()
+	if tok.typ != tokenIdent && tok.typ != tokenString {
+		return "", p.errorf("expected collation name after COLLATE")
+	}
+	name := p.advance().value
+
+	// Consume additional dotted parts (e.g., .NOCASE.NOACCENT)
+	for p.current().typ == tokenDot {
+		p.advance() // consume dot
+		tok = p.current()
+		if tok.typ != tokenIdent {
+			return "", p.errorf("expected collation modifier after '.'")
+		}
+		name += "." + p.advance().value
+	}
+
+	return name, nil
 }
 
 func parseIntLiteral(value string) (int, error) {
@@ -1234,6 +1418,15 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 		return nil, p.errorf("expected VALUES or SELECT")
 	}
 
+	// Parse optional ON CONFLICT clause
+	if p.isKeyword("ON") {
+		onConflict, err := p.parseOnConflict()
+		if err != nil {
+			return nil, err
+		}
+		stmt.OnConflict = onConflict
+	}
+
 	// Parse optional RETURNING clause
 	if p.isKeyword("RETURNING") {
 		returning, err := p.parseReturningClause()
@@ -1244,6 +1437,94 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 	}
 
 	return stmt, nil
+}
+
+// parseOnConflict parses an ON CONFLICT clause for INSERT statements.
+func (p *parser) parseOnConflict() (*OnConflictClause, error) {
+	p.advance() // consume ON
+	if err := p.expectKeyword("CONFLICT"); err != nil {
+		return nil, err
+	}
+
+	clause := &OnConflictClause{}
+
+	// Optional conflict target: (col1, col2, ...)
+	if p.current().typ == tokenLParen {
+		p.advance()
+		for {
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected column name in conflict target")
+			}
+			clause.ConflictColumns = append(clause.ConflictColumns, p.advance().value)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// DO keyword
+	if err := p.expectKeyword("DO"); err != nil {
+		return nil, err
+	}
+
+	// NOTHING or UPDATE
+	if p.isKeyword("NOTHING") {
+		p.advance()
+		clause.Action = OnConflictDoNothing
+		return clause, nil
+	}
+
+	if !p.isKeyword("UPDATE") {
+		return nil, p.errorf("expected NOTHING or UPDATE after DO")
+	}
+	p.advance()
+	clause.Action = OnConflictDoUpdate
+
+	// SET clause
+	if err := p.expectKeyword("SET"); err != nil {
+		return nil, err
+	}
+
+	// Parse SET assignments
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name in SET clause")
+		}
+		col := p.advance().value
+
+		if p.current().typ != tokenOperator || p.current().value != "=" {
+			return nil, p.errorf("expected = after column name")
+		}
+		p.advance()
+
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		clause.UpdateSet = append(clause.UpdateSet, SetClause{Column: col, Value: val})
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	// Optional WHERE clause for DO UPDATE
+	if p.isKeyword("WHERE") {
+		p.advance()
+		where, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		clause.UpdateWhere = where
+	}
+
+	return clause, nil
 }
 
 func (p *parser) parseUpdate() (*UpdateStmt, error) {
@@ -1499,10 +1780,16 @@ func (p *parser) parseCreate() (Statement, error) {
 		return p.parseCreateSecret(orReplace, persistent, temporary)
 	} else if p.isKeyword("FUNCTION") {
 		return p.parseCreateFunction(orReplace)
+	} else if p.isKeyword("TYPE") {
+		return p.parseCreateType()
+	} else if p.isKeyword("MACRO") {
+		return p.parseCreateMacro(orReplace)
+	} else if p.isKeyword("DATABASE") {
+		return p.parseCreateDatabase()
 	}
 
 	return nil, p.errorf(
-		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, SECRET, or FUNCTION after CREATE",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, SECRET, FUNCTION, TYPE, MACRO, or DATABASE after CREATE",
 	)
 }
 
@@ -1571,7 +1858,7 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 	}
 
 	for {
-		// Check for PRIMARY KEY constraint
+		// Check for table-level constraints
 		if p.isKeyword("PRIMARY") {
 			p.advance()
 			if err := p.expectKeyword("KEY"); err != nil {
@@ -1598,6 +1885,12 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 			if _, err := p.expect(tokenRParen); err != nil {
 				return nil, err
 			}
+		} else if p.isKeyword("UNIQUE") || p.isKeyword("CHECK") || p.isKeyword("CONSTRAINT") {
+			tc, err := p.parseTableConstraint()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Constraints = append(stmt.Constraints, tc)
 		} else {
 			col, err := p.parseColumnDef()
 			if err != nil {
@@ -1616,7 +1909,77 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 		return nil, err
 	}
 
+	// Normalize column-level constraints to table-level
+	for _, col := range stmt.Columns {
+		if col.Unique {
+			stmt.Constraints = append(stmt.Constraints, TableConstraint{
+				Type:    "UNIQUE",
+				Columns: []string{col.Name},
+			})
+		}
+		if col.Check != nil {
+			stmt.Constraints = append(stmt.Constraints, TableConstraint{
+				Type:       "CHECK",
+				Expression: col.Check,
+			})
+		}
+	}
+
 	return stmt, nil
+}
+
+func (p *parser) parseTableConstraint() (TableConstraint, error) {
+	tc := TableConstraint{}
+
+	// Optional CONSTRAINT name
+	if p.isKeyword("CONSTRAINT") {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return tc, p.errorf("expected constraint name")
+		}
+		tc.Name = p.advance().value
+	}
+
+	if p.isKeyword("UNIQUE") {
+		p.advance()
+		tc.Type = "UNIQUE"
+		if _, err := p.expect(tokenLParen); err != nil {
+			return tc, err
+		}
+		for {
+			if p.current().typ != tokenIdent {
+				return tc, p.errorf("expected column name in UNIQUE constraint")
+			}
+			tc.Columns = append(tc.Columns, p.advance().value)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return tc, err
+		}
+		return tc, nil
+	}
+
+	if p.isKeyword("CHECK") {
+		p.advance()
+		tc.Type = "CHECK"
+		if _, err := p.expect(tokenLParen); err != nil {
+			return tc, err
+		}
+		expr, err := p.parseExpr()
+		if err != nil {
+			return tc, err
+		}
+		tc.Expression = expr
+		if _, err := p.expect(tokenRParen); err != nil {
+			return tc, err
+		}
+		return tc, nil
+	}
+
+	return tc, p.errorf("expected UNIQUE or CHECK constraint")
 }
 
 func (p *parser) parseColumnDef() (ColumnDefClause, error) {
@@ -1639,6 +2002,7 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 			"UNIQUE":     true,
 			"CHECK":      true,
 			"REFERENCES": true,
+			"COLLATE":    true,
 		},
 	)
 	if err != nil {
@@ -1677,6 +2041,29 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 				return col, err
 			}
 			col.Default = def
+		case p.isKeyword("UNIQUE"):
+			p.advance()
+			col.Unique = true
+		case p.isKeyword("CHECK"):
+			p.advance()
+			if _, err := p.expect(tokenLParen); err != nil {
+				return col, err
+			}
+			expr, err := p.parseExpr()
+			if err != nil {
+				return col, err
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return col, err
+			}
+			col.Check = expr
+		case p.isKeyword("COLLATE"):
+			p.advance()
+			collName, err := p.parseCollationName()
+			if err != nil {
+				return col, err
+			}
+			col.Collation = collName
 		default:
 			// Unknown constraint, stop parsing constraints
 			goto done
@@ -1685,6 +2072,113 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 done:
 
 	return col, nil
+}
+
+func (p *parser) parseCreateType() (Statement, error) {
+	p.advance() // consume TYPE
+
+	// Check for IF NOT EXISTS
+	ifNotExists := false
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("NOT"); err != nil {
+			return nil, err
+		}
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		ifNotExists = true
+	}
+
+	// Parse type name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected type name")
+	}
+	name := p.advance().value
+	schema := ""
+
+	// Check for schema-qualified name
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected type name after schema")
+		}
+		schema = name
+		name = p.advance().value
+	}
+
+	if err := p.expectKeyword("AS"); err != nil {
+		return nil, err
+	}
+
+	if !p.isKeyword("ENUM") {
+		return nil, p.errorf("expected ENUM after AS (only ENUM types are supported)")
+	}
+	p.advance()
+
+	// Parse enum values: ('value1', 'value2', ...)
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, err
+	}
+
+	var values []string
+	for {
+		if p.current().typ != tokenString {
+			return nil, p.errorf("expected string literal for enum value")
+		}
+		values = append(values, p.advance().value)
+		if p.current().typ == tokenComma {
+			p.advance()
+			continue
+		}
+		break
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, err
+	}
+
+	return &CreateTypeStmt{
+		Name:        name,
+		Schema:      schema,
+		TypeKind:    "ENUM",
+		EnumValues:  values,
+		IfNotExists: ifNotExists,
+	}, nil
+}
+
+func (p *parser) parseDropType() (Statement, error) {
+	p.advance() // consume TYPE
+
+	ifExists := false
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		ifExists = true
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected type name")
+	}
+	name := p.advance().value
+	schema := ""
+
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected type name after schema")
+		}
+		schema = name
+		name = p.advance().value
+	}
+
+	return &DropTypeStmt{
+		Name:     name,
+		Schema:   schema,
+		IfExists: ifExists,
+	}, nil
 }
 
 func (p *parser) parseDrop() (Statement, error) {
@@ -1705,10 +2199,16 @@ func (p *parser) parseDrop() (Statement, error) {
 		return p.parseDropSchema()
 	} else if p.isKeyword("SECRET") {
 		return p.parseDropSecret()
+	} else if p.isKeyword("TYPE") {
+		return p.parseDropType()
+	} else if p.isKeyword("MACRO") {
+		return p.parseDropMacro()
+	} else if p.isKeyword("DATABASE") {
+		return p.parseDropDatabase()
 	}
 
 	return nil, p.errorf(
-		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, or SECRET after DROP",
+		"expected TABLE, VIEW, INDEX, SEQUENCE, SCHEMA, SECRET, TYPE, MACRO, or DATABASE after DROP",
 	)
 }
 
@@ -3431,6 +3931,83 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		}, nil
 	}
 
+	// SIMILAR TO
+	if p.isKeyword("SIMILAR") {
+		p.advance() // SIMILAR
+		if err := p.expectKeyword("TO"); err != nil {
+			return nil, err
+		}
+		right, err := p.parseBitwiseOrExpr()
+		if err != nil {
+			return nil, err
+		}
+		// Check for ESCAPE clause
+		if p.isKeyword("ESCAPE") {
+			p.advance()
+			escapeTok := p.current()
+			if escapeTok.typ != tokenString {
+				return nil, p.errorf("ESCAPE must be a single character string")
+			}
+			// Strip quotes from string token value
+			escapeVal := escapeTok.value[1 : len(escapeTok.value)-1]
+			if len(escapeVal) != 1 {
+				return nil, p.errorf("ESCAPE must be a single character string")
+			}
+			p.advance()
+			return &SimilarToExpr{
+				Expr:    left,
+				Pattern: right,
+				Escape:  escapeVal,
+				Not:     false,
+			}, nil
+		}
+		return &BinaryExpr{
+			Left:  left,
+			Op:    OpSimilarTo,
+			Right: right,
+		}, nil
+	}
+
+	// NOT SIMILAR TO
+	if p.isKeyword("NOT") &&
+		p.peek().typ == tokenIdent &&
+		strings.EqualFold(p.peek().value, "SIMILAR") {
+		p.advance() // NOT
+		p.advance() // SIMILAR
+		if err := p.expectKeyword("TO"); err != nil {
+			return nil, err
+		}
+		right, err := p.parseBitwiseOrExpr()
+		if err != nil {
+			return nil, err
+		}
+		// Check for ESCAPE clause
+		if p.isKeyword("ESCAPE") {
+			p.advance()
+			escapeTok := p.current()
+			if escapeTok.typ != tokenString {
+				return nil, p.errorf("ESCAPE must be a single character string")
+			}
+			// Strip quotes from string token value
+			escapeVal := escapeTok.value[1 : len(escapeTok.value)-1]
+			if len(escapeVal) != 1 {
+				return nil, p.errorf("ESCAPE must be a single character string")
+			}
+			p.advance()
+			return &SimilarToExpr{
+				Expr:    left,
+				Pattern: right,
+				Escape:  escapeVal,
+				Not:     true,
+			}, nil
+		}
+		return &BinaryExpr{
+			Left:  left,
+			Op:    OpNotSimilarTo,
+			Right: right,
+		}, nil
+	}
+
 	// Comparison operators
 	if p.current().typ == tokenOperator {
 		var op BinaryOp
@@ -3811,6 +4388,7 @@ func (p *parser) parsePostfixExpr() (Expr, error) {
 		expr = &CastExpr{
 			Expr:       expr,
 			TargetType: targetType,
+			TryCast:    false,
 		}
 	}
 
@@ -4006,7 +4584,9 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 	case "CASE":
 		return p.parseCase()
 	case "CAST":
-		return p.parseCast()
+		return p.parseCast(false)
+	case "TRY_CAST":
+		return p.parseCast(true)
 	case "EXISTS":
 		return p.parseExists()
 	case "EXTRACT":
@@ -4079,7 +4659,19 @@ func (p *parser) parseFunctionCall(
 		if err != nil {
 			return nil, err
 		}
-		fn.Args = args
+		// Separate named arguments from positional arguments
+		var positionalArgs []Expr
+		for _, arg := range args {
+			if na, ok := arg.(*NamedArgExpr); ok {
+				if fn.NamedArgs == nil {
+					fn.NamedArgs = make(map[string]Expr)
+				}
+				fn.NamedArgs[na.Name] = na.Value
+			} else {
+				positionalArgs = append(positionalArgs, arg)
+			}
+		}
+		fn.Args = positionalArgs
 	}
 
 	// Check for ORDER BY within aggregate function
@@ -4106,12 +4698,13 @@ func (p *parser) parseFunctionCall(
 }
 
 // parseFunctionArgs parses function arguments, stopping at ORDER BY or closing paren.
-// This is different from parseExprList because it needs to handle ORDER BY within aggregates.
+// This is different from parseExprList because it needs to handle ORDER BY within aggregates
+// and lambda expressions (x -> expr) as function arguments.
 func (p *parser) parseFunctionArgs() ([]Expr, error) {
 	var exprs []Expr
 
 	for {
-		expr, err := p.parseExpr()
+		expr, err := p.parseFunctionArg()
 		if err != nil {
 			return nil, err
 		}
@@ -4134,6 +4727,102 @@ func (p *parser) parseFunctionArgs() ([]Expr, error) {
 	}
 
 	return exprs, nil
+}
+
+// parseFunctionArg parses a single function argument, which may be a lambda expression
+// or a named argument (name := expr).
+// Lambda expressions use the -> operator, which is also used for JSON extract.
+// Disambiguation: inside function arguments, ident -> non-string-non-number is a lambda.
+// ident -> string_literal or ident -> number_literal is JSON extract.
+// (ident, ident, ...) -> expr is a multi-parameter lambda.
+func (p *parser) parseFunctionArg() (Expr, error) {
+	// Check for named argument: ident := expr (used by struct_pack etc.)
+	if p.current().typ == tokenIdent && !p.isKeyword("CASE") && !p.isKeyword("NOT") {
+		if p.peek().typ == tokenOperator && p.peek().value == ":=" {
+			name := p.advance().value // consume ident
+			p.advance()               // consume :=
+			valExpr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			return &NamedArgExpr{Name: name, Value: valExpr}, nil
+		}
+	}
+
+	// Check for single-param lambda: ident -> expr (where expr is not a string/number literal)
+	if p.current().typ == tokenIdent && !p.isKeyword("CASE") && !p.isKeyword("NOT") {
+		if p.peek().typ == tokenOperator && p.peek().value == "->" {
+			// Look two tokens ahead to disambiguate from JSON extract
+			thirdTok := p.peekAt(2)
+			if thirdTok.typ != tokenString && thirdTok.typ != tokenNumber {
+				// This is a lambda: ident -> expr
+				paramName := p.advance().value // consume ident
+				p.advance()                    // consume ->
+				body, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				return &LambdaExpr{Params: []string{paramName}, Body: body}, nil
+			}
+		}
+	}
+
+	// Check for multi-param lambda: (ident, ident, ...) -> expr
+	if p.current().typ == tokenLParen {
+		if params, ok := p.tryParseParenthesizedIdentList(); ok {
+			// We successfully parsed (ident, ident, ...) and the next token is ->
+			if p.current().typ == tokenOperator && p.current().value == "->" {
+				p.advance() // consume ->
+				body, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				return &LambdaExpr{Params: params, Body: body}, nil
+			}
+			// Not a lambda -- need to restore position. But tryParseParenthesizedIdentList
+			// already handles backtracking on failure, so if we get here it means we
+			// parsed the parens but there's no ->. We need to backtrack.
+			// This case should not happen because tryParseParenthesizedIdentList checks for ->.
+		}
+	}
+
+	return p.parseExpr()
+}
+
+// tryParseParenthesizedIdentList attempts to parse (ident, ident, ...) for multi-param lambdas.
+// Returns the parameter names and true if successful. On failure, restores parser position.
+// This method only returns true if the closing paren is followed by ->.
+func (p *parser) tryParseParenthesizedIdentList() ([]string, bool) {
+	savedPos := p.tokPos
+
+	p.tokPos++ // consume (
+
+	var params []string
+	for {
+		if p.current().typ != tokenIdent {
+			p.tokPos = savedPos
+			return nil, false
+		}
+		params = append(params, p.advance().value)
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.tokPos++ // consume comma
+	}
+
+	if len(params) == 0 || p.current().typ != tokenRParen {
+		p.tokPos = savedPos
+		return nil, false
+	}
+	p.tokPos++ // consume )
+
+	// Check if followed by ->
+	if p.current().typ != tokenOperator || p.current().value != "->" {
+		p.tokPos = savedPos
+		return nil, false
+	}
+
+	return params, true
 }
 
 // maybeParseWindowExpr checks for IGNORE/RESPECT NULLS, FILTER, and OVER clauses
@@ -4515,7 +5204,7 @@ func (p *parser) parseCase() (Expr, error) {
 	return caseExpr, nil
 }
 
-func (p *parser) parseCast() (Expr, error) {
+func (p *parser) parseCast(tryCast bool) (Expr, error) {
 	if _, err := p.expect(tokenLParen); err != nil {
 		return nil, err
 	}
@@ -4561,6 +5250,7 @@ func (p *parser) parseCast() (Expr, error) {
 	return &CastExpr{
 		Expr:       expr,
 		TargetType: targetType,
+		TryCast:    tryCast,
 	}, nil
 }
 
@@ -5060,4 +5750,260 @@ func GetTypeName(t dukdb.Type) string {
 		return "VARIANT"
 	}
 	return "UNKNOWN"
+}
+
+// parseExportDatabase parses an EXPORT DATABASE 'path' [(options)] statement.
+func (p *parser) parseExportDatabase() (*ExportDatabaseStmt, error) {
+	p.advance() // consume EXPORT
+	if err := p.expectKeyword("DATABASE"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected string path after EXPORT DATABASE")
+	}
+	pathTok := p.advance()
+	// Remove quotes from the path
+	path := pathTok.value[1 : len(pathTok.value)-1]
+	path = strings.ReplaceAll(path, "''", "'")
+
+	options := make(map[string]string)
+	if p.current().typ == tokenLParen {
+		p.advance() // consume (
+		for {
+			if p.current().typ == tokenRParen {
+				break
+			}
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected option name")
+			}
+			key := strings.ToUpper(p.advance().value)
+
+			var value string
+			if p.current().typ == tokenString {
+				tok := p.advance()
+				value = tok.value[1 : len(tok.value)-1]
+				value = strings.ReplaceAll(value, "''", "'")
+			} else if p.current().typ == tokenIdent {
+				value = strings.ToUpper(p.advance().value)
+			} else if p.current().typ == tokenNumber {
+				value = p.advance().value
+			} else {
+				return nil, p.errorf("expected option value for %s", key)
+			}
+
+			options[key] = value
+
+			if p.current().typ == tokenComma {
+				p.advance()
+			} else if p.current().typ != tokenRParen {
+				return nil, p.errorf("expected comma or ) in export options")
+			}
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	return &ExportDatabaseStmt{Path: path, Options: options}, nil
+}
+
+// parseImportDatabase parses an IMPORT DATABASE 'path' statement.
+func (p *parser) parseImportDatabase() (*ImportDatabaseStmt, error) {
+	p.advance() // consume IMPORT
+	if err := p.expectKeyword("DATABASE"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected string path after IMPORT DATABASE")
+	}
+	pathTok := p.advance()
+	// Remove quotes from the path
+	path := pathTok.value[1 : len(pathTok.value)-1]
+	path = strings.ReplaceAll(path, "''", "'")
+
+	return &ImportDatabaseStmt{Path: path}, nil
+}
+
+// parseInstall parses an INSTALL extension_name statement.
+func (p *parser) parseInstall() (*InstallStmt, error) {
+	p.advance() // consume INSTALL
+	if p.current().typ != tokenIdent && p.current().typ != tokenString {
+		return nil, p.errorf("expected extension name after INSTALL")
+	}
+	name := p.advance().value
+	// Strip quotes from string tokens
+	if len(name) >= 2 && name[0] == '\'' && name[len(name)-1] == '\'' {
+		name = name[1 : len(name)-1]
+	}
+	return &InstallStmt{Name: name}, nil
+}
+
+// parseLoad parses a LOAD extension_name statement.
+func (p *parser) parseLoad() (*LoadStmt, error) {
+	p.advance() // consume LOAD
+	if p.current().typ != tokenIdent && p.current().typ != tokenString {
+		return nil, p.errorf("expected extension name after LOAD")
+	}
+	name := p.advance().value
+	// Strip quotes from string tokens
+	if len(name) >= 2 && name[0] == '\'' && name[len(name)-1] == '\'' {
+		name = name[1 : len(name)-1]
+	}
+	return &LoadStmt{Name: name}, nil
+}
+
+// parseAttach parses an ATTACH [DATABASE] 'path' [AS alias] [(options)] statement.
+func (p *parser) parseAttach() (Statement, error) {
+	p.advance() // consume ATTACH
+	// Optional DATABASE keyword
+	if p.isKeyword("DATABASE") {
+		p.advance()
+	}
+
+	// Path (string literal)
+	if p.current().typ != tokenString {
+		return nil, p.errorf("expected database path string")
+	}
+	pathTok := p.advance()
+	path := pathTok.value
+	// Remove quotes
+	if len(path) >= 2 && (path[0] == '\'' || path[0] == '"') {
+		path = path[1 : len(path)-1]
+	}
+
+	stmt := &AttachStmt{Path: path, Options: make(map[string]string)}
+
+	// Optional AS alias
+	if p.isKeyword("AS") {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected database alias")
+		}
+		stmt.Alias = p.advance().value
+	}
+
+	// Optional (READ_ONLY, TYPE 'duckdb', etc.)
+	if p.current().typ == tokenLParen {
+		p.advance()
+		for p.current().typ != tokenRParen && p.current().typ != tokenEOF {
+			if p.current().typ != tokenIdent {
+				break
+			}
+			key := strings.ToUpper(p.advance().value)
+			if key == "READ_ONLY" {
+				stmt.ReadOnly = true
+			} else {
+				// key value pair
+				if p.current().typ == tokenString {
+					val := p.advance().value
+					if len(val) >= 2 && (val[0] == '\'' || val[0] == '"') {
+						val = val[1 : len(val)-1]
+					}
+					stmt.Options[key] = val
+				} else if p.current().typ == tokenIdent {
+					stmt.Options[key] = p.advance().value
+				}
+			}
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	return stmt, nil
+}
+
+// parseDetach parses a DETACH [DATABASE] [IF EXISTS] name statement.
+func (p *parser) parseDetach() (Statement, error) {
+	p.advance() // consume DETACH
+	if p.isKeyword("DATABASE") {
+		p.advance()
+	}
+
+	ifExists := false
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		ifExists = true
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected database name")
+	}
+	name := p.advance().value
+
+	return &DetachStmt{Name: name, IfExists: ifExists}, nil
+}
+
+// parseUse parses a USE database[.schema] statement.
+func (p *parser) parseUse() (Statement, error) {
+	p.advance() // consume USE
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected database name")
+	}
+	db := p.advance().value
+
+	schema := ""
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected schema name")
+		}
+		schema = p.advance().value
+	}
+
+	return &UseStmt{Database: db, Schema: schema}, nil
+}
+
+// parseCreateDatabase parses CREATE DATABASE [IF NOT EXISTS] name.
+func (p *parser) parseCreateDatabase() (Statement, error) {
+	p.advance() // consume DATABASE
+
+	ifNotExists := false
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("NOT"); err != nil {
+			return nil, err
+		}
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		ifNotExists = true
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected database name")
+	}
+	name := p.advance().value
+
+	return &CreateDatabaseStmt{Name: name, IfNotExists: ifNotExists}, nil
+}
+
+// parseDropDatabase parses DROP DATABASE [IF EXISTS] name.
+func (p *parser) parseDropDatabase() (Statement, error) {
+	p.advance() // consume DATABASE
+
+	ifExists := false
+	if p.isKeyword("IF") {
+		p.advance()
+		if err := p.expectKeyword("EXISTS"); err != nil {
+			return nil, err
+		}
+		ifExists = true
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected database name")
+	}
+	name := p.advance().value
+
+	return &DropDatabaseStmt{Name: name, IfExists: ifExists}, nil
 }

@@ -9,55 +9,55 @@
       "id": "11.1",
       "section": "Testing and Validation",
       "description": "Test expression rewrites on all data types",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.2",
       "section": "Testing and Validation",
       "description": "Test filter rewrites on single and multi-table queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.3",
       "section": "Testing and Validation",
       "description": "Test join rewrites preserve semantics",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.4",
       "section": "Testing and Validation",
       "description": "Test aggregation rewrites with various functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.5",
       "section": "Testing and Validation",
       "description": "Test subquery rewrites with correlated and uncorrelated",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.6",
       "section": "Testing and Validation",
       "description": "Test rewrite combinations (multiple rewrites on same query)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.7",
       "section": "Testing and Validation",
       "description": "Test correctness: rewritten results match original",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.8",
       "section": "Testing and Validation",
       "description": "Test performance: rewritten plans execute faster",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.9",
       "section": "Testing and Validation",
       "description": "Equivalence checking against reference DuckDB implementation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "11"

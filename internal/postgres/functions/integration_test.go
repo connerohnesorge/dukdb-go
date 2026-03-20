@@ -76,7 +76,7 @@ func TestFunctionAliasIntegration(t *testing.T) {
 		{"least_passthrough", "least", "least", DirectAlias, 1, -1},
 
 		// Transformed functions
-		{"generate_series_to_range", "generate_series", "range", TransformedAlias, 2, 3},
+		{"generate_series_passthrough", "generate_series", "generate_series", TransformedAlias, 2, 3},
 	}
 
 	for _, tt := range tests {
@@ -199,22 +199,22 @@ func TestTransformerExecution(t *testing.T) {
 		{
 			name:     "simple_integers",
 			args:     []string{"1", "5"},
-			wantFunc: "range",
-			wantArgs: []string{"1", "6"}, // +1 for exclusive end
+			wantFunc: "generate_series",
+			wantArgs: []string{"1", "5"},
 			wantErr:  false,
 		},
 		{
 			name:     "with_step",
 			args:     []string{"1", "10", "2"},
-			wantFunc: "range",
-			wantArgs: []string{"1", "11", "2"},
+			wantFunc: "generate_series",
+			wantArgs: []string{"1", "10", "2"},
 			wantErr:  false,
 		},
 		{
 			name:     "variable_arguments",
 			args:     []string{"start_var", "end_var"},
-			wantFunc: "range",
-			wantArgs: []string{"start_var", "(end_var + 1)"},
+			wantFunc: "generate_series",
+			wantArgs: []string{"start_var", "end_var"},
 			wantErr:  false,
 		},
 		{
@@ -566,7 +566,7 @@ func TestSpecificNameMappings(t *testing.T) {
 		{"jsonb_typeof", "json_type"},
 		{"percentile_cont", "quantile_cont"},
 		{"percentile_disc", "quantile_disc"},
-		{"generate_series", "range"},
+		{"generate_series", "generate_series"},
 
 		// Same name (passthrough)
 		{"now", "current_timestamp"},

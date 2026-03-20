@@ -9,37 +9,37 @@
       "id": "3.1",
       "section": "Phase 2: MAP Type Support",
       "description": "Implement MapVector type",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Phase 2: MAP Type Support",
       "description": "Add MapVector child vector management",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Phase 2: MAP Type Support",
       "description": "Implement MapVector serialization",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Phase 2: MAP Type Support",
       "description": "Implement MapVector deserialization",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.5",
       "section": "Phase 2: MAP Type Support",
       "description": "Implement ScanMap() generic function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.6",
       "section": "Phase 2: MAP Type Support",
       "description": "Add MAP error handling",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

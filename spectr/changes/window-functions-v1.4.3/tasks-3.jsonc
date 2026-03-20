@@ -9,25 +9,25 @@
       "id": "3.1",
       "section": "Phase 3: Vectorized Window Function Library",
       "description": "**Task 3.1**: Implement `RankingFunctionEvaluator` with vectorized versions of:",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Phase 3: Vectorized Window Function Library",
       "description": "**Task 3.2**: Implement `ValueFunctionEvaluator` with vectorized versions of:",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Phase 3: Vectorized Window Function Library",
       "description": "**Task 3.3**: Implement `IGNORE NULLS` support for all value functions.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Phase 3: Vectorized Window Function Library",
       "description": "**Task 3.4**: Implement distribution functions:",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

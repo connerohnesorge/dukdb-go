@@ -9,43 +9,43 @@
       "id": "6.1",
       "section": "Integration \u0026 Testing",
       "description": "Integration test: Round-trip JSON through DataChunk",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Integration \u0026 Testing",
       "description": "Integration test: Round-trip MAP through RowGroup",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Integration \u0026 Testing",
       "description": "Integration test: Round-trip STRUCT through RowGroup",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Integration \u0026 Testing",
       "description": "Integration test: Round-trip UNION through RowGroup",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
       "section": "Integration \u0026 Testing",
       "description": "Integration test: Complex type queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.6",
       "section": "Integration \u0026 Testing",
       "description": "Performance benchmarks",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.7",
       "section": "Integration \u0026 Testing",
       "description": "Compatibility test: DuckDB binary round-trip",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

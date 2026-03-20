@@ -9,25 +9,25 @@
       "id": "1.1",
       "section": "Infrastructure and Setup",
       "description": "Create `internal/postgres/catalog/information_schema.go` file",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.2",
       "section": "Infrastructure and Setup",
       "description": "Implement information_schema schema creation at engine initialization",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.3",
       "section": "Infrastructure and Setup",
       "description": "Register all 12 views in virtual table registry",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.4",
       "section": "Infrastructure and Setup",
       "description": "Add information_schema to default search paths",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "1"

@@ -9,31 +9,31 @@
       "id": "13.1",
       "section": "Documentation and Polish",
       "description": "Add godoc comments to pg_catalog package",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "13.2",
       "section": "Documentation and Polish",
       "description": "Document each view's columns and usage",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "13.3",
       "section": "Documentation and Polish",
       "description": "Document OID system and how it works",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "13.4",
       "section": "Documentation and Polish",
       "description": "Add examples for common pg_catalog queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "13.5",
       "section": "Documentation and Polish",
       "description": "Update CLAUDE.md with pg_catalog documentation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "13"

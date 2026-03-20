@@ -9,25 +9,25 @@
       "id": "5.1",
       "section": "System Function Implementations (Part 4 - Monitoring)",
       "description": "Implement duckdb_extensions() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "System Function Implementations (Part 4 - Monitoring)",
       "description": "Implement duckdb_memory_usage() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "System Function Implementations (Part 4 - Monitoring)",
       "description": "Implement duckdb_temp_directory() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "System Function Implementations (Part 4 - Monitoring)",
       "description": "Add tests for 5.1-5.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

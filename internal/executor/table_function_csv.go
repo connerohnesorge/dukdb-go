@@ -140,9 +140,55 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeDuckDBMemoryUsage(ctx, plan)
 	case "duckdb_temp_directory":
 		return e.executeDuckDBTempDirectory(ctx, plan)
+	// Series generation functions
+	case "generate_series":
+		return e.executeGenerateSeries(ctx, plan, true) // inclusive
+	case "range":
+		return e.executeGenerateSeries(ctx, plan, false) // exclusive
+	// Full-text search functions
+	case "fts_search", "match_bm25":
+		return e.executeFTSSearch(ctx, plan)
 	// Array/list expansion functions
 	case "unnest":
 		return e.executeUnnest(ctx, plan)
+	// information_schema views
+	case "information_schema_tables":
+		return e.executeInformationSchemaTables(ctx, plan)
+	case "information_schema_columns":
+		return e.executeInformationSchemaColumns(ctx, plan)
+	case "information_schema_schemata":
+		return e.executeInformationSchemaSchemata(ctx, plan)
+	case "information_schema_views":
+		return e.executeInformationSchemaViews(ctx, plan)
+	case "information_schema_table_constraints":
+		return e.executeInformationSchemaTableConstraints(ctx, plan)
+	case "information_schema_key_column_usage":
+		return e.executeInformationSchemaKeyColumnUsage(ctx, plan)
+	// pg_catalog views
+	case "pg_catalog_pg_namespace":
+		return e.executePgCatalogNamespace(ctx, plan)
+	case "pg_catalog_pg_class":
+		return e.executePgCatalogClass(ctx, plan)
+	case "pg_catalog_pg_attribute":
+		return e.executePgCatalogAttribute(ctx, plan)
+	case "pg_catalog_pg_type":
+		return e.executePgCatalogType(ctx, plan)
+	case "pg_catalog_pg_tables":
+		return e.executePgCatalogTables(ctx, plan)
+	case "pg_catalog_pg_views":
+		return e.executePgCatalogViews(ctx, plan)
+	case "pg_catalog_pg_index":
+		return e.executePgCatalogIndex(ctx, plan)
+	case "pg_catalog_pg_constraint":
+		return e.executePgCatalogConstraint(ctx, plan)
+	case "pg_catalog_pg_database":
+		return e.executePgCatalogDatabase(ctx, plan)
+	case "pg_catalog_pg_settings":
+		return e.executePgCatalogSettings(ctx, plan)
+	case "pg_catalog_pg_roles":
+		return e.executePgCatalogRoles(ctx, plan)
+	case "pg_catalog_pg_user":
+		return e.executePgCatalogRoles(ctx, plan)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

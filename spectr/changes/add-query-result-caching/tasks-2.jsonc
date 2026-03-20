@@ -9,43 +9,43 @@
       "id": "2.1",
       "section": "Cache Key Generation",
       "description": "Design cache key format (plan hash + parameter fingerprint)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "Cache Key Generation",
       "description": "Extract plan structure for hashing",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "Cache Key Generation",
       "description": "Extract literal parameters for fingerprinting",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "Cache Key Generation",
       "description": "Generate deterministic hash",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.5",
       "section": "Cache Key Generation",
       "description": "Handle prepared statements specially",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.6",
       "section": "Cache Key Generation",
       "description": "Implement parameter normalization for similar queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.7",
       "section": "Cache Key Generation",
       "description": "Write tests for cache key generation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

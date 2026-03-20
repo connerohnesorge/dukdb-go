@@ -9,43 +9,43 @@
       "id": "4.1",
       "section": "Query Signature and Matching",
       "description": "Design query signature for similarity matching",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "Query Signature and Matching",
       "description": "Extract plan shape for matching",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.3",
       "section": "Query Signature and Matching",
       "description": "Extract predicate patterns",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "Query Signature and Matching",
       "description": "Implement approximate matching for parametric queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.5",
       "section": "Query Signature and Matching",
       "description": "Handle parameterized queries (prepared statements)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.6",
       "section": "Query Signature and Matching",
       "description": "Write tests for signature generation and matching",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.7",
       "section": "Query Signature and Matching",
       "description": "Test matching accuracy on similar/different queries",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "4"

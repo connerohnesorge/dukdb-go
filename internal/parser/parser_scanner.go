@@ -266,7 +266,7 @@ func (p *parser) scanOperator() {
 	if p.pos+1 < len(p.input) {
 		two := p.input[p.pos : p.pos+2]
 		switch two {
-		case "<=", ">=", "<>", "!=", "||", "::", "->":
+		case "<=", ">=", "<>", "!=", "||", "::", "->", ":=":
 			p.pos += 2
 			p.tokens = append(
 				p.tokens,
@@ -361,6 +361,16 @@ func (p *parser) peek() token {
 	}
 
 	return p.tokens[p.tokPos+1]
+}
+
+// peekAt returns the token n positions ahead without consuming any tokens.
+func (p *parser) peekAt(n int) token {
+	idx := p.tokPos + n
+	if idx >= len(p.tokens) {
+		return token{tokenEOF, "", len(p.input)}
+	}
+
+	return p.tokens[idx]
 }
 
 func (p *parser) advance() token {

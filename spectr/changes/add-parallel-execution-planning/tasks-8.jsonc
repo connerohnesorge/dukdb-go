@@ -9,61 +9,61 @@
       "id": "8.1",
       "section": "Comprehensive Testing",
       "description": "Test parallel scan with filter pushdown",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "Comprehensive Testing",
       "description": "Test parallel join with various join types",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
       "section": "Comprehensive Testing",
       "description": "Test parallel aggregation with GROUP BY",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.4",
       "section": "Comprehensive Testing",
       "description": "Test complex queries with multiple parallel stages",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.5",
       "section": "Comprehensive Testing",
       "description": "Test parallelization threshold (ensure small queries stay sequential)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.6",
       "section": "Comprehensive Testing",
       "description": "Test correctness: parallel results match sequential",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.7",
       "section": "Comprehensive Testing",
       "description": "Test with race detector enabled",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.8",
       "section": "Comprehensive Testing",
       "description": "Performance benchmark: compare parallel vs sequential execution",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.9",
       "section": "Comprehensive Testing",
       "description": "Test edge cases: empty tables, single row, all NULLs, etc.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.10",
       "section": "Comprehensive Testing",
       "description": "Test concurrent query execution with thread pool limits",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"

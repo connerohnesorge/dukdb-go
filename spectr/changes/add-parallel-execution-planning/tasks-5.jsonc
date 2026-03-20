@@ -9,37 +9,37 @@
       "id": "5.1",
       "section": "Planner Integration",
       "description": "Integrate pipeline analysis into planner",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Planner Integration",
       "description": "Integrate parallel plan generation into planner",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Planner Integration",
       "description": "Modify planner to evaluate both sequential and parallel plans",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Planner Integration",
       "description": "Implement threshold logic to skip parallelization for small queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Planner Integration",
       "description": "Add configuration options for parallelization behavior",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Planner Integration",
       "description": "Add PRAGMA-based control (e.g., PRAGMA enable_parallel_plans = true/false)",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

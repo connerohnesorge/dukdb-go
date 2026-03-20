@@ -31,6 +31,10 @@ var pragmaCategories = map[string]PragmaType{
 	"temp_directory":       PragmaTypeConfig,
 	"checkpoint_threshold": PragmaTypeConfig,
 
+	// FTS pragmas
+	"create_fts_index": PragmaTypeConfig,
+	"drop_fts_index":   PragmaTypeConfig,
+
 	// Profiling pragmas
 	"enable_profiling":     PragmaTypeProfiling,
 	"disable_profiling":    PragmaTypeProfiling,

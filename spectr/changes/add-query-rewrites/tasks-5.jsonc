@@ -9,43 +9,43 @@
       "id": "5.1",
       "section": "Aggregation Rewrites",
       "description": "Implement removal of redundant aggregates",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Aggregation Rewrites",
       "description": "Implement GROUP BY elimination (GROUP BY on unique key → no group)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Aggregation Rewrites",
       "description": "Implement aggregate simplification (SUM of 1 → COUNT, etc.)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Aggregation Rewrites",
       "description": "Implement MIN/MAX with index pushdown",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Aggregation Rewrites",
       "description": "Implement removal of DISTINCT when not needed",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Aggregation Rewrites",
       "description": "Implement correlated aggregate detection",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.7",
       "section": "Aggregation Rewrites",
       "description": "Write tests for aggregation rewriting",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

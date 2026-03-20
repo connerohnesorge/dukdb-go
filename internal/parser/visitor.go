@@ -49,6 +49,10 @@ type Visitor interface {
 	VisitAnalyzeStmt(stmt *AnalyzeStmt)
 	VisitCheckpointStmt(stmt *CheckpointStmt)
 
+	// Macro DDL statement visitors
+	VisitCreateMacroStmt(stmt *CreateMacroStmt)
+	VisitDropMacroStmt(stmt *DropMacroStmt)
+
 	// Function DDL statement visitors
 	VisitCreateFunctionStmt(stmt *CreateFunctionStmt)
 
@@ -60,4 +64,28 @@ type Visitor interface {
 	// Session configuration statement visitors
 	VisitSetStmt(stmt *SetStmt)
 	VisitShowStmt(stmt *ShowStmt)
+
+	// Prepared statement visitors
+	VisitPrepareStmt(stmt *PrepareStmt)
+	VisitExecuteStmt(stmt *ExecuteStmt)
+	VisitDeallocateStmt(stmt *DeallocateStmt)
+
+	// Type DDL statement visitors
+	VisitCreateTypeStmt(stmt *CreateTypeStmt)
+	VisitDropTypeStmt(stmt *DropTypeStmt)
+
+	// Export/Import Database statement visitors
+	VisitExportDatabaseStmt(stmt *ExportDatabaseStmt)
+	VisitImportDatabaseStmt(stmt *ImportDatabaseStmt)
+
+	// Extension statement visitors
+	VisitInstallStmt(stmt *InstallStmt)
+	VisitLoadStmt(stmt *LoadStmt)
+
+	// Database management statement visitors
+	VisitAttachStmt(stmt *AttachStmt)
+	VisitDetachStmt(stmt *DetachStmt)
+	VisitUseStmt(stmt *UseStmt)
+	VisitCreateDatabaseStmt(stmt *CreateDatabaseStmt)
+	VisitDropDatabaseStmt(stmt *DropDatabaseStmt)
 }

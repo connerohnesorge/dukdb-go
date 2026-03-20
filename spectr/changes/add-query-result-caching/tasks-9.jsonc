@@ -9,43 +9,43 @@
       "id": "9.1",
       "section": "Special Cases and Edge Cases",
       "description": "Handle non-deterministic functions (NOW(), RANDOM())",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "Special Cases and Edge Cases",
       "description": "Handle system calls that vary (FILE access)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",
       "section": "Special Cases and Edge Cases",
       "description": "Handle UDFs with side effects",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "Special Cases and Edge Cases",
       "description": "Mark these queries as non-cacheable",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.5",
       "section": "Special Cases and Edge Cases",
       "description": "Handle very large result sets",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.6",
       "section": "Special Cases and Edge Cases",
       "description": "Handle queries with side effects (INSERT, UPDATE)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.7",
       "section": "Special Cases and Edge Cases",
       "description": "Write tests for edge cases",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "9"

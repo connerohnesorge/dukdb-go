@@ -9,31 +9,31 @@
       "id": "4.1",
       "section": "Phase 4: Optimized Aggregate Window Functions",
       "description": "**Task 4.1**: Implement `AggregateWindowEvaluator` for standard aggregates (`SUM`, `COUNT`, `AVG`, `MIN`, `MAX`).",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.2",
       "section": "Phase 4: Optimized Aggregate Window Functions",
       "description": "**Task 4.2**: Implement `SlidingWindowState` using ring buffers or segments for efficient incremental aggregation.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.3",
       "section": "Phase 4: Optimized Aggregate Window Functions",
       "description": "**Task 4.3**: Add support for `DISTINCT` within window aggregates.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.4",
       "section": "Phase 4: Optimized Aggregate Window Functions",
       "description": "**Task 4.4**: Add support for `FILTER (WHERE ...)` clause in window aggregate evaluation.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.5",
       "section": "Phase 4: Optimized Aggregate Window Functions",
       "description": "**Task 4.5**: Implement specialized aggregators for high-precision numeric types.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "4"

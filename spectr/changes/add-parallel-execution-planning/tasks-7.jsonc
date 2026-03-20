@@ -9,31 +9,31 @@
       "id": "7.1",
       "section": "EXPLAIN Output",
       "description": "Extend EXPLAIN output to show parallel plan structure",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "EXPLAIN Output",
       "description": "Show worker count and morsel distribution in EXPLAIN",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "EXPLAIN Output",
       "description": "Show exchange operators and repartitioning strategy",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.4",
       "section": "EXPLAIN Output",
       "description": "Add estimated cost for parallel plan vs sequential",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.5",
       "section": "EXPLAIN Output",
       "description": "Show actual execution parallelism in EXPLAIN ANALYZE",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"

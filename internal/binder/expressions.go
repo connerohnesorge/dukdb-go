@@ -62,12 +62,13 @@ func (e *BoundUnaryExpr) ResultType() dukdb.Type { return e.ResType }
 
 // BoundFunctionCall represents a bound function call.
 type BoundFunctionCall struct {
-	Name     string
-	Args     []BoundExpr
-	Distinct bool
-	Star     bool
-	OrderBy  []BoundOrderByExpr // ORDER BY within aggregate functions
-	ResType  dukdb.Type
+	Name      string
+	Args      []BoundExpr
+	NamedArgs map[string]BoundExpr // Named arguments (e.g., struct_pack(name := 'Alice'))
+	Distinct  bool
+	Star      bool
+	OrderBy   []BoundOrderByExpr // ORDER BY within aggregate functions
+	ResType   dukdb.Type
 }
 
 // BoundOrderByExpr represents a bound ORDER BY expression within an aggregate function.
@@ -102,6 +103,7 @@ func (f *BoundScalarUDF) ResultType() dukdb.Type { return f.ResType }
 type BoundCastExpr struct {
 	Expr       BoundExpr
 	TargetType dukdb.Type
+	TryCast    bool
 }
 
 func (*BoundCastExpr) boundExprNode() {}
@@ -215,6 +217,30 @@ type BoundIntervalLiteral struct {
 func (*BoundIntervalLiteral) boundExprNode() {}
 
 func (*BoundIntervalLiteral) ResultType() dukdb.Type { return dukdb.TYPE_INTERVAL }
+
+// BoundLambdaExpr represents a bound lambda expression.
+// Lambda parameters are not resolved as column references; instead, the raw parser
+// expression body is stored and evaluated at execution time with parameter substitution.
+type BoundLambdaExpr struct {
+	Params   []string    // Parameter names
+	BodyExpr parser.Expr // Raw parser expression (evaluated at runtime with param bindings)
+}
+
+func (*BoundLambdaExpr) boundExprNode() {}
+
+func (e *BoundLambdaExpr) ResultType() dukdb.Type { return dukdb.TYPE_LAMBDA }
+
+// BoundSimilarToExpr represents a bound SIMILAR TO expression.
+type BoundSimilarToExpr struct {
+	Expr    BoundExpr
+	Pattern BoundExpr
+	Escape  rune // 0 means default '\'
+	Not     bool
+}
+
+func (*BoundSimilarToExpr) boundExprNode() {}
+
+func (*BoundSimilarToExpr) ResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
 
 // ---------- Window Function Types ----------
 

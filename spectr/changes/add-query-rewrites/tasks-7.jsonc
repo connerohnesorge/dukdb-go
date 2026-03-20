@@ -9,37 +9,37 @@
       "id": "7.1",
       "section": "Subquery Rewrites",
       "description": "Implement removal of unnecessary outer subqueries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Subquery Rewrites",
       "description": "Implement scalar subquery flattening when appropriate",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Subquery Rewrites",
       "description": "Implement IN subquery to JOIN conversion",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.4",
       "section": "Subquery Rewrites",
       "description": "Implement EXISTS to ANY conversion",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.5",
       "section": "Subquery Rewrites",
       "description": "Implement uncorrelated subquery hoisting",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.6",
       "section": "Subquery Rewrites",
       "description": "Write tests for subquery rewriting with various patterns",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"

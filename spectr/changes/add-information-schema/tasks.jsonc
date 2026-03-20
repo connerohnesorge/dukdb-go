@@ -42,49 +42,49 @@
       "id": "1",
       "section": "Infrastructure and Setup",
       "description": "Infrastructure and Setup tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-1.jsonc"
     },
     {
       "id": "2",
       "section": "Core Views Implementation (Part 1)",
       "description": "Core Views Implementation (Part 1) tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-2.jsonc"
     },
     {
       "id": "3",
       "section": "Constraint and Key Views (Part 2)",
       "description": "Constraint and Key Views (Part 2) tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-3.jsonc"
     },
     {
       "id": "4",
       "section": "View and Function Views (Part 3)",
       "description": "View and Function Views (Part 3) tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-4.jsonc"
     },
     {
       "id": "5",
       "section": "Extensibility Views (Part 4)",
       "description": "Extensibility Views (Part 4) tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-5.jsonc"
     },
     {
       "id": "6",
       "section": "Testing and Validation",
       "description": "Testing and Validation tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-6.jsonc"
     },
     {
       "id": "7",
       "section": "Documentation and Polish",
       "description": "Documentation and Polish tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-7.jsonc"
     }
   ],

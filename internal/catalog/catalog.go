@@ -123,10 +123,11 @@ func (c *Catalog) DropSchemaIfExists(name string, ifExists bool, cascade bool) e
 		}
 	}
 
-	// Check if schema has objects (tables, views, indexes, sequences)
+	// Check if schema has objects (tables, views, indexes, sequences, macros)
 	schema.mu.RLock()
 	hasObjects := len(schema.tables) > 0 || len(schema.views) > 0 ||
-		len(schema.indexes) > 0 || len(schema.sequences) > 0
+		len(schema.indexes) > 0 || len(schema.sequences) > 0 ||
+		len(schema.macros) > 0
 	schema.mu.RUnlock()
 
 	if hasObjects && !cascade {
@@ -585,6 +586,14 @@ func (c *Catalog) IsVirtualTable(
 	return ok
 }
 
+// TypeEntry represents a user-defined type in the catalog.
+type TypeEntry struct {
+	Name       string
+	Schema     string
+	TypeKind   string   // "ENUM"
+	EnumValues []string
+}
+
 // Schema represents a database schema (namespace for tables).
 type Schema struct {
 	mu        sync.RWMutex
@@ -593,6 +602,8 @@ type Schema struct {
 	views     map[string]*ViewDef
 	indexes   map[string]*IndexDef
 	sequences map[string]*SequenceDef
+	types     map[string]*TypeEntry
+	macros    map[string]*MacroDef
 }
 
 // NewSchema creates a new Schema instance.
@@ -603,6 +614,8 @@ func NewSchema(name string) *Schema {
 		views:     make(map[string]*ViewDef),
 		indexes:   make(map[string]*IndexDef),
 		sequences: make(map[string]*SequenceDef),
+		types:     make(map[string]*TypeEntry),
+		macros:    make(map[string]*MacroDef),
 	}
 }
 
@@ -872,6 +885,96 @@ func (s *Schema) ListSequences() []*SequenceDef {
 	return sequences
 }
 
+// CreateType creates a new user-defined type in the schema.
+func (s *Schema) CreateType(entry *TypeEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	name := normalizeKey(entry.Name)
+	if _, exists := s.types[name]; exists {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: type \"" + entry.Name + "\" already exists",
+		}
+	}
+	s.types[name] = entry
+	return nil
+}
+
+// DropType drops a user-defined type from the schema.
+func (s *Schema) DropType(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := normalizeKey(name)
+	if _, exists := s.types[n]; !exists {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: type \"" + name + "\" does not exist",
+		}
+	}
+	delete(s.types, n)
+	return nil
+}
+
+// GetType returns a user-defined type by name (case-insensitive).
+func (s *Schema) GetType(name string) (*TypeEntry, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.types[normalizeKey(name)]
+	return entry, ok
+}
+
+// CreateMacro creates a new macro in the schema.
+// Macro names are case-insensitive; the original case is preserved.
+func (s *Schema) CreateMacro(def *MacroDef, orReplace bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	name := normalizeKey(def.Name)
+	if _, exists := s.macros[name]; exists && !orReplace {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: Macro already exists: " + def.Name,
+		}
+	}
+
+	def.Schema = s.name
+	s.macros[name] = def
+
+	return nil
+}
+
+// DropMacro drops a macro from the schema.
+// Macro names are case-insensitive.
+func (s *Schema) DropMacro(name string, ifExists bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	n := normalizeKey(name)
+	if _, exists := s.macros[n]; !exists {
+		if ifExists {
+			return nil
+		}
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: Macro not found: " + name,
+		}
+	}
+
+	delete(s.macros, n)
+
+	return nil
+}
+
+// GetMacro returns a macro by name (case-insensitive).
+func (s *Schema) GetMacro(name string) (*MacroDef, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	m, ok := s.macros[normalizeKey(name)]
+
+	return m, ok
+}
+
 // Clone creates a deep copy of the schema for transaction rollback support.
 func (s *Schema) Clone() *Schema {
 	s.mu.RLock()
@@ -883,6 +986,8 @@ func (s *Schema) Clone() *Schema {
 		views:     make(map[string]*ViewDef),
 		indexes:   make(map[string]*IndexDef),
 		sequences: make(map[string]*SequenceDef),
+		types:     make(map[string]*TypeEntry),
+		macros:    make(map[string]*MacroDef),
 	}
 
 	// Clone tables
@@ -903,6 +1008,19 @@ func (s *Schema) Clone() *Schema {
 	// Clone sequences
 	for key, seq := range s.sequences {
 		newSchema.sequences[key] = seq.Clone()
+	}
+
+	// Clone types
+	for key, t := range s.types {
+		cloned := *t
+		cloned.EnumValues = make([]string, len(t.EnumValues))
+		copy(cloned.EnumValues, t.EnumValues)
+		newSchema.types[key] = &cloned
+	}
+
+	// Clone macros
+	for key, macro := range s.macros {
+		newSchema.macros[key] = macro // MacroDef is effectively immutable
 	}
 
 	return newSchema
@@ -942,6 +1060,130 @@ func (c *Catalog) RestoreFrom(snapshot *Catalog) {
 		c.schemas[key] = schema.Clone()
 	}
 	// Virtual tables are shared, not restored
+}
+
+// CreateType creates a user-defined type in the appropriate schema.
+func (c *Catalog) CreateType(entry *TypeEntry) error {
+	schemaName := entry.Schema
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.Lock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	if !ok {
+		// Create the schema if it doesn't exist
+		schema = NewSchema(schemaName)
+		c.schemas[normalizeKey(schemaName)] = schema
+	}
+	c.mu.Unlock()
+
+	return schema.CreateType(entry)
+}
+
+// DropType drops a user-defined type from the specified schema.
+func (c *Catalog) DropType(name, schemaName string, ifExists bool) error {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.RLock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	c.mu.RUnlock()
+
+	if !ok {
+		if ifExists {
+			return nil
+		}
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: schema \"" + schemaName + "\" does not exist",
+		}
+	}
+
+	err := schema.DropType(name)
+	if err != nil && ifExists {
+		return nil
+	}
+	return err
+}
+
+// GetType returns a user-defined type from the specified schema.
+func (c *Catalog) GetType(name, schemaName string) (*TypeEntry, bool) {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.RLock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	c.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+	return schema.GetType(name)
+}
+
+// ---------- Macro Catalog Methods ----------
+
+// CreateMacro creates a macro in the specified schema.
+func (c *Catalog) CreateMacro(schemaName string, def *MacroDef, orReplace bool) error {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.RLock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	c.mu.RUnlock()
+
+	if !ok {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: Schema not found: " + schemaName,
+		}
+	}
+
+	return schema.CreateMacro(def, orReplace)
+}
+
+// DropMacro drops a macro from the specified schema.
+func (c *Catalog) DropMacro(schemaName, name string, ifExists bool) error {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.RLock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	c.mu.RUnlock()
+
+	if !ok {
+		if ifExists {
+			return nil
+		}
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "Catalog Error: Macro not found: " + name,
+		}
+	}
+
+	return schema.DropMacro(name, ifExists)
+}
+
+// GetMacro returns a macro from the specified schema.
+func (c *Catalog) GetMacro(schemaName, name string) (*MacroDef, bool) {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	c.mu.RLock()
+	schema, ok := c.schemas[normalizeKey(schemaName)]
+	c.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+
+	return schema.GetMacro(name)
 }
 
 // Compile-time assertion that Catalog implements dukdb.VirtualTableRegistry

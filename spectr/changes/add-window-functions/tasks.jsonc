@@ -42,28 +42,28 @@
       "id": "1",
       "section": "Phase 1: Ranking Functions",
       "description": "Phase 1: Ranking Functions tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-1.jsonc"
     },
     {
       "id": "2",
       "section": "Phase 2: Analytic (Value) Functions",
       "description": "Phase 2: Analytic (Value) Functions tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-2.jsonc"
     },
     {
       "id": "3",
       "section": "Phase 3: Distribution \u0026 Aggregate Window Functions",
       "description": "Phase 3: Distribution \u0026 Aggregate Window Functions tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-3.jsonc"
     },
     {
       "id": "4",
       "section": "Cross-Phase Tasks",
       "description": "Cross-Phase Tasks tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-4.jsonc"
     }
   ],

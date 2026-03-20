@@ -1,386 +1,205 @@
-# DuckDB v1.4.3 Compatibility Implementation Timeline
+# DuckDB v1.4.3 Feature Parity — Implementation Timeline
 
-This document provides a chronological timeline for implementing all change proposals in dependency order to achieve full DuckDB v1.4.3 compatibility.
-
-## New Proposals (v1.4.3 Compatibility)
-
-The following proposals were created to address gaps identified during v1.4.3 compatibility analysis:
-
-| Change ID | Feature | Priority | Effort | Dependencies |
-|-----------|---------|----------|--------|--------------|
-| `add-pragma-checkpoint-threshold` | PRAGMA checkpoint_threshold integration | HIGH | 2-3 weeks | None |
-| `verify-azure-write-support` | Azure Blob Storage write verification | MEDIUM | 1-2 weeks | Cloud storage base |
-| `add-orc-format-support` | ORC file format support (read/write) | HIGH | 5-7 months | None |
-| `add-iceberg-table-support` | Apache Iceberg table format | MEDIUM | 9-12 months | ORC support |
-| `add-postgresql-compat-mode` | PostgreSQL wire protocol compatibility | LOW | 3-6 months | None |
-| `enhance-cost-based-optimizer` | Advanced statistics and subquery optimization | HIGH | 11-15 weeks | None |
-| `fix-index-usage` | Connect optimizer hints to planner (CRITICAL) | CRITICAL | 4 weeks | None |
-
-## Timeline Overview
-
-```
-Phase 1: Critical Reliability (Weeks 1-4)
-├─→ add-pragma-checkpoint-threshold [P0]
-├─→ verify-azure-write-support [P1]
-└─→ fix-index-usage [P0 - CRITICAL]
-
-Phase 2: Core Optimizer (Weeks 5-12)
-└─→ enhance-cost-based-optimizer [P0]
-
-Phase 3: Core File Formats (Months 4-11)
-└─→ add-orc-format-support [P0]
-
-Phase 4: Advanced Table Formats (Months 12-24)
-└─→ add-iceberg-table-support [P1]
-    (depends on: ORC support)
-
-Phase 5: Compatibility Features (Months 18-24)
-└─→ add-postgresql-compat-mode [P2]
-    (can run in parallel)
-```
-
----
+This document describes the chronological order in which all remaining change proposals should be implemented to achieve full DuckDB v1.4.3 compatibility. Proposals are ordered by dependency: each phase's prerequisites are satisfied by earlier phases.
 
 ## Dependency Graph
 
 ```
-                            ┌─────────────────────────────────┐
-                            │       dukdb-go base             │
-                            │   (existing implementation)     │
-                            └────────────────┬────────────────┘
-                                           │
-           ┌───────────────┬───────────────┼───────────────┬───────────────┐
-           │               │               │               │               │
-           ▼               ▼               ▼               ▼               ▼
-┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│ fix-index-usage  │ │ add-pragma-      │ │ verify-azure-    │ │ enhance-cost-    │ │ add-orc-format-  │
-│ [P0 - CRITICAL]  │ │ checkpoint-      │ │ write-support    │ │ based-optimizer  │ │ support          │
-│ (4 weeks)        │ │ threshold        │ │ [P1 - MEDIUM]    │ │ [P0 - HIGH]      │ │ [P0 - HIGH]      │
-│                  │ │ [P0 - CRITICAL]  │ │                  │ │ (11-15 weeks)    │ │ (5-7 months)     │
-└────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘
-         │                    │                    │                    │                    │
-         │                    │                    │                    │                    │
-         ▼                    ▼                    ▼                    ▼                    ▼
-┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│ Future: Index    │ │ add-postgresql-  │ │ Future: Cloud    │ │ Future: Parallel │ │ add-iceberg-     │
-│ Range Scan       │ │ compat-mode      │ │ Optimization     │ │ Execution        │ │ table-support    │
-│ Index-Only Scan  │ │ [P2 - LOW]       │ │                  │ │                  │ │ [P1 - MEDIUM]    │
-└──────────────────┘ └──────────────────┘ └──────────────────┘ └──────────────────┘ │ (9-12 months)    │
-                                                                                  │                  │
-                                                                                  └────────┬─────────┘
-                                                                                           │
-                                                                                           ▼
-                                                                                  ┌──────────────────┐
-                                                                                  │ add-postgresql-  │
-                                                                                  │ compat-mode      │
-                                                                                  │ [P2 - LOW]       │
-                                                                                  └──────────────────┘
+Phase 1 (no dependencies — can be parallelized)
+├── add-try-cast-safe-casting
+├── add-similar-to-enum-ddl
+├── add-grouping-sets-execution
+├── add-union-by-name               ★ NEW
+├── add-generate-series-range        ★ NEW
+└── add-sql-prepare-execute          ★ NEW
+
+Phase 2 (no dependencies — can be parallelized with Phase 1)
+├── add-natural-asof-positional-joins
+├── add-create-macro
+├── add-upsert-on-conflict           ★ NEW
+└── add-table-constraints            ★ NEW
+
+Phase 3 (depends on Phase 1: TRY_CAST, ENUM types used by later features)
+├── add-lambda-functions  (depends on: list type maturity from Phase 1)
+└── add-icu-collation     (depends on: type system stability from Phase 1)
+
+Phase 4 (depends on Phase 2: extension framework needed for cloud/FTS)
+└── add-extension-loading
+
+Phase 5 (depends on Phase 4: extensions register via framework)
+├── add-s3-cloud-storage  (depends on: extension-loading, secret system)
+├── add-full-text-search  (depends on: extension-loading for FTS extension)
+└── add-export-import-database  ★ NEW (depends on: catalog DDL generation)
+
+Phase 6 (depends on Phase 5: cloud storage needed for remote ATTACH)
+└── add-attach-detach-database  (depends on: cloud storage for remote DBs)
 ```
 
----
+## Phase 1 — Core SQL Gaps (No Dependencies)
 
-## Phase 1: Critical Reliability (Weeks 1-4)
+These proposals fix fundamental SQL gaps with zero cross-dependencies. They can all be implemented in parallel.
 
-### 1.1 PRAGMA checkpoint_threshold Integration
+| Proposal | Estimated Effort | Key Deliverables |
+|----------|-----------------|------------------|
+| `add-try-cast-safe-casting` | Small (2-3 days) | TRY_CAST returns NULL on failure; `::` operator |
+| `add-similar-to-enum-ddl` | Medium (4-5 days) | SIMILAR TO operator; CREATE TYPE AS ENUM DDL |
+| `add-grouping-sets-execution` | Small (2-3 days) | Fix GROUPING() aliases; fix mixed GROUP BY; complete execution |
+| `add-union-by-name` ★ | Small (3-4 days) | UNION [ALL] BY NAME with column matching and NULL padding |
+| `add-generate-series-range` ★ | Small (3-4 days) | generate_series() and range() table functions for integers and dates |
+| `add-sql-prepare-execute` ★ | Medium (4-5 days) | PREPARE/EXECUTE/DEALLOCATE SQL statements with plan caching |
 
-**Change**: `spectr/changes/add-pragma-checkpoint-threshold/`
-
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 - CRITICAL |
-| Effort | 2-3 weeks |
-| Dependencies | None |
-
-**Key Deliverables:**
-- Integration between `PRAGMA checkpoint_threshold` and CheckpointManager
-- Threshold parsing with suffix support (b, kb, mb, gb)
-- Persistent storage in `duckdb.settings` table
-- Unit tests for threshold configuration
-
-**Success Criteria:**
-- `PRAGMA checkpoint_threshold = '256MB'` works and persists
-- CheckpointManager uses configurable threshold
-- All existing tests pass
+**Why first**: These are self-contained SQL features. TRY_CAST and ENUM types are referenced by later proposals. GROUPING SETS is nearly complete (just executor bugs to fix). UNION BY NAME, generate_series, and PREPARE/EXECUTE are independent features with no cross-dependencies.
 
 ---
 
-### 1.2 Critical Index Usage Fix
+## Phase 2 — Advanced SQL Features (No Dependencies)
 
-**Change**: `spectr/changes/fix-index-usage/`
+These also have no strict dependencies but are more complex. Can run in parallel with Phase 1.
 
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 - CRITICAL |
-| Effort | 4 weeks |
-| Dependencies | None |
+| Proposal | Estimated Effort | Key Deliverables |
+|----------|-----------------|------------------|
+| `add-natural-asof-positional-joins` | Large (7-10 days) | NATURAL JOIN, ASOF JOIN, POSITIONAL JOIN, USING clause |
+| `add-create-macro` | Medium (5-7 days) | CREATE MACRO, TABLE MACRO, macro expansion in binder |
+| `add-upsert-on-conflict` ★ | Medium (5-7 days) | INSERT ... ON CONFLICT DO NOTHING/UPDATE, EXCLUDED pseudo-table |
+| `add-table-constraints` ★ | Large (7-10 days) | UNIQUE, CHECK, FOREIGN KEY constraints with enforcement |
 
-**Key Deliverables:**
-- Connect optimizer hints to planner physical plan generation
-- `createPhysicalIndexScan()` implementation
-- ART range scan support (<, >, BETWEEN)
-- EXPLAIN output showing index usage
-- Unit and integration tests
+**Why here**: JOIN types and MACROs are frequently used DuckDB features. UPSERT depends on UNIQUE constraint infrastructure (from add-table-constraints or existing PK logic). Table constraints are foundational for data integrity. These can all be parallelized.
 
-**Critical Issue Fixed:**
-- Previously: Planner ignored optimizer hints, PhysicalIndexScan never created
-- Now: Hints passed from optimizer to planner, index scans actually used
-
-**Success Criteria:**
-- `CREATE INDEX` improves query performance
-- `EXPLAIN` shows IndexScan when appropriate
-- Range queries use index scans
-- All existing tests pass
+**Note**: `add-upsert-on-conflict` and `add-table-constraints` are complementary — UPSERT's conflict detection benefits from UNIQUE constraints. Implement constraints first or in parallel.
 
 ---
 
-### 1.3 Azure Write Support Verification
+## Phase 3 — Lambda Functions & Collation (Depends on Phase 1)
 
-**Change**: `spectr/changes/verify-azure-write-support/`
+| Proposal | Estimated Effort | Dependencies | Key Deliverables |
+|----------|-----------------|--------------|------------------|
+| `add-lambda-functions` | Large (8-10 days) | Phase 1 (list type, TRY_CAST) | list_transform, list_filter, list_reduce, list_sort |
+| `add-icu-collation` | Medium (5-7 days) | Phase 1 (type system) | COLLATE clause, locale-aware sorting, golang.org/x/text |
 
-| Attribute | Value |
-|-----------|-------|
-| Priority | P1 - MEDIUM |
-| Effort | 1-2 weeks |
-| Dependencies | Existing cloud storage implementation |
-
-**Key Deliverables:**
-- Verification of existing Azure write implementation
-- COPY TO with Azure Blob Storage works correctly
-- Documentation for Azure authentication
-- Integration tests
-
-**Success Criteria:**
-- `COPY table TO 'azure://container/file.parquet'` works
-- Both connection string and account/key authentication work
-- Documentation complete
+**Why here**: Lambda functions need the list type system to be stable (ENUM types, TRY_CAST for safe element casting). ICU collation touches the type modifier system which ENUM DDL also modifies.
 
 ---
 
-## Phase 2: Core Optimizer (Weeks 5-12)
+## Phase 4 — Extension Loading Framework (Depends on Phase 2)
 
-### 2.1 Cost-Based Optimizer Enhancement
+| Proposal | Estimated Effort | Dependencies | Key Deliverables |
+|----------|-----------------|--------------|------------------|
+| `add-extension-loading` | Medium (5-7 days) | Phase 2 (macros use similar catalog patterns) | INSTALL/LOAD, ExtensionRegistry, autoload, duckdb_extensions() |
 
-**Change**: `spectr/changes/enhance-cost-based-optimizer/`
-
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 - HIGH |
-| Effort | 11-15 weeks |
-| Dependencies | None |
-
-**Key Deliverables:**
-- Statistics persistence and auto-update
-- Subquery decorrelation (correlated EXISTS, SCALAR, ANY)
-- Predicate pushdown optimization
-- Multi-column statistics and cross-predicate selectivity
-- Cardinality learning for runtime adaptation
-
-**Success Criteria:**
-- Statistics persist across database restarts
-- Correlated subqueries execute efficiently
-- Predicate pushdown reduces data processing
-- EXPLAIN ANALYZE shows improved cardinality estimates
-- TPC-H benchmark shows performance improvement
+**Why here**: The extension framework must be in place before cloud storage and FTS can be registered as extensions. It also supersedes the `extension-system-v1.4.3` proposal (which should be archived).
 
 ---
 
-## Phase 3: Core File Formats (Months 4-11)
+## Phase 5 — Cloud Storage, FTS & Database Export (Depends on Phase 4)
 
-### 3.1 ORC File Format Support
+| Proposal | Estimated Effort | Dependencies | Key Deliverables |
+|----------|-----------------|--------------|------------------|
+| `add-s3-cloud-storage` | Large (10-14 days) | Phase 4 (extension framework) | S3/GCS/Azure read/write, httpfs equivalent |
+| `add-full-text-search` | Large (10-14 days) | Phase 4 (extension framework) | Inverted index, BM25, PRAGMA create_fts_index |
+| `add-export-import-database` ★ | Medium (5-7 days) | Phase 2 (catalog DDL gen) | EXPORT DATABASE, IMPORT DATABASE, schema.sql + data files |
 
-**Change**: `spectr/changes/add-orc-format-support/`
-
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 - HIGH |
-| Effort | 5-7 months |
-| Dependencies | None |
-
-**Key Deliverables:**
-- `read_orc()` and `read_orc_auto()` functions
-- ORC file header, footer, and stripe parsing
-- Compression support (zlib, snappy, lz4, zstd)
-- Type mapping (ORC → DuckDB types) including UNION, CHAR
-- Predicate push-down using column statistics
-- Bloom filter support
-- ORC writer (Phase 2)
-
-**Success Criteria:**
-- Read ORC files from Spark, Hive, and other big data tools
-- All compression types supported
-- Type mapping covers all ORC types
-- Performance within 3x of DuckDB
-
-**Note:** ORC support is a prerequisite for Iceberg table format.
+**Why here**: S3 and FTS register as extensions. EXPORT/IMPORT DATABASE depends on catalog DDL generation and COPY TO/FROM infrastructure (already available), plus constraint metadata from Phase 2 for complete DDL output.
 
 ---
 
-## Phase 4: Advanced Table Formats (Months 12-24)
+## Phase 6 — Multi-Database Support (Depends on Phase 5)
 
-### 4.1 Apache Iceberg Table Format Support
+| Proposal | Estimated Effort | Dependencies | Key Deliverables |
+|----------|-----------------|--------------|------------------|
+| `add-attach-detach-database` | Large (10-14 days) | Phase 5 (S3 for remote attach) | ATTACH/DETACH, USE, 3-part names, DatabaseManager |
 
-**Change**: `spectr/changes/add-iceberg-table-support/`
-
-| Attribute | Value |
-|-----------|-------|
-| Priority | P1 - MEDIUM |
-| Effort | 9-12 months |
-| Dependencies | ORC support (3.1), Cloud storage (S3, GCS, Azure) |
-
-**Key Deliverables:**
-- Iceberg metadata parser (metadata.json, manifests, snapshots)
-- `iceberg_metadata()` and `iceberg_snapshots()` functions for discovery
-- Time travel queries (`AS OF TIMESTAMP`, `AS OF SNAPSHOT`)
-- Version selection parameters (version, allow_moved_paths, metadata_compression_codec)
-- Version guessing for tables without version-hint.text
-- Delete file handling (positional, equality)
-- REST catalog support with OAuth2
-- Partition pruning using Iceberg partition specs
-- Schema evolution handling
-- Read-only initially (write support future)
-
-**Success Criteria:**
-- Read Iceberg tables from Spark/Flink
-- Time travel queries work correctly
-- Version selection and guessing work
-- Delete files handled correctly
-- Compatible with Iceberg spec v1 and v2
+**Why last**: ATTACH/DETACH is the capstone feature. It depends on:
+- Extension framework (to load extensions for attached DB types)
+- Cloud storage (to attach remote databases via S3/HTTP)
+- All prior SQL features (attached databases must support full SQL)
 
 ---
 
-## Phase 5: Compatibility Features (Months 18-24)
+## Summary Timeline
 
-### 5.1 PostgreSQL Compatibility Mode
+```
+Week 1-2:   Phase 1 + Phase 2 (parallel — 10 proposals)
+             ├── TRY_CAST (2-3 days)
+             ├── SIMILAR TO + ENUM DDL (4-5 days)
+             ├── GROUPING SETS (2-3 days)
+             ├── UNION BY NAME (3-4 days)              ★ NEW
+             ├── generate_series/range (3-4 days)       ★ NEW
+             ├── PREPARE/EXECUTE (4-5 days)             ★ NEW
+             ├── JOIN types (7-10 days)
+             ├── CREATE MACRO (5-7 days)
+             ├── UPSERT ON CONFLICT (5-7 days)          ★ NEW
+             └── Table Constraints (7-10 days)           ★ NEW
 
-**Change**: `spectr/changes/add-postgresql-compat-mode/`
+Week 3-4:   Phase 3 (parallel)
+             ├── Lambda Functions (8-10 days)
+             └── ICU Collation (5-7 days)
 
-| Attribute | Value |
-|-----------|-------|
-| Priority | P2 - LOW |
-| Effort | 3-6 months |
-| Dependencies | None (can run in parallel) |
+Week 4-5:   Phase 4
+             └── Extension Loading (5-7 days)
 
-**Key Deliverables:**
-- PostgreSQL wire protocol server
-- PostgreSQL type compatibility layer
-- Function name aliases (`now()` → `current_timestamp`)
-- PostgreSQL syntax variations (`DISTINCT ON`, `ILIKE`, etc.)
-- information_schema compatibility
+Week 5-8:   Phase 5 (parallel)
+             ├── S3/Cloud Storage (10-14 days)
+             ├── Full-Text Search (10-14 days)
+             └── EXPORT/IMPORT Database (5-7 days)      ★ NEW
 
-**Success Criteria:**
-- PostgreSQL clients can connect (psql, pgx, libpq)
-- Basic queries work correctly
-- Can be used for ORM testing
+Week 8-10:  Phase 6
+             └── ATTACH/DETACH Database (10-14 days)
+```
 
----
+**Total estimated effort**: 10-14 weeks (with parallelization within phases)
+**New proposals add**: ~28-37 days of additional work, distributed across existing phases
 
-## Original Proposals (GAP-001, GAP-002, etc.)
+## All Proposals — Complete Inventory
 
-The following proposals from the original timeline remain valid and should be considered for future implementation:
+### New Proposals (★ created in this session)
 
-| Gap ID | Feature | Priority | Dependencies |
-|--------|---------|----------|--------------|
-| GAP-001 | DuckDB File Format | CRITICAL | None |
-| GAP-004 | Parallel Execution | CRITICAL | enhance-cost-based-optimizer |
-| GAP-005 | Arrow/IPC Format | HIGH | GAP-001 |
-| GAP-007 | Savepoints | HIGH | None |
-| GAP-008 | Isolation Levels | HIGH | GAP-007 |
-| GAP-009 | Snapshot Isolation | HIGH | GAP-008 |
-| GAP-011 | Excel/XLSX | MEDIUM | None |
-| GAP-012 | Full-Text Search | MEDIUM | None |
-| GAP-013 | Vector Similarity | MEDIUM | None |
+| Proposal | Phase | Effort | Status |
+|----------|-------|--------|--------|
+| `add-upsert-on-conflict` | 2 | Medium (5-7 days) | Validated, graded, fixed |
+| `add-export-import-database` | 5 | Medium (5-7 days) | Validated, graded, fixed |
+| `add-sql-prepare-execute` | 1 | Medium (4-5 days) | Validated, graded, fixed |
+| `add-generate-series-range` | 1 | Small (3-4 days) | Validated, graded, fixed |
+| `add-table-constraints` | 2 | Large (7-10 days) | Validated, graded, fixed |
+| `add-union-by-name` | 1 | Small (3-4 days) | Validated, graded, fixed |
 
----
+### Existing Proposals (from prior sessions)
 
-## Implementation Order Recommendations
+| Proposal | Phase | Effort | Relationship |
+|----------|-------|--------|-------------|
+| `add-try-cast-safe-casting` | 1 | Small | Active |
+| `add-similar-to-enum-ddl` | 1 | Medium | Active |
+| `add-grouping-sets-execution` | 1 | Small | Active |
+| `add-natural-asof-positional-joins` | 2 | Large | Active |
+| `add-create-macro` | 2 | Medium | Active |
+| `add-lambda-functions` | 3 | Large | Active |
+| `add-icu-collation` | 3 | Medium | Active |
+| `add-extension-loading` | 4 | Medium | Active |
+| `add-s3-cloud-storage` | 5 | Large | Active |
+| `add-full-text-search` | 5 | Large | Active |
+| `add-attach-detach-database` | 6 | Large | Active |
 
-### Recommended for Production Focus
+### Existing v1.4.3 Proposals (complementary, can run in parallel)
 
-1. **fix-index-usage** - CRITICAL: Indexes currently not used in queries
-2. **add-pragma-checkpoint-threshold** - Critical for production reliability
-3. **enhance-cost-based-optimizer** - Improves query performance
-4. **add-orc-format-support** - Fundamental for big data interoperability
-5. **add-iceberg-table-support** - Critical for data lake workflows
-6. **verify-azure-write-support** - Verify v1.4.3 feature support
-7. **add-postgresql-compat-mode** - Convenience feature
+| Proposal | Status | Relationship |
+|----------|--------|-------------|
+| `duckdb-file-format-v1.4.3` | Active | Independent — DuckDB file format read/write |
+| `complex-data-types-v1.4.3` | Active | Complementary — nested type improvements |
+| `query-optimizations-v1.4.3` | Active | Independent — optimizer enhancements |
+| `extension-system-v1.4.3` | Active | **Superseded by** `add-extension-loading` — should be archived |
+| `window-functions-v1.4.3` | Active | Independent — window function enhancements |
+| `recursive-cte-lateral-v1.4.3` | Active | Independent — CTE/lateral improvements |
+| `system-functions-metadata-v1.4.3` | Active | Complementary — metadata function additions |
 
-### Recommended for Full Feature Parity
+## Risk Register
 
-1. **fix-index-usage** - Critical bug fix
-2. **enhance-cost-based-optimizer** - Improves query performance
-3. **add-pragma-checkpoint-threshold** - Production reliability
-4. **add-orc-format-support** - Core format support
-5. **add-iceberg-table-support** - Data lake support
-6. **GAP-004** (Parallel Execution) - Multi-core utilization
-7. **GAP-005** (Arrow/IPC) - Data science integrations
-8. **GAP-007/008/009** - Transaction isolation
-9. **add-postgresql-compat-mode** - Compatibility
-10. **GAP-012** (Full-Text Search) - Search capabilities
-11. **GAP-013** (Vector Similarity) - ML capabilities
-
----
-
-## Resource Allocation
-
-### Option A: Focused Team (1-2 engineers)
-
-- **Weeks 1-4**: Phase 1 (checkpoint, index fix, Azure)
-- **Weeks 5-12**: Phase 2 (optimizer)
-- **Months 4-11**: Phase 3 (ORC)
-- **Months 12-24**: Phase 4 (Iceberg)
-- **Months 18-24**: Phase 5 (PostgreSQL) or original GAPs
-
-**Total timeline**: ~24 months
-
-### Option B: Parallel Teams (2-3 engineers)
-
-**Team A: Critical Fixes (Weeks 1-12)**
-- Weeks 1-4: Phase 1 (checkpoint, index fix, Azure)
-- Weeks 5-12: Phase 2 (optimizer)
-
-**Team B: Formats (Starts Month 3)**
-- Months 3-9: Phase 3 (ORC)
-- Months 10-18: Phase 4 (Iceberg)
-
-**Team C: Compatibility (Starts Month 12)**
-- Months 12-18: Phase 5 (PostgreSQL)
-- Or work on original GAP proposals
-
-**Total timeline**: ~12-18 months
-
----
-
-## Success Criteria Summary
-
-| Phase | Milestone | Criteria |
-|-------|-----------|----------|
-| Phase 1 | Checkpoint configuration | `PRAGMA checkpoint_threshold` configurable, Index usage works, Azure writes verified |
-| Phase 2 | Optimizer enhancement | Statistics persist, Subqueries decorrelated, Cardinality accurate |
-| Phase 3 | ORC support | Read ORC from Spark/Hive, all compressions work, Type mapping complete |
-| Phase 4 | Iceberg support | Read Iceberg tables, Time travel works, Delete files handled |
-| Phase 5 | PostgreSQL mode | PostgreSQL clients can connect |
-
----
-
-## Notes
-
-### Already Implemented (No Proposal Needed)
-- CSV, JSON, Parquet file formats
-- S3, GCS, Azure cloud storage (read)
-- Basic ACID transactions with WAL
-- 200+ functions
-- User-Defined Functions (Scalar, Aggregate, Table)
-- Secrets management
-- Type system (JSON, GEOMETRY, BIGNUM, VARIANT, LAMBDA)
-- DuckDB File Format (native .duckdb files)
-- MVCC with full isolation levels
-
-### Not Feasible (Pure Go Limitation)
-- C/C++ extensions (GAP-006)
-- Full Iceberg write with ACID (requires C++ library)
-- Some PostgreSQL wire protocol features
-
-### Out of Scope
-- Distributed query execution
-- GPU acceleration
-- SIMD vectorization
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|-----------|
+| Lambda function parser disambiguation (-> vs JSON) | High | High | Thorough parser tests; lookahead-based approach documented |
+| ASOF JOIN performance on large datasets | Medium | Medium | Start with sort-merge; optimize based on benchmarks |
+| Cloud storage credential management complexity | Medium | High | Leverage existing secret system; test with localstack |
+| Extension framework function registration complexity | Medium | Medium | Bridge existing hard-coded functions incrementally |
+| ATTACH/DETACH cross-database transaction complexity | High | High | Limit to read-only cross-DB transactions initially |
+| FK constraint enforcement performance on bulk INSERT | Medium | Medium | Only NO ACTION/RESTRICT supported; simple parent lookup |
+| UPSERT hash set memory for large tables | Medium | Low | Reuse existing pkKeys infrastructure; streaming fallback |
+| EXPORT DATABASE view dependency ordering | Low | Medium | Topological sort with cycle detection |
+| PREPARE plan staleness after DDL | Low | Low | Document limitation; DEALLOCATE + re-PREPARE as workaround |

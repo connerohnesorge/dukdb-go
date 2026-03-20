@@ -9,25 +9,25 @@
       "id": "3.1",
       "section": "Core System Views (Part 1)",
       "description": "Implement pg_catalog.pg_namespace view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.2",
       "section": "Core System Views (Part 1)",
       "description": "Implement pg_catalog.pg_class view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.3",
       "section": "Core System Views (Part 1)",
       "description": "Implement pg_catalog.pg_attribute view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.4",
       "section": "Core System Views (Part 1)",
       "description": "Add tests for 3.1-3.3 (verify OID joins work)",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "3"

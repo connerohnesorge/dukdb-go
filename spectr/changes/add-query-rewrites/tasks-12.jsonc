@@ -9,25 +9,25 @@
       "id": "12.1",
       "section": "Documentation and Examples",
       "description": "Document all rewrite rules with before/after examples",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.2",
       "section": "Documentation and Examples",
       "description": "Create performance comparison benchmarks",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.3",
       "section": "Documentation and Examples",
       "description": "Write troubleshooting guide for unexpected plans",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.4",
       "section": "Documentation and Examples",
       "description": "Add examples to EXPLAIN documentation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "12"

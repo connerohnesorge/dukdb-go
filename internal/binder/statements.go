@@ -49,23 +49,47 @@ type BoundJoin struct {
 	Type      parser.JoinType
 	Table     *BoundTableRef
 	Condition BoundExpr
+	Using     []string // USING columns (resolved from parser)
 }
 
 // BoundOrderBy represents a bound ORDER BY expression.
 type BoundOrderBy struct {
-	Expr BoundExpr
-	Desc bool
+	Expr      BoundExpr
+	Desc      bool
+	Collation string // COLLATE collation_name (empty = default)
 }
+
+// BoundOnConflictClause represents a bound ON CONFLICT clause.
+type BoundOnConflictClause struct {
+	ConflictColumnIndices []int                // Resolved column indices in target table
+	Action                parser.OnConflictAction
+	UpdateSet             []*BoundSetClause // Bound SET assignments
+	UpdateWhere           BoundExpr         // Bound WHERE filter (may be nil)
+}
+
+// BoundExcludedColumnRef references a column from the EXCLUDED pseudo-table
+// in an ON CONFLICT DO UPDATE SET clause.
+type BoundExcludedColumnRef struct {
+	ColumnIndex int
+	ColumnName  string
+	DataType    dukdb.Type
+}
+
+func (*BoundExcludedColumnRef) boundExprNode() {}
+
+// ResultType returns the data type of the excluded column reference.
+func (e *BoundExcludedColumnRef) ResultType() dukdb.Type { return e.DataType }
 
 // BoundInsertStmt represents a bound INSERT statement.
 type BoundInsertStmt struct {
-	Schema    string
-	Table     string
-	TableDef  *catalog.TableDef
-	Columns   []int // Column indices
-	Values    [][]BoundExpr
-	Select    *BoundSelectStmt
-	Returning []*BoundSelectColumn // RETURNING clause columns
+	Schema     string
+	Table      string
+	TableDef   *catalog.TableDef
+	Columns    []int // Column indices
+	Values     [][]BoundExpr
+	Select     *BoundSelectStmt
+	OnConflict *BoundOnConflictClause   // nil for plain INSERT
+	Returning  []*BoundSelectColumn     // RETURNING clause columns
 }
 
 func (*BoundInsertStmt) boundStmtNode() {}
@@ -112,6 +136,7 @@ type BoundCreateTableStmt struct {
 	IfNotExists bool
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
+	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
 }
 
 func (*BoundCreateTableStmt) boundStmtNode() {}
@@ -541,3 +566,58 @@ type BoundCheckpointStmt struct {
 func (*BoundCheckpointStmt) boundStmtNode() {}
 
 func (*BoundCheckpointStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_TRANSACTION }
+
+// ---------- Type DDL Bound Statement Types ----------
+
+// BoundCreateTypeStmt represents a bound CREATE TYPE statement.
+type BoundCreateTypeStmt struct {
+	Name        string
+	Schema      string
+	TypeKind    string
+	EnumValues  []string
+	IfNotExists bool
+}
+
+func (*BoundCreateTypeStmt) boundStmtNode() {}
+
+func (*BoundCreateTypeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropTypeStmt represents a bound DROP TYPE statement.
+type BoundDropTypeStmt struct {
+	Name     string
+	Schema   string
+	IfExists bool
+}
+
+func (*BoundDropTypeStmt) boundStmtNode() {}
+
+func (*BoundDropTypeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// ---------- Macro DDL Bound Statement Types ----------
+
+// BoundCreateMacroStmt represents a bound CREATE MACRO statement.
+type BoundCreateMacroStmt struct {
+	Schema       string
+	Name         string
+	Params       []catalog.MacroParam
+	IsTableMacro bool
+	OrReplace    bool
+	BodySQL      string
+	QuerySQL     string
+}
+
+func (*BoundCreateMacroStmt) boundStmtNode() {}
+
+func (*BoundCreateMacroStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropMacroStmt represents a bound DROP MACRO statement.
+type BoundDropMacroStmt struct {
+	Schema       string
+	Name         string
+	IfExists     bool
+	IsTableMacro bool
+}
+
+func (*BoundDropMacroStmt) boundStmtNode() {}
+
+func (*BoundDropMacroStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }

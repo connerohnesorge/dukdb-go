@@ -542,6 +542,25 @@ func inferFunctionResultType(
 		// LIST types return TYPE_ANY for now (no LIST type constant available)
 		return dukdb.TYPE_ANY
 
+	// Struct and Map functions
+	case "STRUCT_PACK":
+		return dukdb.TYPE_STRUCT
+	case "STRUCT_EXTRACT":
+		return dukdb.TYPE_ANY // depends on field type
+	case "MAP":
+		return dukdb.TYPE_MAP
+	case "MAP_KEYS", "MAP_VALUES":
+		return dukdb.TYPE_LIST
+	case "ELEMENT_AT":
+		return dukdb.TYPE_ANY // depends on map value type
+
+	// Lambda list functions
+	case "LIST_TRANSFORM", "ARRAY_APPLY", "APPLY",
+		"LIST_FILTER", "ARRAY_FILTER", "FILTER":
+		return dukdb.TYPE_LIST
+	case "LIST_SORT", "ARRAY_SORT":
+		return dukdb.TYPE_LIST
+
 	// Time Series Aggregates
 	case "COUNT_IF":
 		return dukdb.TYPE_BIGINT

@@ -287,6 +287,7 @@ const (
 	STATEMENT_TYPE_COPY_DATABASE     StmtType = 30
 	STATEMENT_TYPE_PIVOT             StmtType = 31
 	STATEMENT_TYPE_UNPIVOT           StmtType = 32
+	STATEMENT_TYPE_DEALLOCATE        StmtType = 33
 )
 
 // StmtReturnType indicates what a statement returns when executed.

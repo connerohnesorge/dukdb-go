@@ -9,37 +9,37 @@
       "id": "12.1",
       "section": "Persistence",
       "description": "Design serialization format for learning data",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.2",
       "section": "Persistence",
       "description": "Implement save to catalog/metadata",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.3",
       "section": "Persistence",
       "description": "Implement load from catalog on database open",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.4",
       "section": "Persistence",
       "description": "Handle compatibility with old format",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.5",
       "section": "Persistence",
       "description": "Add migration if format changes",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "12.6",
       "section": "Persistence",
       "description": "Write tests for persistence",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "12"

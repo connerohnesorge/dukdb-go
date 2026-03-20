@@ -9,25 +9,25 @@
       "id": "8.1",
       "section": "Configuration and Monitoring Views (Part 6)",
       "description": "Implement pg_catalog.pg_settings view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "Configuration and Monitoring Views (Part 6)",
       "description": "Implement pg_catalog.pg_stat_activity view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
       "section": "Configuration and Monitoring Views (Part 6)",
       "description": "Implement pg_catalog.pg_stat_statements view (optional, with provider)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.4",
       "section": "Configuration and Monitoring Views (Part 6)",
       "description": "Add tests for 8.1-8.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"

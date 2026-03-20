@@ -477,6 +477,12 @@ func serializeSelectStmt(stmt *parser.SelectStmt) string {
 				sql += " FULL JOIN "
 			case parser.JoinTypeCross:
 				sql += " CROSS JOIN "
+			case parser.JoinTypePositional:
+				sql += " POSITIONAL JOIN "
+			case parser.JoinTypeAsOf:
+				sql += " ASOF JOIN "
+			case parser.JoinTypeAsOfLeft:
+				sql += " ASOF LEFT JOIN "
 			}
 			sql += serializeTableRef(&join.Table)
 			if join.Condition != nil {
@@ -627,7 +633,12 @@ func serializeExpr(expr parser.Expr) string {
 		return serializeFunctionCall(e)
 
 	case *parser.CastExpr:
-		return fmt.Sprintf("CAST(%s AS %s)",
+		keyword := "CAST"
+		if e.TryCast {
+			keyword = "TRY_CAST"
+		}
+		return fmt.Sprintf("%s(%s AS %s)",
+			keyword,
 			serializeExpr(e.Expr),
 			e.TargetType.String())
 
@@ -770,6 +781,10 @@ func serializeBinaryOp(op parser.BinaryOp) string {
 		return "NOT LIKE"
 	case parser.OpNotILike:
 		return "NOT ILIKE"
+	case parser.OpSimilarTo:
+		return "SIMILAR TO"
+	case parser.OpNotSimilarTo:
+		return "NOT SIMILAR TO"
 	case parser.OpConcat:
 		return "||"
 	default:

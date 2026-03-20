@@ -100,10 +100,40 @@ func (c *paramCollector) collectStmt(
 		// No parameters in CREATE INDEX
 	case *CreateSchemaStmt:
 		// No parameters in CREATE SCHEMA
-	case *DropViewStmt, *DropIndexStmt, *DropSequenceStmt, *DropSchemaStmt, *DropTableStmt:
+	case *DropViewStmt, *DropIndexStmt, *DropSequenceStmt, *DropSchemaStmt, *DropTableStmt, *DropTypeStmt, *DropMacroStmt:
 		// No parameters in DROP statements
+	case *CreateTypeStmt:
+		// No parameters in CREATE TYPE
+	case *CreateMacroStmt:
+		// No parameters in CREATE MACRO
 	case *AlterTableStmt:
 		// No parameters in ALTER TABLE (could add column defaults with params in future)
+	case *PrepareStmt:
+		c.collectStmt(s.Inner)
+	case *ExecuteStmt:
+		for _, param := range s.Params {
+			c.collectExpr(param)
+		}
+	case *DeallocateStmt:
+		// No parameters
+	case *ExportDatabaseStmt:
+		// No parameters in EXPORT DATABASE
+	case *ImportDatabaseStmt:
+		// No parameters in IMPORT DATABASE
+	case *InstallStmt:
+		// No parameters in INSTALL
+	case *LoadStmt:
+		// No parameters in LOAD
+	case *AttachStmt:
+		// No parameters in ATTACH
+	case *DetachStmt:
+		// No parameters in DETACH
+	case *UseStmt:
+		// No parameters in USE
+	case *CreateDatabaseStmt:
+		// No parameters in CREATE DATABASE
+	case *DropDatabaseStmt:
+		// No parameters in DROP DATABASE
 	}
 }
 
@@ -174,6 +204,11 @@ func (c *paramCollector) collectExpr(expr Expr) {
 		c.collectStmt(e.Subquery)
 	case *ExistsExpr:
 		c.collectStmt(e.Subquery)
+	case *SimilarToExpr:
+		c.collectExpr(e.Expr)
+		c.collectExpr(e.Pattern)
+	case *LambdaExpr:
+		c.collectExpr(e.Body)
 	case *SelectStmt:
 		c.collectStmt(e)
 	}
@@ -238,10 +273,40 @@ func (c *paramCounter) countStmt(stmt Statement) {
 		// No parameters in CREATE INDEX
 	case *CreateSchemaStmt:
 		// No parameters in CREATE SCHEMA
-	case *DropViewStmt, *DropIndexStmt, *DropSequenceStmt, *DropSchemaStmt, *DropTableStmt:
+	case *DropViewStmt, *DropIndexStmt, *DropSequenceStmt, *DropSchemaStmt, *DropTableStmt, *DropTypeStmt, *DropMacroStmt:
 		// No parameters in DROP statements
+	case *CreateTypeStmt:
+		// No parameters in CREATE TYPE
+	case *CreateMacroStmt:
+		// No parameters in CREATE MACRO
 	case *AlterTableStmt:
 		// No parameters in ALTER TABLE (could add column defaults with params in future)
+	case *PrepareStmt:
+		c.countStmt(s.Inner)
+	case *ExecuteStmt:
+		for _, param := range s.Params {
+			c.countExpr(param)
+		}
+	case *DeallocateStmt:
+		// No parameters
+	case *ExportDatabaseStmt:
+		// No parameters in EXPORT DATABASE
+	case *ImportDatabaseStmt:
+		// No parameters in IMPORT DATABASE
+	case *InstallStmt:
+		// No parameters in INSTALL
+	case *LoadStmt:
+		// No parameters in LOAD
+	case *AttachStmt:
+		// No parameters in ATTACH
+	case *DetachStmt:
+		// No parameters in DETACH
+	case *UseStmt:
+		// No parameters in USE
+	case *CreateDatabaseStmt:
+		// No parameters in CREATE DATABASE
+	case *DropDatabaseStmt:
+		// No parameters in DROP DATABASE
 	}
 }
 
@@ -309,6 +374,11 @@ func (c *paramCounter) countExpr(expr Expr) {
 		c.countStmt(e.Subquery)
 	case *ExistsExpr:
 		c.countStmt(e.Subquery)
+	case *SimilarToExpr:
+		c.countExpr(e.Expr)
+		c.countExpr(e.Pattern)
+	case *LambdaExpr:
+		c.countExpr(e.Body)
 	case *SelectStmt:
 		c.countStmt(e)
 	}

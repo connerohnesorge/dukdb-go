@@ -9,55 +9,55 @@
       "id": "6.1",
       "section": "Testing and Validation",
       "description": "Test all views return correct column schemas",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Testing and Validation",
       "description": "Test views work with WHERE clauses and filters",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Testing and Validation",
       "description": "Test views work with JOINs (self-joins, cross-joins)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Testing and Validation",
       "description": "Test handling of edge cases (empty database, no constraints)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
       "section": "Testing and Validation",
       "description": "Test NULL handling for optional columns",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.6",
       "section": "Testing and Validation",
       "description": "Cross-validate against DuckDB v1.4.3 information_schema",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.7",
       "section": "Testing and Validation",
       "description": "Test with various BI/ORM tools if possible",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.8",
       "section": "Testing and Validation",
       "description": "Benchmark query performance on medium-sized schemas",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.9",
       "section": "Testing and Validation",
       "description": "Run all existing tests for regressions",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"

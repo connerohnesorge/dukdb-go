@@ -9,31 +9,31 @@
       "id": "11.1",
       "section": "Performance and Edge Cases",
       "description": "Benchmark large schema queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.2",
       "section": "Performance and Edge Cases",
       "description": "Test system schemas visibility (pg_catalog, information_schema)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.3",
       "section": "Performance and Edge Cases",
       "description": "Test empty database (no user tables/views)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.4",
       "section": "Performance and Edge Cases",
       "description": "Test special characters in identifiers",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "11.5",
       "section": "Performance and Edge Cases",
       "description": "Verify NULL handling for optional fields",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "11"

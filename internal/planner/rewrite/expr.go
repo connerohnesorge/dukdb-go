@@ -42,7 +42,7 @@ func RewriteExpr(expr binder.BoundExpr, rewriter ExprRewriter) (binder.BoundExpr
 		inner, innerChanged := RewriteExpr(node.Expr, rewriter)
 		if innerChanged {
 			changed = true
-			expr = &binder.BoundCastExpr{Expr: inner, TargetType: node.TargetType}
+			expr = &binder.BoundCastExpr{Expr: inner, TargetType: node.TargetType, TryCast: node.TryCast}
 		}
 	case *binder.BoundCaseExpr:
 		operand, opChanged := RewriteExpr(node.Operand, rewriter)
@@ -75,12 +75,13 @@ func RewriteExpr(expr binder.BoundExpr, rewriter ExprRewriter) (binder.BoundExpr
 		if argsChanged || orderByChanged {
 			changed = true
 			expr = &binder.BoundFunctionCall{
-				Name:     node.Name,
-				Args:     args,
-				Distinct: node.Distinct,
-				Star:     node.Star,
-				OrderBy:  orderBy,
-				ResType:  node.ResType,
+				Name:      node.Name,
+				Args:      args,
+				NamedArgs: node.NamedArgs,
+				Distinct:  node.Distinct,
+				Star:      node.Star,
+				OrderBy:   orderBy,
+				ResType:   node.ResType,
 			}
 		}
 	case *binder.BoundScalarUDF:
@@ -101,6 +102,13 @@ func RewriteExpr(expr binder.BoundExpr, rewriter ExprRewriter) (binder.BoundExpr
 		if elemsChanged {
 			changed = true
 			expr = &binder.BoundArrayExpr{Elements: elems, ElemType: node.ElemType}
+		}
+	case *binder.BoundSimilarToExpr:
+		exprNode, exprChanged := RewriteExpr(node.Expr, rewriter)
+		patNode, patChanged := RewriteExpr(node.Pattern, rewriter)
+		if exprChanged || patChanged {
+			changed = true
+			expr = &binder.BoundSimilarToExpr{Expr: exprNode, Pattern: patNode, Escape: node.Escape, Not: node.Not}
 		}
 	}
 
@@ -175,5 +183,8 @@ func WalkExpr(expr binder.BoundExpr, visit func(binder.BoundExpr)) {
 		for _, elem := range node.Elements {
 			WalkExpr(elem, visit)
 		}
+	case *binder.BoundSimilarToExpr:
+		WalkExpr(node.Expr, visit)
+		WalkExpr(node.Pattern, visit)
 	}
 }

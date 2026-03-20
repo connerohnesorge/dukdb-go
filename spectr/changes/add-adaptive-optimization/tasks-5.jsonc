@@ -9,43 +9,43 @@
       "id": "5.1",
       "section": "Correction Application",
       "description": "Apply cardinality corrections during planning",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Correction Application",
       "description": "Adjust join selectivity estimates",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Correction Application",
       "description": "Adjust filter selectivity estimates",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Correction Application",
       "description": "Adjust aggregate cardinality estimates",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Correction Application",
       "description": "Apply temporal decay to older corrections",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Correction Application",
       "description": "Limit correction magnitude to prevent over-correction",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.7",
       "section": "Correction Application",
       "description": "Write tests for correction application",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

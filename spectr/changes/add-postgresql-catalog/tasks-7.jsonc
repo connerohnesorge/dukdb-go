@@ -9,19 +9,19 @@
       "id": "7.1",
       "section": "User-Friendly Views (Part 5)",
       "description": "Implement pg_catalog.pg_tables view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "User-Friendly Views (Part 5)",
       "description": "Implement pg_catalog.pg_views view",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "User-Friendly Views (Part 5)",
       "description": "Add tests for 7.1-7.2",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"

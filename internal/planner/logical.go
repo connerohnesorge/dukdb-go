@@ -163,8 +163,11 @@ const (
 	JoinTypeRight
 	JoinTypeFull
 	JoinTypeCross
-	JoinTypeSemi // SEMI JOIN: outputs left rows where right match exists (for EXISTS, IN subqueries)
-	JoinTypeAnti // ANTI JOIN: outputs left rows where right match does NOT exist (for NOT EXISTS, NOT IN)
+	JoinTypeSemi       // SEMI JOIN: outputs left rows where right match exists (for EXISTS, IN subqueries)
+	JoinTypeAnti       // ANTI JOIN: outputs left rows where right match does NOT exist (for NOT EXISTS, NOT IN)
+	JoinTypePositional // POSITIONAL JOIN: matches rows by position
+	JoinTypeAsOf       // ASOF JOIN: matches nearest row based on inequality
+	JoinTypeAsOfLeft   // ASOF LEFT JOIN: like ASOF with LEFT semantics
 )
 
 func (*LogicalJoin) logicalPlanNode() {}
@@ -368,13 +371,14 @@ func (d *LogicalDistinctOn) OutputColumns() []ColumnBinding { return d.Child.Out
 
 // LogicalInsert represents an INSERT operation.
 type LogicalInsert struct {
-	Schema    string
-	Table     string
-	TableDef  *catalog.TableDef
-	Columns   []int
-	Values    [][]binder.BoundExpr
-	Source    LogicalPlan                 // For INSERT ... SELECT
-	Returning []*binder.BoundSelectColumn // RETURNING clause columns
+	Schema     string
+	Table      string
+	TableDef   *catalog.TableDef
+	Columns    []int
+	Values     [][]binder.BoundExpr
+	Source     LogicalPlan                    // For INSERT ... SELECT
+	OnConflict *binder.BoundOnConflictClause  // nil for plain INSERT
+	Returning  []*binder.BoundSelectColumn    // RETURNING clause columns
 }
 
 func (*LogicalInsert) logicalPlanNode() {}
@@ -436,6 +440,7 @@ type LogicalCreateTable struct {
 	IfNotExists bool
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
+	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
 }
 
 func (*LogicalCreateTable) logicalPlanNode() {}
@@ -667,6 +672,69 @@ func (*LogicalAlterTable) logicalPlanNode() {}
 func (*LogicalAlterTable) Children() []LogicalPlan { return nil }
 
 func (*LogicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Type DDL Logical Plan Nodes ----------
+
+// LogicalCreateType represents a CREATE TYPE operation.
+type LogicalCreateType struct {
+	Name        string
+	Schema      string
+	TypeKind    string
+	EnumValues  []string
+	IfNotExists bool
+}
+
+func (*LogicalCreateType) logicalPlanNode() {}
+
+func (*LogicalCreateType) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateType) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropType represents a DROP TYPE operation.
+type LogicalDropType struct {
+	Name     string
+	Schema   string
+	IfExists bool
+}
+
+func (*LogicalDropType) logicalPlanNode() {}
+
+func (*LogicalDropType) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropType) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Macro DDL Logical Plan Nodes ----------
+
+// LogicalCreateMacro represents a CREATE MACRO operation.
+type LogicalCreateMacro struct {
+	Schema       string
+	Name         string
+	Params       []catalog.MacroParam
+	IsTableMacro bool
+	OrReplace    bool
+	BodySQL      string
+	QuerySQL     string
+}
+
+func (*LogicalCreateMacro) logicalPlanNode() {}
+
+func (*LogicalCreateMacro) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateMacro) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropMacro represents a DROP MACRO operation.
+type LogicalDropMacro struct {
+	Schema       string
+	Name         string
+	IfExists     bool
+	IsTableMacro bool
+}
+
+func (*LogicalDropMacro) logicalPlanNode() {}
+
+func (*LogicalDropMacro) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropMacro) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Secret DDL Logical Plan Nodes ----------
 
@@ -1231,6 +1299,10 @@ const (
 	SetOpExcept
 	// SetOpExceptAll represents EXCEPT ALL (preserves duplicates).
 	SetOpExceptAll
+	// SetOpUnionByName represents UNION BY NAME.
+	SetOpUnionByName
+	// SetOpUnionAllByName represents UNION ALL BY NAME.
+	SetOpUnionAllByName
 )
 
 // LogicalSetOp represents a set operation (UNION, INTERSECT, EXCEPT) in the logical plan.

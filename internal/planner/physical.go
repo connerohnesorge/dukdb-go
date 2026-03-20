@@ -308,6 +308,72 @@ func (j *PhysicalNestedLoopJoin) OutputColumns() []ColumnBinding {
 	return j.columns
 }
 
+// PhysicalPositionalJoin represents a physical positional join.
+// It matches rows by position (row 0 with row 0, row 1 with row 1, etc.).
+type PhysicalPositionalJoin struct {
+	Left    PhysicalPlan
+	Right   PhysicalPlan
+	columns []ColumnBinding
+}
+
+func (*PhysicalPositionalJoin) physicalPlanNode() {}
+
+func (j *PhysicalPositionalJoin) Children() []PhysicalPlan {
+	return []PhysicalPlan{j.Left, j.Right}
+}
+
+func (j *PhysicalPositionalJoin) OutputColumns() []ColumnBinding {
+	if j.columns != nil {
+		return j.columns
+	}
+
+	leftCols := j.Left.OutputColumns()
+	rightCols := j.Right.OutputColumns()
+	j.columns = make(
+		[]ColumnBinding,
+		0,
+		len(leftCols)+len(rightCols),
+	)
+	j.columns = append(j.columns, leftCols...)
+	j.columns = append(j.columns, rightCols...)
+
+	return j.columns
+}
+
+// PhysicalAsOfJoin represents a physical ASOF join.
+// It finds the nearest matching row based on an inequality condition.
+type PhysicalAsOfJoin struct {
+	Left      PhysicalPlan
+	Right     PhysicalPlan
+	JoinType  JoinType // JoinTypeAsOf or JoinTypeAsOfLeft
+	Condition binder.BoundExpr
+	columns   []ColumnBinding
+}
+
+func (*PhysicalAsOfJoin) physicalPlanNode() {}
+
+func (j *PhysicalAsOfJoin) Children() []PhysicalPlan {
+	return []PhysicalPlan{j.Left, j.Right}
+}
+
+func (j *PhysicalAsOfJoin) OutputColumns() []ColumnBinding {
+	if j.columns != nil {
+		return j.columns
+	}
+
+	leftCols := j.Left.OutputColumns()
+	rightCols := j.Right.OutputColumns()
+	j.columns = make(
+		[]ColumnBinding,
+		0,
+		len(leftCols)+len(rightCols),
+	)
+	j.columns = append(j.columns, leftCols...)
+	j.columns = append(j.columns, rightCols...)
+
+	return j.columns
+}
+
 // PhysicalHashAggregate represents a physical hash aggregate.
 type PhysicalHashAggregate struct {
 	Child      PhysicalPlan
@@ -463,13 +529,14 @@ func (d *PhysicalDistinctOn) OutputColumns() []ColumnBinding { return d.Child.Ou
 
 // PhysicalInsert represents a physical INSERT operation.
 type PhysicalInsert struct {
-	Schema    string
-	Table     string
-	TableDef  *catalog.TableDef
-	Columns   []int
-	Values    [][]binder.BoundExpr
-	Source    PhysicalPlan
-	Returning []*binder.BoundSelectColumn // RETURNING clause columns
+	Schema     string
+	Table      string
+	TableDef   *catalog.TableDef
+	Columns    []int
+	Values     [][]binder.BoundExpr
+	Source     PhysicalPlan
+	OnConflict *binder.BoundOnConflictClause  // nil for plain INSERT
+	Returning  []*binder.BoundSelectColumn    // RETURNING clause columns
 }
 
 func (*PhysicalInsert) physicalPlanNode() {}
@@ -534,6 +601,7 @@ type PhysicalCreateTable struct {
 	IfNotExists bool
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
+	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
 }
 
 func (*PhysicalCreateTable) physicalPlanNode() {}
@@ -764,6 +832,69 @@ func (*PhysicalAlterTable) physicalPlanNode() {}
 func (*PhysicalAlterTable) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Type DDL Physical Plan Nodes ----------
+
+// PhysicalCreateType represents a physical CREATE TYPE operation.
+type PhysicalCreateType struct {
+	Name        string
+	Schema      string
+	TypeKind    string
+	EnumValues  []string
+	IfNotExists bool
+}
+
+func (*PhysicalCreateType) physicalPlanNode() {}
+
+func (*PhysicalCreateType) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateType) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropType represents a physical DROP TYPE operation.
+type PhysicalDropType struct {
+	Name     string
+	Schema   string
+	IfExists bool
+}
+
+func (*PhysicalDropType) physicalPlanNode() {}
+
+func (*PhysicalDropType) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropType) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Macro DDL Physical Plan Nodes ----------
+
+// PhysicalCreateMacro represents a physical CREATE MACRO operation.
+type PhysicalCreateMacro struct {
+	Schema       string
+	Name         string
+	Params       []catalog.MacroParam
+	IsTableMacro bool
+	OrReplace    bool
+	BodySQL      string
+	QuerySQL     string
+}
+
+func (*PhysicalCreateMacro) physicalPlanNode() {}
+
+func (*PhysicalCreateMacro) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateMacro) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropMacro represents a physical DROP MACRO operation.
+type PhysicalDropMacro struct {
+	Schema       string
+	Name         string
+	IfExists     bool
+	IsTableMacro bool
+}
+
+func (*PhysicalDropMacro) physicalPlanNode() {}
+
+func (*PhysicalDropMacro) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropMacro) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Secret DDL Physical Plan Nodes ----------
 
@@ -1310,6 +1441,39 @@ func (p *Planner) createLogicalPlan(
 		return p.planDropSchema(s)
 	case *binder.BoundAlterTableStmt:
 		return p.planAlterTable(s)
+	// Type DDL statements
+	case *binder.BoundCreateTypeStmt:
+		return &LogicalCreateType{
+			Name:        s.Name,
+			Schema:      s.Schema,
+			TypeKind:    s.TypeKind,
+			EnumValues:  s.EnumValues,
+			IfNotExists: s.IfNotExists,
+		}, nil
+	case *binder.BoundDropTypeStmt:
+		return &LogicalDropType{
+			Name:     s.Name,
+			Schema:   s.Schema,
+			IfExists: s.IfExists,
+		}, nil
+	// Macro DDL statements
+	case *binder.BoundCreateMacroStmt:
+		return &LogicalCreateMacro{
+			Schema:       s.Schema,
+			Name:         s.Name,
+			Params:       s.Params,
+			IsTableMacro: s.IsTableMacro,
+			OrReplace:    s.OrReplace,
+			BodySQL:      s.BodySQL,
+			QuerySQL:     s.QuerySQL,
+		}, nil
+	case *binder.BoundDropMacroStmt:
+		return &LogicalDropMacro{
+			Schema:       s.Schema,
+			Name:         s.Name,
+			IfExists:     s.IfExists,
+			IsTableMacro: s.IsTableMacro,
+		}, nil
 	case *binder.BoundMergeStmt:
 		return p.planMerge(s)
 	case *binder.BoundPivotStmt:
@@ -1377,7 +1541,7 @@ func (p *Planner) planSelect(
 		for _, join := range s.Joins {
 			right := p.createScanForBoundTableRef(join.Table)
 
-			joinType := JoinType(join.Type)
+			joinType := mapParserJoinType(join.Type)
 
 			// Check if this is a LATERAL join
 			if join.Table.Lateral {
@@ -1416,10 +1580,12 @@ func (p *Planner) planSelect(
 		groupingSets, regularGroupBy := extractGroupingSets(s.GroupBy)
 		groupBy := regularGroupBy
 		aggregates := extractNonWindowAggregates(s.Columns)
-		aliases := extractAliases(s.Columns)
 
 		// Extract GROUPING() function calls from the select columns
 		groupingCalls := extractGroupingCalls(s.Columns)
+
+		// Extract aliases reordered to match internal layout [groupby..., aggregates..., groupingCalls...]
+		aliases := extractAggregateAliases(s.Columns, len(regularGroupBy), len(aggregates), len(groupingCalls))
 
 		plan = &LogicalAggregate{
 			Child:         plan,
@@ -1561,6 +1727,10 @@ func (p *Planner) planSelect(
 			opType = SetOpExcept
 		case parser.SetOpExceptAll:
 			opType = SetOpExceptAll
+		case parser.SetOpUnionByName:
+			opType = SetOpUnionByName
+		case parser.SetOpUnionAllByName:
+			opType = SetOpUnionAllByName
 		}
 
 		plan = &LogicalSetOp{
@@ -1587,13 +1757,14 @@ func (p *Planner) planInsert(
 	}
 
 	return &LogicalInsert{
-		Schema:    s.Schema,
-		Table:     s.Table,
-		TableDef:  s.TableDef,
-		Columns:   s.Columns,
-		Values:    s.Values,
-		Source:    source,
-		Returning: s.Returning,
+		Schema:     s.Schema,
+		Table:      s.Table,
+		TableDef:   s.TableDef,
+		Columns:    s.Columns,
+		Values:     s.Values,
+		Source:     source,
+		OnConflict: s.OnConflict,
+		Returning:  s.Returning,
 	}, nil
 }
 
@@ -1667,6 +1838,7 @@ func (p *Planner) planCreateTable(
 		IfNotExists: s.IfNotExists,
 		Columns:     s.Columns,
 		PrimaryKey:  s.PrimaryKey,
+		Constraints: s.Constraints,
 	}, nil
 }
 
@@ -2219,6 +2391,22 @@ func (p *Planner) createPhysicalPlan(
 			return nil, err
 		}
 
+		// Handle special join types
+		if l.JoinType == JoinTypePositional {
+			return &PhysicalPositionalJoin{
+				Left:  left,
+				Right: right,
+			}, nil
+		}
+		if l.JoinType == JoinTypeAsOf || l.JoinType == JoinTypeAsOfLeft {
+			return &PhysicalAsOfJoin{
+				Left:      left,
+				Right:     right,
+				JoinType:  l.JoinType,
+				Condition: l.Condition,
+			}, nil
+		}
+
 		// Check for optimization hints for this join
 		joinKey := fmt.Sprintf("join_%d", p.joinIndex)
 		p.joinIndex++
@@ -2357,13 +2545,14 @@ func (p *Planner) createPhysicalPlan(
 		}
 
 		return &PhysicalInsert{
-			Schema:    l.Schema,
-			Table:     l.Table,
-			TableDef:  l.TableDef,
-			Columns:   l.Columns,
-			Values:    l.Values,
-			Source:    source,
-			Returning: l.Returning,
+			Schema:     l.Schema,
+			Table:      l.Table,
+			TableDef:   l.TableDef,
+			Columns:    l.Columns,
+			Values:     l.Values,
+			Source:     source,
+			OnConflict: l.OnConflict,
+			Returning:  l.Returning,
 		}, nil
 
 	case *LogicalUpdate:
@@ -2410,6 +2599,7 @@ func (p *Planner) createPhysicalPlan(
 			IfNotExists: l.IfNotExists,
 			Columns:     l.Columns,
 			PrimaryKey:  l.PrimaryKey,
+			Constraints: l.Constraints,
 		}, nil
 
 	case *LogicalDropTable:
@@ -2539,6 +2729,43 @@ func (p *Planner) createPhysicalPlan(
 			NewColumn:    l.NewColumn,
 			DropColumn:   l.DropColumn,
 			AddColumn:    l.AddColumn,
+		}, nil
+
+	// Type DDL logical to physical mappings
+	case *LogicalCreateType:
+		return &PhysicalCreateType{
+			Name:        l.Name,
+			Schema:      l.Schema,
+			TypeKind:    l.TypeKind,
+			EnumValues:  l.EnumValues,
+			IfNotExists: l.IfNotExists,
+		}, nil
+
+	case *LogicalDropType:
+		return &PhysicalDropType{
+			Name:     l.Name,
+			Schema:   l.Schema,
+			IfExists: l.IfExists,
+		}, nil
+
+	// Macro DDL logical to physical mappings
+	case *LogicalCreateMacro:
+		return &PhysicalCreateMacro{
+			Schema:       l.Schema,
+			Name:         l.Name,
+			Params:       l.Params,
+			IsTableMacro: l.IsTableMacro,
+			OrReplace:    l.OrReplace,
+			BodySQL:      l.BodySQL,
+			QuerySQL:     l.QuerySQL,
+		}, nil
+
+	case *LogicalDropMacro:
+		return &PhysicalDropMacro{
+			Schema:       l.Schema,
+			Name:         l.Name,
+			IfExists:     l.IfExists,
+			IsTableMacro: l.IsTableMacro,
 		}, nil
 
 	// Secret DDL logical to physical mappings
@@ -3117,6 +3344,79 @@ func extractAliases(
 	return aliases
 }
 
+// extractAggregateAliases extracts aliases from SELECT columns reordered to match
+// the internal aggregate layout: [groupBy..., aggregates..., groupingCalls...].
+// SELECT columns can have these types interleaved in any order, but the aggregate
+// node stores them grouped by type.
+func extractAggregateAliases(
+	columns []*binder.BoundSelectColumn,
+	numGroupBy, numAgg, numGroupingCalls int,
+) []string {
+	total := numGroupBy + numAgg + numGroupingCalls
+	aliases := make([]string, total)
+
+	var gbIdx, aggIdx, gcIdx int
+	for _, col := range columns {
+		switch e := col.Expr.(type) {
+		case *binder.BoundGroupingCall:
+			if numGroupBy+numAgg+gcIdx < total {
+				aliases[numGroupBy+numAgg+gcIdx] = col.Alias
+				gcIdx++
+			}
+		case *binder.BoundWindowExpr:
+			// Window expressions are handled separately, skip them
+			_ = e
+		case *binder.BoundFunctionCall:
+			if isAggregateFunction(e.Name) {
+				if numGroupBy+aggIdx < total {
+					aliases[numGroupBy+aggIdx] = col.Alias
+					aggIdx++
+				}
+			} else {
+				// Non-aggregate function treated as group-by column
+				if gbIdx < numGroupBy {
+					aliases[gbIdx] = col.Alias
+					gbIdx++
+				}
+			}
+		default:
+			// Group-by column reference
+			if gbIdx < numGroupBy {
+				aliases[gbIdx] = col.Alias
+				gbIdx++
+			}
+		}
+	}
+
+	return aliases
+}
+
+// mapParserJoinType converts a parser.JoinType to a planner.JoinType.
+// This is needed because the two enums have different orderings
+// (planner has Semi/Anti between Cross and the new join types).
+func mapParserJoinType(pt parser.JoinType) JoinType {
+	switch pt {
+	case parser.JoinTypeInner:
+		return JoinTypeInner
+	case parser.JoinTypeLeft:
+		return JoinTypeLeft
+	case parser.JoinTypeRight:
+		return JoinTypeRight
+	case parser.JoinTypeFull:
+		return JoinTypeFull
+	case parser.JoinTypeCross:
+		return JoinTypeCross
+	case parser.JoinTypePositional:
+		return JoinTypePositional
+	case parser.JoinTypeAsOf:
+		return JoinTypeAsOf
+	case parser.JoinTypeAsOfLeft:
+		return JoinTypeAsOfLeft
+	default:
+		return JoinTypeInner
+	}
+}
+
 func isEquiJoin(condition binder.BoundExpr) bool {
 	if condition == nil {
 		return false
@@ -3228,26 +3528,49 @@ func extractGroupingSets(
 ) ([][]binder.BoundExpr, []binder.BoundExpr) {
 	var groupingSets [][]binder.BoundExpr
 	var regularCols []binder.BoundExpr
+	var prefixCols []binder.BoundExpr // Regular columns that appear before grouping sets
 
 	for _, expr := range groupBy {
 		if gsExpr, ok := expr.(*binder.BoundGroupingSetExpr); ok {
 			// Found a grouping set expression - use its expanded sets
 			groupingSets = gsExpr.Sets
-			// The columns for the grouping set are all unique expressions in the sets
-			colMap := make(map[string]binder.BoundExpr)
-			for _, set := range gsExpr.Sets {
-				for _, col := range set {
-					// Use a simple key based on column identity
-					key := getExprKey(col)
-					if _, exists := colMap[key]; !exists {
-						colMap[key] = col
-						regularCols = append(regularCols, col)
-					}
-				}
-			}
 		} else {
 			// Regular GROUP BY expression
-			regularCols = append(regularCols, expr)
+			prefixCols = append(prefixCols, expr)
+		}
+	}
+
+	if groupingSets == nil {
+		// No grouping sets found - return as regular GROUP BY
+		return nil, prefixCols
+	}
+
+	// Collect all unique columns across grouping sets AND prefix columns
+	colMap := make(map[string]bool)
+	for _, col := range prefixCols {
+		key := getExprKey(col)
+		if key != "" {
+			colMap[key] = true
+		}
+		regularCols = append(regularCols, col)
+	}
+	for _, set := range groupingSets {
+		for _, col := range set {
+			key := getExprKey(col)
+			if key != "" && !colMap[key] {
+				colMap[key] = true
+				regularCols = append(regularCols, col)
+			}
+		}
+	}
+
+	// Prepend prefix columns to each grouping set
+	if len(prefixCols) > 0 {
+		for i, set := range groupingSets {
+			newSet := make([]binder.BoundExpr, 0, len(prefixCols)+len(set))
+			newSet = append(newSet, prefixCols...)
+			newSet = append(newSet, set...)
+			groupingSets[i] = newSet
 		}
 	}
 

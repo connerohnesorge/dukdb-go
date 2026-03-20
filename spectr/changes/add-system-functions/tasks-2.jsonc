@@ -9,25 +9,25 @@
       "id": "2.1",
       "section": "System Function Implementations (Part 1 - Core)",
       "description": "Implement duckdb_settings() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.2",
       "section": "System Function Implementations (Part 1 - Core)",
       "description": "Implement duckdb_tables() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.3",
       "section": "System Function Implementations (Part 1 - Core)",
       "description": "Implement duckdb_columns() table function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.4",
       "section": "System Function Implementations (Part 1 - Core)",
       "description": "Add tests for 2.1-2.3",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "2"

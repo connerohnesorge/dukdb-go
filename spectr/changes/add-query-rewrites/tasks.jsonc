@@ -42,84 +42,84 @@
       "id": "1",
       "section": "Rewrite Engine Foundation",
       "description": "Rewrite Engine Foundation tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-1.jsonc"
     },
     {
       "id": "2",
       "section": "Expression Rewrite Rules",
       "description": "Expression Rewrite Rules tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-2.jsonc"
     },
     {
       "id": "3",
       "section": "Filter and Predicate Rewrites",
       "description": "Filter and Predicate Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-3.jsonc"
     },
     {
       "id": "4",
       "section": "Join Rewrites",
       "description": "Join Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-4.jsonc"
     },
     {
       "id": "5",
       "section": "Aggregation Rewrites",
       "description": "Aggregation Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-5.jsonc"
     },
     {
       "id": "6",
       "section": "Set Operation Rewrites",
       "description": "Set Operation Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-6.jsonc"
     },
     {
       "id": "7",
       "section": "Subquery Rewrites",
       "description": "Subquery Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-7.jsonc"
     },
     {
       "id": "8",
       "section": "View and Expression Rewrites",
       "description": "View and Expression Rewrites tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-8.jsonc"
     },
     {
       "id": "9",
       "section": "Planner Integration",
       "description": "Planner Integration tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-9.jsonc"
     },
     {
       "id": "10",
       "section": "Diagnostics and EXPLAIN",
       "description": "Diagnostics and EXPLAIN tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-10.jsonc"
     },
     {
       "id": "11",
       "section": "Testing and Validation",
       "description": "Testing and Validation tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-11.jsonc"
     },
     {
       "id": "12",
       "section": "Documentation and Examples",
       "description": "Documentation and Examples tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-12.jsonc"
     }
   ],

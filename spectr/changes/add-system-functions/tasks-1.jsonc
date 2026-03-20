@@ -9,73 +9,73 @@
       "id": "1.1",
       "section": "Infrastructure Setup",
       "description": "Create `internal/metadata/` package with module structure",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.2",
       "section": "Infrastructure Setup",
       "description": "Define metadata data structures (TableMetadata, ColumnMetadata, etc.)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.3",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/tables.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.4",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/columns.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.5",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/constraints.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.6",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/views.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.7",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/indexes.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.8",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/sequences.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.9",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/functions.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.10",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/settings.go",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.11",
       "section": "Infrastructure Setup",
       "description": "Implement helper functions in internal/metadata/types.go (type string conversion)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "1.12",
       "section": "Infrastructure Setup",
       "description": "Add comprehensive unit tests for metadata helpers",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "1"

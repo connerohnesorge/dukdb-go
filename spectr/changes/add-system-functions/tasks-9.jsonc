@@ -9,25 +9,25 @@
       "id": "9.1",
       "section": "Documentation and Polish",
       "description": "Add godoc comments to all public metadata functions",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.2",
       "section": "Documentation and Polish",
       "description": "Document column schemas for each system function",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.3",
       "section": "Documentation and Polish",
       "description": "Add examples for common system function queries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "9.4",
       "section": "Documentation and Polish",
       "description": "Update CLAUDE.md with system functions documentation",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "9"

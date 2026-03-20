@@ -9,43 +9,43 @@
       "id": "6.1",
       "section": "Cache Query Interface",
       "description": "Implement PRAGMA CACHE_STATUS query",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.2",
       "section": "Cache Query Interface",
       "description": "Show cache size and hit/miss statistics",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.3",
       "section": "Cache Query Interface",
       "description": "Show cached query count",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.4",
       "section": "Cache Query Interface",
       "description": "Show cache memory usage",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.5",
       "section": "Cache Query Interface",
       "description": "Implement PRAGMA CLEAR CACHE",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.6",
       "section": "Cache Query Interface",
       "description": "Implement PRAGMA EXPLAIN_CACHE",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.7",
       "section": "Cache Query Interface",
       "description": "Write tests for cache queries",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "6"
