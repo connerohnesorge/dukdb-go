@@ -165,6 +165,8 @@ func (t *TableDef) Clone() *TableDef {
 				newTable.Constraints[i] = ct.Clone()
 			case *CheckConstraintDef:
 				newTable.Constraints[i] = ct.Clone()
+			case *ForeignKeyConstraintDef:
+				newTable.Constraints[i] = ct.Clone()
 			default:
 				newTable.Constraints[i] = c
 			}

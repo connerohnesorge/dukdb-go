@@ -162,6 +162,26 @@ func (t *Table) generateRowID() RowID {
 	return id
 }
 
+// Truncate removes all rows from the table, returning the number of rows removed.
+func (t *Table) Truncate() int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	prevRows := t.totalRows
+	t.rowGroups = make([]*RowGroup, 0)
+	t.totalRows = 0
+	t.nextRowID = 0
+	t.tombstones = NewBitmap(1024)
+	t.rowIDMap = make(map[RowID]*rowLocation)
+	t.rowVersions = make(map[RowID]*VersionInfo)
+
+	t.versionsMu.Lock()
+	t.versions = make(map[RowID]*VersionChain)
+	t.versionsMu.Unlock()
+
+	return prevRows
+}
+
 // Name returns the table name.
 func (t *Table) Name() string {
 	return t.name
