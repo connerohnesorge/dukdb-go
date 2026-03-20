@@ -1,205 +1,190 @@
 # DuckDB v1.4.3 Feature Parity — Implementation Timeline
 
-This document describes the chronological order in which all remaining change proposals should be implemented to achieve full DuckDB v1.4.3 compatibility. Proposals are ordered by dependency: each phase's prerequisites are satisfied by earlier phases.
+This document describes the chronological order in which all active change proposals should be implemented. Proposals are ordered by dependency and complexity.
+
+## Active Proposals
+
+| # | Proposal | Scope | Effort | Dependencies |
+|---|----------|-------|--------|-------------|
+| 1 | `add-utility-functions-v1.4.3` | 9 utility functions (system, date, string) | Small (2-3 days) | None |
+| 2 | `add-list-array-functions-v1.4.3` | 6 list/array functions | Small (2-3 days) | None |
+| 3 | `add-select-star-modifiers-v1.4.3` | EXCLUDE, REPLACE, COLUMNS() | Medium (4-5 days) | None |
+| 4 | `add-comprehensive-json-functions-v1.4.3` | 5 JSON functions (scalar, aggregate, table) | Small (3-4 days) | None |
+| 5 | `add-foreign-key-enforcement-v1.4.3` | FK constraint parsing + enforcement | Medium (5-7 days) | None |
+| 6 | `add-s3-query-integration-v1.4.3` | Wire cloud filesystem to SQL queries | Medium (5-7 days) | None |
+| 7 | `add-streaming-results-v1.4.3` | Chunked/streaming result delivery | Medium (5-7 days) | None |
+| 8 | `add-columnar-compression-v1.4.3` | Constant, Dictionary, RLE compression | Large (8-10 days) | None |
+| 9 | `add-replacement-scans-v1.4.3` | FROM 'file.csv' syntax | Small (2-3 days) | None |
+| 10 | `add-export-import-database-v1.4.3` | Complete EXPORT/IMPORT DATABASE | Medium (4-5 days) | Soft dep on #5 (FK DDL) |
 
 ## Dependency Graph
 
 ```
-Phase 1 (no dependencies — can be parallelized)
-├── add-try-cast-safe-casting
-├── add-similar-to-enum-ddl
-├── add-grouping-sets-execution
-├── add-union-by-name               ★ NEW
-├── add-generate-series-range        ★ NEW
-└── add-sql-prepare-execute          ★ NEW
+Phase 1 (no dependencies — fully parallelizable)
+├── add-utility-functions-v1.4.3                 [2-3 days]  ← smallest, quick win
+├── add-list-array-functions-v1.4.3              [2-3 days]  ← small, quick win
+├── add-select-star-modifiers-v1.4.3             [4-5 days]  ← parser+binder
+├── add-replacement-scans-v1.4.3                 [2-3 days]  ← parser+binder
+├── add-comprehensive-json-functions-v1.4.3      [3-4 days]
+├── add-foreign-key-enforcement-v1.4.3           [5-7 days]
+├── add-s3-query-integration-v1.4.3              [5-7 days]
+├── add-streaming-results-v1.4.3                 [5-7 days]
+└── add-columnar-compression-v1.4.3              [8-10 days]
 
-Phase 2 (no dependencies — can be parallelized with Phase 1)
-├── add-natural-asof-positional-joins
-├── add-create-macro
-├── add-upsert-on-conflict           ★ NEW
-└── add-table-constraints            ★ NEW
-
-Phase 3 (depends on Phase 1: TRY_CAST, ENUM types used by later features)
-├── add-lambda-functions  (depends on: list type maturity from Phase 1)
-└── add-icu-collation     (depends on: type system stability from Phase 1)
-
-Phase 4 (depends on Phase 2: extension framework needed for cloud/FTS)
-└── add-extension-loading
-
-Phase 5 (depends on Phase 4: extensions register via framework)
-├── add-s3-cloud-storage  (depends on: extension-loading, secret system)
-├── add-full-text-search  (depends on: extension-loading for FTS extension)
-└── add-export-import-database  ★ NEW (depends on: catalog DDL generation)
-
-Phase 6 (depends on Phase 5: cloud storage needed for remote ATTACH)
-└── add-attach-detach-database  (depends on: cloud storage for remote DBs)
+Phase 2 (soft dependency on Phase 1: FK for complete DDL output)
+└── add-export-import-database-v1.4.3            [4-5 days]
+    └── depends on: add-foreign-key-enforcement (for FK DDL in schema.sql)
 ```
 
-## Phase 1 — Core SQL Gaps (No Dependencies)
+## Phase 1 — Independent Features (All Parallelizable)
 
-These proposals fix fundamental SQL gaps with zero cross-dependencies. They can all be implemented in parallel.
+All eight proposals touch different parts of the codebase and can be implemented simultaneously.
 
-| Proposal | Estimated Effort | Key Deliverables |
-|----------|-----------------|------------------|
-| `add-try-cast-safe-casting` | Small (2-3 days) | TRY_CAST returns NULL on failure; `::` operator |
-| `add-similar-to-enum-ddl` | Medium (4-5 days) | SIMILAR TO operator; CREATE TYPE AS ENUM DDL |
-| `add-grouping-sets-execution` | Small (2-3 days) | Fix GROUPING() aliases; fix mixed GROUP BY; complete execution |
-| `add-union-by-name` ★ | Small (3-4 days) | UNION [ALL] BY NAME with column matching and NULL padding |
-| `add-generate-series-range` ★ | Small (3-4 days) | generate_series() and range() table functions for integers and dates |
-| `add-sql-prepare-execute` ★ | Medium (4-5 days) | PREPARE/EXECUTE/DEALLOCATE SQL statements with plan caching |
+### add-utility-functions-v1.4.3
 
-**Why first**: These are self-contained SQL features. TRY_CAST and ENUM types are referenced by later proposals. GROUPING SETS is nearly complete (just executor bugs to fix). UNION BY NAME, generate_series, and PREPARE/EXECUTE are independent features with no cross-dependencies.
+**Scope**: CURRENT_DATABASE, CURRENT_SCHEMA, VERSION (system); DAYNAME, MONTHNAME, YEARWEEK, EPOCH_US (date/time); TRANSLATE, STRIP_ACCENTS (string)
+
+**Files touched**: `internal/executor/expr.go`, `internal/binder/utils.go`, `internal/engine/engine.go` (expose db name setting)
+
+**Why Phase 1**: Self-contained — adds to existing function dispatch pattern. Each function is 5-20 lines.
 
 ---
 
-## Phase 2 — Advanced SQL Features (No Dependencies)
+### add-list-array-functions-v1.4.3
 
-These also have no strict dependencies but are more complex. Can run in parallel with Phase 1.
+**Scope**: LIST_ELEMENT/ARRAY_EXTRACT, LIST_AGGREGATE/ARRAY_AGGREGATE, LIST_REVERSE_SORT/ARRAY_REVERSE_SORT, ARRAY_TO_STRING/LIST_TO_STRING, LIST_ZIP, LIST_RESIZE/ARRAY_RESIZE
 
-| Proposal | Estimated Effort | Key Deliverables |
-|----------|-----------------|------------------|
-| `add-natural-asof-positional-joins` | Large (7-10 days) | NATURAL JOIN, ASOF JOIN, POSITIONAL JOIN, USING clause |
-| `add-create-macro` | Medium (5-7 days) | CREATE MACRO, TABLE MACRO, macro expansion in binder |
-| `add-upsert-on-conflict` ★ | Medium (5-7 days) | INSERT ... ON CONFLICT DO NOTHING/UPDATE, EXCLUDED pseudo-table |
-| `add-table-constraints` ★ | Large (7-10 days) | UNIQUE, CHECK, FOREIGN KEY constraints with enforcement |
+**Files touched**: `internal/executor/list_functions.go`, `internal/executor/expr.go`, `internal/binder/utils.go`
 
-**Why here**: JOIN types and MACROs are frequently used DuckDB features. UPSERT depends on UNIQUE constraint infrastructure (from add-table-constraints or existing PK logic). Table constraints are foundational for data integrity. These can all be parallelized.
-
-**Note**: `add-upsert-on-conflict` and `add-table-constraints` are complementary — UPSERT's conflict detection benefits from UNIQUE constraints. Implement constraints first or in parallel.
+**Why Phase 1**: Builds on existing list infrastructure (toSlice, compareValues, evaluateListSort). No cross-dependencies.
 
 ---
 
-## Phase 3 — Lambda Functions & Collation (Depends on Phase 1)
+### add-select-star-modifiers-v1.4.3
 
-| Proposal | Estimated Effort | Dependencies | Key Deliverables |
-|----------|-----------------|--------------|------------------|
-| `add-lambda-functions` | Large (8-10 days) | Phase 1 (list type, TRY_CAST) | list_transform, list_filter, list_reduce, list_sort |
-| `add-icu-collation` | Medium (5-7 days) | Phase 1 (type system) | COLLATE clause, locale-aware sorting, golang.org/x/text |
+**Scope**: SELECT * EXCLUDE(cols), SELECT * REPLACE(expr AS col), COLUMNS('regex') expression
 
-**Why here**: Lambda functions need the list type system to be stable (ENUM types, TRY_CAST for safe element casting). ICU collation touches the type modifier system which ENUM DDL also modifies.
+**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/binder/bind_expr.go`, `internal/binder/bind_stmt.go`, `internal/binder/expressions.go`
 
----
-
-## Phase 4 — Extension Loading Framework (Depends on Phase 2)
-
-| Proposal | Estimated Effort | Dependencies | Key Deliverables |
-|----------|-----------------|--------------|------------------|
-| `add-extension-loading` | Medium (5-7 days) | Phase 2 (macros use similar catalog patterns) | INSTALL/LOAD, ExtensionRegistry, autoload, duckdb_extensions() |
-
-**Why here**: The extension framework must be in place before cloud storage and FTS can be registered as extensions. It also supersedes the `extension-system-v1.4.3` proposal (which should be archived).
+**Why Phase 1**: Parser and binder changes only — no executor changes needed. Modifiers resolved at bind time.
 
 ---
 
-## Phase 5 — Cloud Storage, FTS & Database Export (Depends on Phase 4)
+### add-replacement-scans-v1.4.3
 
-| Proposal | Estimated Effort | Dependencies | Key Deliverables |
-|----------|-----------------|--------------|------------------|
-| `add-s3-cloud-storage` | Large (10-14 days) | Phase 4 (extension framework) | S3/GCS/Azure read/write, httpfs equivalent |
-| `add-full-text-search` | Large (10-14 days) | Phase 4 (extension framework) | Inverted index, BM25, PRAGMA create_fts_index |
-| `add-export-import-database` ★ | Medium (5-7 days) | Phase 2 (catalog DDL gen) | EXPORT DATABASE, IMPORT DATABASE, schema.sql + data files |
+**Scope**: Allow string literals in FROM position to be automatically resolved to table function calls based on file extension (e.g., `FROM 'data.csv'` → `read_csv_auto('data.csv')`)
 
-**Why here**: S3 and FTS register as extensions. EXPORT/IMPORT DATABASE depends on catalog DDL generation and COPY TO/FROM infrastructure (already available), plus constraint metadata from Phase 2 for complete DDL output.
+**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/binder/bind_stmt.go`
+
+**Why Phase 1**: Parser and binder only — rewrites to existing table functions. No new executor code needed.
 
 ---
 
-## Phase 6 — Multi-Database Support (Depends on Phase 5)
+### add-comprehensive-json-functions-v1.4.3
 
-| Proposal | Estimated Effort | Dependencies | Key Deliverables |
-|----------|-----------------|--------------|------------------|
-| `add-attach-detach-database` | Large (10-14 days) | Phase 5 (S3 for remote attach) | ATTACH/DETACH, USE, 3-part names, DatabaseManager |
+**Scope**: JSON_CONTAINS, JSON_QUOTE (scalars), JSON_GROUP_ARRAY, JSON_GROUP_OBJECT (aggregates), JSON_EACH (table function)
 
-**Why last**: ATTACH/DETACH is the capstone feature. It depends on:
-- Extension framework (to load extensions for attached DB types)
-- Cloud storage (to attach remote databases via S3/HTTP)
-- All prior SQL features (attached databases must support full SQL)
+**Files touched**: `internal/executor/expr.go`, `internal/executor/physical_aggregate.go`, `internal/executor/table_function_json_each.go` (new), `internal/binder/utils.go`
+
+**Why Phase 1**: Self-contained — adds to existing JSON function infrastructure. No cross-dependencies.
 
 ---
 
-## Summary Timeline
+### add-foreign-key-enforcement-v1.4.3
+
+**Scope**: Parse FOREIGN KEY / REFERENCES constraints, store in catalog, enforce on INSERT/UPDATE/DELETE, CASCADE/RESTRICT actions
+
+**Files touched**: `internal/parser/parser.go`, `internal/catalog/constraint.go` (new), `internal/executor/operator.go`, `internal/executor/physical_update.go`, `internal/executor/physical_delete.go`
+
+**Why Phase 1**: Foundational integrity feature. Export/Import benefits from FK metadata for DDL generation, but FK enforcement itself has no prerequisites.
+
+---
+
+### add-s3-query-integration-v1.4.3
+
+**Scope**: Wire existing S3/GCS/Azure filesystem implementations to `read_csv()`, `read_json()`, `read_parquet()`, and `COPY FROM/TO` for cloud URLs
+
+**Files touched**: `internal/executor/table_function_csv.go`, `internal/executor/table_function_json.go`, `internal/executor/table_function_parquet.go`, `internal/executor/copy_cloud.go`
+
+**Why Phase 1**: The filesystem backends already exist in `internal/io/filesystem/`. This proposal wires them to the query layer. No dependencies on other proposals.
+
+---
+
+### add-streaming-results-v1.4.3
+
+**Scope**: Chunked result delivery via pull-based `StreamingResult` type. Reduces peak memory from O(rows) to O(chunk_size). New `BackendConnStreaming` interface.
+
+**Files touched**: `internal/engine/conn.go`, `internal/executor/operator.go`, `conn.go`, `rows.go`
+
+**Why Phase 1**: Engine-level change affecting how results are delivered. Independent of all other proposals.
+
+---
+
+### add-columnar-compression-v1.4.3
+
+**Scope**: Constant, Dictionary, and RLE compression for in-memory RowGroup columns. Analyze data characteristics and select optimal codec per column.
+
+**Files touched**: `internal/storage/table.go` (RowGroup), `internal/storage/compression/` (new package), `internal/storage/column.go`
+
+**Why Phase 1**: Pure storage layer change. Does not affect query execution, parsing, or binding.
+
+---
+
+## Phase 2 — Export/Import Database
+
+### add-export-import-database-v1.4.3
+
+**Scope**: Complete EXPORT DATABASE (add sequence DDL, index DDL, DEFAULT clauses, FORMAT options, multi-schema file naming) and complete IMPORT DATABASE
+
+**Files touched**: `internal/engine/export_import.go`
+
+**Why Phase 2**: Benefits from FK enforcement being in place so `schema.sql` can include FOREIGN KEY constraints in CREATE TABLE output. Can proceed without FKs but the output will be incomplete.
+
+**Soft dependency**: If FK enforcement (#5) is implemented first, EXPORT DATABASE can emit complete DDL including FK constraints. Without it, exported DDL omits FK definitions — functionally correct but less complete.
+
+---
+
+## Completed Proposals (Archived)
+
+| Proposal | Status | Date |
+|----------|--------|------|
+| `add-missing-scalar-functions-v1.4.3` | Implemented & Archived | 2026-03-20 |
+| `add-missing-sql-syntax-v1.4.3` | Implemented & Archived | 2026-03-20 |
+
+---
+
+## Implementation Schedule
 
 ```
-Week 1-2:   Phase 1 + Phase 2 (parallel — 10 proposals)
-             ├── TRY_CAST (2-3 days)
-             ├── SIMILAR TO + ENUM DDL (4-5 days)
-             ├── GROUPING SETS (2-3 days)
-             ├── UNION BY NAME (3-4 days)              ★ NEW
-             ├── generate_series/range (3-4 days)       ★ NEW
-             ├── PREPARE/EXECUTE (4-5 days)             ★ NEW
-             ├── JOIN types (7-10 days)
-             ├── CREATE MACRO (5-7 days)
-             ├── UPSERT ON CONFLICT (5-7 days)          ★ NEW
-             └── Table Constraints (7-10 days)           ★ NEW
+Week 1:     Quick wins + start long-running work
+             ├── Utility functions (2-3 days)          ← quick win
+             ├── List/array functions (2-3 days)        ← quick win
+             ├── JSON functions (3-4 days)              ← start early
+             ├── SELECT * modifiers (4-5 days)          ← start early
+             └── Columnar compression (8-10 days)       ← longest, start day 1
 
-Week 3-4:   Phase 3 (parallel)
-             ├── Lambda Functions (8-10 days)
-             └── ICU Collation (5-7 days)
+Week 1-2:   Medium features
+             ├── FK enforcement (5-7 days)
+             ├── S3 query integration (5-7 days)
+             └── Streaming results (5-7 days)
 
-Week 4-5:   Phase 4
-             └── Extension Loading (5-7 days)
-
-Week 5-8:   Phase 5 (parallel)
-             ├── S3/Cloud Storage (10-14 days)
-             ├── Full-Text Search (10-14 days)
-             └── EXPORT/IMPORT Database (5-7 days)      ★ NEW
-
-Week 8-10:  Phase 6
-             └── ATTACH/DETACH Database (10-14 days)
+Week 2-3:   Phase 2
+             └── Export/Import Database (4-5 days)
 ```
 
-**Total estimated effort**: 10-14 weeks (with parallelization within phases)
-**New proposals add**: ~28-37 days of additional work, distributed across existing phases
-
-## All Proposals — Complete Inventory
-
-### New Proposals (★ created in this session)
-
-| Proposal | Phase | Effort | Status |
-|----------|-------|--------|--------|
-| `add-upsert-on-conflict` | 2 | Medium (5-7 days) | Validated, graded, fixed |
-| `add-export-import-database` | 5 | Medium (5-7 days) | Validated, graded, fixed |
-| `add-sql-prepare-execute` | 1 | Medium (4-5 days) | Validated, graded, fixed |
-| `add-generate-series-range` | 1 | Small (3-4 days) | Validated, graded, fixed |
-| `add-table-constraints` | 2 | Large (7-10 days) | Validated, graded, fixed |
-| `add-union-by-name` | 1 | Small (3-4 days) | Validated, graded, fixed |
-
-### Existing Proposals (from prior sessions)
-
-| Proposal | Phase | Effort | Relationship |
-|----------|-------|--------|-------------|
-| `add-try-cast-safe-casting` | 1 | Small | Active |
-| `add-similar-to-enum-ddl` | 1 | Medium | Active |
-| `add-grouping-sets-execution` | 1 | Small | Active |
-| `add-natural-asof-positional-joins` | 2 | Large | Active |
-| `add-create-macro` | 2 | Medium | Active |
-| `add-lambda-functions` | 3 | Large | Active |
-| `add-icu-collation` | 3 | Medium | Active |
-| `add-extension-loading` | 4 | Medium | Active |
-| `add-s3-cloud-storage` | 5 | Large | Active |
-| `add-full-text-search` | 5 | Large | Active |
-| `add-attach-detach-database` | 6 | Large | Active |
-
-### Existing v1.4.3 Proposals (complementary, can run in parallel)
-
-| Proposal | Status | Relationship |
-|----------|--------|-------------|
-| `duckdb-file-format-v1.4.3` | Active | Independent — DuckDB file format read/write |
-| `complex-data-types-v1.4.3` | Active | Complementary — nested type improvements |
-| `query-optimizations-v1.4.3` | Active | Independent — optimizer enhancements |
-| `extension-system-v1.4.3` | Active | **Superseded by** `add-extension-loading` — should be archived |
-| `window-functions-v1.4.3` | Active | Independent — window function enhancements |
-| `recursive-cte-lateral-v1.4.3` | Active | Independent — CTE/lateral improvements |
-| `system-functions-metadata-v1.4.3` | Active | Complementary — metadata function additions |
+**Total estimated effort**: 41-54 person-days
+**With full parallelization**: 2-3 weeks elapsed time
+**Critical path**: Columnar compression (8-10 days) → Export/Import (4-5 days) = 12-15 days
 
 ## Risk Register
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|-----------|
-| Lambda function parser disambiguation (-> vs JSON) | High | High | Thorough parser tests; lookahead-based approach documented |
-| ASOF JOIN performance on large datasets | Medium | Medium | Start with sort-merge; optimize based on benchmarks |
-| Cloud storage credential management complexity | Medium | High | Leverage existing secret system; test with localstack |
-| Extension framework function registration complexity | Medium | Medium | Bridge existing hard-coded functions incrementally |
-| ATTACH/DETACH cross-database transaction complexity | High | High | Limit to read-only cross-DB transactions initially |
-| FK constraint enforcement performance on bulk INSERT | Medium | Medium | Only NO ACTION/RESTRICT supported; simple parent lookup |
-| UPSERT hash set memory for large tables | Medium | Low | Reuse existing pkKeys infrastructure; streaming fallback |
-| EXPORT DATABASE view dependency ordering | Low | Medium | Topological sort with cycle detection |
-| PREPARE plan staleness after DDL | Low | Low | Document limitation; DEALLOCATE + re-PREPARE as workaround |
+| FK enforcement performance on bulk INSERT | Medium | Medium | Start with NO ACTION/RESTRICT only; parent lookup via index |
+| S3 credential resolution edge cases | Medium | Low | Test with localstack; leverage existing secret manager |
+| Compression analysis overhead for small tables | Low | Low | Skip compression for RowGroups below threshold |
+| Streaming backpressure with slow consumers | Medium | Medium | Context cancellation + configurable channel buffer |
+| JSON_EACH on deeply nested structures | Low | Low | Document depth limits; match DuckDB behavior |
+| Export/Import round-trip fidelity | Medium | Medium | Integration tests comparing pre/post-export schema |
+| COLUMNS regex performance on wide tables | Low | Low | Compile regex once, linear scan over column names |
+| toTime() error handling in date functions | Low | Low | Follow existing EPOCH/EPOCH_MS pattern for error returns |

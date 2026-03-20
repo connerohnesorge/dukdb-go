@@ -2302,3 +2302,556 @@ The executor SHALL handle edge cases correctly for all aggregate functions.
 - WHEN executing `SELECT ARRAY_AGG(x ORDER BY x DESC) FROM t`
 - THEN the ORDER BY SHALL determine the order of values in the result
 - AND the aggregate output respects the ordering
+
+### Requirement: EXPORT DATABASE Execution
+
+The engine SHALL export the entire database schema and data to a directory, producing schema.sql (DDL), data files (one per table), and load.sql (COPY FROM statements) in dependency order.
+
+#### Scenario: Export database with single table as CSV
+
+- GIVEN a database with table "users" (id INTEGER, name VARCHAR) containing rows (1, 'alice'), (2, 'bob')
+- WHEN executing `EXPORT DATABASE '/tmp/export'`
+- THEN directory '/tmp/export' is created
+- AND file 'schema.sql' contains `CREATE TABLE users (id INTEGER, name VARCHAR);`
+- AND file 'users.csv' contains the table data in CSV format
+- AND file 'load.sql' contains `COPY users FROM '/tmp/export/users.csv';`
+
+#### Scenario: Export database with FORMAT PARQUET
+
+- GIVEN a database with table "data" containing rows
+- WHEN executing `EXPORT DATABASE '/tmp/export' (FORMAT PARQUET)`
+- THEN data files use .parquet extension
+- AND load.sql COPY FROM statements reference .parquet files with FORMAT PARQUET
+
+#### Scenario: Export database with multiple schemas
+
+- GIVEN a database with schemas "main" and "analytics" each containing tables
+- WHEN executing `EXPORT DATABASE '/tmp/export'`
+- THEN schema.sql contains `CREATE SCHEMA analytics;` before analytics tables
+- AND tables in "analytics" schema are exported as `analytics_{table}.csv`
+- AND tables in "main" schema are exported as `{table}.csv`
+
+#### Scenario: Export database dependency ordering
+
+- GIVEN a database with sequence "id_seq", table "t" using nextval('id_seq'), view "v" referencing "t", and index "idx" on "t"
+- WHEN executing `EXPORT DATABASE '/tmp/export'`
+- THEN schema.sql contains statements in order: CREATE SEQUENCE, CREATE TABLE, CREATE VIEW, CREATE INDEX
+
+#### Scenario: Export database with primary key
+
+- GIVEN a table with PRIMARY KEY (id)
+- WHEN executing `EXPORT DATABASE '/tmp/export'`
+- THEN schema.sql CREATE TABLE includes PRIMARY KEY constraint
+
+#### Scenario: Export database with views
+
+- GIVEN a view "v" defined as `SELECT id, name FROM users WHERE active = true`
+- WHEN executing `EXPORT DATABASE '/tmp/export'`
+- THEN schema.sql contains `CREATE VIEW v AS SELECT id, name FROM users WHERE active = true;`
+- AND no data file is created for the view
+
+### Requirement: IMPORT DATABASE Execution
+
+The engine SHALL import a previously exported database by executing schema.sql followed by load.sql from the specified directory.
+
+#### Scenario: Import database round-trip
+
+- GIVEN an exported database at '/tmp/export' with schema.sql and load.sql
+- WHEN executing `IMPORT DATABASE '/tmp/export'`
+- THEN all tables, views, sequences, and indexes are recreated
+- AND all table data is loaded
+- AND the resulting database is equivalent to the original
+
+#### Scenario: Import database into non-empty database fails
+
+- GIVEN a database with existing table "users"
+- AND an export directory containing a table also named "users"
+- WHEN executing `IMPORT DATABASE '/tmp/export'`
+- THEN an error is returned indicating the database is not empty or table already exists
+
+#### Scenario: Import database with missing schema.sql
+
+- WHEN executing `IMPORT DATABASE '/tmp/nonexistent'`
+- THEN an error is returned indicating the directory or schema.sql does not exist
+
+#### Scenario: Import database with FORMAT PARQUET
+
+- GIVEN an export directory with .parquet data files and load.sql referencing them
+- WHEN executing `IMPORT DATABASE '/tmp/export'`
+- THEN load.sql COPY FROM statements correctly load parquet data
+
+### Requirement: DDL Generation
+
+The catalog SHALL provide ToCreateSQL() methods on TableDef, ViewDef, SequenceDef, and IndexDef that generate valid CREATE statements parseable by the dukdb-go parser.
+
+#### Scenario: TableDef DDL generation with all features
+
+- GIVEN a TableDef with columns (id INTEGER NOT NULL, name VARCHAR DEFAULT 'unknown'), PRIMARY KEY (id), and schema "main"
+- WHEN calling ToCreateSQL()
+- THEN the output is `CREATE TABLE main.id_table (id INTEGER NOT NULL, name VARCHAR DEFAULT 'unknown', PRIMARY KEY (id));` or equivalent valid SQL
+
+#### Scenario: ViewDef DDL generation
+
+- GIVEN a ViewDef with name "active_users" and SQL "SELECT * FROM users WHERE active = true"
+- WHEN calling ToCreateSQL()
+- THEN the output is `CREATE VIEW active_users AS SELECT * FROM users WHERE active = true;`
+
+#### Scenario: SequenceDef DDL generation
+
+- GIVEN a SequenceDef with START WITH 100, INCREMENT BY 5, CYCLE
+- WHEN calling ToCreateSQL()
+- THEN the output includes START WITH, INCREMENT BY, and CYCLE clauses
+
+#### Scenario: DDL round-trip correctness
+
+- GIVEN any catalog object
+- WHEN calling ToCreateSQL() and parsing the result with the dukdb-go parser
+- THEN the parsed AST correctly represents the original catalog object
+
+### Requirement: generate_series Table Function
+
+The engine SHALL provide a generate_series(start, stop[, step]) table function that produces sequential values inclusive of the stop value, supporting INTEGER, BIGINT, DATE, and TIMESTAMP types.
+
+#### Scenario: Integer series with default step
+
+- WHEN executing `SELECT * FROM generate_series(1, 5)`
+- THEN the result contains rows: 1, 2, 3, 4, 5
+
+#### Scenario: Integer series with explicit step
+
+- WHEN executing `SELECT * FROM generate_series(0, 10, 3)`
+- THEN the result contains rows: 0, 3, 6, 9
+
+#### Scenario: Descending integer series
+
+- WHEN executing `SELECT * FROM generate_series(5, 1, -1)`
+- THEN the result contains rows: 5, 4, 3, 2, 1
+
+#### Scenario: Date series with interval step
+
+- WHEN executing `SELECT * FROM generate_series(DATE '2024-01-01', DATE '2024-01-03', INTERVAL '1 day')`
+- THEN the result contains rows: 2024-01-01, 2024-01-02, 2024-01-03
+
+#### Scenario: Timestamp series
+
+- WHEN executing `SELECT * FROM generate_series(TIMESTAMP '2024-01-01 00:00:00', TIMESTAMP '2024-01-01 02:00:00', INTERVAL '1 hour')`
+- THEN the result contains rows: 2024-01-01 00:00:00, 2024-01-01 01:00:00, 2024-01-01 02:00:00
+
+#### Scenario: Single value when start equals stop
+
+- WHEN executing `SELECT * FROM generate_series(5, 5)`
+- THEN the result contains a single row: 5
+
+#### Scenario: Empty result when direction mismatches step
+
+- WHEN executing `SELECT * FROM generate_series(5, 1, 1)`
+- THEN the result is empty (start > stop with positive step)
+
+#### Scenario: Error on zero step
+
+- WHEN executing `SELECT * FROM generate_series(1, 10, 0)`
+- THEN an error is returned indicating step size cannot be zero
+
+#### Scenario: Column named after function
+
+- WHEN executing `SELECT generate_series FROM generate_series(1, 3)`
+- THEN the output column is named "generate_series" and contains 1, 2, 3
+
+### Requirement: range Table Function
+
+The engine SHALL provide a range(start, stop[, step]) table function that produces sequential values exclusive of the stop value, supporting INTEGER, BIGINT, DATE, and TIMESTAMP types.
+
+#### Scenario: Integer range with default step
+
+- WHEN executing `SELECT * FROM range(1, 5)`
+- THEN the result contains rows: 1, 2, 3, 4 (excludes 5)
+
+#### Scenario: Integer range with explicit step
+
+- WHEN executing `SELECT * FROM range(0, 10, 3)`
+- THEN the result contains rows: 0, 3, 6, 9
+
+#### Scenario: Empty range when start equals stop
+
+- WHEN executing `SELECT * FROM range(5, 5)`
+- THEN the result is empty (exclusive of stop)
+
+#### Scenario: Descending range
+
+- WHEN executing `SELECT * FROM range(5, 1, -1)`
+- THEN the result contains rows: 5, 4, 3, 2 (excludes 1)
+
+#### Scenario: Date range
+
+- WHEN executing `SELECT * FROM range(DATE '2024-01-01', DATE '2024-01-04', INTERVAL '1 day')`
+- THEN the result contains rows: 2024-01-01, 2024-01-02, 2024-01-03 (excludes 2024-01-04)
+
+### Requirement: SQL-Level Prepared Statement Execution
+
+The engine SHALL support PREPARE/EXECUTE/DEALLOCATE for named SQL-level prepared statements with plan caching and parameter substitution.
+
+#### Scenario: PREPARE and EXECUTE a SELECT
+
+- WHEN executing `PREPARE q AS SELECT $1 + $2`
+- AND then executing `EXECUTE q(10, 20)`
+- THEN the result contains a single row with value 30
+
+#### Scenario: EXECUTE with different parameters reuses plan
+
+- GIVEN `PREPARE q AS SELECT * FROM users WHERE id = $1`
+- WHEN executing `EXECUTE q(1)` then `EXECUTE q(2)` then `EXECUTE q(3)`
+- THEN each execution returns the correct filtered rows
+- AND the plan is parsed, bound, and planned only once (during PREPARE)
+
+#### Scenario: PREPARE INSERT and EXECUTE multiple times
+
+- GIVEN `PREPARE ins AS INSERT INTO t (id, name) VALUES ($1, $2)`
+- WHEN executing `EXECUTE ins(1, 'alice')` then `EXECUTE ins(2, 'bob')`
+- THEN both rows are inserted into the table
+
+#### Scenario: DEALLOCATE removes prepared statement
+
+- GIVEN `PREPARE q AS SELECT 1`
+- WHEN executing `DEALLOCATE q`
+- AND then executing `EXECUTE q`
+- THEN an error is returned: prepared statement "q" does not exist
+
+#### Scenario: DEALLOCATE ALL removes all prepared statements
+
+- GIVEN `PREPARE q1 AS SELECT 1` and `PREPARE q2 AS SELECT 2`
+- WHEN executing `DEALLOCATE ALL`
+- AND then executing `EXECUTE q1`
+- THEN an error is returned: prepared statement "q1" does not exist
+
+#### Scenario: Error on duplicate PREPARE name
+
+- GIVEN `PREPARE q AS SELECT 1`
+- WHEN executing `PREPARE q AS SELECT 2`
+- THEN an error is returned: prepared statement "q" already exists
+
+#### Scenario: Error on EXECUTE unknown name
+
+- WHEN executing `EXECUTE nonexistent`
+- THEN an error is returned: prepared statement "nonexistent" does not exist
+
+#### Scenario: Error on EXECUTE wrong parameter count
+
+- GIVEN `PREPARE q AS SELECT $1 + $2`
+- WHEN executing `EXECUTE q(42)`
+- THEN an error is returned: expected 2 parameters, got 1
+
+#### Scenario: Error on DEALLOCATE unknown name
+
+- WHEN executing `DEALLOCATE nonexistent`
+- THEN an error is returned: prepared statement "nonexistent" does not exist
+
+#### Scenario: Prepared statements are connection-scoped
+
+- GIVEN connection A with `PREPARE q AS SELECT 1`
+- WHEN connection B executes `EXECUTE q`
+- THEN an error is returned (prepared statement not visible across connections)
+
+#### Scenario: Connection close cleans up prepared statements
+
+- GIVEN a connection with multiple prepared statements
+- WHEN the connection is closed
+- THEN all prepared statement resources are released
+
+### Requirement: UNIQUE Constraint Enforcement
+
+The engine SHALL enforce UNIQUE constraints on INSERT and UPDATE, rejecting rows that violate uniqueness.
+
+#### Scenario: UNIQUE violation on INSERT
+
+- GIVEN table "t" with UNIQUE (email) and existing row (1, 'alice@test.com')
+- WHEN executing `INSERT INTO t VALUES (2, 'alice@test.com')`
+- THEN a constraint violation error is returned
+
+#### Scenario: UNIQUE allows NULL duplicates
+
+- GIVEN table "t" with UNIQUE (email) and existing row (1, NULL)
+- WHEN executing `INSERT INTO t VALUES (2, NULL)`
+- THEN the insert succeeds (NULL != NULL per SQL standard)
+
+#### Scenario: Composite UNIQUE violation
+
+- GIVEN table "t" with UNIQUE (a, b) and existing row (1, 2, 'old')
+- WHEN executing `INSERT INTO t VALUES (1, 2, 'new')`
+- THEN a constraint violation error is returned
+
+#### Scenario: UNIQUE enforced on UPDATE
+
+- GIVEN table "t" with UNIQUE (email) and rows (1, 'alice'), (2, 'bob')
+- WHEN executing `UPDATE t SET email = 'alice' WHERE id = 2`
+- THEN a constraint violation error is returned
+
+### Requirement: CHECK Constraint Enforcement
+
+The engine SHALL enforce CHECK constraints on INSERT and UPDATE, rejecting rows where the CHECK expression evaluates to FALSE.
+
+#### Scenario: CHECK violation on INSERT
+
+- GIVEN table "t" with CHECK (age >= 0)
+- WHEN executing `INSERT INTO t (name, age) VALUES ('alice', -1)`
+- THEN a constraint violation error is returned
+
+#### Scenario: CHECK passes with NULL
+
+- GIVEN table "t" with CHECK (age >= 0)
+- WHEN executing `INSERT INTO t (name, age) VALUES ('alice', NULL)`
+- THEN the insert succeeds (NULL does not violate CHECK per SQL standard)
+
+#### Scenario: CHECK with multiple columns
+
+- GIVEN table "t" with CHECK (end_date > start_date)
+- WHEN executing `INSERT INTO t VALUES ('2024-01-05', '2024-01-01')`
+- THEN a constraint violation error is returned (end < start)
+
+#### Scenario: CHECK enforced on UPDATE
+
+- GIVEN table "t" with CHECK (age >= 0) and existing row ('alice', 25)
+- WHEN executing `UPDATE t SET age = -5 WHERE name = 'alice'`
+- THEN a constraint violation error is returned
+
+### Requirement: FOREIGN KEY Enforcement
+
+The engine SHALL enforce FOREIGN KEY constraints on INSERT/UPDATE of the child table and reject DELETE/UPDATE of referenced parent rows (NO ACTION/RESTRICT only, matching DuckDB v1.4.3).
+
+#### Scenario: FK violation on INSERT into child
+
+- GIVEN parent table "users" with PK (id) and rows (1), (2)
+- AND child table "orders" with FK (user_id) REFERENCES users(id)
+- WHEN executing `INSERT INTO orders (id, user_id) VALUES (1, 999)`
+- THEN a FK violation error is returned (user 999 does not exist)
+
+#### Scenario: FK allows NULL reference
+
+- GIVEN parent table "users" with PK (id)
+- AND child table "orders" with FK (user_id) REFERENCES users(id)
+- WHEN executing `INSERT INTO orders (id, user_id) VALUES (1, NULL)`
+- THEN the insert succeeds (NULL FK is allowed)
+
+#### Scenario: FK ON DELETE RESTRICT prevents deletion
+
+- GIVEN parent "users" with row (1) and child "orders" with FK REFERENCES users(id) and rows referencing user 1
+- WHEN executing `DELETE FROM users WHERE id = 1`
+- THEN a FK violation error is returned (cannot delete referenced row)
+
+#### Scenario: FK ON DELETE NO ACTION (default) prevents deletion
+
+- GIVEN parent "users" with row (1) and child "orders" with FK (default NO ACTION) and rows referencing user 1
+- WHEN executing `DELETE FROM users WHERE id = 1`
+- THEN a FK violation error is returned (same as RESTRICT for immediate constraints)
+
+#### Scenario: FK rejects CASCADE action at parse time
+
+- WHEN executing `CREATE TABLE t (ref_id INTEGER REFERENCES other(id) ON DELETE CASCADE)`
+- THEN a parse error is returned: "FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT"
+
+#### Scenario: FK validation during CREATE TABLE
+
+- WHEN executing `CREATE TABLE t (ref_id INTEGER REFERENCES nonexistent(id))`
+- THEN an error is returned indicating referenced table does not exist
+
+#### Scenario: Self-referencing FK
+
+- GIVEN table "employees" with PK (id) and FK (manager_id) REFERENCES employees(id)
+- WHEN executing `INSERT INTO employees (id, name, manager_id) VALUES (1, 'CEO', NULL)`
+- AND then `INSERT INTO employees (id, name, manager_id) VALUES (2, 'VP', 1)`
+- THEN both inserts succeed (manager_id=NULL is allowed, manager_id=1 exists)
+
+### Requirement: UNION BY NAME Execution
+
+The engine SHALL execute UNION BY NAME by matching columns by name across both sides, padding missing columns with NULL, and producing a unified result set.
+
+#### Scenario: Overlapping columns with different order
+
+- GIVEN `SELECT a, b FROM t1` returns (1, 2) and `SELECT b, a FROM t2` returns (3, 4)
+- WHEN executing `SELECT a, b FROM t1 UNION ALL BY NAME SELECT b, a FROM t2`
+- THEN the result contains columns [a, b] with rows (1, 2) and (4, 3)
+
+#### Scenario: Partially overlapping columns with NULL padding
+
+- GIVEN `SELECT a, b FROM t1` returns (1, 2) and `SELECT b, c FROM t2` returns (3, 4)
+- WHEN executing `SELECT a, b FROM t1 UNION ALL BY NAME SELECT b, c FROM t2`
+- THEN the result has columns [a, b, c]
+- AND row from t1 is (1, 2, NULL) — c padded with NULL
+- AND row from t2 is (NULL, 3, 4) — a padded with NULL
+
+#### Scenario: No overlapping columns
+
+- GIVEN `SELECT a FROM t1` returns (1) and `SELECT b FROM t2` returns (2)
+- WHEN executing `SELECT a FROM t1 UNION ALL BY NAME SELECT b FROM t2`
+- THEN the result has columns [a, b]
+- AND rows are (1, NULL) and (NULL, 2)
+
+#### Scenario: UNION BY NAME with deduplication
+
+- GIVEN `SELECT a, b FROM t1` returns (1, 2) and `SELECT a, b FROM t2` returns (1, 2)
+- WHEN executing `SELECT a, b FROM t1 UNION BY NAME SELECT a, b FROM t2`
+- THEN the result contains a single row (1, 2) — duplicates removed
+
+#### Scenario: Type promotion for matching columns
+
+- GIVEN `SELECT 1::INTEGER AS x` and `SELECT 1000000000::BIGINT AS x`
+- WHEN executing the UNION BY NAME
+- THEN column x has type BIGINT (common supertype)
+
+#### Scenario: Case-insensitive column matching
+
+- GIVEN `SELECT A FROM t1` and `SELECT a FROM t2`
+- WHEN executing UNION BY NAME
+- THEN columns A and a are matched as the same column
+
+### Requirement: UPSERT Execution (INSERT ... ON CONFLICT)
+
+The engine SHALL support INSERT ... ON CONFLICT DO NOTHING and INSERT ... ON CONFLICT DO UPDATE SET with conflict detection against PRIMARY KEY and UNIQUE indexes, EXCLUDED pseudo-table evaluation, and batch-optimized conflict resolution.
+
+#### Scenario: DO NOTHING skips conflicting rows
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing row (1, 'old')
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'new'), (2, 'added') ON CONFLICT (id) DO NOTHING`
+- THEN row (1, 'old') remains unchanged
+- AND row (2, 'added') is inserted
+- AND RowsAffected returns 1
+
+#### Scenario: DO UPDATE updates conflicting rows with EXCLUDED
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing row (1, 'old')
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'new') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+- THEN row (1, 'old') is updated to (1, 'new')
+- AND RowsAffected returns 1
+
+#### Scenario: DO UPDATE with WHERE filter on update action
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing rows (1, 10), (2, 20)
+- WHEN executing `INSERT INTO t (id, val) VALUES (1, 5), (2, 30) ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val WHERE EXCLUDED.val > t.val`
+- THEN row (1, 10) remains unchanged (EXCLUDED.val=5 is NOT > t.val=10)
+- AND row (2, 20) is updated to (2, 30) (EXCLUDED.val=30 > t.val=20)
+- AND RowsAffected returns 1
+
+#### Scenario: DO NOTHING with no conflicts inserts all rows
+
+- GIVEN table "t" with PRIMARY KEY (id) and no existing rows
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'a'), (2, 'b') ON CONFLICT (id) DO NOTHING`
+- THEN both rows are inserted
+- AND RowsAffected returns 2
+
+#### Scenario: Conflict detection on UNIQUE index (non-PK)
+
+- GIVEN table "t" with columns (id INTEGER, email VARCHAR) and UNIQUE INDEX on (email)
+- AND existing row (1, 'alice@test.com')
+- WHEN executing `INSERT INTO t VALUES (2, 'alice@test.com') ON CONFLICT (email) DO NOTHING`
+- THEN the insert is skipped
+- AND RowsAffected returns 0
+
+#### Scenario: Conflict detection on composite key
+
+- GIVEN table "t" with PRIMARY KEY (a, b) and existing row (1, 2, 'old')
+- WHEN executing `INSERT INTO t (a, b, c) VALUES (1, 2, 'new') ON CONFLICT (a, b) DO UPDATE SET c = EXCLUDED.c`
+- THEN row (1, 2, 'old') is updated to (1, 2, 'new')
+- AND RowsAffected returns 1
+
+#### Scenario: UPSERT with RETURNING clause
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing row (1, 'old')
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'new'), (2, 'fresh') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name RETURNING id, name`
+- THEN the result set contains rows (1, 'new') and (2, 'fresh')
+- AND the updated row appears in RETURNING output
+
+#### Scenario: INSERT ... SELECT ... ON CONFLICT
+
+- GIVEN table "target" with PRIMARY KEY (id) and existing row (1, 'old')
+- AND table "source" with rows (1, 'updated'), (3, 'new')
+- WHEN executing `INSERT INTO target SELECT * FROM source ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+- THEN target contains (1, 'updated') and (3, 'new')
+- AND the original row (1, 'old') is replaced
+
+#### Scenario: DO NOTHING without explicit conflict columns infers PK
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing row (1, 'old')
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'new') ON CONFLICT DO NOTHING`
+- THEN the insert is skipped (conflict detected on inferred PK column "id")
+- AND RowsAffected returns 0
+
+#### Scenario: Error when no unique constraint matches conflict columns
+
+- GIVEN table "t" with PRIMARY KEY (id) and no unique index on (name)
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT (name) DO NOTHING`
+- THEN an error is returned indicating no unique constraint covers column "name"
+
+#### Scenario: WAL logging for upsert operations
+
+- GIVEN table "t" with PRIMARY KEY (id)
+- WHEN executing an upsert that inserts some rows and updates others
+- THEN inserted rows are logged as INSERT WAL entries
+- AND updated rows are logged as UPDATE WAL entries
+- AND skipped rows (DO NOTHING) produce no WAL entries
+
+#### Scenario: Bulk upsert performance
+
+- GIVEN table "t" with PRIMARY KEY (id) and 1000 existing rows
+- WHEN executing an INSERT with 10000 rows and ON CONFLICT DO UPDATE
+- THEN conflict detection uses batch-optimized key lookup
+- AND the operation completes without per-row table scans for non-conflicting rows
+
+### Requirement: EXCLUDED Pseudo-Table
+
+The engine SHALL provide an EXCLUDED pseudo-table scope within ON CONFLICT DO UPDATE expressions that references the column values from the row that caused the conflict.
+
+#### Scenario: EXCLUDED references insert values in SET clause
+
+- GIVEN an INSERT that conflicts on row (1, 'old', 100)
+- AND the INSERT attempted values (1, 'new', 200)
+- WHEN the DO UPDATE SET clause references `EXCLUDED.name`
+- THEN `EXCLUDED.name` evaluates to 'new' (the attempted insert value)
+
+#### Scenario: EXCLUDED in WHERE clause of DO UPDATE
+
+- WHEN the DO UPDATE WHERE clause references `EXCLUDED.val > t.val`
+- THEN `EXCLUDED.val` evaluates to the attempted insert value for column "val"
+- AND `t.val` evaluates to the existing row's value for column "val"
+
+#### Scenario: EXCLUDED with expression combining existing and new values
+
+- GIVEN an INSERT that conflicts with existing row (1, 100)
+- AND attempted insert values (1, 50)
+- WHEN executing `ON CONFLICT (id) DO UPDATE SET val = t.val + EXCLUDED.val`
+- THEN the updated row has val = 150 (existing 100 + attempted 50)
+
+#### Scenario: EXCLUDED is not accessible outside ON CONFLICT
+
+- WHEN a SELECT statement references `EXCLUDED.col`
+- THEN a binding error is returned indicating EXCLUDED is only valid in ON CONFLICT DO UPDATE
+
+#### Scenario: NULL values in UNIQUE conflict columns do not trigger conflicts
+
+- GIVEN table "t" with UNIQUE INDEX on (email) and existing row (1, NULL)
+- WHEN executing `INSERT INTO t (id, email) VALUES (2, NULL) ON CONFLICT (email) DO NOTHING`
+- THEN the insert succeeds (NULL != NULL per SQL standard)
+- AND RowsAffected returns 1
+
+#### Scenario: DO UPDATE preserves non-updated column values
+
+- GIVEN table "t" with PRIMARY KEY (id) and columns (id, name, score) and existing row (1, 'alice', 100)
+- WHEN executing `INSERT INTO t (id, name, score) VALUES (1, 'bob', 200) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+- THEN row becomes (1, 'bob', 100) — score is NOT updated and retains its existing value
+- AND RowsAffected returns 1
+
+#### Scenario: DO NOTHING with RETURNING returns empty for skipped rows
+
+- GIVEN table "t" with PRIMARY KEY (id) and existing row (1, 'old')
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'new') ON CONFLICT (id) DO NOTHING RETURNING id, name`
+- THEN the result set is empty (skipped rows produce no RETURNING output)
+
+#### Scenario: Error on partial composite key conflict target
+
+- GIVEN table "t" with PRIMARY KEY (a, b)
+- WHEN executing `INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO NOTHING`
+- THEN an error is returned indicating conflict target must include all columns of the constraint
+
+#### Scenario: Error when DO UPDATE SET modifies conflict target column
+
+- GIVEN table "t" with PRIMARY KEY (id)
+- WHEN executing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id`
+- THEN a binding error is returned indicating conflict target columns cannot be modified in DO UPDATE SET

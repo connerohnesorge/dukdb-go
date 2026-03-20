@@ -763,3 +763,219 @@ Params SHALL be name TypeName.
 #### Scenario: Multiple params
 - GIVEN (id UUID, name VARCHAR(50))
 - THEN Params list w/ types
+
+### Requirement: EXPORT DATABASE Statement Parsing
+
+The parser SHALL parse `EXPORT DATABASE 'path'` with optional parenthesized options including FORMAT specification.
+
+#### Scenario: EXPORT DATABASE with default format
+
+- WHEN parsing `EXPORT DATABASE '/tmp/mydb'`
+- THEN the parser produces an ExportDatabaseStmt with Path="/tmp/mydb" and empty Options
+
+#### Scenario: EXPORT DATABASE with FORMAT option
+
+- WHEN parsing `EXPORT DATABASE '/tmp/mydb' (FORMAT PARQUET)`
+- THEN the parser produces an ExportDatabaseStmt with Path="/tmp/mydb" and Options={"FORMAT": "PARQUET"}
+
+#### Scenario: EXPORT DATABASE with multiple options
+
+- WHEN parsing `EXPORT DATABASE '/tmp/mydb' (FORMAT CSV, DELIMITER '|', HEADER true)`
+- THEN the parser produces an ExportDatabaseStmt with Options containing FORMAT, DELIMITER, and HEADER
+
+### Requirement: IMPORT DATABASE Statement Parsing
+
+The parser SHALL parse `IMPORT DATABASE 'path'` to load a previously exported database.
+
+#### Scenario: IMPORT DATABASE basic
+
+- WHEN parsing `IMPORT DATABASE '/tmp/mydb'`
+- THEN the parser produces an ImportDatabaseStmt with Path="/tmp/mydb"
+
+### Requirement: PREPARE Statement Parsing
+
+The parser SHALL parse `PREPARE name AS statement` to create named prepared statements with parameter placeholders.
+
+#### Scenario: PREPARE a SELECT statement
+
+- WHEN parsing `PREPARE my_query AS SELECT * FROM users WHERE id = $1`
+- THEN the parser produces a PrepareStmt with Name="my_query"
+- AND Inner is a SelectStmt with a $1 parameter placeholder
+
+#### Scenario: PREPARE an INSERT statement
+
+- WHEN parsing `PREPARE my_insert AS INSERT INTO t (a, b) VALUES ($1, $2)`
+- THEN the parser produces a PrepareStmt with Name="my_insert"
+- AND Inner is an InsertStmt with $1 and $2 parameter placeholders
+
+#### Scenario: PREPARE a DELETE statement
+
+- WHEN parsing `PREPARE my_delete AS DELETE FROM t WHERE id = $1`
+- THEN the parser produces a PrepareStmt with Name="my_delete"
+- AND Inner is a DeleteStmt
+
+### Requirement: EXECUTE Statement Parsing
+
+The parser SHALL parse `EXECUTE name` and `EXECUTE name(params)` for executing named prepared statements.
+
+#### Scenario: EXECUTE without parameters
+
+- WHEN parsing `EXECUTE my_query`
+- THEN the parser produces an ExecuteStmt with Name="my_query" and empty Params
+
+#### Scenario: EXECUTE with parameters
+
+- WHEN parsing `EXECUTE my_query(42, 'hello')`
+- THEN the parser produces an ExecuteStmt with Name="my_query"
+- AND Params contains IntLiteral(42) and StringLiteral('hello')
+
+#### Scenario: EXECUTE with expressions as parameters
+
+- WHEN parsing `EXECUTE my_query(1 + 2, CURRENT_DATE)`
+- THEN the parser produces an ExecuteStmt with expression parameters
+- AND Params[0] is a BinaryExpr (1 + 2)
+
+### Requirement: DEALLOCATE Statement Parsing
+
+The parser SHALL parse `DEALLOCATE [PREPARE] name` and `DEALLOCATE ALL` for releasing prepared statements.
+
+#### Scenario: DEALLOCATE by name
+
+- WHEN parsing `DEALLOCATE my_query`
+- THEN the parser produces a DeallocateStmt with Name="my_query"
+
+#### Scenario: DEALLOCATE PREPARE by name
+
+- WHEN parsing `DEALLOCATE PREPARE my_query`
+- THEN the parser produces a DeallocateStmt with Name="my_query"
+
+#### Scenario: DEALLOCATE ALL
+
+- WHEN parsing `DEALLOCATE ALL`
+- THEN the parser produces a DeallocateStmt with Name="" (empty, meaning all)
+
+### Requirement: UNIQUE Constraint Parsing
+
+The parser SHALL parse UNIQUE constraints in CREATE TABLE at both column-level and table-level.
+
+#### Scenario: Column-level UNIQUE
+
+- WHEN parsing `CREATE TABLE t (id INTEGER, email VARCHAR UNIQUE)`
+- THEN the parsed statement includes a UNIQUE constraint on column "email"
+
+#### Scenario: Table-level UNIQUE on multiple columns
+
+- WHEN parsing `CREATE TABLE t (a INTEGER, b INTEGER, UNIQUE (a, b))`
+- THEN the parsed statement includes a UNIQUE constraint on columns ["a", "b"]
+
+#### Scenario: Named UNIQUE constraint
+
+- WHEN parsing `CREATE TABLE t (id INTEGER, CONSTRAINT uq_email UNIQUE (email))`
+- THEN the constraint has Name="uq_email"
+
+### Requirement: CHECK Constraint Parsing
+
+The parser SHALL parse CHECK constraints with arbitrary boolean expressions.
+
+#### Scenario: Column-level CHECK
+
+- WHEN parsing `CREATE TABLE t (age INTEGER CHECK (age >= 0))`
+- THEN the parsed statement includes a CHECK constraint with expression `age >= 0`
+
+#### Scenario: Table-level CHECK with multiple columns
+
+- WHEN parsing `CREATE TABLE t (start_date DATE, end_date DATE, CHECK (end_date > start_date))`
+- THEN the CHECK constraint references both columns
+
+### Requirement: FOREIGN KEY Constraint Parsing
+
+The parser SHALL parse FOREIGN KEY constraints with REFERENCES clause and optional ON DELETE/UPDATE actions.
+
+#### Scenario: Column-level REFERENCES
+
+- WHEN parsing `CREATE TABLE orders (id INTEGER, user_id INTEGER REFERENCES users(id))`
+- THEN the parsed statement includes a FK constraint referencing users(id)
+
+#### Scenario: Table-level FOREIGN KEY with RESTRICT
+
+- WHEN parsing `CREATE TABLE orders (user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT)`
+- THEN the FK constraint has OnDelete=RESTRICT
+
+#### Scenario: FOREIGN KEY rejects CASCADE action
+
+- WHEN parsing `CREATE TABLE t (ref_id INTEGER REFERENCES other(id) ON DELETE CASCADE)`
+- THEN a parse error is returned: "FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT"
+
+#### Scenario: FOREIGN KEY with NO ACTION (default)
+
+- WHEN parsing `CREATE TABLE t (ref_id INTEGER REFERENCES other(id))`
+- THEN OnDelete defaults to NO ACTION and OnUpdate defaults to NO ACTION
+
+### Requirement: UNION BY NAME Parsing
+
+The parser SHALL parse `UNION [ALL] BY NAME` as a set operation variant that matches columns by name.
+
+#### Scenario: UNION BY NAME
+
+- WHEN parsing `SELECT a, b FROM t1 UNION BY NAME SELECT b, c FROM t2`
+- THEN the parser produces a SelectStmt with SetOp=SetOpUnionByName
+
+#### Scenario: UNION ALL BY NAME
+
+- WHEN parsing `SELECT a FROM t1 UNION ALL BY NAME SELECT b FROM t2`
+- THEN the parser produces a SelectStmt with SetOp=SetOpUnionAllByName
+
+#### Scenario: Chained UNION BY NAME
+
+- WHEN parsing `SELECT a FROM t1 UNION BY NAME SELECT b FROM t2 UNION BY NAME SELECT c FROM t3`
+- THEN the parser produces a left-associative chain of SetOpUnionByName operations
+
+### Requirement: ON CONFLICT Clause Parsing
+
+The parser SHALL parse the `ON CONFLICT` clause in INSERT statements, supporting both `DO NOTHING` and `DO UPDATE SET` actions with optional conflict target columns and WHERE filters.
+
+#### Scenario: INSERT ... ON CONFLICT DO NOTHING without conflict columns
+
+- WHEN parsing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT DO NOTHING`
+- THEN the parser produces an InsertStmt with OnConflict.Action = OnConflictDoNothing
+- AND OnConflict.ConflictColumns is empty (infer from PK)
+
+#### Scenario: INSERT ... ON CONFLICT (columns) DO NOTHING
+
+- WHEN parsing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT (id) DO NOTHING`
+- THEN the parser produces an InsertStmt with OnConflict.ConflictColumns = ["id"]
+- AND OnConflict.Action = OnConflictDoNothing
+
+#### Scenario: INSERT ... ON CONFLICT DO UPDATE SET
+
+- WHEN parsing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+- THEN the parser produces an InsertStmt with OnConflict.Action = OnConflictDoUpdate
+- AND OnConflict.UpdateSet contains one SetClause mapping "name" to a column ref of "EXCLUDED"."name"
+
+#### Scenario: INSERT ... ON CONFLICT DO UPDATE SET with WHERE
+
+- WHEN parsing `INSERT INTO t (id, val) VALUES (1, 10) ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val WHERE EXCLUDED.val > t.val`
+- THEN the parser produces an InsertStmt with OnConflict.UpdateWhere containing the comparison expression
+- AND the WHERE filter references both EXCLUDED and the target table
+
+#### Scenario: INSERT ... ON CONFLICT with multiple conflict columns
+
+- WHEN parsing `INSERT INTO t (a, b, c) VALUES (1, 2, 3) ON CONFLICT (a, b) DO NOTHING`
+- THEN OnConflict.ConflictColumns = ["a", "b"]
+
+#### Scenario: INSERT ... SELECT ... ON CONFLICT
+
+- WHEN parsing `INSERT INTO t SELECT * FROM source ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`
+- THEN the parser produces an InsertStmt with both a Select and an OnConflict clause
+
+#### Scenario: ON CONFLICT with RETURNING
+
+- WHEN parsing `INSERT INTO t (id, name) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name RETURNING *`
+- THEN the parser produces an InsertStmt with both OnConflict and Returning populated
+- AND ON CONFLICT is parsed before RETURNING
+
+#### Scenario: ON CONFLICT conflict target WHERE (partial index)
+
+- WHEN parsing `INSERT INTO t VALUES (1, 'a') ON CONFLICT (id) WHERE id > 0 DO NOTHING`
+- THEN OnConflict.ConflictWhere contains the predicate `id > 0`
+- AND OnConflict.Action = OnConflictDoNothing
