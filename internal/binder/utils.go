@@ -97,6 +97,10 @@ var aggregateWindowFunctions = map[string]bool{
 	"REGR_SYY":       true,
 	"REGR_SXY":       true,
 
+	// JSON aggregates
+	"JSON_GROUP_ARRAY":  true,
+	"JSON_GROUP_OBJECT": true,
+
 	// Boolean aggregates
 	"BOOL_AND": true,
 	"BOOL_OR":  true,
@@ -547,11 +551,19 @@ func inferFunctionResultType(
 		return dukdb.TYPE_STRUCT
 	case "STRUCT_EXTRACT":
 		return dukdb.TYPE_ANY // depends on field type
+	case "STRUCT_KEYS":
+		return dukdb.TYPE_LIST
+	case "STRUCT_INSERT":
+		return dukdb.TYPE_STRUCT
 	case "MAP":
 		return dukdb.TYPE_MAP
-	case "MAP_KEYS", "MAP_VALUES":
+	case "MAP_KEYS", "MAP_VALUES", "MAP_ENTRIES":
 		return dukdb.TYPE_LIST
-	case "ELEMENT_AT":
+	case "MAP_CONTAINS_KEY":
+		return dukdb.TYPE_BOOLEAN
+	case "MAP_FROM_ENTRIES":
+		return dukdb.TYPE_MAP
+	case "ELEMENT_AT", "MAP_EXTRACT":
 		return dukdb.TYPE_ANY // depends on map value type
 
 	// Lambda list functions
@@ -560,6 +572,12 @@ func inferFunctionResultType(
 		return dukdb.TYPE_LIST
 	case "LIST_SORT", "ARRAY_SORT":
 		return dukdb.TYPE_LIST
+	case "LIST_REVERSE_SORT", "ARRAY_REVERSE_SORT":
+		return dukdb.TYPE_LIST
+	case "LIST_ELEMENT", "ARRAY_EXTRACT":
+		return dukdb.TYPE_ANY
+	case "LIST_AGGREGATE", "ARRAY_AGGREGATE":
+		return dukdb.TYPE_ANY
 
 	// Time Series Aggregates
 	case "COUNT_IF":
@@ -707,6 +725,45 @@ func inferFunctionResultType(
 	// Set operations (Phase 5)
 	case "ST_UNION", "ST_INTERSECTION", "ST_DIFFERENCE", "ST_BUFFER", "ST_MAKEPOLYGON":
 		return dukdb.TYPE_GEOMETRY
+
+	// Encoding/decoding functions
+	case "BASE64_ENCODE", "BASE64", "TO_BASE64",
+		"URL_ENCODE", "URL_DECODE":
+		return dukdb.TYPE_VARCHAR
+	case "BASE64_DECODE", "FROM_BASE64":
+		return dukdb.TYPE_BLOB
+
+	case "IF", "IFF":
+		// Return type is type of the true/false branch
+		if len(args) > 1 {
+			return args[1].ResultType()
+		}
+		return dukdb.TYPE_ANY
+
+	case "TYPEOF", "PG_TYPEOF":
+		return dukdb.TYPE_VARCHAR
+
+	// String formatting functions
+	case "FORMAT", "PRINTF":
+		return dukdb.TYPE_VARCHAR
+
+	// JSON functions
+	case "JSON_CONTAINS":
+		return dukdb.TYPE_BOOLEAN
+	case "JSON_QUOTE":
+		return dukdb.TYPE_VARCHAR
+
+	// JSON aggregate functions
+	case "JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT":
+		return dukdb.TYPE_VARCHAR
+
+	// List/Array functions
+	case "ARRAY_TO_STRING", "LIST_TO_STRING":
+		return dukdb.TYPE_VARCHAR
+	case "LIST_ZIP":
+		return dukdb.TYPE_LIST
+	case "LIST_RESIZE", "ARRAY_RESIZE":
+		return dukdb.TYPE_LIST
 
 	default:
 		return dukdb.TYPE_ANY

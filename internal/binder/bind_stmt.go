@@ -92,6 +92,16 @@ func (b *Binder) bindSelect(
 					return nil, err
 				}
 				for _, c := range boundStar.Columns {
+					// Check if this column has a replacement
+					if boundStar.Replacements != nil {
+						if replExpr, ok := boundStar.Replacements[strings.ToUpper(c.Column)]; ok {
+							bound.Columns = append(bound.Columns, &BoundSelectColumn{
+								Expr:  replExpr,
+								Alias: c.Column,
+							})
+							continue
+						}
+					}
 					bound.Columns = append(
 						bound.Columns,
 						&BoundSelectColumn{
@@ -110,6 +120,21 @@ func (b *Binder) bindSelect(
 			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
 			if err != nil {
 				return nil, err
+			}
+			// Handle COLUMNS() which returns BoundStarExpr
+			if starResult, ok := expr.(*BoundStarExpr); ok {
+				for _, c := range starResult.Columns {
+					bound.Columns = append(bound.Columns, &BoundSelectColumn{
+						Expr: &BoundColumnRef{
+							Table:     c.Table,
+							Column:    c.Column,
+							ColumnIdx: c.ColumnIdx,
+							ColType:   c.Type,
+						},
+						Alias: c.Column,
+					})
+				}
+				continue
 			}
 			alias := col.Alias
 			if alias == "" {
@@ -222,6 +247,14 @@ func (b *Binder) bindSelect(
 		bound.Offset = offset
 	}
 
+	// Bind WITH TIES
+	if s.FetchWithTies {
+		if len(s.OrderBy) == 0 {
+			return nil, fmt.Errorf("WITH TIES requires ORDER BY")
+		}
+		bound.WithTies = true
+	}
+
 	// Bind SAMPLE clause
 	if s.Sample != nil {
 		bound.Sample = &BoundSampleOptions{
@@ -292,6 +325,11 @@ func (b *Binder) bindTableRef(
 	// Check for UNPIVOT table reference
 	if ref.UnpivotRef != nil {
 		return b.bindUnpivotTableRef(ref)
+	}
+
+	// Check for VALUES table reference
+	if ref.ValuesRef != nil {
+		return b.bindValuesRef(ref)
 	}
 
 	if ref.Subquery != nil {
@@ -456,6 +494,84 @@ func (b *Binder) bindTableRef(
 	return boundRef, nil
 }
 
+// bindValuesRef binds a VALUES clause table reference.
+// It evaluates each row's expressions and generates column names.
+func (b *Binder) bindValuesRef(ref parser.TableRef) (*BoundTableRef, error) {
+	vc := ref.ValuesRef
+	alias := ref.Alias
+	if alias == "" {
+		alias = "valueslist"
+	}
+
+	if len(vc.Rows) == 0 {
+		return nil, b.errorf("VALUES clause must have at least one row")
+	}
+
+	numCols := len(vc.Rows[0])
+
+	// Bind all expressions in all rows
+	var boundRows [][]BoundExpr
+	for _, row := range vc.Rows {
+		var boundRow []BoundExpr
+		for _, expr := range row {
+			bound, err := b.bindExpr(expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			boundRow = append(boundRow, bound)
+		}
+		boundRows = append(boundRows, boundRow)
+	}
+
+	// Determine column types from the first non-NULL value in each column
+	colTypes := make([]dukdb.Type, numCols)
+	for colIdx := 0; colIdx < numCols; colIdx++ {
+		colTypes[colIdx] = dukdb.TYPE_ANY
+		for _, row := range boundRows {
+			rt := row[colIdx].ResultType()
+			if rt != dukdb.TYPE_ANY && rt != dukdb.TYPE_INVALID {
+				colTypes[colIdx] = rt
+				break
+			}
+		}
+		// Default to VARCHAR if all NULLs
+		if colTypes[colIdx] == dukdb.TYPE_ANY {
+			colTypes[colIdx] = dukdb.TYPE_VARCHAR
+		}
+	}
+
+	// Generate column names
+	colNames := make([]string, numCols)
+	for i := 0; i < numCols; i++ {
+		if i < len(vc.ColumnAliases) {
+			colNames[i] = vc.ColumnAliases[i]
+		} else {
+			colNames[i] = fmt.Sprintf("column%d", i+1)
+		}
+	}
+
+	boundRef := &BoundTableRef{
+		Alias:      alias,
+		ValuesRows: boundRows,
+	}
+
+	// Create columns
+	for i := 0; i < numCols; i++ {
+		boundRef.Columns = append(boundRef.Columns, &BoundColumn{
+			Table:      alias,
+			Column:     colNames[i],
+			ColumnIdx:  i,
+			Type:       colTypes[i],
+			SourceType: "values",
+		})
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = alias
+
+	return boundRef, nil
+}
+
 // bindTableFunction binds a table function call (e.g., read_csv, read_json).
 func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) {
 	tableFunc := ref.TableFunction
@@ -486,6 +602,11 @@ func (b *Binder) bindTableFunction(ref parser.TableRef) (*BoundTableRef, error) 
 	// Check for FTS search table function
 	if funcNameLower == "fts_search" || funcNameLower == "match_bm25" {
 		return b.bindFTSSearchFunction(ref, funcNameLower)
+	}
+
+	// Check for json_each table function
+	if funcNameLower == "json_each" {
+		return b.bindJSONEachFunction(ref)
 	}
 
 	// Check for table macro expansion
@@ -888,6 +1009,69 @@ func (b *Binder) bindUnnestTableFunction(ref parser.TableRef) (*BoundTableRef, e
 
 	b.scope.tables[alias] = boundRef
 	b.scope.aliases[alias] = "unnest"
+
+	return boundRef, nil
+}
+
+// bindJSONEachFunction binds a json_each table function call.
+// json_each(json_string) expands a JSON object or array into rows with key and value columns.
+func (b *Binder) bindJSONEachFunction(ref parser.TableRef) (*BoundTableRef, error) {
+	tableFunc := ref.TableFunction
+	alias := ref.Alias
+	if alias == "" {
+		alias = "json_each"
+	}
+
+	if len(tableFunc.Args) == 0 {
+		return nil, b.errorf("json_each requires 1 argument")
+	}
+
+	// Bind the JSON argument
+	boundArg, err := b.bindExpr(tableFunc.Args[0], dukdb.TYPE_VARCHAR)
+	if err != nil {
+		return nil, b.errorf("json_each: failed to bind argument: %v", err)
+	}
+
+	// Build options map with the bound expression
+	options := make(map[string]any)
+	options["json_expr"] = boundArg
+
+	// Create column definitions for the output: key and value, both VARCHAR
+	columns := []*catalog.ColumnDef{
+		catalog.NewColumnDef("key", dukdb.TYPE_VARCHAR),
+		catalog.NewColumnDef("value", dukdb.TYPE_VARCHAR),
+	}
+
+	// Create bound table function reference
+	boundFunc := &BoundTableFunctionRef{
+		Name:    "json_each",
+		Path:    "",
+		Options: options,
+		Columns: columns,
+	}
+
+	boundRef := &BoundTableRef{
+		TableName:     "json_each",
+		Alias:         alias,
+		TableFunction: boundFunc,
+	}
+
+	// Create bound columns for the table function
+	for i, col := range columns {
+		boundRef.Columns = append(
+			boundRef.Columns,
+			&BoundColumn{
+				Table:      alias,
+				Column:     col.Name,
+				ColumnIdx:  i,
+				Type:       col.Type,
+				SourceType: "table_function",
+			},
+		)
+	}
+
+	b.scope.tables[alias] = boundRef
+	b.scope.aliases[alias] = "json_each"
 
 	return boundRef, nil
 }
@@ -2970,6 +3154,33 @@ func (b *Binder) bindCreateTable(
 				Name:       tc.Name,
 				Expression: exprStr,
 			})
+		case "FOREIGN_KEY":
+			// Convert parser FK action to catalog FK action
+			var onDelete, onUpdate catalog.ForeignKeyAction
+			switch tc.OnDelete {
+			case parser.FKActionRestrict:
+				onDelete = catalog.FKActionRestrict
+			case parser.FKActionNoAction:
+				onDelete = catalog.FKActionNoAction
+			default:
+				onDelete = catalog.FKActionNoAction
+			}
+			switch tc.OnUpdate {
+			case parser.FKActionRestrict:
+				onUpdate = catalog.FKActionRestrict
+			case parser.FKActionNoAction:
+				onUpdate = catalog.FKActionNoAction
+			default:
+				onUpdate = catalog.FKActionNoAction
+			}
+			bound.Constraints = append(bound.Constraints, &catalog.ForeignKeyConstraintDef{
+				Name:       tc.Name,
+				Columns:    tc.Columns,
+				RefTable:   tc.RefTable,
+				RefColumns: tc.RefColumns,
+				OnDelete:   onDelete,
+				OnUpdate:   onUpdate,
+			})
 		}
 	}
 
@@ -2988,6 +3199,26 @@ func (b *Binder) bindDropTable(
 		Schema:   schema,
 		Table:    s.Table,
 		IfExists: s.IfExists,
+	}, nil
+}
+
+func (b *Binder) bindTruncate(
+	s *parser.TruncateStmt,
+) (*BoundTruncateStmt, error) {
+	schema := s.Schema
+	if schema == "" {
+		schema = "main"
+	}
+
+	// Verify the table exists
+	_, exists := b.catalog.GetTableInSchema(schema, s.Table)
+	if !exists {
+		return nil, fmt.Errorf("table %q not found", s.Table)
+	}
+
+	return &BoundTruncateStmt{
+		Schema: schema,
+		Table:  s.Table,
 	}, nil
 }
 
@@ -3282,6 +3513,16 @@ func (b *Binder) bindReturningClause(
 					return nil, err
 				}
 				for _, c := range boundStar.Columns {
+					// Check if this column has a replacement
+					if boundStar.Replacements != nil {
+						if replExpr, ok := boundStar.Replacements[strings.ToUpper(c.Column)]; ok {
+							result = append(result, &BoundSelectColumn{
+								Expr:  replExpr,
+								Alias: c.Column,
+							})
+							continue
+						}
+					}
 					result = append(result, &BoundSelectColumn{
 						Expr: &BoundColumnRef{
 							Table:     c.Table,
@@ -3297,6 +3538,21 @@ func (b *Binder) bindReturningClause(
 			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
 			if err != nil {
 				return nil, err
+			}
+			// Handle COLUMNS() which returns BoundStarExpr
+			if starResult, ok := expr.(*BoundStarExpr); ok {
+				for _, c := range starResult.Columns {
+					result = append(result, &BoundSelectColumn{
+						Expr: &BoundColumnRef{
+							Table:     c.Table,
+							Column:    c.Column,
+							ColumnIdx: c.ColumnIdx,
+							ColType:   c.Type,
+						},
+						Alias: c.Column,
+					})
+				}
+				continue
 			}
 			alias := col.Alias
 			if alias == "" {
@@ -3750,6 +4006,16 @@ func (b *Binder) bindLateralSubquery(
 					return nil, err
 				}
 				for _, c := range boundStar.Columns {
+					// Check if this column has a replacement
+					if boundStar.Replacements != nil {
+						if replExpr, ok := boundStar.Replacements[strings.ToUpper(c.Column)]; ok {
+							bound.Columns = append(bound.Columns, &BoundSelectColumn{
+								Expr:  replExpr,
+								Alias: c.Column,
+							})
+							continue
+						}
+					}
 					bound.Columns = append(
 						bound.Columns,
 						&BoundSelectColumn{
@@ -3768,6 +4034,21 @@ func (b *Binder) bindLateralSubquery(
 			expr, err := b.bindExpr(col.Expr, dukdb.TYPE_ANY)
 			if err != nil {
 				return nil, err
+			}
+			// Handle COLUMNS() which returns BoundStarExpr
+			if starResult, ok := expr.(*BoundStarExpr); ok {
+				for _, c := range starResult.Columns {
+					bound.Columns = append(bound.Columns, &BoundSelectColumn{
+						Expr: &BoundColumnRef{
+							Table:     c.Table,
+							Column:    c.Column,
+							ColumnIdx: c.ColumnIdx,
+							ColType:   c.Type,
+						},
+						Alias: c.Column,
+					})
+				}
+				continue
 			}
 			alias := col.Alias
 			if alias == "" {
@@ -3878,6 +4159,14 @@ func (b *Binder) bindLateralSubquery(
 			return nil, err
 		}
 		bound.Offset = offset
+	}
+
+	// Bind WITH TIES
+	if s.FetchWithTies {
+		if len(s.OrderBy) == 0 {
+			return nil, fmt.Errorf("WITH TIES requires ORDER BY")
+		}
+		bound.WithTies = true
 	}
 
 	// Bind SAMPLE clause

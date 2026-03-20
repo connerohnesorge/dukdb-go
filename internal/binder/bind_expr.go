@@ -2,6 +2,7 @@ package binder
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
@@ -63,6 +64,8 @@ func (b *Binder) bindExpr(
 		return b.bindExistsExpr(e)
 	case *parser.StarExpr:
 		return b.bindStarExpr(e)
+	case *parser.ColumnsExpr:
+		return b.bindColumnsExpr(e)
 	case *parser.SelectStmt:
 		return b.bindSelect(e)
 	case *parser.ExtractExpr:
@@ -660,6 +663,90 @@ func (b *Binder) bindStarExpr(
 		for _, tableRef := range b.scope.tables {
 			bound.Columns = append(bound.Columns, tableRef.Columns...)
 		}
+	}
+
+	// Apply EXCLUDE filter
+	if len(e.Exclude) > 0 {
+		// Validate all excluded columns exist
+		for _, excl := range e.Exclude {
+			found := false
+			for _, col := range bound.Columns {
+				if strings.EqualFold(col.Column, excl) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, b.errorf("EXCLUDE column %q not found", excl)
+			}
+		}
+		// Filter out excluded columns
+		var filtered []*BoundColumn
+		for _, col := range bound.Columns {
+			excluded := false
+			for _, excl := range e.Exclude {
+				if strings.EqualFold(col.Column, excl) {
+					excluded = true
+					break
+				}
+			}
+			if !excluded {
+				filtered = append(filtered, col)
+			}
+		}
+		bound.Columns = filtered
+	}
+
+	// Bind REPLACE expressions
+	if len(e.Replace) > 0 {
+		bound.Replacements = make(map[string]BoundExpr)
+		for _, repl := range e.Replace {
+			// Validate column exists
+			found := false
+			for _, col := range bound.Columns {
+				if strings.EqualFold(col.Column, repl.Column) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, b.errorf("REPLACE column %q not found", repl.Column)
+			}
+			boundExpr, err := b.bindExpr(repl.Expr, dukdb.TYPE_ANY)
+			if err != nil {
+				return nil, err
+			}
+			bound.Replacements[strings.ToUpper(repl.Column)] = boundExpr
+		}
+	}
+
+	return bound, nil
+}
+
+// bindColumnsExpr binds a COLUMNS(pattern) expression.
+// It matches column names in scope against the given regex pattern
+// and returns a BoundStarExpr containing the matched columns.
+func (b *Binder) bindColumnsExpr(
+	e *parser.ColumnsExpr,
+) (*BoundStarExpr, error) {
+	re, err := regexp.Compile(e.Pattern)
+	if err != nil {
+		return nil, b.errorf("COLUMNS: invalid regex pattern %q: %v", e.Pattern, err)
+	}
+
+	bound := &BoundStarExpr{}
+
+	// Match against all columns in scope
+	for _, tableRef := range b.scope.tables {
+		for _, col := range tableRef.Columns {
+			if re.MatchString(col.Column) {
+				bound.Columns = append(bound.Columns, col)
+			}
+		}
+	}
+
+	if len(bound.Columns) == 0 {
+		return nil, b.errorf("COLUMNS('%s') matched no columns", e.Pattern)
 	}
 
 	return bound, nil

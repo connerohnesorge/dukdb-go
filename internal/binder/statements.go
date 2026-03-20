@@ -23,6 +23,7 @@ type BoundSelectStmt struct {
 	OrderBy         []*BoundOrderBy
 	Limit           BoundExpr
 	Offset          BoundExpr
+	WithTies        bool // true when FETCH ... WITH TIES was used
 	Sample          *BoundSampleOptions // SAMPLE clause options
 	RecursionOption *parser.RecursionOption
 	SetOp           parser.SetOpType // Type of set operation (UNION, INTERSECT, EXCEPT)
@@ -153,6 +154,16 @@ type BoundDropTableStmt struct {
 func (*BoundDropTableStmt) boundStmtNode() {}
 
 func (*BoundDropTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// BoundTruncateStmt represents a bound TRUNCATE TABLE statement.
+type BoundTruncateStmt struct {
+	Schema string
+	Table  string
+}
+
+func (*BoundTruncateStmt) boundStmtNode() {}
+
+func (*BoundTruncateStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DELETE }
 
 // BoundBeginStmt represents a bound BEGIN statement.
 type BoundBeginStmt struct{}

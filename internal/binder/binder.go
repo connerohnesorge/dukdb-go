@@ -68,6 +68,7 @@ type BoundTableRef struct {
 	Subquery      *BoundSelectStmt         // Set for subqueries in FROM clause (including LATERAL)
 	PivotStmt     *BoundPivotStmt          // Set for PIVOT table references
 	UnpivotStmt   *BoundUnpivotStmt        // Set for UNPIVOT table references
+	ValuesRows    [][]BoundExpr            // Set for VALUES clause (bound expressions per row)
 	Columns       []*BoundColumn
 	Lateral       bool // LATERAL flag (subquery can reference outer scope)
 	IsCTESelfRef  bool // True if this is a self-reference within a recursive CTE's recursive part
@@ -190,6 +191,8 @@ func (b *Binder) Bind(
 		return b.bindCreateTable(s)
 	case *parser.DropTableStmt:
 		return b.bindDropTable(s)
+	case *parser.TruncateStmt:
+		return b.bindTruncate(s)
 	case *parser.CreateViewStmt:
 		return b.bindCreateView(s)
 	case *parser.DropViewStmt:

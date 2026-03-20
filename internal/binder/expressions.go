@@ -186,8 +186,9 @@ func (*BoundExistsExpr) ResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
 
 // BoundStarExpr represents a bound * expression.
 type BoundStarExpr struct {
-	Table   string
-	Columns []*BoundColumn
+	Table        string
+	Columns      []*BoundColumn
+	Replacements map[string]BoundExpr // Column name (uppercased) → replacement expression
 }
 
 func (*BoundStarExpr) boundExprNode() {}
