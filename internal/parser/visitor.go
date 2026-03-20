@@ -11,6 +11,7 @@ type Visitor interface {
 	VisitDeleteStmt(stmt *DeleteStmt)
 	VisitCreateTableStmt(stmt *CreateTableStmt)
 	VisitDropTableStmt(stmt *DropTableStmt)
+	VisitTruncateStmt(stmt *TruncateStmt)
 	VisitBeginStmt(stmt *BeginStmt)
 	VisitCommitStmt(stmt *CommitStmt)
 	VisitRollbackStmt(stmt *RollbackStmt)

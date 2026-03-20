@@ -195,6 +195,15 @@ func (te *TableExtractor) VisitDropTableStmt(stmt *DropTableStmt) {
 	te.tables[ref] = struct{}{}
 }
 
+// VisitTruncateStmt extracts table references from TRUNCATE statements.
+func (te *TableExtractor) VisitTruncateStmt(stmt *TruncateStmt) {
+	ref := EnhancedTableRef{
+		Schema: stmt.Schema,
+		Table:  stmt.Table,
+	}
+	te.tables[ref] = struct{}{}
+}
+
 // VisitBeginStmt is a no-op for BEGIN statements (no table references).
 func (te *TableExtractor) VisitBeginStmt(stmt *BeginStmt) {
 	// No table references in BEGIN statements

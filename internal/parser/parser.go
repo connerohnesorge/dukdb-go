@@ -59,6 +59,8 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseCreate()
 	case p.isKeyword("DROP"):
 		stmt, err = p.parseDrop()
+	case p.isKeyword("TRUNCATE"):
+		stmt, err = p.parseTruncate()
 	case p.isKeyword("ALTER"):
 		p.advance()
 		stmt, err = p.parseAlter()
@@ -111,6 +113,8 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseDetach()
 	case p.isKeyword("USE"):
 		stmt, err = p.parseUse()
+	case p.isKeyword("VALUES"):
+		stmt, err = p.parseStandaloneValues()
 	default:
 		tok := p.current()
 		suggestion := suggestKeyword(tok.value)
@@ -420,6 +424,7 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 	}
 
 	// OFFSET without LIMIT (PostgreSQL allows standalone OFFSET)
+	// Also supports SQL standard: OFFSET N {ROW|ROWS}
 	// Only parse if OFFSET wasn't already parsed as part of LIMIT clause
 	if stmt.Offset == nil && p.isKeyword("OFFSET") {
 		p.advance()
@@ -428,6 +433,56 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			return nil, err
 		}
 		stmt.Offset = offset
+		// Consume optional ROW or ROWS keyword (SQL standard syntax)
+		if p.isKeyword("ROW") || p.isKeyword("ROWS") {
+			p.advance()
+		}
+	}
+
+	// FETCH {FIRST|NEXT} [N] {ROW|ROWS} {ONLY|WITH TIES}
+	// SQL standard alternative to LIMIT
+	if p.isKeyword("FETCH") {
+		if stmt.Limit != nil {
+			return nil, p.errorf("cannot use both LIMIT and FETCH FIRST")
+		}
+		p.advance() // consume FETCH
+		if !p.isKeyword("FIRST") && !p.isKeyword("NEXT") {
+			return nil, p.errorf("expected FIRST or NEXT after FETCH")
+		}
+		p.advance() // consume FIRST or NEXT
+
+		// Parse optional count expression; default to 1 if ROW/ROWS follows directly
+		if p.isKeyword("ROW") || p.isKeyword("ROWS") {
+			// No count specified, default to 1
+			stmt.Limit = &Literal{Value: int64(1), Type: dukdb.TYPE_BIGINT}
+		} else {
+			limit, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Limit = limit
+		}
+
+		// Expect ROW or ROWS
+		if !p.isKeyword("ROW") && !p.isKeyword("ROWS") {
+			return nil, p.errorf("expected ROW or ROWS in FETCH clause")
+		}
+		p.advance() // consume ROW/ROWS
+
+		// Expect ONLY or WITH TIES
+		if p.isKeyword("ONLY") {
+			p.advance()
+			stmt.FetchWithTies = false
+		} else if p.isKeyword("WITH") {
+			p.advance() // consume WITH
+			if !p.isKeyword("TIES") {
+				return nil, p.errorf("expected TIES after WITH in FETCH clause")
+			}
+			p.advance() // consume TIES
+			stmt.FetchWithTies = true
+		} else {
+			return nil, p.errorf("expected ONLY or WITH TIES in FETCH clause")
+		}
 	}
 
 	// Check for set operations (UNION, INTERSECT, EXCEPT)
@@ -518,17 +573,75 @@ func (p *parser) parseRecursionOption() (*RecursionOption, error) {
 	return &RecursionOption{MaxRecursion: maxRecursion}, nil
 }
 
+// parseStarModifiers parses optional EXCLUDE and REPLACE modifiers after a star (*) expression.
+func (p *parser) parseStarModifiers(star *StarExpr) error {
+	if p.isKeyword("EXCLUDE") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return err
+		}
+		for {
+			if p.current().typ != tokenIdent {
+				return p.errorf("expected column name in EXCLUDE")
+			}
+			star.Exclude = append(star.Exclude, p.advance().value)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return err
+		}
+	}
+	if p.isKeyword("REPLACE") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return err
+		}
+		for {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return err
+			}
+			if err := p.expectKeyword("AS"); err != nil {
+				return p.errorf("expected AS in REPLACE clause")
+			}
+			if p.current().typ != tokenIdent {
+				return p.errorf("expected column name after AS in REPLACE")
+			}
+			colName := p.advance().value
+			star.Replace = append(star.Replace, ReplaceColumn{
+				Expr:   expr,
+				Column: colName,
+			})
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 	var cols []SelectColumn
 
 	for {
 		if p.current().typ == tokenStar {
 			p.advance()
+			starExpr := &StarExpr{}
+			if err := p.parseStarModifiers(starExpr); err != nil {
+				return nil, err
+			}
 			cols = append(
 				cols,
 				SelectColumn{
 					Star: true,
-					Expr: &StarExpr{},
+					Expr: starExpr,
 				},
 			)
 
@@ -537,7 +650,9 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 			if p.current().typ == tokenIdent && !p.isKeyword("FROM") &&
 				!p.isKeyword("WHERE") && !p.isKeyword("GROUP") &&
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
-				!p.isKeyword("OFFSET") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+				!p.isKeyword("OFFSET") && !p.isKeyword("FETCH") &&
+				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+				!p.isKeyword("EXCLUDE") && !p.isKeyword("REPLACE") &&
 				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 				tok := p.current()
 				if isProbableKeywordTypo(tok.value) {
@@ -567,6 +682,7 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 				!p.isKeyword("WHERE") && !p.isKeyword("GROUP") &&
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 				!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
+				!p.isKeyword("FETCH") && // FETCH FIRST/NEXT (SQL standard alternative to LIMIT)
 				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("INNER") &&
 				!p.isKeyword("LEFT") && !p.isKeyword("RIGHT") &&
 				!p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
@@ -651,16 +767,39 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		ref.Lateral = true
 	}
 
-	if p.current().typ == tokenLParen {
-		// Subquery
-		p.advance()
-		subquery, err := p.parseSelect()
+	if p.isKeyword("VALUES") {
+		// VALUES clause in FROM: parse into ValuesRef
+		vc, err := p.parseValuesClauseBody()
 		if err != nil {
 			return ref, err
 		}
-		ref.Subquery = subquery
-		if _, err := p.expect(tokenRParen); err != nil {
-			return ref, err
+		ref.ValuesRef = vc
+	} else if p.current().typ == tokenLParen {
+		// Check if this is (VALUES ...) - parenthesized VALUES
+		saved := p.tokPos
+		p.advance() // consume '('
+		if p.isKeyword("VALUES") {
+			// Parse VALUES into ValuesRef
+			vc, err := p.parseValuesClauseBody()
+			if err != nil {
+				return ref, err
+			}
+			ref.ValuesRef = vc
+			if _, err := p.expect(tokenRParen); err != nil {
+				return ref, err
+			}
+		} else {
+			// Regular subquery - restore position and re-parse
+			p.tokPos = saved
+			p.advance() // consume '(' again
+			subquery, err := p.parseSelect()
+			if err != nil {
+				return ref, err
+			}
+			ref.Subquery = subquery
+			if _, err := p.expect(tokenRParen); err != nil {
+				return ref, err
+			}
 		}
 	} else if p.current().typ == tokenIdent {
 		name := p.advance().value
@@ -708,6 +847,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 			!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
+			!p.isKeyword("FETCH") && // FETCH FIRST/NEXT (SQL standard alternative to LIMIT)
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
@@ -747,6 +887,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 			!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 			!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
+			!p.isKeyword("FETCH") && // FETCH FIRST/NEXT (SQL standard alternative to LIMIT)
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
@@ -794,6 +935,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 	} else if p.current().typ == tokenIdent && !p.isKeyword("WHERE") &&
 		!p.isKeyword("GROUP") && !p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 		!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
+		!p.isKeyword("FETCH") && // FETCH FIRST/NEXT (SQL standard alternative to LIMIT)
 		!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 		!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
@@ -1439,6 +1581,88 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 	return stmt, nil
 }
 
+// parseValuesRows parses the rows portion of a VALUES clause: (expr, ...), (expr, ...), ...
+// Returns the parsed rows. Validates that all rows have the same number of columns.
+func (p *parser) parseValuesRows() ([][]Expr, error) {
+	var rows [][]Expr
+	for {
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		values, err := p.parseExprList()
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, values)
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	// Validate all rows have same column count
+	if len(rows) > 1 {
+		expected := len(rows[0])
+		for i := 1; i < len(rows); i++ {
+			if len(rows[i]) != expected {
+				return nil, p.errorf("VALUES rows have different numbers of columns: row 1 has %d, row %d has %d",
+					expected, i+1, len(rows[i]))
+			}
+		}
+	}
+
+	return rows, nil
+}
+
+// parseValuesClauseBody parses VALUES keyword and rows, returning a ValuesClause.
+// Expects the VALUES keyword to be the current token.
+func (p *parser) parseValuesClauseBody() (*ValuesClause, error) {
+	if err := p.expectKeyword("VALUES"); err != nil {
+		return nil, err
+	}
+
+	rows, err := p.parseValuesRows()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ValuesClause{
+		Rows: rows,
+	}, nil
+}
+
+// parseStandaloneValues parses a standalone VALUES statement.
+// VALUES (1, 'a'), (2, 'b') is treated as SELECT * FROM (VALUES ...) AS valueslist
+func (p *parser) parseStandaloneValues() (*SelectStmt, error) {
+	vc, err := p.parseValuesClauseBody()
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap as: SELECT * FROM (VALUES ...) AS valueslist
+	outerSelect := &SelectStmt{
+		Columns: []SelectColumn{
+			{
+				Expr: &StarExpr{},
+				Star: true,
+			},
+		},
+		From: &FromClause{
+			Tables: []TableRef{
+				{
+					ValuesRef: vc,
+					Alias:     "valueslist",
+				},
+			},
+		},
+	}
+
+	return outerSelect, nil
+}
+
 // parseOnConflict parses an ON CONFLICT clause for INSERT statements.
 func (p *parser) parseOnConflict() (*OnConflictClause, error) {
 	p.advance() // consume ON
@@ -1885,7 +2109,7 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 			if _, err := p.expect(tokenRParen); err != nil {
 				return nil, err
 			}
-		} else if p.isKeyword("UNIQUE") || p.isKeyword("CHECK") || p.isKeyword("CONSTRAINT") {
+		} else if p.isKeyword("UNIQUE") || p.isKeyword("CHECK") || p.isKeyword("CONSTRAINT") || p.isKeyword("FOREIGN") {
 			tc, err := p.parseTableConstraint()
 			if err != nil {
 				return nil, err
@@ -1921,6 +2145,20 @@ func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
 			stmt.Constraints = append(stmt.Constraints, TableConstraint{
 				Type:       "CHECK",
 				Expression: col.Check,
+			})
+		}
+		if col.ForeignKey != nil {
+			refCols := col.ForeignKey.Columns
+			if len(refCols) == 0 {
+				refCols = []string{col.Name}
+			}
+			stmt.Constraints = append(stmt.Constraints, TableConstraint{
+				Type:       "FOREIGN_KEY",
+				Columns:    []string{col.Name},
+				RefTable:   col.ForeignKey.Table,
+				RefColumns: refCols,
+				OnDelete:   col.ForeignKey.OnDelete,
+				OnUpdate:   col.ForeignKey.OnUpdate,
 			})
 		}
 	}
@@ -1979,7 +2217,128 @@ func (p *parser) parseTableConstraint() (TableConstraint, error) {
 		return tc, nil
 	}
 
-	return tc, p.errorf("expected UNIQUE or CHECK constraint")
+	if p.isKeyword("FOREIGN") {
+		p.advance()
+		if err := p.expectKeyword("KEY"); err != nil {
+			return tc, err
+		}
+		tc.Type = "FOREIGN_KEY"
+		// Parse child columns
+		if _, err := p.expect(tokenLParen); err != nil {
+			return tc, err
+		}
+		for {
+			if p.current().typ != tokenIdent {
+				return tc, p.errorf("expected column name in FOREIGN KEY")
+			}
+			tc.Columns = append(tc.Columns, p.advance().value)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return tc, err
+		}
+		// Parse REFERENCES
+		ref, err := p.parseForeignKeyRef()
+		if err != nil {
+			return tc, err
+		}
+		tc.RefTable = ref.Table
+		tc.RefColumns = ref.Columns
+		tc.OnDelete = ref.OnDelete
+		tc.OnUpdate = ref.OnUpdate
+		return tc, nil
+	}
+
+	return tc, p.errorf("expected UNIQUE, CHECK, or FOREIGN KEY constraint")
+}
+
+// parseForeignKeyRef parses REFERENCES table(col1, col2) [ON DELETE action] [ON UPDATE action]
+func (p *parser) parseForeignKeyRef() (*ForeignKeyRef, error) {
+	if err := p.expectKeyword("REFERENCES"); err != nil {
+		return nil, err
+	}
+
+	ref := &ForeignKeyRef{}
+
+	// Table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name after REFERENCES")
+	}
+	ref.Table = p.advance().value
+
+	// Column list
+	if p.current().typ == tokenLParen {
+		p.advance()
+		for {
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected column name in REFERENCES")
+			}
+			ref.Columns = append(ref.Columns, p.advance().value)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// Optional ON DELETE/ON UPDATE actions
+	for p.isKeyword("ON") {
+		p.advance()
+		if p.isKeyword("DELETE") {
+			p.advance()
+			action, err := p.parseFKAction()
+			if err != nil {
+				return nil, err
+			}
+			ref.OnDelete = action
+		} else if p.isKeyword("UPDATE") {
+			p.advance()
+			action, err := p.parseFKAction()
+			if err != nil {
+				return nil, err
+			}
+			ref.OnUpdate = action
+		} else {
+			return nil, p.errorf("expected DELETE or UPDATE after ON")
+		}
+	}
+
+	return ref, nil
+}
+
+// parseFKAction parses NO ACTION, RESTRICT (supported) or rejects CASCADE, SET NULL, SET DEFAULT.
+func (p *parser) parseFKAction() (ForeignKeyAction, error) {
+	if p.isKeyword("NO") {
+		p.advance()
+		if err := p.expectKeyword("ACTION"); err != nil {
+			return FKActionNoAction, err
+		}
+		return FKActionNoAction, nil
+	}
+	if p.isKeyword("RESTRICT") {
+		p.advance()
+		return FKActionRestrict, nil
+	}
+	if p.isKeyword("CASCADE") {
+		return FKActionNoAction, p.errorf("CASCADE action is not supported for foreign keys")
+	}
+	if p.isKeyword("SET") {
+		p.advance()
+		if p.isKeyword("NULL") {
+			return FKActionNoAction, p.errorf("SET NULL action is not supported for foreign keys")
+		}
+		if p.isKeyword("DEFAULT") {
+			return FKActionNoAction, p.errorf("SET DEFAULT action is not supported for foreign keys")
+		}
+		return FKActionNoAction, p.errorf("expected NULL or DEFAULT after SET")
+	}
+	return FKActionNoAction, p.errorf("expected NO ACTION, RESTRICT, CASCADE, SET NULL, or SET DEFAULT")
 }
 
 func (p *parser) parseColumnDef() (ColumnDefClause, error) {
@@ -2064,6 +2423,12 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 				return col, err
 			}
 			col.Collation = collName
+		case p.isKeyword("REFERENCES"):
+			ref, err := p.parseForeignKeyRef()
+			if err != nil {
+				return col, err
+			}
+			col.ForeignKey = ref
 		default:
 			// Unknown constraint, stop parsing constraints
 			goto done
@@ -2244,6 +2609,38 @@ func (p *parser) parseDropTable() (*DropTableStmt, error) {
 				"expected table name after dot",
 			)
 		}
+		stmt.Table = p.advance().value
+	}
+
+	return stmt, nil
+}
+
+// parseTruncate parses a TRUNCATE [TABLE] statement.
+func (p *parser) parseTruncate() (*TruncateStmt, error) {
+	if err := p.expectKeyword("TRUNCATE"); err != nil {
+		return nil, err
+	}
+
+	// TABLE keyword is optional
+	if p.isKeyword("TABLE") {
+		p.advance()
+	}
+
+	// Table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name")
+	}
+
+	stmt := &TruncateStmt{}
+	stmt.Table = p.advance().value
+
+	// Check for schema.table
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after dot")
+		}
+		stmt.Schema = stmt.Table
 		stmt.Table = p.advance().value
 	}
 
@@ -4593,6 +4990,22 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		return p.parseExtract()
 	case "INTERVAL":
 		return p.parseInterval()
+	case "COLUMNS":
+		if p.current().typ == tokenLParen {
+			p.advance()
+			if p.current().typ != tokenString {
+				return nil, p.errorf("COLUMNS requires a string pattern argument")
+			}
+			raw := p.advance().value
+			// Strip surrounding quotes and unescape
+			pattern := raw[1 : len(raw)-1]
+			pattern = strings.ReplaceAll(pattern, "''", "'")
+			if _, err := p.expect(tokenRParen); err != nil {
+				return nil, err
+			}
+			return &ColumnsExpr{Pattern: pattern}, nil
+		}
+		// Fall through to treat as regular identifier
 	}
 
 	// Function call or column reference
@@ -4605,8 +5018,11 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		p.advance()
 		if p.current().typ == tokenStar {
 			p.advance()
-
-			return &StarExpr{Table: name}, nil
+			starExpr := &StarExpr{Table: name}
+			if err := p.parseStarModifiers(starExpr); err != nil {
+				return nil, err
+			}
+			return starExpr, nil
 		}
 		if p.current().typ != tokenIdent {
 			return nil, p.errorf(

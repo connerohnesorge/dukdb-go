@@ -42,8 +42,9 @@ type SelectStmt struct {
 	Having     Expr
 	Qualify    Expr // QUALIFY clause - filters rows after window function evaluation
 	OrderBy    []OrderByExpr
-	Limit      Expr
-	Offset     Expr
+	Limit        Expr
+	Offset       Expr
+	FetchWithTies bool // true when FETCH ... WITH TIES was used
 	Sample     *SampleOptions // SAMPLE clause - for sampling a subset of rows
 	Options    *RecursionOption
 	IsSubquery bool
@@ -81,6 +82,13 @@ type FromClause struct {
 	Joins  []JoinClause
 }
 
+// ValuesClause represents a VALUES clause that produces inline rows.
+// Example: VALUES (1, 'a'), (2, 'b')
+type ValuesClause struct {
+	Rows          [][]Expr // Each row is a list of expressions
+	ColumnAliases []string // Optional column aliases from AS alias(col1, col2)
+}
+
 // TableRef represents a table reference.
 type TableRef struct {
 	Catalog       string // Optional catalog name (e.g., "main")
@@ -91,6 +99,7 @@ type TableRef struct {
 	TableFunction *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
 	PivotRef      *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
 	UnpivotRef    *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
+	ValuesRef     *ValuesClause     // VALUES clause (when VALUES is used in FROM clause)
 	Lateral       bool              // LATERAL join (subquery can reference columns from outer scope)
 	TimeTravel    *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
 }
@@ -358,10 +367,14 @@ func (s *DeleteStmt) Accept(v Visitor) {
 
 // TableConstraint represents a table-level constraint in CREATE TABLE.
 type TableConstraint struct {
-	Name       string   // Optional CONSTRAINT name
-	Type       string   // "UNIQUE", "CHECK"
-	Columns    []string // Column names (for UNIQUE)
-	Expression Expr     // For CHECK constraints
+	Name       string           // Optional CONSTRAINT name
+	Type       string           // "UNIQUE", "CHECK", "FOREIGN_KEY"
+	Columns    []string         // Column names (for UNIQUE or FK child columns)
+	Expression Expr             // For CHECK constraints
+	RefTable   string           // Referenced table (for FOREIGN_KEY)
+	RefColumns []string         // Referenced columns (for FOREIGN_KEY)
+	OnDelete   ForeignKeyAction // ON DELETE action
+	OnUpdate   ForeignKeyAction // ON UPDATE action
 }
 
 // CreateTableStmt represents a CREATE TABLE statement.
@@ -384,6 +397,22 @@ func (s *CreateTableStmt) Accept(v Visitor) {
 	v.VisitCreateTableStmt(s)
 }
 
+// ForeignKeyAction represents ON DELETE/ON UPDATE actions.
+type ForeignKeyAction int
+
+const (
+	FKActionNoAction ForeignKeyAction = iota
+	FKActionRestrict
+)
+
+// ForeignKeyRef represents a REFERENCES clause on a column or table constraint.
+type ForeignKeyRef struct {
+	Table    string           // Referenced table name
+	Columns  []string         // Referenced column(s)
+	OnDelete ForeignKeyAction // ON DELETE action (default NoAction)
+	OnUpdate ForeignKeyAction // ON UPDATE action (default NoAction)
+}
+
 // ColumnDefClause represents a column definition in CREATE TABLE.
 type ColumnDefClause struct {
 	Name       string
@@ -392,9 +421,10 @@ type ColumnDefClause struct {
 	NotNull    bool
 	Default    Expr
 	PrimaryKey bool
-	Unique     bool   // Column-level UNIQUE constraint
-	Check      Expr   // Column-level CHECK expression
-	Collation  string // COLLATE collation_name (empty = default)
+	Unique     bool            // Column-level UNIQUE constraint
+	Check      Expr            // Column-level CHECK expression
+	Collation  string          // COLLATE collation_name (empty = default)
+	ForeignKey *ForeignKeyRef  // Column-level REFERENCES constraint
 }
 
 // DropTableStmt represents a DROP TABLE statement.
@@ -411,6 +441,21 @@ func (*DropTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
 // Accept implements the Visitor pattern for DropTableStmt.
 func (s *DropTableStmt) Accept(v Visitor) {
 	v.VisitDropTableStmt(s)
+}
+
+// TruncateStmt represents a TRUNCATE TABLE statement.
+type TruncateStmt struct {
+	Schema string
+	Table  string
+}
+
+func (*TruncateStmt) stmtNode() {}
+
+func (*TruncateStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DELETE }
+
+// Accept implements the Visitor pattern for TruncateStmt.
+func (s *TruncateStmt) Accept(v Visitor) {
+	v.VisitTruncateStmt(s)
 }
 
 // ---------- View DDL Statements ----------
@@ -843,12 +888,27 @@ type ExistsExpr struct {
 
 func (*ExistsExpr) exprNode() {}
 
-// StarExpr represents a * expression in SELECT.
+// ReplaceColumn represents an expression replacement in SELECT * REPLACE.
+type ReplaceColumn struct {
+	Expr   Expr   // Replacement expression
+	Column string // Column name to replace
+}
+
+// StarExpr represents a star (*) expression, optionally table-qualified.
 type StarExpr struct {
-	Table string // optional table prefix (e.g., t.*)
+	Table   string          // optional table prefix (e.g., t.*)
+	Exclude []string        // EXCLUDE(col1, col2)
+	Replace []ReplaceColumn // REPLACE(expr AS col, ...)
 }
 
 func (*StarExpr) exprNode() {}
+
+// ColumnsExpr represents a COLUMNS(pattern) expression that selects columns matching a regex.
+type ColumnsExpr struct {
+	Pattern string // Regex pattern to match column names
+}
+
+func (*ColumnsExpr) exprNode() {}
 
 // ExtractExpr represents an EXTRACT(part FROM source) expression.
 // This is SQL standard syntax that extracts a date/time field from a temporal value.
