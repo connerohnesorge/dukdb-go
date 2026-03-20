@@ -165,6 +165,19 @@ func (e *Executor) executeDelete(
 
 doneScanning:
 
+	// Check FK constraints - ensure no child rows reference the rows being deleted
+	if plan.TableDef != nil {
+		for _, dr := range deletedRows {
+			keyColumns := make([]string, len(plan.TableDef.Columns))
+			for i, col := range plan.TableDef.Columns {
+				keyColumns[i] = col.Name
+			}
+			if err := e.checkNoChildReferences(plan.Table, plan.TableDef, dr.data, keyColumns); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Extract RowIDs for deletion
 	deletedRowIDs := make([]storage.RowID, len(deletedRows))
 	for i, row := range deletedRows {

@@ -830,3 +830,27 @@ func (e *Executor) executeDropType(
 	}
 	return &ExecutionResult{RowsAffected: 0}, nil
 }
+
+// executeTruncate executes a TRUNCATE TABLE statement.
+func (e *Executor) executeTruncate(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalTruncate,
+) (*ExecutionResult, error) {
+	// Check if table exists in catalog
+	_, exists := e.catalog.GetTableInSchema(plan.Schema, plan.Table)
+	if !exists {
+		return nil, dukdb.ErrTableNotFound
+	}
+
+	// Get storage table and truncate it
+	table, ok := e.storage.GetTable(plan.Table)
+	if !ok {
+		return nil, dukdb.ErrTableNotFound
+	}
+
+	rowsAffected := table.Truncate()
+
+	e.invalidateQueryCache(plan.Table)
+
+	return &ExecutionResult{RowsAffected: rowsAffected}, nil
+}

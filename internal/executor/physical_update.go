@@ -151,6 +151,54 @@ func (e *Executor) executeUpdate(
 		}
 	}
 
+	// Check child-side FK constraints: when FK columns are being updated,
+	// verify new values exist in parent table
+	if plan.TableDef != nil {
+		for _, upd := range updates {
+			// Build the new row values by applying updates to before values
+			newValues := make([]any, len(plan.TableDef.Columns))
+			copy(newValues, upd.beforeValues)
+			for colIdx, newVal := range upd.columnValues {
+				newValues[colIdx] = newVal
+			}
+			colNames := make([]string, len(plan.TableDef.Columns))
+			for i, col := range plan.TableDef.Columns {
+				colNames[i] = col.Name
+			}
+			if err := e.checkForeignKeys(plan.TableDef, newValues, colNames); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Check parent-side FK constraints: when PK/unique columns are being modified,
+	// verify no child rows reference the old values
+	if plan.TableDef != nil {
+		for _, upd := range updates {
+			keyChanged := false
+			for colIdx := range upd.columnValues {
+				for _, pkIdx := range plan.TableDef.PrimaryKey {
+					if colIdx == pkIdx {
+						keyChanged = true
+						break
+					}
+				}
+				if keyChanged {
+					break
+				}
+			}
+			if keyChanged {
+				keyColumns := make([]string, len(plan.TableDef.Columns))
+				for i, col := range plan.TableDef.Columns {
+					keyColumns[i] = col.Name
+				}
+				if err := e.checkNoChildReferences(plan.Table, plan.TableDef, upd.beforeValues, keyColumns); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	// For SERIALIZABLE isolation, acquire locks and register writes before modifying data
 	// This ensures proper conflict detection at commit time
 	if len(updates) > 0 {

@@ -858,6 +858,9 @@ func (a *ParallelExplainAnnotator) annotatePlan(
 	case *planner.PhysicalDummyScan:
 		sb.WriteString(fmt.Sprintf("%sDummyScan (seq_cost=%.2f)", prefix, seqCost))
 
+	case *planner.PhysicalValues:
+		sb.WriteString(fmt.Sprintf("%sValues (%d rows, seq_cost=%.2f)", prefix, len(p.Rows), seqCost))
+
 	case *planner.PhysicalTableFunctionScan:
 		sb.WriteString(fmt.Sprintf("%sTableFunction: %s (seq_cost=%.2f)", prefix, p.FunctionName, seqCost))
 

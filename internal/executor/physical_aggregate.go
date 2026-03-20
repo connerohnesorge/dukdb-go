@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sort"
@@ -986,6 +987,33 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeBitXor(values)
 
+	case "JSON_GROUP_ARRAY":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeJSONGroupArray(values)
+
+	case "JSON_GROUP_OBJECT":
+		if len(fn.Args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_GROUP_OBJECT requires 2 arguments (key, value)",
+			}
+		}
+		keys, err := op.collectValuesWithOrderBy(fn.Args[0], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		vals, err := op.collectValuesWithOrderBy(fn.Args[1], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeJSONGroupObject(keys, vals)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -1171,4 +1199,45 @@ func (op *PhysicalAggregateOperator) computeAggregatesParallel(
 	}
 
 	return collected, nil
+}
+
+// computeJSONGroupArray builds a JSON array string from the given values, filtering out NULLs.
+func computeJSONGroupArray(values []any) (string, error) {
+	var filtered []any
+	for _, v := range values {
+		if v != nil {
+			filtered = append(filtered, v)
+		}
+	}
+	if filtered == nil {
+		filtered = []any{}
+	}
+	b, err := json.Marshal(filtered)
+	if err != nil {
+		return "", &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_GROUP_ARRAY: marshal error: %v", err),
+		}
+	}
+	return string(b), nil
+}
+
+// computeJSONGroupObject builds a JSON object string from key-value pairs, skipping NULL keys.
+func computeJSONGroupObject(keys, vals []any) (string, error) {
+	result := make(map[string]any)
+	for i := 0; i < len(keys) && i < len(vals); i++ {
+		if keys[i] == nil {
+			continue
+		}
+		key := toString(keys[i])
+		result[key] = vals[i]
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		return "", &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_GROUP_OBJECT: marshal error: %v", err),
+		}
+	}
+	return string(b), nil
 }

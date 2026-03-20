@@ -1,10 +1,14 @@
 package executor
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -1689,6 +1693,72 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return isValidJSON(args[0])
 
+	case "JSON_TYPE":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_TYPE requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalJSONType(args[0])
+
+	case "JSON_KEYS":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_KEYS requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalJSONKeys(args[0])
+
+	case "JSON_ARRAY_LENGTH":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_ARRAY_LENGTH requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalJSONArrayLength(args[0])
+
+	case "TO_JSON":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TO_JSON requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalToJSON(args[0])
+
+	case "JSON_MERGE_PATCH":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_MERGE_PATCH requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalJSONMergePatch(args[0], args[1])
+
+	case "JSON_OBJECT", "JSON_BUILD_OBJECT":
+		return evalJSONObject(args)
+
+	case "JSON_ARRAY":
+		return evalJSONArray(args)
+
 	// Geometry functions
 	case "ST_GEOMFROMTEXT", "ST_GEOMETRYFROMTEXT":
 		return executeSTGeomFromText(args)
@@ -1762,6 +1832,69 @@ func (e *Executor) evaluateFunctionCall(
 		return executeSTMakePolygon(args)
 
 	// ---- Struct functions ----
+	case "STRUCT_INSERT":
+		// STRUCT_INSERT(struct, key1, val1, key2, val2, ...)
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "struct_insert requires at least 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		srcStruct, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("struct_insert: first argument must be a struct, got %T", args[0]),
+			}
+		}
+		if (len(args)-1)%2 != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "struct_insert: key/value arguments must come in pairs",
+			}
+		}
+		result := make(map[string]any, len(srcStruct)+(len(args)-1)/2)
+		for k, v := range srcStruct {
+			result[k] = v
+		}
+		for i := 1; i < len(args); i += 2 {
+			key := toString(args[i])
+			result[key] = args[i+1]
+		}
+		return result, nil
+
+	case "STRUCT_KEYS":
+		// STRUCT_KEYS(struct) - returns sorted list of field names
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "struct_keys requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		sk, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("struct_keys: argument must be a struct, got %T", args[0]),
+			}
+		}
+		skKeys := make([]string, 0, len(sk))
+		for k := range sk {
+			skKeys = append(skKeys, k)
+		}
+		sort.Strings(skKeys)
+		skResult := make([]any, len(skKeys))
+		for i, k := range skKeys {
+			skResult[i] = k
+		}
+		return skResult, nil
+
 	case "STRUCT_EXTRACT":
 		if len(args) < 2 {
 			return nil, &dukdb.Error{
@@ -1875,6 +2008,121 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return vals, nil
 
+	case "MAP_CONTAINS_KEY":
+		// MAP_CONTAINS_KEY(map, key) - returns bool
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_contains_key requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_contains_key: first argument must be a map, got %T", args[0]),
+			}
+		}
+		searchKey := toString(args[1])
+		_, exists := m[searchKey]
+		return exists, nil
+
+	case "MAP_ENTRIES":
+		// MAP_ENTRIES(map) - returns []any of {key, value} maps
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_entries requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_entries: argument must be a map, got %T", args[0]),
+			}
+		}
+		meKeys := make([]string, 0, len(m))
+		for k := range m {
+			meKeys = append(meKeys, k)
+		}
+		sort.Strings(meKeys)
+		entries := make([]any, len(meKeys))
+		for i, k := range meKeys {
+			entries[i] = map[string]any{"key": k, "value": m[k]}
+		}
+		return entries, nil
+
+	case "MAP_FROM_ENTRIES":
+		// MAP_FROM_ENTRIES(entries) - takes []any of {key, value} maps, returns map
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_from_entries requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		mfeSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_from_entries: argument must be an array, got %T", args[0]),
+			}
+		}
+		result := make(map[string]any, len(mfeSlice))
+		for _, entry := range mfeSlice {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("map_from_entries: each entry must be a struct with key/value fields, got %T", entry),
+				}
+			}
+			k, hasKey := entryMap["key"]
+			v, hasVal := entryMap["value"]
+			if !hasKey || !hasVal {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  "map_from_entries: each entry must have 'key' and 'value' fields",
+				}
+			}
+			result[toString(k)] = v
+		}
+		return result, nil
+
+	case "MAP_EXTRACT":
+		// MAP_EXTRACT(map, key) - extract value by key from map
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "map_extract requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("map_extract: first argument must be a map, got %T", args[0]),
+			}
+		}
+		extractKey := toString(args[1])
+		val, exists := m[extractKey]
+		if !exists {
+			return nil, nil
+		}
+		return val, nil
+
 	case "ELEMENT_AT":
 		if len(args) < 2 {
 			return nil, &dukdb.Error{
@@ -1898,6 +2146,566 @@ func (e *Executor) evaluateFunctionCall(
 			return nil, nil
 		}
 		return val, nil
+
+	case "UNION_TAG":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "union_tag requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		utMap, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("union_tag: argument must be a union (map), got %T", args[0]),
+			}
+		}
+		tag, exists := utMap["__tag"]
+		if !exists {
+			return nil, nil
+		}
+		return toString(tag), nil
+
+	case "UNION_EXTRACT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "union_extract requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		ueMap, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("union_extract: first argument must be a union (map), got %T", args[0]),
+			}
+		}
+		requestedTag := toString(args[1])
+		currentTag := ueMap["__tag"]
+		if toString(currentTag) == requestedTag {
+			return ueMap["__value"], nil
+		}
+		return nil, nil
+
+	case "LIST_CONTAINS", "ARRAY_CONTAINS":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_contains requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lcSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("list_contains: first argument must be a list, got %T", args[0]),
+			}
+		}
+		needle := args[1]
+		needleStr := fmt.Sprintf("%v", needle)
+		for _, elem := range lcSlice {
+			if elem == needle || fmt.Sprintf("%v", elem) == needleStr {
+				return true, nil
+			}
+		}
+		return false, nil
+
+	case "LIST_POSITION", "ARRAY_POSITION", "LIST_INDEXOF":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_position requires 2 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lpSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("list_position: first argument must be a list, got %T", args[0]),
+			}
+		}
+		lpNeedle := args[1]
+		lpNeedleStr := fmt.Sprintf("%v", lpNeedle)
+		for i, elem := range lpSlice {
+			if elem == lpNeedle || fmt.Sprintf("%v", elem) == lpNeedleStr {
+				return int64(i + 1), nil
+			}
+		}
+		return nil, nil
+
+	case "LIST_CONCAT", "ARRAY_CONCAT", "ARRAY_CAT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_concat requires 2 arguments",
+			}
+		}
+		if args[0] == nil && args[1] == nil {
+			return nil, nil
+		}
+		var concatResult []any
+		if args[0] != nil {
+			s1, ok := toSlice(args[0])
+			if !ok {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("list_concat: first argument must be a list, got %T", args[0]),
+				}
+			}
+			concatResult = append(concatResult, s1...)
+		}
+		if args[1] != nil {
+			s2, ok := toSlice(args[1])
+			if !ok {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("list_concat: second argument must be a list, got %T", args[1]),
+				}
+			}
+			concatResult = append(concatResult, s2...)
+		}
+		return concatResult, nil
+
+	case "LIST_DISTINCT", "ARRAY_DISTINCT", "LIST_UNIQUE", "ARRAY_UNIQUE":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_distinct requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		ldSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("list_distinct: argument must be a list, got %T", args[0]),
+			}
+		}
+		seen := make(map[string]bool, len(ldSlice))
+		ldResult := make([]any, 0, len(ldSlice))
+		for _, elem := range ldSlice {
+			key := fmt.Sprintf("%v", elem)
+			if !seen[key] {
+				seen[key] = true
+				ldResult = append(ldResult, elem)
+			}
+		}
+		return ldResult, nil
+
+	case "LIST_REVERSE", "ARRAY_REVERSE":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_reverse requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lrSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("list_reverse: argument must be a list, got %T", args[0]),
+			}
+		}
+		lrResult := make([]any, len(lrSlice))
+		for i, elem := range lrSlice {
+			lrResult[len(lrSlice)-1-i] = elem
+		}
+		return lrResult, nil
+
+	case "LIST_SLICE", "ARRAY_SLICE":
+		if len(args) < 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "list_slice requires 3 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lsSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("list_slice: first argument must be a list, got %T", args[0]),
+			}
+		}
+		begin := int(toInt64Value(args[1]))
+		end := int(toInt64Value(args[2]))
+		if begin < 1 {
+			begin = 1
+		}
+		if end > len(lsSlice) {
+			end = len(lsSlice)
+		}
+		if begin > end+1 || begin > len(lsSlice) {
+			return []any{}, nil
+		}
+		// Convert from 1-based to 0-based indexing
+		return append([]any{}, lsSlice[begin-1:end]...), nil
+
+	case "FLATTEN":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "flatten requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		fSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("flatten: argument must be a list, got %T", args[0]),
+			}
+		}
+		var flatResult []any
+		for _, elem := range fSlice {
+			if inner, ok := toSlice(elem); ok {
+				flatResult = append(flatResult, inner...)
+			} else {
+				flatResult = append(flatResult, elem)
+			}
+		}
+		return flatResult, nil
+
+	case "IF", "IFF":
+		if len(args) != 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("IF requires 3 arguments, got %d", len(args)),
+			}
+		}
+		// IF does NOT return NULL when condition is NULL — returns false_value
+		cond := args[0]
+		if cond == nil || !toBool(cond) {
+			return args[2], nil
+		}
+		return args[1], nil
+
+	case "TYPEOF":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TYPEOF requires 1 argument",
+			}
+		}
+		return duckdbTypeName(args[0]), nil
+
+	case "PG_TYPEOF":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "PG_TYPEOF requires 1 argument",
+			}
+		}
+		return pgTypeName(args[0]), nil
+
+	case "BASE64_ENCODE", "BASE64", "TO_BASE64":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("BASE64_ENCODE requires 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		var data []byte
+		switch v := args[0].(type) {
+		case []byte:
+			data = v
+		case string:
+			data = []byte(v)
+		default:
+			data = []byte(toString(args[0]))
+		}
+		return base64.StdEncoding.EncodeToString(data), nil
+
+	case "BASE64_DECODE", "FROM_BASE64":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("BASE64_DECODE requires 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		s := toString(args[0])
+		decoded, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("BASE64_DECODE: invalid base64: %v", err),
+			}
+		}
+		return decoded, nil
+
+	case "URL_ENCODE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("URL_ENCODE requires 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return url.QueryEscape(toString(args[0])), nil
+
+	case "URL_DECODE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("URL_DECODE requires 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		decodedURL, err := url.QueryUnescape(toString(args[0]))
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("URL_DECODE: invalid encoding: %v", err),
+			}
+		}
+		return decodedURL, nil
+
+	case "FORMAT", "PRINTF":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "FORMAT requires at least 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		fmtStr := toString(args[0])
+		return formatString(fmtStr, args[1:])
+
+	case "JSON_CONTAINS":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("JSON_CONTAINS requires 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return evalJSONContains(args[0], args[1])
+
+	case "JSON_QUOTE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("JSON_QUOTE requires 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return "null", nil
+		}
+		quoted, err := json.Marshal(args[0])
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("JSON_QUOTE: cannot quote value: %v", err),
+			}
+		}
+		return string(quoted), nil
+
+	case "LIST_ELEMENT", "ARRAY_EXTRACT":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_element requires 2 arguments"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		leSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_element: first argument must be a list, got %T", args[0])}
+		}
+		idx, ok := toInt64(args[1])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_element: index must be an integer"}
+		}
+		// 1-based indexing, negative counts from end
+		if idx == 0 {
+			return nil, nil // out of bounds
+		}
+		var absIdx int
+		if idx > 0 {
+			absIdx = int(idx) - 1
+		} else {
+			absIdx = len(leSlice) + int(idx)
+		}
+		if absIdx < 0 || absIdx >= len(leSlice) {
+			return nil, nil // out of bounds returns NULL
+		}
+		return leSlice[absIdx], nil
+
+	case "LIST_AGGREGATE", "ARRAY_AGGREGATE":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_aggregate requires at least 2 arguments"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		laSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_aggregate: first argument must be a list, got %T", args[0])}
+		}
+		aggName := strings.ToLower(toString(args[1]))
+		return evaluateListAggregate(laSlice, aggName, args[2:])
+
+	case "LIST_REVERSE_SORT", "ARRAY_REVERSE_SORT":
+		if len(args) < 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_reverse_sort requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lrsSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_reverse_sort: argument must be a list, got %T", args[0])}
+		}
+		result := make([]any, len(lrsSlice))
+		copy(result, lrsSlice)
+		sort.SliceStable(result, func(i, j int) bool {
+			// NULLs sort to end
+			if result[i] == nil && result[j] == nil {
+				return false
+			}
+			if result[i] == nil {
+				return false
+			}
+			if result[j] == nil {
+				return true
+			}
+			return compareValues(result[i], result[j]) > 0
+		})
+		return result, nil
+
+	case "ARRAY_TO_STRING", "LIST_TO_STRING":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "array_to_string requires at least 2 arguments"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		atsSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("array_to_string: first argument must be a list, got %T", args[0])}
+		}
+		sep := toString(args[1])
+		nullStr := ""
+		hasNullStr := len(args) >= 3 && args[2] != nil
+		if hasNullStr {
+			nullStr = toString(args[2])
+		}
+		var atsParts []string
+		for _, v := range atsSlice {
+			if v == nil {
+				if hasNullStr {
+					atsParts = append(atsParts, nullStr)
+				}
+				// Skip NULLs when no null_string provided
+				continue
+			}
+			atsParts = append(atsParts, toString(v))
+		}
+		return strings.Join(atsParts, sep), nil
+
+	case "LIST_ZIP":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_zip requires at least 2 arguments"}
+		}
+		// Convert all args to slices
+		var lzLists [][]any
+		lzMaxLen := 0
+		for i, arg := range args {
+			if arg == nil {
+				lzLists = append(lzLists, nil)
+				continue
+			}
+			s, ok := toSlice(arg)
+			if !ok {
+				return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_zip: argument %d must be a list, got %T", i+1, arg)}
+			}
+			lzLists = append(lzLists, s)
+			if len(s) > lzMaxLen {
+				lzMaxLen = len(s)
+			}
+		}
+		// Build result: list of structs (map[string]any)
+		lzResult := make([]any, lzMaxLen)
+		for i := 0; i < lzMaxLen; i++ {
+			row := make(map[string]any)
+			for j, list := range lzLists {
+				key := fmt.Sprintf("f%d", j+1)
+				if list != nil && i < len(list) {
+					row[key] = list[i]
+				} else {
+					row[key] = nil
+				}
+			}
+			lzResult[i] = row
+		}
+		return lzResult, nil
+
+	case "LIST_RESIZE", "ARRAY_RESIZE":
+		if len(args) < 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_resize requires at least 2 arguments"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		lrSlice, ok := toSlice(args[0])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_resize: first argument must be a list, got %T", args[0])}
+		}
+		lrSize, ok := toInt64(args[1])
+		if !ok {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "list_resize: size must be an integer"}
+		}
+		if lrSize < 0 {
+			lrSize = 0
+		}
+		var lrFillValue any
+		if len(args) >= 3 {
+			lrFillValue = args[2]
+		}
+		lrResult := make([]any, int(lrSize))
+		for i := 0; i < int(lrSize); i++ {
+			if i < len(lrSlice) {
+				lrResult[i] = lrSlice[i]
+			} else {
+				lrResult[i] = lrFillValue
+			}
+		}
+		return lrResult, nil
 
 	default:
 		// For aggregate functions called in scalar context, return NULL
@@ -1933,6 +2741,9 @@ func (e *Executor) evaluateFunctionCall(
 			return nil, nil
 		// Bitwise aggregates
 		case "BIT_AND", "BIT_OR", "BIT_XOR":
+			return nil, nil
+		// JSON aggregates
+		case "JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT":
 			return nil, nil
 		}
 
@@ -2524,6 +3335,33 @@ func (e *Executor) computeAggregate(
 			return nil, err
 		}
 		return computeListDistinct(values)
+
+	case "JSON_GROUP_ARRAY":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValuesWithOrderBy(ctx, fn.Args[0], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeJSONGroupArray(values)
+
+	case "JSON_GROUP_OBJECT":
+		if len(fn.Args) < 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "JSON_GROUP_OBJECT requires 2 arguments (key, value)",
+			}
+		}
+		keys, err := e.collectAggValuesWithOrderBy(ctx, fn.Args[0], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		vals, err := e.collectAggValuesWithOrderBy(ctx, fn.Args[1], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeJSONGroupObject(keys, vals)
 
 	default:
 		return nil, &dukdb.Error{
@@ -3215,6 +4053,181 @@ func isValidJSON(v any) (bool, error) {
 		return false, nil
 	}
 	return jsonutil.IsValidJSON(toString(v)), nil
+}
+
+// evalJSONType returns the type of a JSON value as a string.
+func evalJSONType(v any) (any, error) {
+	s := toString(v)
+	var parsed any
+	if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_TYPE: invalid JSON input",
+		}
+	}
+	switch parsed.(type) {
+	case map[string]any:
+		return "OBJECT", nil
+	case []any:
+		return "ARRAY", nil
+	case string:
+		return "VARCHAR", nil
+	case float64:
+		// Check if it's an integer value
+		f := parsed.(float64)
+		if f == float64(int64(f)) {
+			return "BIGINT", nil
+		}
+		return "DOUBLE", nil
+	case bool:
+		return "BOOLEAN", nil
+	case nil:
+		return "NULL", nil
+	default:
+		return "NULL", nil
+	}
+}
+
+// evalJSONKeys returns the keys of a JSON object as a list of strings.
+func evalJSONKeys(v any) (any, error) {
+	s := toString(v)
+	var parsed any
+	if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_KEYS: invalid JSON input",
+		}
+	}
+	obj, ok := parsed.(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	keys := make([]any, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].(string) < keys[j].(string)
+	})
+	return keys, nil
+}
+
+// evalJSONArrayLength returns the length of a JSON array.
+func evalJSONArrayLength(v any) (any, error) {
+	s := toString(v)
+	var parsed any
+	if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_ARRAY_LENGTH: invalid JSON input",
+		}
+	}
+	arr, ok := parsed.([]any)
+	if !ok {
+		return nil, nil
+	}
+	return int64(len(arr)), nil
+}
+
+// evalToJSON converts a Go value to its JSON string representation.
+func evalToJSON(v any) (any, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("TO_JSON: failed to marshal value: %v", err),
+		}
+	}
+	return string(b), nil
+}
+
+// evalJSONMergePatch implements RFC 7386 JSON Merge Patch.
+func evalJSONMergePatch(v1, v2 any) (any, error) {
+	s1 := toString(v1)
+	s2 := toString(v2)
+	var parsed1, parsed2 any
+	if err := json.Unmarshal([]byte(s1), &parsed1); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_MERGE_PATCH: invalid JSON in first argument",
+		}
+	}
+	if err := json.Unmarshal([]byte(s2), &parsed2); err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_MERGE_PATCH: invalid JSON in second argument",
+		}
+	}
+	merged := jsonMergePatch(parsed1, parsed2)
+	b, err := json.Marshal(merged)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_MERGE_PATCH: failed to marshal result: %v", err),
+		}
+	}
+	return string(b), nil
+}
+
+// jsonMergePatch recursively merges two parsed JSON values per RFC 7386.
+func jsonMergePatch(target, patch any) any {
+	patchObj, patchIsObj := patch.(map[string]any)
+	if !patchIsObj {
+		return patch
+	}
+	targetObj, targetIsObj := target.(map[string]any)
+	if !targetIsObj {
+		targetObj = make(map[string]any)
+	}
+	result := make(map[string]any, len(targetObj))
+	for k, v := range targetObj {
+		result[k] = v
+	}
+	for k, v := range patchObj {
+		if v == nil {
+			delete(result, k)
+		} else {
+			result[k] = jsonMergePatch(result[k], v)
+		}
+	}
+	return result
+}
+
+// evalJSONObject builds a JSON object from alternating key/value pairs.
+func evalJSONObject(args []any) (any, error) {
+	if len(args)%2 != 0 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "JSON_OBJECT requires an even number of arguments (key/value pairs)",
+		}
+	}
+	obj := make(map[string]any, len(args)/2)
+	for i := 0; i < len(args); i += 2 {
+		key := toString(args[i])
+		obj[key] = args[i+1]
+	}
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_OBJECT: failed to marshal result: %v", err),
+		}
+	}
+	return string(b), nil
+}
+
+// evalJSONArray builds a JSON array from the given arguments.
+func evalJSONArray(args []any) (any, error) {
+	arr := make([]any, len(args))
+	copy(arr, args)
+	b, err := json.Marshal(arr)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_ARRAY: failed to marshal result: %v", err),
+		}
+	}
+	return string(b), nil
 }
 
 // Geometry function implementations
@@ -4218,4 +5231,219 @@ func executeSTMakePolygon(args []any) (any, error) {
 		}
 	}
 	return result, nil
+}
+
+func duckdbTypeName(val any) string {
+	if val == nil {
+		return "NULL"
+	}
+	switch val.(type) {
+	case bool:
+		return "BOOLEAN"
+	case int, int32:
+		return "INTEGER"
+	case int8:
+		return "TINYINT"
+	case int16:
+		return "SMALLINT"
+	case int64:
+		return "BIGINT"
+	case float32:
+		return "FLOAT"
+	case float64:
+		return "DOUBLE"
+	case string:
+		return "VARCHAR"
+	case []byte:
+		return "BLOB"
+	case time.Time:
+		return "TIMESTAMP"
+	case []any:
+		return "LIST"
+	case map[string]any:
+		return "STRUCT"
+	default:
+		return "VARCHAR"
+	}
+}
+
+func pgTypeName(val any) string {
+	if val == nil {
+		return "unknown"
+	}
+	switch val.(type) {
+	case bool:
+		return "boolean"
+	case int, int32:
+		return "integer"
+	case int8:
+		return "smallint"
+	case int16:
+		return "smallint"
+	case int64:
+		return "bigint"
+	case float32:
+		return "real"
+	case float64:
+		return "double precision"
+	case string:
+		return "character varying"
+	case []byte:
+		return "bytea"
+	case time.Time:
+		return "timestamp without time zone"
+	case []any:
+		return "ARRAY"
+	case map[string]any:
+		return "record"
+	default:
+		return "character varying"
+	}
+}
+
+func evalJSONContains(jsonVal, searchVal any) (bool, error) {
+	jsonStr := toString(jsonVal)
+	var doc any
+	if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
+		return false, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("JSON_CONTAINS: invalid JSON: %v", err),
+		}
+	}
+	// Marshal the search value to compare as JSON
+	searchJSON, err := json.Marshal(searchVal)
+	if err != nil {
+		return false, nil
+	}
+	return jsonContainsValue(doc, searchJSON), nil
+}
+
+func jsonContainsValue(doc any, searchJSON []byte) bool {
+	// Marshal the current document node
+	docJSON, err := json.Marshal(doc)
+	if err != nil {
+		return false
+	}
+	// Direct comparison
+	if string(docJSON) == string(searchJSON) {
+		return true
+	}
+	// Recurse into arrays and objects
+	switch d := doc.(type) {
+	case []any:
+		for _, elem := range d {
+			if jsonContainsValue(elem, searchJSON) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, v := range d {
+			if jsonContainsValue(v, searchJSON) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// evaluateListAggregate applies an aggregate function over list elements.
+func evaluateListAggregate(list []any, aggName string, extraArgs []any) (any, error) {
+	// Filter NULLs for most aggregates
+	var nonNull []any
+	for _, v := range list {
+		if v != nil {
+			nonNull = append(nonNull, v)
+		}
+	}
+
+	switch aggName {
+	case "sum":
+		var sum float64
+		for _, v := range nonNull {
+			f, _ := toFloat64(v)
+			sum += f
+		}
+		// Return int if all were ints
+		allInt := true
+		for _, v := range nonNull {
+			if _, ok := v.(float64); ok {
+				allInt = false
+				break
+			}
+		}
+		if allInt {
+			return int64(sum), nil
+		}
+		return sum, nil
+	case "avg":
+		if len(nonNull) == 0 {
+			return nil, nil
+		}
+		var sum float64
+		for _, v := range nonNull {
+			f, _ := toFloat64(v)
+			sum += f
+		}
+		return sum / float64(len(nonNull)), nil
+	case "min":
+		if len(nonNull) == 0 {
+			return nil, nil
+		}
+		minVal := nonNull[0]
+		for _, v := range nonNull[1:] {
+			if compareValues(v, minVal) < 0 {
+				minVal = v
+			}
+		}
+		return minVal, nil
+	case "max":
+		if len(nonNull) == 0 {
+			return nil, nil
+		}
+		maxVal := nonNull[0]
+		for _, v := range nonNull[1:] {
+			if compareValues(v, maxVal) > 0 {
+				maxVal = v
+			}
+		}
+		return maxVal, nil
+	case "count":
+		return int64(len(nonNull)), nil
+	case "first":
+		if len(list) == 0 {
+			return nil, nil
+		}
+		return list[0], nil
+	case "last":
+		if len(list) == 0 {
+			return nil, nil
+		}
+		return list[len(list)-1], nil
+	case "string_agg":
+		sep := ","
+		if len(extraArgs) > 0 && extraArgs[0] != nil {
+			sep = toString(extraArgs[0])
+		}
+		var parts []string
+		for _, v := range nonNull {
+			parts = append(parts, toString(v))
+		}
+		return strings.Join(parts, sep), nil
+	case "bool_and":
+		for _, v := range nonNull {
+			if !toBool(v) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "bool_or":
+		for _, v := range nonNull {
+			if toBool(v) {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_aggregate: unknown aggregate %q", aggName)}
+	}
 }

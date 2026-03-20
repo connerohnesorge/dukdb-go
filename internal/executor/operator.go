@@ -107,6 +107,8 @@ func isAggregateFunc(name string) bool {
 		"APPROX_COUNT_DISTINCT", "APPROX_MEDIAN", "APPROX_QUANTILE",
 		// String/list aggregates
 		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
+		// JSON aggregates
+		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
 		// Regression aggregates
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
 		"CORR", "COVAR_POP", "COVAR_SAMP":
@@ -400,8 +402,12 @@ func (e *Executor) executeWithContext(
 		return e.executeCreateTable(execCtx, p)
 	case *planner.PhysicalDropTable:
 		return e.executeDropTable(execCtx, p)
+	case *planner.PhysicalTruncate:
+		return e.executeTruncate(execCtx, p)
 	case *planner.PhysicalDummyScan:
 		return e.executeDummyScan(execCtx, p)
+	case *planner.PhysicalValues:
+		return e.executeValues(execCtx, p)
 	case *planner.PhysicalBegin:
 		return e.executeBegin(execCtx, p)
 	case *planner.PhysicalCommit:
@@ -1805,7 +1811,43 @@ func (e *Executor) executeLimit(
 
 	// Apply limit
 	if limit >= 0 && int(limit) < len(rows) {
-		rows = rows[:limit]
+		if plan.WithTies && len(plan.OrderBy) > 0 {
+			// WITH TIES: include additional rows that tie with the last row at the limit boundary
+			lastIdx := int(limit) - 1
+			lastRow := rows[lastIdx]
+			// Evaluate ORDER BY values for the last row within the limit
+			lastOrderVals := make([]any, len(plan.OrderBy))
+			for i, ob := range plan.OrderBy {
+				val, err := e.evaluateExpr(ctx, ob.Expr, lastRow)
+				if err != nil {
+					return nil, err
+				}
+				lastOrderVals[i] = val
+			}
+			// Extend past the limit while ORDER BY values match (ties)
+			endIdx := int(limit)
+			for endIdx < len(rows) {
+				row := rows[endIdx]
+				tied := true
+				for i, ob := range plan.OrderBy {
+					val, err := e.evaluateExpr(ctx, ob.Expr, row)
+					if err != nil {
+						return nil, err
+					}
+					if !valuesEqual(lastOrderVals[i], val) {
+						tied = false
+						break
+					}
+				}
+				if !tied {
+					break
+				}
+				endIdx++
+			}
+			rows = rows[:endIdx]
+		} else {
+			rows = rows[:limit]
+		}
 	}
 
 	return &ExecutionResult{
@@ -2275,6 +2317,17 @@ func (e *Executor) executeInsert(
 				return nil, err
 			}
 
+			// Check foreign key constraints
+			if plan.TableDef != nil {
+				colNames := make([]string, len(plan.TableDef.Columns))
+				for i, col := range plan.TableDef.Columns {
+					colNames[i] = col.Name
+				}
+				if err := e.checkForeignKeys(plan.TableDef, values, colNames); err != nil {
+					return nil, err
+				}
+			}
+
 			// Collect values for WAL logging and RETURNING
 			valuesCopy := make([]any, len(values))
 			copy(valuesCopy, values)
@@ -2342,6 +2395,17 @@ func (e *Executor) executeInsert(
 			// Check CHECK constraints
 			if err := checkCheckConstraints(values); err != nil {
 				return nil, err
+			}
+
+			// Check foreign key constraints
+			if plan.TableDef != nil {
+				colNames := make([]string, len(plan.TableDef.Columns))
+				for i, col := range plan.TableDef.Columns {
+					colNames[i] = col.Name
+				}
+				if err := e.checkForeignKeys(plan.TableDef, values, colNames); err != nil {
+					return nil, err
+				}
 			}
 
 			// Collect values for WAL logging and RETURNING
@@ -2565,6 +2629,49 @@ func (e *Executor) executeCreateTable(
 		tableDef.Constraints = plan.Constraints
 	}
 
+	// Validate foreign key constraints
+	for _, c := range plan.Constraints {
+		fk, ok := c.(*catalog.ForeignKeyConstraintDef)
+		if !ok {
+			continue
+		}
+		// Validate parent table exists
+		parentDef, exists := e.catalog.GetTableInSchema(plan.Schema, fk.RefTable)
+		if !exists {
+			// Try default schema
+			parentDef, exists = e.catalog.GetTable(fk.RefTable)
+			if !exists {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeConstraint,
+					Msg:  fmt.Sprintf("foreign key constraint references non-existent table %q", fk.RefTable),
+				}
+			}
+		}
+		// Validate referenced columns exist in parent
+		for _, refCol := range fk.RefColumns {
+			found := false
+			for _, col := range parentDef.Columns {
+				if strings.EqualFold(col.Name, refCol) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeConstraint,
+					Msg:  fmt.Sprintf("foreign key references non-existent column %q in table %q", refCol, fk.RefTable),
+				}
+			}
+		}
+		// Validate referenced columns form PK or UNIQUE constraint
+		if !isKeyOrUnique(parentDef, fk.RefColumns) {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeConstraint,
+				Msg:  fmt.Sprintf("foreign key references columns that are not a PRIMARY KEY or UNIQUE constraint on table %q", fk.RefTable),
+			}
+		}
+	}
+
 	// Add to catalog
 	if err := e.catalog.CreateTableInSchema(plan.Schema, tableDef); err != nil {
 		return nil, err
@@ -2685,6 +2792,36 @@ func (e *Executor) executeDummyScan(
 	return &ExecutionResult{
 		Rows:    []map[string]any{{}},
 		Columns: []string{},
+	}, nil
+}
+
+func (e *Executor) executeValues(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalValues,
+) (*ExecutionResult, error) {
+	// Build column names from the plan
+	columns := make([]string, len(plan.Columns))
+	for i, col := range plan.Columns {
+		columns[i] = col.Column
+	}
+
+	// Evaluate each row's expressions
+	var rows []map[string]any
+	for _, boundRow := range plan.Rows {
+		row := make(map[string]any)
+		for colIdx, expr := range boundRow {
+			val, err := e.evaluateExpr(ctx, expr, nil)
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating VALUES expression: %w", err)
+			}
+			row[columns[colIdx]] = val
+		}
+		rows = append(rows, row)
+	}
+
+	return &ExecutionResult{
+		Columns: columns,
+		Rows:    rows,
 	}, nil
 }
 
@@ -3355,4 +3492,44 @@ func formatRowForSetOp(row map[string]any, columns []string) string {
 		result += formatValue(row[col])
 	}
 	return result
+}
+
+// isKeyOrUnique checks whether the given columns match the primary key or a UNIQUE constraint on the table.
+func isKeyOrUnique(tableDef *catalog.TableDef, columns []string) bool {
+	// Check if columns match the primary key
+	if len(tableDef.PrimaryKey) > 0 && len(columns) == len(tableDef.PrimaryKey) {
+		match := true
+		for i, pkIdx := range tableDef.PrimaryKey {
+			if pkIdx < len(tableDef.Columns) {
+				if !strings.EqualFold(tableDef.Columns[pkIdx].Name, columns[i]) {
+					match = false
+					break
+				}
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	// Check if columns match a UNIQUE constraint
+	for _, c := range tableDef.Constraints {
+		uc, ok := c.(*catalog.UniqueConstraintDef)
+		if !ok {
+			continue
+		}
+		if len(uc.Columns) != len(columns) {
+			continue
+		}
+		match := true
+		for i := range columns {
+			if !strings.EqualFold(uc.Columns[i], columns[i]) {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

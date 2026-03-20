@@ -151,6 +151,9 @@ func (e *Executor) executeTableFunctionScan(
 	// Array/list expansion functions
 	case "unnest":
 		return e.executeUnnest(ctx, plan)
+	// JSON table functions
+	case "json_each":
+		return e.executeJSONEach(ctx, plan)
 	// information_schema views
 	case "information_schema_tables":
 		return e.executeInformationSchemaTables(ctx, plan)

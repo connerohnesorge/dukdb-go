@@ -1255,6 +1255,9 @@ func formatPhysicalPlanWithAnalyze(
 	case *planner.PhysicalDummyScan:
 		sb.WriteString(fmt.Sprintf("%sDummyScan %s (actual rows=%d time=%.2fms)",
 			prefix, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
+	case *planner.PhysicalValues:
+		sb.WriteString(fmt.Sprintf("%sValues (%d rows) %s (actual rows=%d time=%.2fms)",
+			prefix, len(p.Rows), formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
 	case *planner.PhysicalTableFunctionScan:
 		sb.WriteString(fmt.Sprintf("%sTableFunction: %s %s (actual rows=%d time=%.2fms)",
 			prefix, p.FunctionName, formatCostAnnotation(cost), actualRows, float64(actualTime.Microseconds())/1000))
@@ -1306,6 +1309,8 @@ func (a *physicalPlanAdapter) PhysicalPlanType() string {
 		return "PhysicalWindow"
 	case *planner.PhysicalDummyScan:
 		return "PhysicalDummyScan"
+	case *planner.PhysicalValues:
+		return "PhysicalValues"
 	default:
 		return "Unknown"
 	}
@@ -1466,6 +1471,8 @@ func formatPhysicalPlanWithCost(
 		sb.WriteString(formatPhysicalPlanWithCost(p.Child, indent+1, costModel))
 	case *planner.PhysicalDummyScan:
 		sb.WriteString(fmt.Sprintf("%sDummyScan %s", prefix, formatCostAnnotation(cost)))
+	case *planner.PhysicalValues:
+		sb.WriteString(fmt.Sprintf("%sValues (%d rows) %s", prefix, len(p.Rows), formatCostAnnotation(cost)))
 	case *planner.PhysicalTableFunctionScan:
 		sb.WriteString(fmt.Sprintf("%sTableFunction: %s %s", prefix, p.FunctionName, formatCostAnnotation(cost)))
 	case *planner.PhysicalWindow:
@@ -1560,6 +1567,8 @@ func formatPhysicalPlan(plan planner.PhysicalPlan, indent int) string {
 		sb.WriteString(formatPhysicalPlan(p.Child, indent+1))
 	case *planner.PhysicalDummyScan:
 		sb.WriteString(fmt.Sprintf("%sDummyScan", prefix))
+	case *planner.PhysicalValues:
+		sb.WriteString(fmt.Sprintf("%sValues (%d rows)", prefix, len(p.Rows)))
 	case *planner.PhysicalTableFunctionScan:
 		sb.WriteString(fmt.Sprintf("%sTableFunction: %s", prefix, p.FunctionName))
 	default:
