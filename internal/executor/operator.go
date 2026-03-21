@@ -109,6 +109,10 @@ func isAggregateFunc(name string) bool {
 		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
 		// JSON aggregates
 		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
+		// Time series aggregates
+		"COUNT_IF", "FIRST", "LAST", "ANY_VALUE",
+		"ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY",
+		"HISTOGRAM",
 		// Regression aggregates
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
 		"CORR", "COVAR_POP", "COVAR_SAMP":
