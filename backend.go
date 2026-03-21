@@ -66,6 +66,20 @@ type BackendConn interface {
 	) ([]TypeInfo, []string, error)
 }
 
+// BackendConnStreaming is an optional interface for backends that support
+// streaming query results. Instead of materializing all rows in memory,
+// streaming delivers results one row at a time from DataChunk batches.
+type BackendConnStreaming interface {
+	BackendConn
+	// QueryStreaming executes a query and returns a StreamingResult for
+	// incremental row consumption, along with column names.
+	QueryStreaming(
+		ctx context.Context,
+		query string,
+		args []driver.NamedValue,
+	) (*StreamingResult, []string, error)
+}
+
 // BackendConnCatalog is an optional interface for backends that provide
 // access to the catalog. This is needed for virtual table registration.
 type BackendConnCatalog interface {
