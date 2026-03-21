@@ -1,0 +1,81 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "COMMENT ON",
+      "description": "Add CommentStmt AST type — In internal/parser/ast.go, add CommentStmt struct with ObjectType, Schema, ObjectName, ColumnName, Comment fields. Add stmtNode() method.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "COMMENT ON",
+      "description": "Parse COMMENT ON statement — In internal/parser/parser_ddl.go, add parseComment() function. Register COMMENT keyword in main parser switch. Handle TABLE, COLUMN, VIEW, INDEX, SCHEMA object types. Handle IS 'text' and IS NULL.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "COMMENT ON",
+      "description": "Add Comment field to catalog types — In internal/catalog/table.go, add Comment string to TableDef. In internal/catalog/column.go, add Comment string to ColumnDef.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "COMMENT ON",
+      "description": "Bind and plan COMMENT ON — Add BoundCommentStmt to internal/binder/statements.go. Add bindComment() to internal/binder/bind_ddl.go. Add PhysicalComment plan node to internal/planner/physical.go.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "COMMENT ON",
+      "description": "Execute COMMENT ON — Add executeComment() to internal/executor/ddl.go. Register in executor dispatch. Update catalog metadata with comment text.",
+      "status": "completed"
+    },
+    {
+      "id": "6",
+      "section": "ALTER TABLE ALTER COLUMN TYPE",
+      "description": "Add AlterTableAlterColumnType operation — In internal/parser/ast.go, add AlterTableAlterColumnType to AlterTableOp enum. Add AlterColumn string and NewColumnType fields to AlterTableStmt.",
+      "status": "completed"
+    },
+    {
+      "id": "7",
+      "section": "ALTER TABLE ALTER COLUMN TYPE",
+      "description": "Parse ALTER TABLE ALTER COLUMN TYPE — In internal/parser/parser_ddl.go, in parseAlterTable(), add case for ALTER [COLUMN] colname [SET DATA] TYPE typename.",
+      "status": "completed"
+    },
+    {
+      "id": "8",
+      "section": "ALTER TABLE ALTER COLUMN TYPE",
+      "description": "Bind and execute ALTER COLUMN TYPE — In bind_ddl.go, add case in bindAlterTable(). In ddl.go, add case in executeAlterTable() — update column type and convert storage data.",
+      "status": "completed"
+    },
+    {
+      "id": "9",
+      "section": "DELETE USING",
+      "description": "Add Using field to DeleteStmt — In internal/parser/ast.go, add Using []TableRef field to DeleteStmt.",
+      "status": "completed"
+    },
+    {
+      "id": "10",
+      "section": "DELETE USING",
+      "description": "Parse DELETE ... USING — In internal/parser/parser.go, in parseDelete(), add USING clause parsing after FROM table and before WHERE.",
+      "status": "completed"
+    },
+    {
+      "id": "11",
+      "section": "DELETE USING",
+      "description": "Bind and plan DELETE USING — In bind_stmt.go, extend bindDelete() to bind USING table references. In planner, generate cross-join of target + USING tables filtered by WHERE.",
+      "status": "completed"
+    },
+    {
+      "id": "12",
+      "section": "Integration Tests",
+      "description": "Integration tests — Test all three features: COMMENT ON (set, drop, column comments, errors), ALTER COLUMN TYPE (conversion, errors), DELETE USING (single table, multi-table, with RETURNING).",
+      "status": "pending"
+    }
+  ]
+}
