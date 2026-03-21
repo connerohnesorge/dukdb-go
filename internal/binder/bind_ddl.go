@@ -6,6 +6,7 @@ import (
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
 	"github.com/dukdb/dukdb-go/internal/parser"
+	internaltypes "github.com/dukdb/dukdb-go/internal/types"
 )
 
 // bindCreateView binds a CREATE VIEW statement.
@@ -391,8 +392,28 @@ func (b *Binder) bindAlterTable(
 			colDef.TypeInfo = s.AddColumn.TypeInfo
 		}
 		colDef.Nullable = !s.AddColumn.NotNull
-		colDef.HasDefault = s.AddColumn.Default != nil
+		if s.AddColumn.Default != nil {
+			colDef.HasDefault = true
+			if lit, ok := s.AddColumn.Default.(*parser.Literal); ok {
+				colDef.DefaultValue = lit.Value
+			}
+		}
 		bound.AddColumn = colDef
+
+	case parser.AlterTableAlterColumnType:
+		if s.AlterColumn == "" {
+			return nil, b.errorf("column name is required for ALTER COLUMN TYPE")
+		}
+		if _, ok := tableDef.GetColumnIndex(s.AlterColumn); !ok {
+			return nil, b.errorf("column not found: %s", s.AlterColumn)
+		}
+		// Resolve type from raw string
+		info, err := internaltypes.ParseTypeExpression(s.NewTypeRaw)
+		if err != nil {
+			return nil, b.errorf("invalid type %q: %v", s.NewTypeRaw, err)
+		}
+		bound.AlterColumn = s.AlterColumn
+		bound.NewColumnType = info.InternalType()
 
 	case parser.AlterTableSetOption:
 		// Not yet implemented
@@ -972,5 +993,49 @@ func (b *Binder) bindAlterSecret(
 	return &BoundAlterSecretStmt{
 		Name:    s.Name,
 		Options: s.Options,
+	}, nil
+}
+
+// bindComment binds a COMMENT ON statement, validating the target object exists.
+func (b *Binder) bindComment(s *parser.CommentStmt) (*BoundCommentStmt, error) {
+	schema := s.Schema
+	if schema == "" {
+		schema = "main"
+	}
+
+	// Validate object exists
+	switch s.ObjectType {
+	case "TABLE":
+		if _, ok := b.catalog.GetTableInSchema(schema, s.ObjectName); !ok {
+			return nil, b.errorf("table not found: %s", s.ObjectName)
+		}
+	case "COLUMN":
+		tableDef, ok := b.catalog.GetTableInSchema(schema, s.ObjectName)
+		if !ok {
+			return nil, b.errorf("table not found: %s", s.ObjectName)
+		}
+		if _, ok := tableDef.GetColumnIndex(s.ColumnName); !ok {
+			return nil, b.errorf("column %q not found in table %q", s.ColumnName, s.ObjectName)
+		}
+	case "VIEW":
+		if _, ok := b.catalog.GetViewInSchema(schema, s.ObjectName); !ok {
+			return nil, b.errorf("view not found: %s", s.ObjectName)
+		}
+	case "INDEX":
+		if _, ok := b.catalog.GetIndexInSchema(schema, s.ObjectName); !ok {
+			return nil, b.errorf("index not found: %s", s.ObjectName)
+		}
+	case "SCHEMA":
+		if _, ok := b.catalog.GetSchema(s.ObjectName); !ok {
+			return nil, b.errorf("schema not found: %s", s.ObjectName)
+		}
+	}
+
+	return &BoundCommentStmt{
+		ObjectType: s.ObjectType,
+		Schema:     schema,
+		ObjectName: s.ObjectName,
+		ColumnName: s.ColumnName,
+		Comment:    s.Comment,
 	}, nil
 }

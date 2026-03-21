@@ -53,6 +53,24 @@ func (b *Binder) bindSelect(
 		bound.CTEs = boundCTEs
 	}
 
+	// Collect named window definitions
+	if len(s.Windows) > 0 {
+		b.windowDefs = make(map[string]*parser.WindowDef, len(s.Windows))
+		for i := range s.Windows {
+			name := strings.ToUpper(s.Windows[i].Name)
+			if _, exists := b.windowDefs[name]; exists {
+				return nil, b.errorf("duplicate window name: %s", s.Windows[i].Name)
+			}
+			b.windowDefs[name] = &s.Windows[i]
+		}
+		// Resolve transitive references and detect cycles
+		for name := range b.windowDefs {
+			if _, err := b.resolveWindowDef(name, nil); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Bind FROM clause first to establish table bindings
 	if s.From != nil {
 		for _, table := range s.From.Tables {
@@ -3110,6 +3128,44 @@ func (b *Binder) bindDelete(
 		TableDef: tableDef,
 	}
 
+	// Bind USING tables
+	if len(s.Using) > 0 {
+		for _, usingRef := range s.Using {
+			usingSchema := usingRef.Schema
+			if usingSchema == "" {
+				usingSchema = "main"
+			}
+			usingTableDef, ok := b.catalog.GetTableInSchema(usingSchema, usingRef.TableName)
+			if !ok {
+				return nil, b.errorf("table not found: %s", usingRef.TableName)
+			}
+
+			usingAlias := usingRef.TableName
+			if usingRef.Alias != "" {
+				usingAlias = usingRef.Alias
+			}
+
+			boundRef := &BoundTableRef{
+				Schema:    usingSchema,
+				TableName: usingRef.TableName,
+				Alias:     usingAlias,
+				TableDef:  usingTableDef,
+			}
+
+			for i, col := range usingTableDef.Columns {
+				boundRef.Columns = append(boundRef.Columns, &BoundColumn{
+					Table:     usingAlias,
+					Column:    col.Name,
+					ColumnIdx: i,
+					Type:      col.Type,
+				})
+			}
+
+			b.scope.tables[usingAlias] = boundRef
+			bound.Using = append(bound.Using, boundRef)
+		}
+	}
+
 	// Bind WHERE
 	if s.Where != nil {
 		where, err := b.bindExpr(
@@ -3160,8 +3216,11 @@ func (b *Binder) bindCreateTable(
 		}
 		colDef.Nullable = !col.NotNull
 		if col.Default != nil {
-			// For now, just mark that there's a default
 			colDef.HasDefault = true
+			// Extract literal value from default expression if possible
+			if lit, ok := col.Default.(*parser.Literal); ok {
+				colDef.DefaultValue = lit.Value
+			}
 		}
 		bound.Columns = append(
 			bound.Columns,
@@ -3941,6 +4000,7 @@ func (b *Binder) bindSelectWithoutSetOp(s *parser.SelectStmt) (*BoundSelectStmt,
 		GroupBy:    s.GroupBy,
 		Having:     s.Having,
 		Qualify:    s.Qualify,
+		Windows:    s.Windows,
 		OrderBy:    nil, // ORDER BY is applied to the final result, not base case
 		Limit:      nil, // Same for LIMIT
 		Offset:     nil, // Same for OFFSET
@@ -4272,4 +4332,58 @@ func (b *Binder) bindQualifyWithSelectAliases(
 	delete(b.scope.tables, "__select_aliases__")
 
 	return boundQualify, err
+}
+
+// resolveWindowDef resolves a named window definition, handling transitive references.
+// visited tracks the chain for cycle detection.
+func (b *Binder) resolveWindowDef(name string, visited []string) (*parser.WindowDef, error) {
+	def, ok := b.windowDefs[name]
+	if !ok {
+		return nil, b.errorf("undefined window: %s", name)
+	}
+
+	if def.RefName == "" {
+		return def, nil
+	}
+
+	// Cycle detection
+	refUpper := strings.ToUpper(def.RefName)
+	for _, v := range visited {
+		if v == refUpper {
+			return nil, b.errorf("circular window reference: %s", def.RefName)
+		}
+	}
+
+	visited = append(visited, name)
+	base, err := b.resolveWindowDef(refUpper, visited)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge: base provides defaults, current overrides are NOT allowed for existing clauses
+	if len(def.PartitionBy) > 0 && len(base.PartitionBy) > 0 {
+		return nil, b.errorf("cannot override PARTITION BY of window %s", def.RefName)
+	}
+	if len(def.OrderBy) > 0 && len(base.OrderBy) > 0 {
+		return nil, b.errorf("cannot override ORDER BY of window %s", def.RefName)
+	}
+	if def.Frame != nil && base.Frame != nil {
+		return nil, b.errorf("cannot override frame of window %s", def.RefName)
+	}
+
+	// Merge base into def
+	if len(def.PartitionBy) == 0 {
+		def.PartitionBy = base.PartitionBy
+	}
+	if len(def.OrderBy) == 0 {
+		def.OrderBy = base.OrderBy
+	}
+	if def.Frame == nil {
+		def.Frame = base.Frame
+	}
+
+	// Clear RefName since we've resolved it
+	def.RefName = ""
+
+	return def, nil
 }

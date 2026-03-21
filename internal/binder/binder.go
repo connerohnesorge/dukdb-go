@@ -14,6 +14,7 @@ type Binder struct {
 	catalog     *catalog.Catalog
 	scope       *BindScope
 	udfResolver ScalarUDFResolver
+	windowDefs  map[string]*parser.WindowDef // Named window definitions from WINDOW clause
 }
 
 // BindScope represents the current binding scope with available tables and columns.
@@ -211,6 +212,8 @@ func (b *Binder) Bind(
 		return b.bindDropSchema(s)
 	case *parser.AlterTableStmt:
 		return b.bindAlterTable(s)
+	case *parser.CommentStmt:
+		return b.bindComment(s)
 	case *parser.BeginStmt:
 		return &BoundBeginStmt{}, nil
 	case *parser.CommitStmt:

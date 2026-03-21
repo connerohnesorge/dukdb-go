@@ -122,6 +122,7 @@ type BoundDeleteStmt struct {
 	Schema    string
 	Table     string
 	TableDef  *catalog.TableDef
+	Using     []*BoundTableRef     // USING clause bound table references
 	Where     BoundExpr
 	Returning []*BoundSelectColumn // RETURNING clause columns
 }
@@ -317,16 +318,31 @@ type BoundAlterTableStmt struct {
 	TableDef     *catalog.TableDef
 	Operation    parser.AlterTableOp
 	IfExists     bool               // IF EXISTS modifier
-	NewTableName string             // RENAME TO
-	OldColumn    string             // RENAME COLUMN
-	NewColumn    string             // RENAME COLUMN
-	DropColumn   string             // DROP COLUMN
-	AddColumn    *catalog.ColumnDef // ADD COLUMN
+	NewTableName  string             // RENAME TO
+	OldColumn     string             // RENAME COLUMN
+	NewColumn     string             // RENAME COLUMN
+	DropColumn    string             // DROP COLUMN
+	AddColumn     *catalog.ColumnDef // ADD COLUMN
+	AlterColumn   string             // ALTER COLUMN TYPE
+	NewColumnType dukdb.Type         // ALTER COLUMN TYPE
 }
 
 func (*BoundAlterTableStmt) boundStmtNode() {}
 
 func (*BoundAlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// BoundCommentStmt represents a bound COMMENT ON statement.
+type BoundCommentStmt struct {
+	ObjectType string
+	Schema     string
+	ObjectName string
+	ColumnName string
+	Comment    *string
+}
+
+func (*BoundCommentStmt) boundStmtNode() {}
+
+func (*BoundCommentStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
 
 // ---------- MERGE INTO Bound Statement Types ----------
 

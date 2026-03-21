@@ -252,7 +252,9 @@ func (b *Binder) bindBinaryExpr(
 		parser.OpIn,
 		parser.OpNotIn,
 		parser.OpIs,
-		parser.OpIsNot:
+		parser.OpIsNot,
+		parser.OpIsDistinctFrom,
+		parser.OpIsNotDistinctFrom:
 		resType = dukdb.TYPE_BOOLEAN
 	case parser.OpConcat:
 		resType = dukdb.TYPE_VARCHAR
@@ -788,6 +790,31 @@ func (b *Binder) bindIntervalLiteral(
 func (b *Binder) bindWindowExpr(
 	e *parser.WindowExpr,
 ) (*BoundWindowExpr, error) {
+	// Resolve named window reference
+	if e.RefName != "" {
+		refUpper := strings.ToUpper(e.RefName)
+		def, ok := b.windowDefs[refUpper]
+		if !ok {
+			return nil, b.errorf("undefined window: %s", e.RefName)
+		}
+		// Merge window def into the expression
+		if len(e.PartitionBy) == 0 {
+			e.PartitionBy = def.PartitionBy
+		} else if len(def.PartitionBy) > 0 {
+			return nil, b.errorf("cannot override PARTITION BY of window %s", e.RefName)
+		}
+		if len(e.OrderBy) == 0 {
+			e.OrderBy = def.OrderBy
+		} else if len(def.OrderBy) > 0 {
+			return nil, b.errorf("cannot override ORDER BY of window %s", e.RefName)
+		}
+		if e.Frame == nil {
+			e.Frame = def.Frame
+		} else if def.Frame != nil {
+			return nil, b.errorf("cannot override frame of window %s", e.RefName)
+		}
+	}
+
 	funcName := strings.ToUpper(e.Function.Name)
 
 	// Determine function type and validate it can be used as a window function

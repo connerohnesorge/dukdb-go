@@ -386,6 +386,8 @@ func inferFunctionResultType(
 	case "COALESCE":
 		// COALESCE returns the common type of all arguments
 		return inferCoalesceResultType(args)
+	case "IFNULL", "NVL":
+		return inferCoalesceResultType(args)
 	case "NULLIF":
 		// NULLIF returns the type of the first argument
 		if len(args) > 0 {
@@ -442,6 +444,7 @@ func inferFunctionResultType(
 		"STRPOS",
 		"INSTR",
 		"ASCII",
+		"ORD",
 		"UNICODE",
 		"LEVENSHTEIN",
 		"DAMERAU_LEVENSHTEIN",
@@ -477,7 +480,7 @@ func inferFunctionResultType(
 	case "DAYOFWEEK", "DAYOFYEAR", "WEEK", "QUARTER":
 		return dukdb.TYPE_INTEGER
 	// Date arithmetic functions (tasks 1.5, 1.6, 1.7, 1.8, 1.9, 1.10)
-	case "DATE_ADD", "DATE_SUB":
+	case "DATE_ADD", "DATEADD", "DATE_SUB":
 		// Return type matches first argument
 		if len(args) > 0 {
 			return args[0].ResultType()
@@ -485,7 +488,7 @@ func inferFunctionResultType(
 		return dukdb.TYPE_TIMESTAMP
 	case "DATE_DIFF":
 		return dukdb.TYPE_BIGINT
-	case "DATE_TRUNC":
+	case "DATE_TRUNC", "DATETRUNC":
 		return dukdb.TYPE_TIMESTAMP
 	case "DATE_PART":
 		return dukdb.TYPE_DOUBLE
@@ -695,10 +698,25 @@ func inferFunctionResultType(
 		// Boolean predicates
 		return dukdb.TYPE_BOOLEAN
 
-	// Bitwise function
+	// Bitwise functions
 	case "BIT_COUNT":
 		// BIT_COUNT returns INTEGER (count of set bits)
 		return dukdb.TYPE_INTEGER
+	case "BIT_LENGTH":
+		return dukdb.TYPE_BIGINT
+	case "GET_BIT":
+		return dukdb.TYPE_INTEGER
+	case "SET_BIT":
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_BLOB
+
+	// Encoding functions
+	case "ENCODE":
+		return dukdb.TYPE_BLOB
+	case "DECODE":
+		return dukdb.TYPE_VARCHAR
 
 	// JSON functions
 	case "JSON_EXTRACT":
@@ -897,7 +915,7 @@ func getFunctionArgTypes(
 			}
 			return types
 		}
-	case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "ASCII", "UNICODE", "MD5", "SHA256":
+	case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "ASCII", "ORD", "UNICODE", "MD5", "SHA256":
 		// Single string argument functions
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR}
@@ -951,6 +969,8 @@ func getFunctionArgTypes(
 		// COALESCE accepts homogeneous types - first arg determines type
 		// Return empty to let the first arg drive inference
 		return nil
+	case "IFNULL", "NVL":
+		return nil
 	case "NULLIF":
 		// NULLIF(value, value) - returns first arg type
 		// Both args should be same type for comparison
@@ -976,7 +996,7 @@ func getFunctionArgTypes(
 			return []dukdb.Type{dukdb.TYPE_TIMESTAMP}
 		}
 	// Date arithmetic functions
-	case "DATE_ADD", "DATE_SUB":
+	case "DATE_ADD", "DATEADD", "DATE_SUB":
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_TIMESTAMP, dukdb.TYPE_INTERVAL}
 		}
@@ -984,7 +1004,7 @@ func getFunctionArgTypes(
 		if argCount >= 3 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_TIMESTAMP, dukdb.TYPE_TIMESTAMP}
 		}
-	case "DATE_TRUNC", "DATE_PART":
+	case "DATE_TRUNC", "DATETRUNC", "DATE_PART":
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_TIMESTAMP}
 		}
@@ -1174,10 +1194,38 @@ func getFunctionArgTypes(
 			return []dukdb.Type{dukdb.TYPE_DOUBLE}
 		}
 
-	// Bitwise function
+	// Bitwise functions
 	case "BIT_COUNT":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_BIGINT}
+		}
+	case "BIT_LENGTH":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "GET_BIT":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_BLOB, dukdb.TYPE_INTEGER}
+		}
+	case "SET_BIT":
+		if argCount >= 3 {
+			return []dukdb.Type{dukdb.TYPE_BLOB, dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER}
+		}
+
+	// Encoding functions
+	case "ENCODE":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
+		}
+	case "DECODE":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_BLOB, dukdb.TYPE_VARCHAR}
+		}
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_BLOB}
 		}
 
 	// JSON functions
