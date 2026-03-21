@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
@@ -17,6 +18,7 @@ import (
 	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/wal"
+	"golang.org/x/text/unicode/norm"
 )
 
 // evaluateExpr evaluates an expression and returns the result.
@@ -1212,6 +1214,66 @@ func (e *Executor) evaluateFunctionCall(
 			toString(args[1]),
 			toString(args[2]),
 		), nil
+
+	case "TRANSLATE":
+		if len(args) != 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "TRANSLATE requires 3 arguments",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		str := toString(args[0])
+		fromStr := toString(args[1])
+		toStr := toString(args[2])
+
+		fromRunes := []rune(fromStr)
+		toRunes := []rune(toStr)
+		mapping := make(map[rune]rune)
+		deleteSet := make(map[rune]bool)
+		for i, r := range fromRunes {
+			if i < len(toRunes) {
+				mapping[r] = toRunes[i]
+			} else {
+				deleteSet[r] = true
+			}
+		}
+
+		var sb strings.Builder
+		for _, r := range str {
+			if deleteSet[r] {
+				continue
+			}
+			if replacement, ok := mapping[r]; ok {
+				sb.WriteRune(replacement)
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+		return sb.String(), nil
+
+	case "STRIP_ACCENTS":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "STRIP_ACCENTS requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		str := toString(args[0])
+		// NFD decompose, then remove combining diacritical marks
+		t := norm.NFD.String(str)
+		var sb strings.Builder
+		for _, r := range t {
+			if !unicode.Is(unicode.Mn, r) {
+				sb.WriteRune(r)
+			}
+		}
+		return sb.String(), nil
 
 	// Regular Expression Functions
 	case "REGEXP_MATCHES":
@@ -2706,6 +2768,82 @@ func (e *Executor) evaluateFunctionCall(
 			}
 		}
 		return lrResult, nil
+
+	// System functions
+	case "CURRENT_DATABASE":
+		if ctx.conn != nil {
+			dbName := ctx.conn.GetSetting("database_name")
+			if dbName != "" {
+				return dbName, nil
+			}
+		}
+		return "memory", nil
+
+	case "CURRENT_SCHEMA":
+		if ctx.conn != nil {
+			schema := ctx.conn.GetSetting("search_path")
+			if schema != "" {
+				return schema, nil
+			}
+		}
+		return "main", nil
+
+	case "VERSION":
+		return "v1.4.3 (dukdb-go)", nil
+
+	// Date/time functions
+	case "DAYNAME":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DAYNAME requires 1 argument")
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		dnTime, err := toTime(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return dnTime.Weekday().String(), nil
+
+	case "MONTHNAME":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MONTHNAME requires 1 argument")
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		mnTime, err := toTime(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return mnTime.Month().String(), nil
+
+	case "YEARWEEK":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("YEARWEEK requires 1 argument")
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		ywTime, err := toTime(args[0])
+		if err != nil {
+			return nil, err
+		}
+		ywYear, ywWeek := ywTime.ISOWeek()
+		return int64(ywYear*100 + ywWeek), nil
+
+	case "EPOCH_US":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("EPOCH_US requires 1 argument")
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		euTime, err := toTime(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return euTime.UnixMicro(), nil
 
 	default:
 		// For aggregate functions called in scalar context, return NULL
