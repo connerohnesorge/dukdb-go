@@ -84,6 +84,15 @@ func pushFilterIntoJoin(cond binder.BoundExpr, left, right rewrite.Plan, joinTyp
 		}
 	}
 
+	// If no filters were pushed to either side, the plan is unchanged.
+	// Return false to avoid infinite rewrite loops.
+	if len(leftFilters) == 0 && len(rightFilters) == 0 {
+		return ctx.Adapter.NewFilter(
+			ctx.Adapter.NewJoin(left, right, joinType, joinCond),
+			combineANDList(keep),
+		), false
+	}
+
 	if len(leftFilters) > 0 {
 		left = addFilter(left, combineANDList(leftFilters), ctx)
 	}
