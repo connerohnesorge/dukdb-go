@@ -1,0 +1,27 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Implement ENUM_RANGE — In expr.go, add case. Look up type via e.catalog.GetType(). Verify TypeKind is ENUM. Return EnumValues as []any. In binder, return TYPE_ANY.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Implement ENUM_FIRST and ENUM_LAST — Same type lookup. ENUM_FIRST returns EnumValues[0], ENUM_LAST returns EnumValues[len-1]. In binder, return TYPE_VARCHAR.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Integration tests — Test all three functions with valid enum, non-existent type error, NULL input, single-value enum.",
+      "status": "completed"
+    }
+  ]
+}

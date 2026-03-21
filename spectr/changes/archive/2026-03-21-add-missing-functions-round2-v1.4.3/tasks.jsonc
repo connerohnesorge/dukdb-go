@@ -1,0 +1,51 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Implement SHA1 — In internal/executor/hash.go, add sha1Value() following SHA256 pattern. In expr.go, add case SHA1 near SHA256. In binder utils.go, add SHA1 to VARCHAR return case.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Implement SETSEED — In internal/executor/expr.go, add case SETSEED near RANDOM. Accept float between 0 and 1, store as connection setting. Update randomValue() in math.go to check for set seed.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Implement LIST_VALUE / LIST_PACK — In internal/executor/expr.go, add case LIST_VALUE, LIST_PACK near MAP. Return []any containing all arguments including NULLs. In binder, return TYPE_ANY.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Implement ANY_VALUE aggregate — In internal/executor/physical_aggregate.go, add case ANY_VALUE after FIRST. Reuse computeFirst(). Register in aggregate list at operator.go. In binder, return first arg type.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Implement HISTOGRAM aggregate — In internal/executor/physical_aggregate.go, add case HISTOGRAM. Create computeHistogram(). Register in operator.go. In binder, return TYPE_ANY.",
+      "status": "completed"
+    },
+    {
+      "id": "6",
+      "section": "",
+      "description": "Add ARG_MIN / ARG_MAX aliases — In physical_aggregate.go, add ARG_MIN to ARGMIN case and ARG_MAX to ARGMAX case. Register aliases in operator.go and binder.",
+      "status": "completed"
+    },
+    {
+      "id": "7",
+      "section": "",
+      "description": "Integration tests — Test all functions with edge cases: NULL inputs, empty tables, type validation. Verify SHA1 against known test vectors. Verify SETSEED reproducibility. Verify HISTOGRAM with various types.",
+      "status": "completed"
+    }
+  ]
+}
