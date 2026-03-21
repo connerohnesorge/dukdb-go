@@ -653,6 +653,110 @@ func (e *Executor) executeAlterTable(
 		// Update catalog type
 		tableDef.Columns[colIdx].Type = newType
 
+	case parser.AlterTableAddConstraint:
+		constraint := plan.Constraint
+		if constraint == nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "no constraint specified for ADD CONSTRAINT",
+			}
+		}
+
+		// Convert parser.TableConstraint to catalog constraint
+		switch constraint.Type {
+		case "UNIQUE":
+			// Validate columns exist
+			for _, col := range constraint.Columns {
+				if _, ok := tableDef.GetColumnIndex(col); !ok {
+					return nil, &dukdb.Error{
+						Type: dukdb.ErrorTypeExecutor,
+						Msg:  fmt.Sprintf("column %q does not exist in table %q", col, plan.Table),
+					}
+				}
+			}
+			catalogConstraint := &catalog.UniqueConstraintDef{
+				Name:    constraint.Name,
+				Columns: constraint.Columns,
+			}
+			tableDef.Constraints = append(tableDef.Constraints, catalogConstraint)
+
+		case "CHECK":
+			catalogConstraint := &catalog.CheckConstraintDef{
+				Name:       constraint.Name,
+				Expression: fmt.Sprintf("%v", constraint.Expression),
+			}
+			tableDef.Constraints = append(tableDef.Constraints, catalogConstraint)
+
+		case "FOREIGN_KEY":
+			// Validate referenced table and columns exist
+			refTable, refExists := e.catalog.GetTableInSchema(plan.Schema, constraint.RefTable)
+			if !refExists {
+				refTable, refExists = e.catalog.GetTable(constraint.RefTable)
+			}
+			if !refExists {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeConstraint,
+					Msg:  fmt.Sprintf("referenced table %q does not exist", constraint.RefTable),
+				}
+			}
+			for _, col := range constraint.RefColumns {
+				if _, ok := refTable.GetColumnIndex(col); !ok {
+					return nil, &dukdb.Error{
+						Type: dukdb.ErrorTypeConstraint,
+						Msg:  fmt.Sprintf("referenced column %q does not exist in table %q", col, constraint.RefTable),
+					}
+				}
+			}
+			// Validate local columns exist
+			for _, col := range constraint.Columns {
+				if _, ok := tableDef.GetColumnIndex(col); !ok {
+					return nil, &dukdb.Error{
+						Type: dukdb.ErrorTypeExecutor,
+						Msg:  fmt.Sprintf("column %q does not exist in table %q", col, plan.Table),
+					}
+				}
+			}
+			catalogConstraint := &catalog.ForeignKeyConstraintDef{
+				Name:       constraint.Name,
+				Columns:    constraint.Columns,
+				RefTable:   constraint.RefTable,
+				RefColumns: constraint.RefColumns,
+			}
+			tableDef.Constraints = append(tableDef.Constraints, catalogConstraint)
+
+		default:
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("unsupported constraint type: %s", constraint.Type),
+			}
+		}
+
+	case parser.AlterTableDropConstraint:
+		constraintName := plan.ConstraintName
+		found := false
+		for i, c := range tableDef.Constraints {
+			var name string
+			switch ct := c.(type) {
+			case *catalog.UniqueConstraintDef:
+				name = ct.Name
+			case *catalog.CheckConstraintDef:
+				name = ct.Name
+			case *catalog.ForeignKeyConstraintDef:
+				name = ct.Name
+			}
+			if strings.EqualFold(name, constraintName) {
+				tableDef.Constraints = append(tableDef.Constraints[:i], tableDef.Constraints[i+1:]...)
+				found = true
+				break
+			}
+		}
+		if !found && !plan.IfExists {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("constraint %q does not exist on table %q", constraintName, plan.Table),
+			}
+		}
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
