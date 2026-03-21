@@ -2604,9 +2604,45 @@ func (e *Executor) executeCreateTable(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalCreateTable,
 ) (*ExecutionResult, error) {
+	// OR REPLACE and IF NOT EXISTS are mutually exclusive
+	if plan.OrReplace && plan.IfNotExists {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "cannot use both OR REPLACE and IF NOT EXISTS",
+		}
+	}
+
+	// TEMPORARY: override schema to temp
+	schema := plan.Schema
+	if plan.Temporary {
+		schema = "temp"
+		// Auto-create temp schema if needed
+		if _, ok := e.catalog.GetSchema(schema); !ok {
+			if _, err := e.catalog.CreateSchema(schema); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// OR REPLACE: drop existing table first
+	if plan.OrReplace {
+		_, exists := e.catalog.GetTableInSchema(schema, plan.Table)
+		if exists {
+			// Drop from storage first
+			if err := e.storage.DropTable(plan.Table); err != nil &&
+				err != dukdb.ErrTableNotFound {
+				return nil, err
+			}
+			// Drop from catalog
+			if err := e.catalog.DropTableInSchema(schema, plan.Table); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Check if table already exists
 	_, exists := e.catalog.GetTableInSchema(
-		plan.Schema,
+		schema,
 		plan.Table,
 	)
 	if exists {
@@ -2642,7 +2678,7 @@ func (e *Executor) executeCreateTable(
 			continue
 		}
 		// Validate parent table exists
-		parentDef, exists := e.catalog.GetTableInSchema(plan.Schema, fk.RefTable)
+		parentDef, exists := e.catalog.GetTableInSchema(schema, fk.RefTable)
 		if !exists {
 			// Try default schema
 			parentDef, exists = e.catalog.GetTable(fk.RefTable)
@@ -2679,7 +2715,7 @@ func (e *Executor) executeCreateTable(
 	}
 
 	// Add to catalog
-	if err := e.catalog.CreateTableInSchema(plan.Schema, tableDef); err != nil {
+	if err := e.catalog.CreateTableInSchema(schema, tableDef); err != nil {
 		return nil, err
 	}
 
@@ -2691,7 +2727,7 @@ func (e *Executor) executeCreateTable(
 	if _, err := e.storage.CreateTable(plan.Table, types); err != nil {
 		// Rollback catalog change
 		_ = e.catalog.DropTableInSchema(
-			plan.Schema,
+			schema,
 			plan.Table,
 		)
 
@@ -2709,13 +2745,13 @@ func (e *Executor) executeCreateTable(
 			}
 		}
 		entry := &wal.CreateTableEntry{
-			Schema:  plan.Schema,
+			Schema:  schema,
 			Name:    plan.Table,
 			Columns: columns,
 		}
 		if err := e.wal.WriteEntry(entry); err != nil {
 			// Rollback catalog and storage changes
-			_ = e.catalog.DropTableInSchema(plan.Schema, plan.Table)
+			_ = e.catalog.DropTableInSchema(schema, plan.Table)
 			_ = e.storage.DropTable(plan.Table)
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}

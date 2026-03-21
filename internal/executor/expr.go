@@ -67,6 +67,35 @@ func (e *Executor) evaluateExpr(
 
 		return nil, nil
 
+	case *binder.BoundFieldAccess:
+		// Evaluate the struct expression
+		structVal, err := e.evaluateExpr(ctx, ex.Struct, row)
+		if err != nil {
+			return nil, err
+		}
+		if structVal == nil {
+			return nil, nil // NULL propagation
+		}
+		m, ok := structVal.(map[string]any)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("expected struct value for field access, got %T", structVal),
+			}
+		}
+		// Try exact field name first
+		val, exists := m[ex.Field]
+		if exists {
+			return val, nil
+		}
+		// Case-insensitive fallback
+		for k, v := range m {
+			if strings.EqualFold(k, ex.Field) {
+				return v, nil
+			}
+		}
+		return nil, nil // Field not found returns NULL
+
 	case *binder.BoundParameter:
 		if ctx.Args == nil || ex.Position <= 0 || ex.Position > len(ctx.Args) {
 			return nil, nil
@@ -1947,11 +1976,46 @@ func (e *Executor) evaluateFunctionCall(
 		return evalMakeTime(args)
 
 	// Formatting/Parsing functions
-	case "STRFTIME":
+	case "STRFTIME", "TO_CHAR":
 		return evalStrftime(args)
 
 	case "STRPTIME":
 		return evalStrptime(args)
+
+	case "TO_DATE":
+		// TO_DATE(string, format) or TO_DATE(string)
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("TO_DATE requires 1 or 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		if len(args) == 2 {
+			// Use STRPTIME-style parsing, then convert to DATE
+			result, err := evalStrptime(args)
+			if err != nil {
+				return nil, err
+			}
+			// evalStrptime returns int64 (microseconds since epoch)
+			if ts, ok := result.(int64); ok {
+				t := timestampToTime(ts)
+				return timeToDate(t), nil
+			}
+			return result, nil
+		}
+		// 1-arg: auto-detect ISO format
+		toDateStr := toString(args[0])
+		toDateT, toDateErr := time.Parse("2006-01-02", toDateStr)
+		if toDateErr != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("TO_DATE: cannot parse %q as date", toDateStr),
+			}
+		}
+		return timeToDate(toDateT), nil
 
 	case "TO_TIMESTAMP":
 		return evalToTimestamp(args)
@@ -3048,6 +3112,29 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return lrResult, nil
 
+	case "GENERATE_SUBSCRIPTS":
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("GENERATE_SUBSCRIPTS requires 1 or 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		gsArr, gsOk := args[0].([]any)
+		if !gsOk {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "GENERATE_SUBSCRIPTS requires a list argument",
+			}
+		}
+		gsResult := make([]any, len(gsArr))
+		for gsI := range gsArr {
+			gsResult[gsI] = int64(gsI + 1)
+		}
+		return gsResult, nil
+
 	// System functions
 	case "CURRENT_DATABASE":
 		if ctx.conn != nil {
@@ -3485,6 +3572,19 @@ func (e *Executor) computeAggregate(
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  "expected aggregate function",
 		}
+	}
+
+	// Apply FILTER clause: pre-filter rows before aggregation
+	if fn.Filter != nil {
+		filteredRows := make([]map[string]any, 0, len(rows))
+		for _, row := range rows {
+			filterVal, err := e.evaluateExpr(ctx, fn.Filter, row)
+			if err != nil || !toBool(filterVal) {
+				continue
+			}
+			filteredRows = append(filteredRows, row)
+		}
+		rows = filteredRows
 	}
 
 	switch fn.Name {

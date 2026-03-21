@@ -304,6 +304,19 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 	}
 
+	// Apply FILTER clause: pre-filter rows before aggregation
+	if fn.Filter != nil {
+		filteredRows := make([]map[string]any, 0, len(rows))
+		for _, row := range rows {
+			filterVal, err := op.executor.evaluateExpr(op.ctx, fn.Filter, row)
+			if err != nil || !toBool(filterVal) {
+				continue
+			}
+			filteredRows = append(filteredRows, row)
+		}
+		rows = filteredRows
+	}
+
 	switch fn.Name {
 	case "COUNT":
 		// COUNT(*) - count all rows
