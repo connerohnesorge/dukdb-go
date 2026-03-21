@@ -195,6 +195,8 @@ func (c *EngineConn) Execute(
 		return c.handleReleaseSavepoint(s)
 	case *parser.SetStmt:
 		return c.handleSet(s)
+	case *parser.ResetStmt:
+		return c.handleReset(s)
 	case *parser.PrepareStmt:
 		return c.handlePrepare(s, query)
 	case *parser.ExecuteStmt:
@@ -576,6 +578,30 @@ func (c *EngineConn) handleSet(stmt *parser.SetStmt) (int64, error) {
 		// In a full implementation, we might store these in a config map
 		return 0, nil
 	}
+}
+
+// handleReset handles the RESET statement by resetting variables to defaults.
+func (c *EngineConn) handleReset(stmt *parser.ResetStmt) (int64, error) {
+	if stmt.All {
+		// Reset all settings to defaults
+		c.defaultIsolationLevel = parser.IsolationLevelSerializable
+		c.maxFilesPerGlob = dukdb.DefaultMaxFilesPerGlob
+		c.fileGlobTimeout = dukdb.DefaultFileGlobTimeout
+		return 0, nil
+	}
+
+	switch stmt.Variable {
+	case "default_transaction_isolation", "transaction_isolation":
+		c.defaultIsolationLevel = parser.IsolationLevelSerializable
+	case "max_files_per_glob":
+		c.maxFilesPerGlob = dukdb.DefaultMaxFilesPerGlob
+	case "file_glob_timeout":
+		c.fileGlobTimeout = dukdb.DefaultFileGlobTimeout
+	default:
+		// Silently accept unknown variables (matching SET behavior)
+		return 0, nil
+	}
+	return 0, nil
 }
 
 // parseIsolationLevelString converts a string to an IsolationLevel.
