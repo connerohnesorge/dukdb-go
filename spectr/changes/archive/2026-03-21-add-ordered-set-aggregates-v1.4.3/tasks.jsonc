@@ -1,0 +1,33 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Parse WITHIN GROUP syntax — After closing paren of function call, check for WITHIN GROUP (ORDER BY ...). Map to existing FunctionCall.OrderBy field. Error if both internal ORDER BY and WITHIN GROUP are used.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add LISTAGG aggregate dispatch — In physical_aggregate.go and expr.go, add LISTAGG case near STRING_AGG. Default delimiter is empty string. Register in operator.go, binder, and expr.go aggregate passthrough.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add LISTAGG type inference — In binder/utils.go, add LISTAGG to STRING_AGG/GROUP_CONCAT cases.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test WITHIN GROUP with PERCENTILE_CONT, MODE. Test LISTAGG with delimiter, no delimiter, GROUP BY, NULL values. Test error for conflicting ORDER BY.",
+      "status": "completed"
+    }
+  ]
+}
