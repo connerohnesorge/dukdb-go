@@ -106,7 +106,7 @@ func isAggregateFunc(name string) bool {
 		// Approximate aggregates
 		"APPROX_COUNT_DISTINCT", "APPROX_MEDIAN", "APPROX_QUANTILE",
 		// String/list aggregates
-		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
+		"STRING_AGG", "GROUP_CONCAT", "LISTAGG", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
 		// JSON aggregates
 		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
 		// Time series aggregates

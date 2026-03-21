@@ -3218,7 +3218,7 @@ func (e *Executor) evaluateFunctionCall(
 		case "APPROX_COUNT_DISTINCT", "APPROX_QUANTILE", "APPROX_MEDIAN":
 			return nil, nil
 		// String/List aggregates
-		case "STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT":
+		case "STRING_AGG", "GROUP_CONCAT", "LISTAGG", "LIST", "ARRAY_AGG", "LIST_DISTINCT":
 			return nil, nil
 		// Time series aggregates
 		case "COUNT_IF", "FIRST", "LAST", "ANY_VALUE", "ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY", "HISTOGRAM":
@@ -3653,6 +3653,20 @@ func (e *Executor) computeAggregate(
 		return computeQuantile(values, q)
 
 	case "PERCENTILE_CONT":
+		// WITHIN GROUP syntax: PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY col)
+		if len(fn.OrderBy) > 0 && len(fn.Args) >= 1 {
+			values, err := e.collectAggValues(ctx, fn.OrderBy[0].Expr, rows)
+			if err != nil {
+				return nil, err
+			}
+			pVal, err := e.evaluateExpr(ctx, fn.Args[0], nil)
+			if err != nil {
+				return nil, err
+			}
+			p := toFloat64Value(pVal)
+			return computePercentileCont(values, p)
+		}
+		// Traditional syntax: PERCENTILE_CONT(col, p)
 		if len(fn.Args) < 2 {
 			return nil, nil
 		}
@@ -3668,6 +3682,20 @@ func (e *Executor) computeAggregate(
 		return computePercentileCont(values, p)
 
 	case "PERCENTILE_DISC":
+		// WITHIN GROUP syntax: PERCENTILE_DISC(p) WITHIN GROUP (ORDER BY col)
+		if len(fn.OrderBy) > 0 && len(fn.Args) >= 1 {
+			values, err := e.collectAggValues(ctx, fn.OrderBy[0].Expr, rows)
+			if err != nil {
+				return nil, err
+			}
+			pVal, err := e.evaluateExpr(ctx, fn.Args[0], nil)
+			if err != nil {
+				return nil, err
+			}
+			p := toFloat64Value(pVal)
+			return computePercentileDisc(values, p)
+		}
+		// Traditional syntax: PERCENTILE_DISC(col, p)
 		if len(fn.Args) < 2 {
 			return nil, nil
 		}
@@ -3683,6 +3711,14 @@ func (e *Executor) computeAggregate(
 		return computePercentileDisc(values, p)
 
 	case "MODE":
+		// WITHIN GROUP syntax: MODE() WITHIN GROUP (ORDER BY col)
+		if len(fn.OrderBy) > 0 {
+			values, err := e.collectAggValues(ctx, fn.OrderBy[0].Expr, rows)
+			if err != nil {
+				return nil, err
+			}
+			return computeMode(values)
+		}
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -3773,6 +3809,26 @@ func (e *Executor) computeAggregate(
 		}
 		// Get delimiter from second argument, default to comma
 		delimiter := ","
+		if len(fn.Args) >= 2 {
+			delimVal, err := e.evaluateExpr(ctx, fn.Args[1], nil)
+			if err != nil {
+				return nil, err
+			}
+			if delimVal != nil {
+				delimiter = toString(delimVal)
+			}
+		}
+		return computeStringAgg(values, delimiter)
+
+	case "LISTAGG":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValuesWithOrderBy(ctx, fn.Args[0], fn.OrderBy, rows)
+		if err != nil {
+			return nil, err
+		}
+		delimiter := "" // LISTAGG defaults to empty string
 		if len(fn.Args) >= 2 {
 			delimVal, err := e.evaluateExpr(ctx, fn.Args[1], nil)
 			if err != nil {
