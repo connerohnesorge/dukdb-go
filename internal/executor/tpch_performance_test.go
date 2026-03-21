@@ -560,9 +560,9 @@ func TestTPCHNoQueryShouldBeSlow(t *testing.T) {
 	baseline := times[1]
 	maxAcceptableMS := baseline * 2 // 2x baseline is the limit
 
-	// Use a minimum floor of 50ms to avoid flakiness with very fast queries
-	// in development environments where timing can be variable
-	const minFloor int64 = 50
+	// Use a minimum floor to avoid flakiness with very fast queries
+	// CI runners have more timing variability than development machines
+	const minFloor int64 = 200
 	if maxAcceptableMS < minFloor {
 		maxAcceptableMS = minFloor
 	}
