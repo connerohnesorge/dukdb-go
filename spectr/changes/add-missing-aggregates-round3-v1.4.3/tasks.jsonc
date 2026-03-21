@@ -1,0 +1,38 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add PRODUCT aggregate — Multiply all non-NULL values with identity 1.0. Register in isAggregateFunc() and inferFunctionResultType().",
+      "status": "in_progress"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add MAD aggregate — Collect values, compute median, then compute median of absolute deviations.",
+      "status": "in_progress"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add FAVG and FSUM aggregates — Kahan summation for floating-point accuracy.",
+      "status": "in_progress"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Add BITSTRING_AGG — Aggregate boolean values into a VARCHAR bitstring.",
+      "status": "in_progress"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Integration tests — Test all aggregates with NULL values, empty sets, GROUP BY.",
+      "status": "pending"
+    }
+  ]
+}
