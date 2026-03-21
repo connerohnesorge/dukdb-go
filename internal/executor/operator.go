@@ -439,6 +439,8 @@ func (e *Executor) executeWithContext(
 		return e.executeDropSchema(execCtx, p)
 	case *planner.PhysicalAlterTable:
 		return e.executeAlterTable(execCtx, p)
+	case *planner.PhysicalComment:
+		return e.executeComment(execCtx, p)
 	case *planner.PhysicalMerge:
 		return e.executeMerge(execCtx, p)
 	case *planner.PhysicalLateralJoin:
