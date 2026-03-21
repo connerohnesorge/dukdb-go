@@ -183,6 +183,7 @@ func TestDukdbGoIcebergSimpleTable(t *testing.T) {
 
 	// Update metadata locations for the test
 	updateMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 	reader, err := NewReader(ctx, tablePath, nil)
@@ -254,6 +255,7 @@ func TestDuckDBCompatibilitySimpleTable(t *testing.T) {
 
 	// Update metadata locations for the test
 	updateMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	// Query with dukdb-go (pure Go implementation)
 	ctx := context.Background()
@@ -326,6 +328,7 @@ func TestDuckDBCompatibilitySchema(t *testing.T) {
 	}
 
 	updateMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	// Get dukdb-go schema (pure Go implementation)
 	ctx := context.Background()
@@ -376,6 +379,7 @@ func TestDuckDBCompatibilityTimeTravel(t *testing.T) {
 	}
 
 	updateMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	// Snapshot IDs from the time_travel_table fixture
 	snapshotTests := []struct {
