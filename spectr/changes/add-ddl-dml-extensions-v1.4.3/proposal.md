@@ -2,7 +2,7 @@
 
 **Change ID:** `add-ddl-dml-extensions-v1.4.3`
 **Created:** 2026-03-20
-**Status:** PROPOSED
+**Status:** IMPLEMENTED — COMMENT ON at parser.go:116/parser_ddl.go:608, ALTER COLUMN TYPE at ast.go:663/parser_ddl.go:566, DELETE USING at parser.go:1910
 **Scope:** Medium — Three new DDL/DML features across parser, binder, planner, executor, and catalog
 **Estimated Complexity:** Medium — COMMENT ON and ALTER COLUMN TYPE touch 5 layers; DELETE USING touches 4
 **User-Visible:** Yes — New SQL statements
