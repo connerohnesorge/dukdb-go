@@ -36,6 +36,9 @@ type TableDef struct {
 	// Statistics contains optimizer statistics for this table.
 	// May be nil if table has not been analyzed.
 	Statistics *optimizer.TableStatistics
+
+	// Comment is an optional user-defined comment for the table.
+	Comment string
 }
 
 // NewTableDef creates a new TableDef instance.

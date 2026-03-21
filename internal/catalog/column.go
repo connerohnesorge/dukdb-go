@@ -24,6 +24,9 @@ type ColumnDef struct {
 
 	// HasDefault indicates whether a default value is set.
 	HasDefault bool
+
+	// Comment is an optional user-defined comment for the column.
+	Comment string
 }
 
 // NewColumnDef creates a new ColumnDef instance.

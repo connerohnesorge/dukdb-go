@@ -17,6 +17,9 @@ type ViewDef struct {
 	// Each entry is a table name (lowercased for case-insensitive comparison).
 	// These are unqualified table names within the same schema.
 	TableDependencies []string
+
+	// Comment is an optional user-defined comment for the view.
+	Comment string
 }
 
 // NewViewDef creates a new ViewDef instance.

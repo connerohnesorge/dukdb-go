@@ -19,6 +19,9 @@ type IndexDef struct {
 
 	// IsPrimary indicates whether this is a primary key index.
 	IsPrimary bool
+
+	// Comment is an optional user-defined comment for the index.
+	Comment string
 }
 
 // NewIndexDef creates a new IndexDef instance.

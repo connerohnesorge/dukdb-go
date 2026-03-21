@@ -604,6 +604,7 @@ type Schema struct {
 	sequences map[string]*SequenceDef
 	types     map[string]*TypeEntry
 	macros    map[string]*MacroDef
+	Comment   string
 }
 
 // NewSchema creates a new Schema instance.
