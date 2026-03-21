@@ -66,6 +66,7 @@ type Visitor interface {
 	// Session configuration statement visitors
 	VisitSetStmt(stmt *SetStmt)
 	VisitShowStmt(stmt *ShowStmt)
+	VisitDescribeStmt(stmt *DescribeStmt)
 
 	// Prepared statement visitors
 	VisitPrepareStmt(stmt *PrepareStmt)
@@ -90,4 +91,10 @@ type Visitor interface {
 	VisitUseStmt(stmt *UseStmt)
 	VisitCreateDatabaseStmt(stmt *CreateDatabaseStmt)
 	VisitDropDatabaseStmt(stmt *DropDatabaseStmt)
+
+	// SUMMARIZE statement visitor
+	VisitSummarizeStmt(stmt *SummarizeStmt)
+
+	// CALL statement visitor
+	VisitCallStmt(stmt *CallStmt)
 }

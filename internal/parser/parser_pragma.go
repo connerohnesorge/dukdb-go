@@ -272,6 +272,9 @@ func (p *parser) parseSetValue() (string, error) {
 //   - SHOW variable
 //   - SHOW transaction_isolation
 //   - SHOW default_transaction_isolation
+//   - SHOW TABLES
+//   - SHOW ALL TABLES
+//   - SHOW COLUMNS FROM table
 func (p *parser) parseShow() (*ShowStmt, error) {
 	if err := p.expectKeyword("SHOW"); err != nil {
 		return nil, err
@@ -279,11 +282,175 @@ func (p *parser) parseShow() (*ShowStmt, error) {
 
 	stmt := &ShowStmt{}
 
-	// Parse variable name
+	// SHOW ALL TABLES or SHOW ALL (settings)
+	if p.isKeyword("ALL") {
+		p.advance()
+		if p.isKeyword("TABLES") {
+			p.advance()
+			stmt.Variable = "__all_tables"
+			return stmt, nil
+		}
+		stmt.Variable = "__all_settings"
+		return stmt, nil
+	}
+
+	// SHOW TABLES
+	if p.isKeyword("TABLES") {
+		p.advance()
+		stmt.Variable = "__tables"
+		return stmt, nil
+	}
+
+	// SHOW COLUMNS FROM table
+	if p.isKeyword("COLUMNS") {
+		p.advance()
+		if err := p.expectKeyword("FROM"); err != nil {
+			return nil, err
+		}
+		tableName, err := p.expect(tokenIdent)
+		if err != nil {
+			return nil, p.errorf("expected table name after SHOW COLUMNS FROM")
+		}
+		stmt.Variable = "__columns"
+		stmt.TableName = tableName.value
+		return stmt, nil
+	}
+
+	// SHOW variable (existing behavior)
 	if p.current().typ != tokenIdent {
 		return nil, p.errorf("expected variable name after SHOW")
 	}
 	stmt.Variable = p.advance().value
+
+	return stmt, nil
+}
+
+// parseDescribe parses a DESCRIBE or DESC statement.
+// Supports:
+//   - DESCRIBE tablename
+//   - DESCRIBE schema.tablename
+//   - DESCRIBE SELECT ...
+func (p *parser) parseDescribe() (*DescribeStmt, error) {
+	p.advance() // consume DESCRIBE/DESC
+	stmt := &DescribeStmt{}
+
+	// DESCRIBE SELECT ... or DESCRIBE WITH ...
+	if p.isKeyword("SELECT") || p.isKeyword("WITH") {
+		var query Statement
+		var err error
+		if p.isKeyword("SELECT") {
+			query, err = p.parseSelect()
+		} else {
+			query, err = p.parseWithSelect()
+		}
+		if err != nil {
+			return nil, err
+		}
+		stmt.Query = query
+		return stmt, nil
+	}
+
+	// DESCRIBE [schema.]table
+	name, err := p.expect(tokenIdent)
+	if err != nil {
+		return nil, p.errorf("expected table name or SELECT after DESCRIBE")
+	}
+	stmt.TableName = name.value
+
+	if p.current().typ == tokenDot {
+		p.advance()
+		tableName, err := p.expect(tokenIdent)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Schema = stmt.TableName
+		stmt.TableName = tableName.value
+	}
+
+	return stmt, nil
+}
+
+// parseSummarize parses a SUMMARIZE statement.
+// Supports:
+//   - SUMMARIZE tablename
+//   - SUMMARIZE schema.tablename
+//   - SUMMARIZE SELECT ...
+//   - SUMMARIZE WITH ...
+func (p *parser) parseSummarize() (*SummarizeStmt, error) {
+	p.advance() // consume SUMMARIZE
+	stmt := &SummarizeStmt{}
+
+	// SUMMARIZE SELECT ... or SUMMARIZE WITH ...
+	if p.isKeyword("SELECT") || p.isKeyword("WITH") {
+		var query Statement
+		var err error
+		if p.isKeyword("SELECT") {
+			query, err = p.parseSelect()
+		} else {
+			query, err = p.parseWithSelect()
+		}
+		if err != nil {
+			return nil, err
+		}
+		stmt.Query = query
+		return stmt, nil
+	}
+
+	// SUMMARIZE [schema.]table
+	name, err := p.expect(tokenIdent)
+	if err != nil {
+		return nil, p.errorf("expected table name or SELECT after SUMMARIZE")
+	}
+	stmt.TableName = name.value
+
+	if p.current().typ == tokenDot {
+		p.advance()
+		tableName, err := p.expect(tokenIdent)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Schema = stmt.TableName
+		stmt.TableName = tableName.value
+	}
+
+	return stmt, nil
+}
+
+// parseCall parses a CALL function(args...) statement.
+func (p *parser) parseCall() (*CallStmt, error) {
+	p.advance() // consume CALL
+	stmt := &CallStmt{}
+
+	// Function name
+	name, err := p.expect(tokenIdent)
+	if err != nil {
+		return nil, p.errorf("expected function name after CALL")
+	}
+	stmt.FunctionName = name.value
+
+	// Arguments in parentheses
+	if _, err := p.expect(tokenLParen); err != nil {
+		return nil, p.errorf("expected '(' after function name")
+	}
+
+	// Parse arguments
+	if p.current().typ != tokenRParen {
+		for {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Args = append(stmt.Args, expr)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance() // consume comma
+		}
+	}
+
+	if _, err := p.expect(tokenRParen); err != nil {
+		return nil, p.errorf("expected ')' after function arguments")
+	}
 
 	return stmt, nil
 }

@@ -436,6 +436,33 @@ func (te *TableExtractor) VisitShowStmt(stmt *ShowStmt) {
 	// No table references in SHOW statements
 }
 
+// VisitDescribeStmt extracts table references from DESCRIBE statements.
+func (te *TableExtractor) VisitDescribeStmt(stmt *DescribeStmt) {
+	// If DESCRIBE wraps a query, visit that query for table references
+	if stmt.Query != nil {
+		switch q := stmt.Query.(type) {
+		case *SelectStmt:
+			te.VisitSelectStmt(q)
+		}
+	}
+}
+
+// VisitSummarizeStmt extracts table references from SUMMARIZE statements.
+func (te *TableExtractor) VisitSummarizeStmt(stmt *SummarizeStmt) {
+	// If SUMMARIZE wraps a query, visit that query for table references
+	if stmt.Query != nil {
+		switch q := stmt.Query.(type) {
+		case *SelectStmt:
+			te.VisitSelectStmt(q)
+		}
+	}
+}
+
+// VisitCallStmt is a no-op for CALL statements (no table references).
+func (te *TableExtractor) VisitCallStmt(stmt *CallStmt) {
+	// No table references in CALL statements
+}
+
 // VisitPrepareStmt is a no-op for PREPARE statements (no table references at this level).
 func (te *TableExtractor) VisitPrepareStmt(stmt *PrepareStmt) {
 	// No table references in PREPARE statements

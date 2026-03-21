@@ -1662,7 +1662,10 @@ func (s *SetStmt) Accept(v Visitor) {
 type ShowStmt struct {
 	// Variable is the name of the configuration variable to show.
 	// For isolation levels: "transaction_isolation" or "default_transaction_isolation"
+	// Special values: "__tables", "__all_tables", "__columns", "__all_settings"
 	Variable string
+	// TableName is used for SHOW COLUMNS FROM table.
+	TableName string
 }
 
 func (*ShowStmt) stmtNode() {}
@@ -1672,4 +1675,72 @@ func (*ShowStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
 // Accept implements the Visitor pattern for ShowStmt.
 func (s *ShowStmt) Accept(v Visitor) {
 	v.VisitShowStmt(s)
+}
+
+// DescribeStmt represents a DESCRIBE statement.
+// Supports:
+//   - DESCRIBE tablename
+//   - DESCRIBE schema.tablename
+//   - DESCRIBE SELECT ...
+type DescribeStmt struct {
+	// TableName is the name of the table to describe.
+	TableName string
+	// Schema is the optional schema qualifier.
+	Schema string
+	// Query is the inner statement for DESCRIBE SELECT ... (wraps a statement).
+	Query Statement
+}
+
+func (*DescribeStmt) stmtNode() {}
+
+func (*DescribeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
+
+// Accept implements the Visitor pattern for DescribeStmt.
+func (s *DescribeStmt) Accept(v Visitor) {
+	v.VisitDescribeStmt(s)
+}
+
+// ---------- SUMMARIZE Statement ----------
+
+// SummarizeStmt represents a SUMMARIZE statement.
+// Supports:
+//   - SUMMARIZE tablename
+//   - SUMMARIZE schema.tablename
+//   - SUMMARIZE SELECT ...
+type SummarizeStmt struct {
+	// TableName is the name of the table to summarize.
+	TableName string
+	// Schema is the optional schema qualifier.
+	Schema string
+	// Query is the inner statement for SUMMARIZE SELECT ... (wraps a statement).
+	Query Statement
+}
+
+func (*SummarizeStmt) stmtNode() {}
+
+func (*SummarizeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
+
+// Accept implements the Visitor pattern for SummarizeStmt.
+func (s *SummarizeStmt) Accept(v Visitor) {
+	v.VisitSummarizeStmt(s)
+}
+
+// ---------- CALL Statement ----------
+
+// CallStmt represents a CALL function(args...) statement.
+// The CALL statement invokes a table function and returns its results.
+type CallStmt struct {
+	// FunctionName is the name of the function to call.
+	FunctionName string
+	// Args are the arguments passed to the function.
+	Args []Expr
+}
+
+func (*CallStmt) stmtNode() {}
+
+func (*CallStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CALL }
+
+// Accept implements the Visitor pattern for CallStmt.
+func (s *CallStmt) Accept(v Visitor) {
+	v.VisitCallStmt(s)
 }

@@ -117,6 +117,12 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseComment()
 	case p.isKeyword("VALUES"):
 		stmt, err = p.parseStandaloneValues()
+	case p.isKeyword("DESCRIBE"), p.isKeyword("DESC"):
+		stmt, err = p.parseDescribe()
+	case p.isKeyword("SUMMARIZE"):
+		stmt, err = p.parseSummarize()
+	case p.isKeyword("CALL"):
+		stmt, err = p.parseCall()
 	default:
 		tok := p.current()
 		suggestion := suggestKeyword(tok.value)
@@ -5171,6 +5177,34 @@ func (p *parser) parseFunctionCall(
 
 	if _, err := p.expect(tokenRParen); err != nil {
 		return nil, err
+	}
+
+	// Check for WITHIN GROUP (ORDER BY ...) — ordered-set aggregate syntax
+	if p.isKeyword("WITHIN") {
+		p.advance() // consume WITHIN
+		if err := p.expectKeyword("GROUP"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		if err := p.expectKeyword("ORDER"); err != nil {
+			return nil, p.errorf("expected ORDER BY inside WITHIN GROUP")
+		}
+		if err := p.expectKeyword("BY"); err != nil {
+			return nil, err
+		}
+		orderBy, err := p.parseOrderBy()
+		if err != nil {
+			return nil, err
+		}
+		if len(fn.OrderBy) > 0 {
+			return nil, p.errorf("cannot use both internal ORDER BY and WITHIN GROUP")
+		}
+		fn.OrderBy = orderBy
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
 	}
 
 	// Check for window function OVER clause
