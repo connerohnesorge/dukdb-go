@@ -167,6 +167,10 @@ func (c *Conn) ExecContext(
 
 // QueryContext executes a query that returns rows.
 // Implements the driver.QueryerContext interface.
+// If the backend implements BackendConnStreaming, the streaming path is
+// preferred: rows are delivered one-at-a-time via StreamingResult without
+// materializing the entire result set in memory. Otherwise, the
+// traditional materialized path is used as a fallback.
 func (c *Conn) QueryContext(
 	ctx context.Context,
 	query string,
@@ -183,6 +187,19 @@ func (c *Conn) QueryContext(
 	default:
 	}
 
+	// Try streaming path if backend supports it
+	if streamConn, ok := c.backendConn.(BackendConnStreaming); ok {
+		sr, columns, err := streamConn.QueryStreaming(ctx, query, args)
+		if err != nil {
+			return nil, err
+		}
+		return &rows{
+			columns:      columns,
+			streamResult: sr,
+		}, nil
+	}
+
+	// Fallback to materialized path
 	data, columns, err := c.backendConn.Query(
 		ctx,
 		query,
@@ -360,10 +377,14 @@ func (r *result) RowsAffected() (int64, error) {
 }
 
 // rows implements the driver.Rows interface.
+// When streamResult is non-nil, rows operates in streaming mode:
+// Next() delegates to StreamingResult.ScanNext() and Close() delegates
+// to StreamingResult.Close(), bypassing the materialized data slice.
 type rows struct {
-	columns []string
-	data    []map[string]any
-	pos     int
+	columns      []string
+	data         []map[string]any
+	pos          int
+	streamResult *StreamingResult // non-nil = streaming mode
 }
 
 // Columns returns the names of the columns.
@@ -372,12 +393,23 @@ func (r *rows) Columns() []string {
 }
 
 // Close closes the rows iterator.
+// In streaming mode, it delegates to StreamingResult.Close() to release
+// resources held by the streaming pipeline.
 func (r *rows) Close() error {
+	if r.streamResult != nil {
+		return r.streamResult.Close()
+	}
 	return nil
 }
 
 // Next is called to populate the next row of data into the provided slice.
+// In streaming mode, it delegates to StreamingResult.ScanNext().
+// In materialized mode, it reads from the data slice.
 func (r *rows) Next(dest []driver.Value) error {
+	if r.streamResult != nil {
+		return r.streamResult.ScanNext(dest)
+	}
+
 	if r.pos >= len(r.data) {
 		return io.EOF
 	}
