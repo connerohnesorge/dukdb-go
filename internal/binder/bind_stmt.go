@@ -11,6 +11,7 @@ import (
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
+	fileio "github.com/dukdb/dukdb-go/internal/io"
 	"github.com/dukdb/dukdb-go/internal/io/arrow"
 	"github.com/dukdb/dukdb-go/internal/io/csv"
 	"github.com/dukdb/dukdb-go/internal/io/filesystem"
@@ -314,9 +315,63 @@ func setOpName(op parser.SetOpType) string {
 	}
 }
 
+// detectTableFunction maps a file path to the appropriate table function name
+// based on file extension. This is used by replacement scans to determine which
+// reader function to invoke when a string literal appears in FROM position.
+func detectTableFunction(path string) (string, error) {
+	format := fileio.DetectFormatFromPath(path)
+	switch format {
+	case fileio.FormatCSV:
+		return "read_csv_auto", nil
+	case fileio.FormatParquet:
+		return "read_parquet", nil
+	case fileio.FormatJSON:
+		return "read_json_auto", nil
+	case fileio.FormatNDJSON:
+		return "read_ndjson", nil
+	case fileio.FormatXLSX:
+		return "read_xlsx", nil
+	default:
+		// Check for Arrow IPC files
+		if isArrowPath(path) {
+			return "read_arrow_auto", nil
+		}
+		return "", fmt.Errorf(
+			"unrecognized file format for '%s': cannot determine table function from extension",
+			path,
+		)
+	}
+}
+
+// isArrowPath checks if a file path has an Arrow IPC file extension.
+func isArrowPath(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".arrow" || ext == ".ipc" || ext == ".feather"
+}
+
 func (b *Binder) bindTableRef(
 	ref parser.TableRef,
 ) (*BoundTableRef, error) {
+	// Rewrite replacement scans (string literals in FROM position) to table function calls.
+	// e.g., SELECT * FROM 'data.csv' -> SELECT * FROM read_csv_auto('data.csv')
+	if ref.ReplacementScan != nil {
+		funcName, err := detectTableFunction(ref.ReplacementScan.Path)
+		if err != nil {
+			return nil, err
+		}
+		// Create a synthetic TableFunctionRef so the existing table function
+		// binding logic handles the rest.
+		ref.TableFunction = &parser.TableFunctionRef{
+			Name: funcName,
+			Args: []parser.Expr{&parser.Literal{
+				Value: ref.ReplacementScan.Path,
+				Type:  dukdb.TYPE_VARCHAR,
+			}},
+		}
+		ref.TableName = funcName
+		// Fall through to existing table function binding below.
+	}
+
 	// Check for PIVOT table reference
 	if ref.PivotRef != nil {
 		return b.bindPivotTableRef(ref)

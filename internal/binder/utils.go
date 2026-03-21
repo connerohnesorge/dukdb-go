@@ -425,7 +425,9 @@ func inferFunctionResultType(
 		"RSTRIP",
 		"CHR",
 		"MD5",
-		"SHA256":
+		"SHA256",
+		"TRANSLATE",
+		"STRIP_ACCENTS":
 		return dukdb.TYPE_VARCHAR
 	// String functions returning BOOLEAN
 	case "REGEXP_MATCHES",
@@ -507,6 +509,16 @@ func inferFunctionResultType(
 		return dukdb.TYPE_DOUBLE
 	case "EPOCH_MS":
 		return dukdb.TYPE_BIGINT
+	case "EPOCH_US":
+		return dukdb.TYPE_BIGINT
+	// System functions
+	case "CURRENT_DATABASE", "CURRENT_SCHEMA", "VERSION":
+		return dukdb.TYPE_VARCHAR
+	// Date/time name functions
+	case "DAYNAME", "MONTHNAME":
+		return dukdb.TYPE_VARCHAR
+	case "YEARWEEK":
+		return dukdb.TYPE_INTEGER
 	// Interval extraction functions (tasks 7.9, 7.10, 7.11)
 	case "TO_YEARS", "TO_MONTHS", "TO_DAYS", "TO_HOURS", "TO_MINUTES":
 		return dukdb.TYPE_BIGINT
