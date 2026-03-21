@@ -110,6 +110,12 @@ func RewriteExpr(expr binder.BoundExpr, rewriter ExprRewriter) (binder.BoundExpr
 			changed = true
 			expr = &binder.BoundSimilarToExpr{Expr: exprNode, Pattern: patNode, Escape: node.Escape, Not: node.Not}
 		}
+	case *binder.BoundFieldAccess:
+		inner, innerChanged := RewriteExpr(node.Struct, rewriter)
+		if innerChanged {
+			changed = true
+			expr = &binder.BoundFieldAccess{Struct: inner, Field: node.Field, ResType: node.ResType}
+		}
 	}
 
 	if rewriter == nil {
@@ -186,5 +192,7 @@ func WalkExpr(expr binder.BoundExpr, visit func(binder.BoundExpr)) {
 	case *binder.BoundSimilarToExpr:
 		WalkExpr(node.Expr, visit)
 		WalkExpr(node.Pattern, visit)
+	case *binder.BoundFieldAccess:
+		WalkExpr(node.Struct, visit)
 	}
 }

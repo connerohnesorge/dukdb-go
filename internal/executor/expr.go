@@ -68,13 +68,13 @@ func (e *Executor) evaluateExpr(
 		return nil, nil
 
 	case *binder.BoundFieldAccess:
-		// Evaluate the struct expression
+		// Evaluate the struct expression (the struct-typed column or sub-expression)
 		structVal, err := e.evaluateExpr(ctx, ex.Struct, row)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("evaluating struct expression for field access: %w", err)
 		}
 		if structVal == nil {
-			return nil, nil // NULL propagation
+			return nil, nil // NULL propagation: NULL.field => NULL
 		}
 		m, ok := structVal.(map[string]any)
 		if !ok {

@@ -138,9 +138,11 @@ func (b *Binder) bindColumnRef(
 		}
 
 		// Table not found -- try as struct_column.field_name
+		// We check for TYPE_STRUCT or TYPE_ANY (since CTAS may not preserve struct type info)
 		for _, tRef := range b.scope.tables {
 			for _, col := range tRef.Columns {
-				if strings.EqualFold(col.Column, ref.Table) && col.Type == dukdb.TYPE_STRUCT {
+				if strings.EqualFold(col.Column, ref.Table) &&
+					(col.Type == dukdb.TYPE_STRUCT || col.Type == dukdb.TYPE_ANY) {
 					structRef := &BoundColumnRef{
 						Table:     tRef.Alias,
 						Column:    col.Column,
