@@ -12,32 +12,50 @@ This document describes the chronological order in which all active change propo
 | 4 | `add-function-aliases-v1.4.3` | DATETRUNC, DATEADD, ORD, IFNULL/NVL, BIT_LENGTH, etc. | Small | None | IMPLEMENTED & ARCHIVED |
 | 5 | `add-ordered-set-aggregates-v1.4.3` | WITHIN GROUP syntax + LISTAGG aggregate | Small (2-3 days) | None | PROPOSED |
 | 6 | `add-s3-query-integration-v1.4.3` | Harden S3/cloud filesystem + tests | Medium (5-7 days) | None | PROPOSED |
-| 7 | `add-metadata-commands-v1.4.3` | DESCRIBE, SHOW TABLES/COLUMNS, SUMMARIZE, CALL | Medium (3-5 days) | None | PROPOSED |
+| 7 | `add-metadata-commands-v1.4.3` | DESCRIBE, SHOW TABLES/COLUMNS, SUMMARIZE, CALL | Medium (3-5 days) | None | IMPLEMENTED |
 | 8 | `add-table-ddl-extensions-v1.4.3` | CREATE OR REPLACE TABLE, TEMP TABLE, ADD/DROP CONSTRAINT | Medium (3-5 days) | None | PROPOSED |
 | 9 | `add-standalone-aggregate-filter-v1.4.3` | FILTER (WHERE) on non-window aggregates | Small (1-2 days) | None | PROPOSED |
 | 10 | `add-missing-conversion-functions-v1.4.3` | TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS | Small (1-2 days) | None | PROPOSED |
+| 11 | `add-missing-list-string-functions-v1.4.3` | LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH | Small (1-2 days) | None | PROPOSED |
+| 12 | `add-missing-aggregates-round3-v1.4.3` | PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG | Small (1-2 days) | None | PROPOSED |
+| 13 | `add-reset-statement-v1.4.3` | RESET variable, RESET ALL | Small (1 day) | None | PROPOSED |
+| 14 | `add-struct-field-access-v1.4.3` | struct_col.field dot notation | Small (1-2 days) | None | PROPOSED |
 
 ## Dependency Graph
 
 ```
 Phase 1 (no dependencies — fully parallelizable)
-├── add-missing-conversion-functions-v1.4.3    [1-2 days]  ← smallest, quick win
-├── add-standalone-aggregate-filter-v1.4.3     [1-2 days]  ← small parser+executor
-├── add-ordered-set-aggregates-v1.4.3          [2-3 days]  ← parser + executor
-├── add-metadata-commands-v1.4.3               [3-5 days]  ← new statement types
-├── add-table-ddl-extensions-v1.4.3            [3-5 days]  ← DDL pipeline threading
+├── add-reset-statement-v1.4.3                 [1 day]     ← smallest, parser+conn only
+├── add-missing-conversion-functions-v1.4.3    [1-2 days]  ← TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS
+├── add-missing-list-string-functions-v1.4.3   [1-2 days]  ← LIST_APPEND/PREPEND, aliases, REGEXP_FULL_MATCH
+├── add-missing-aggregates-round3-v1.4.3       [1-2 days]  ← PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG
+├── add-standalone-aggregate-filter-v1.4.3     [1-2 days]  ← FILTER (WHERE) on non-window aggs
+├── add-struct-field-access-v1.4.3             [1-2 days]  ← binder disambiguates struct.field
+├── add-ordered-set-aggregates-v1.4.3          [2-3 days]  ← WITHIN GROUP + LISTAGG
+├── add-table-ddl-extensions-v1.4.3            [3-5 days]  ← OR REPLACE, TEMP, constraints
 └── add-s3-query-integration-v1.4.3            [5-7 days]  ← integration testing
 
 Already Completed:
 ├── add-ddl-dml-extensions-v1.4.3              [DONE]
 ├── add-enum-utility-functions-v1.4.3          [DONE]
 ├── add-missing-functions-round2-v1.4.3        [DONE]
-└── add-function-aliases-v1.4.3                [DONE]
+├── add-function-aliases-v1.4.3                [DONE]
+└── add-metadata-commands-v1.4.3               [DONE]
 ```
 
 ## Phase 1 — Independent Features (All Parallelizable)
 
-All six remaining proposals touch different parts of the codebase and can be implemented simultaneously.
+All nine remaining proposals touch different parts of the codebase and can be implemented simultaneously.
+
+### add-reset-statement-v1.4.3
+
+**Scope**: RESET variable, RESET ALL statement
+
+**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/parser/parser_pragma.go`, `internal/engine/conn.go`
+
+**Why first**: Smallest proposal — one new AST node, parser function, and handler. Follows SET pattern exactly. ~50 lines total.
+
+---
 
 ### add-missing-conversion-functions-v1.4.3
 
@@ -69,13 +87,33 @@ All six remaining proposals touch different parts of the codebase and can be imp
 
 ---
 
-### add-metadata-commands-v1.4.3
+### add-missing-list-string-functions-v1.4.3
 
-**Scope**: DESCRIBE table/SELECT, SHOW TABLES/ALL TABLES/COLUMNS, SUMMARIZE, CALL
+**Scope**: LIST_APPEND/PREPEND, LIST_HAS alias, STRING_TO_ARRAY alias, REGEXP_FULL_MATCH
 
-**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/parser/parser_pragma.go`, `internal/engine/conn.go`
+**Files touched**: `internal/executor/expr.go`, `internal/binder/utils.go`
 
-**Why Phase 1**: New statement types that return catalog metadata. Follow existing SHOW/EXPLAIN patterns. Independent of all other proposals.
+**Why Phase 1**: Two new list functions (follow LIST_CONCAT pattern), two alias additions, one new regex function. All in executor function dispatch. ~80 lines total.
+
+---
+
+### add-missing-aggregates-round3-v1.4.3
+
+**Scope**: PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG aggregate functions
+
+**Files touched**: `internal/executor/physical_aggregate.go`, `internal/executor/operator.go`, `internal/binder/utils.go`
+
+**Why Phase 1**: Five aggregates following established SUM/AVG/MEDIAN patterns. All in aggregate dispatch. ~120 lines total.
+
+---
+
+### add-struct-field-access-v1.4.3
+
+**Scope**: `struct_col.field` dot notation syntax
+
+**Files touched**: `internal/binder/expressions.go`, `internal/binder/bind_expr.go`, `internal/executor/expr.go`
+
+**Why Phase 1**: New BoundFieldAccess expression type. Binder disambiguates table.column vs struct.field. Follows STRUCT_EXTRACT pattern for evaluation.
 
 ---
 
@@ -103,6 +141,7 @@ All six remaining proposals touch different parts of the codebase and can be imp
 
 | Proposal | Status | Date |
 |----------|--------|------|
+| `add-metadata-commands-v1.4.3` | Implemented | 2026-03-21 |
 | `add-ddl-dml-extensions-v1.4.3` | Implemented | 2026-03-21 |
 | `add-enum-utility-functions-v1.4.3` | Implemented & Archived | 2026-03-21 |
 | `add-missing-functions-round2-v1.4.3` | Implemented & Archived | 2026-03-21 |
@@ -127,22 +166,25 @@ All six remaining proposals touch different parts of the codebase and can be imp
 ## Implementation Schedule
 
 ```
-Day 1:      Quick wins (all parallelizable)
-            ├── Conversion functions (1-2 days)           ← TO_DATE, TO_CHAR aliases
-            ├── Aggregate FILTER clause (1-2 days)        ← parser lift + executor
+Day 1:      Quick wins (all parallelizable — start everything)
+            ├── RESET statement (1 day)                    ← parser + conn handler
+            ├── Conversion functions (1-2 days)            ← TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS
+            ├── List/string functions (1-2 days)           ← LIST_APPEND/PREPEND, aliases, REGEXP_FULL_MATCH
+            ├── Aggregates round 3 (1-2 days)              ← PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG
+            ├── Aggregate FILTER clause (1-2 days)         ← parser lift + executor
+            ├── Struct field access (1-2 days)             ← binder + evaluator
             ├── Ordered-set aggregates (2-3 days)          ← WITHIN GROUP + LISTAGG
-            ├── Metadata commands (3-5 days)               ← DESCRIBE, SHOW, SUMMARIZE, CALL
             ├── Table DDL extensions (3-5 days)            ← OR REPLACE, TEMP, constraints
             └── S3 integration hardening (5-7 days)        ← longest, start day 1
 
-Day 2:      Conversion functions + aggregate FILTER complete
-
-Day 3-4:    Ordered-set aggregates complete, metadata/DDL continue
-
-Day 5-7:    All remaining proposals complete
+Day 1:      RESET statement complete
+Day 2:      Conversion functions, list/string functions, aggregates round 3,
+            aggregate FILTER, struct field access complete
+Day 3-4:    Ordered-set aggregates complete, table DDL continues
+Day 5-7:    Table DDL + S3 integration complete
 ```
 
-**Total estimated effort**: 15-24 person-days
+**Total estimated effort**: 19-30 person-days
 **With full parallelization**: 5-7 days elapsed time
 **Critical path**: S3 integration (5-7 days) or Table DDL extensions (3-5 days)
 
@@ -170,11 +212,14 @@ Day 5-7:    All remaining proposals complete
 
 ### Remaining Gaps (This Timeline)
 
-1. WITHIN GROUP syntax + LISTAGG aggregate
-2. DESCRIBE / SHOW TABLES / SHOW COLUMNS / SUMMARIZE / CALL statements
-3. CREATE OR REPLACE TABLE
-4. CREATE TEMP/TEMPORARY TABLE
-5. ALTER TABLE ADD/DROP CONSTRAINT
-6. FILTER clause on non-window aggregates
-7. TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS functions
-8. S3 integration hardening + tests
+1. RESET variable / RESET ALL statement
+2. TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS functions
+3. LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH
+4. PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG aggregates
+5. FILTER clause on non-window aggregates
+6. Struct dot notation field access (struct_col.field)
+7. WITHIN GROUP syntax + LISTAGG aggregate
+8. CREATE OR REPLACE TABLE
+9. CREATE TEMP/TEMPORARY TABLE
+10. ALTER TABLE ADD/DROP CONSTRAINT
+11. S3 integration hardening + tests
