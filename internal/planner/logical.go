@@ -453,6 +453,8 @@ type LogicalCreateTable struct {
 	Schema      string
 	Table       string
 	IfNotExists bool
+	OrReplace   bool
+	Temporary   bool
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
 	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
@@ -691,9 +693,11 @@ type LogicalAlterTable struct {
 	OldColumn     string             // RENAME COLUMN
 	NewColumn     string             // RENAME COLUMN
 	DropColumn    string             // DROP COLUMN
-	AddColumn     *catalog.ColumnDef // ADD COLUMN
-	AlterColumn   string             // ALTER COLUMN TYPE
-	NewColumnType dukdb.Type         // ALTER COLUMN TYPE
+	AddColumn      *catalog.ColumnDef      // ADD COLUMN
+	AlterColumn    string                  // ALTER COLUMN TYPE
+	NewColumnType  dukdb.Type              // ALTER COLUMN TYPE
+	ConstraintName string                  // DROP CONSTRAINT
+	Constraint     *parser.TableConstraint // ADD CONSTRAINT
 }
 
 func (*LogicalAlterTable) logicalPlanNode() {}

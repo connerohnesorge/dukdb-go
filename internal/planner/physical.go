@@ -601,6 +601,8 @@ type PhysicalCreateTable struct {
 	Schema      string
 	Table       string
 	IfNotExists bool
+	OrReplace   bool
+	Temporary   bool
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
 	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
@@ -851,9 +853,11 @@ type PhysicalAlterTable struct {
 	OldColumn     string             // RENAME COLUMN
 	NewColumn     string             // RENAME COLUMN
 	DropColumn    string             // DROP COLUMN
-	AddColumn     *catalog.ColumnDef // ADD COLUMN
-	AlterColumn   string             // ALTER COLUMN TYPE
-	NewColumnType dukdb.Type         // ALTER COLUMN TYPE
+	AddColumn      *catalog.ColumnDef      // ADD COLUMN
+	AlterColumn    string                  // ALTER COLUMN TYPE
+	NewColumnType  dukdb.Type              // ALTER COLUMN TYPE
+	ConstraintName string                  // DROP CONSTRAINT
+	Constraint     *parser.TableConstraint // ADD CONSTRAINT
 }
 
 func (*PhysicalAlterTable) physicalPlanNode() {}
@@ -1904,6 +1908,8 @@ func (p *Planner) planCreateTable(
 		Schema:      s.Schema,
 		Table:       s.Table,
 		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
+		Temporary:   s.Temporary,
 		Columns:     s.Columns,
 		PrimaryKey:  s.PrimaryKey,
 		Constraints: s.Constraints,
@@ -2053,18 +2059,20 @@ func (p *Planner) planAlterTable(
 	s *binder.BoundAlterTableStmt,
 ) (LogicalPlan, error) {
 	return &LogicalAlterTable{
-		Schema:        s.Schema,
-		Table:         s.Table,
-		TableDef:      s.TableDef,
-		Operation:     int(s.Operation),
-		IfExists:      s.IfExists,
-		NewTableName:  s.NewTableName,
-		OldColumn:     s.OldColumn,
-		NewColumn:     s.NewColumn,
-		DropColumn:    s.DropColumn,
-		AddColumn:     s.AddColumn,
-		AlterColumn:   s.AlterColumn,
-		NewColumnType: s.NewColumnType,
+		Schema:         s.Schema,
+		Table:          s.Table,
+		TableDef:       s.TableDef,
+		Operation:      int(s.Operation),
+		IfExists:       s.IfExists,
+		NewTableName:   s.NewTableName,
+		OldColumn:      s.OldColumn,
+		NewColumn:      s.NewColumn,
+		DropColumn:     s.DropColumn,
+		AddColumn:      s.AddColumn,
+		AlterColumn:    s.AlterColumn,
+		NewColumnType:  s.NewColumnType,
+		ConstraintName: s.ConstraintName,
+		Constraint:     s.Constraint,
 	}, nil
 }
 
@@ -2704,6 +2712,8 @@ func (p *Planner) createPhysicalPlan(
 			Schema:      l.Schema,
 			Table:       l.Table,
 			IfNotExists: l.IfNotExists,
+			OrReplace:   l.OrReplace,
+			Temporary:   l.Temporary,
 			Columns:     l.Columns,
 			PrimaryKey:  l.PrimaryKey,
 			Constraints: l.Constraints,
@@ -2832,18 +2842,20 @@ func (p *Planner) createPhysicalPlan(
 
 	case *LogicalAlterTable:
 		return &PhysicalAlterTable{
-			Schema:        l.Schema,
-			Table:         l.Table,
-			TableDef:      l.TableDef,
-			Operation:     l.Operation,
-			IfExists:      l.IfExists,
-			NewTableName:  l.NewTableName,
-			OldColumn:     l.OldColumn,
-			NewColumn:     l.NewColumn,
-			DropColumn:    l.DropColumn,
-			AddColumn:     l.AddColumn,
-			AlterColumn:   l.AlterColumn,
-			NewColumnType: l.NewColumnType,
+			Schema:         l.Schema,
+			Table:          l.Table,
+			TableDef:       l.TableDef,
+			Operation:      l.Operation,
+			IfExists:       l.IfExists,
+			NewTableName:   l.NewTableName,
+			OldColumn:      l.OldColumn,
+			NewColumn:      l.NewColumn,
+			DropColumn:     l.DropColumn,
+			AddColumn:      l.AddColumn,
+			AlterColumn:    l.AlterColumn,
+			NewColumnType:  l.NewColumnType,
+			ConstraintName: l.ConstraintName,
+			Constraint:     l.Constraint,
 		}, nil
 
 	case *LogicalComment:
