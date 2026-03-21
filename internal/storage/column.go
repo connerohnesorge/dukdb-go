@@ -254,6 +254,11 @@ func (v *Vector) Type() dukdb.Type {
 	return v.typ
 }
 
+// SetType updates the type of the vector.
+func (v *Vector) SetType(typ dukdb.Type) {
+	v.typ = typ
+}
+
 // Data returns the underlying data.
 func (v *Vector) Data() any {
 	return v.data

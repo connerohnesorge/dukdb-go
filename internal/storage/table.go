@@ -206,6 +206,24 @@ func (t *Table) AddColumn(columnType dukdb.Type) {
 	}
 }
 
+// SetColumnType updates the type of the column at the given index.
+// This only updates the column type metadata; data conversion must be done separately
+// by iterating over row groups.
+func (t *Table) SetColumnType(columnIndex int, newType dukdb.Type) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if columnIndex < 0 || columnIndex >= len(t.columnTypes) {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeCatalog,
+			Msg:  "column index out of range",
+		}
+	}
+
+	t.columnTypes[columnIndex] = newType
+	return nil
+}
+
 // DropColumn removes a column from the table at the given index.
 func (t *Table) DropColumn(columnIndex int) error {
 	t.mu.Lock()
@@ -278,6 +296,13 @@ func (t *Table) AppendChunk(
 	var currentRGIdx int
 	if len(t.rowGroups) == 0 ||
 		t.rowGroups[len(t.rowGroups)-1].IsFull() {
+		// Compress the full row group before creating a new one
+		if len(t.rowGroups) > 0 {
+			oldRG := t.rowGroups[len(t.rowGroups)-1]
+			oldRG.mu.Lock()
+			oldRG.Compress()
+			oldRG.mu.Unlock()
+		}
 		currentRG = NewRowGroup(
 			t.columnTypes,
 			RowGroupSize,
@@ -295,6 +320,9 @@ func (t *Table) AppendChunk(
 	// Append rows from the chunk
 	for row := 0; row < chunk.Count(); row++ {
 		if currentRG.IsFull() {
+			currentRG.mu.Lock()
+			currentRG.Compress()
+			currentRG.mu.Unlock()
 			currentRG = NewRowGroup(
 				t.columnTypes,
 				RowGroupSize,
@@ -763,10 +791,11 @@ func (t *Table) ScanWithVisibility(
 
 // RowGroup represents a group of rows stored in columnar format.
 type RowGroup struct {
-	mu       sync.RWMutex
-	columns  []*Vector
-	count    int
-	capacity int
+	mu         sync.RWMutex
+	columns    []*Vector
+	count      int
+	capacity   int
+	compressed []*CompressedSegment // one per column, nil = uncompressed
 }
 
 // NewRowGroup creates a new RowGroup with the given column types.
@@ -805,6 +834,29 @@ func (rg *RowGroup) IsFull() bool {
 	return rg.count >= rg.capacity
 }
 
+// Compress analyzes and compresses each column in the row group.
+// Must be called under write lock.
+func (rg *RowGroup) Compress() {
+	if rg.compressed != nil {
+		return // Already compressed
+	}
+	rg.compressed = make([]*CompressedSegment, len(rg.columns))
+	for i, col := range rg.columns {
+		col.SetCount(rg.count) // Ensure count is set before compression
+		seg := AnalyzeAndCompress(col)
+		if seg != nil {
+			rg.compressed[i] = seg
+		}
+	}
+}
+
+// IsCompressed returns whether the row group has been compressed.
+func (rg *RowGroup) IsCompressed() bool {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
+	return rg.compressed != nil
+}
+
 // GetColumn returns the column at the given index.
 func (rg *RowGroup) GetColumn(idx int) *Vector {
 	rg.mu.RLock()
@@ -814,6 +866,16 @@ func (rg *RowGroup) GetColumn(idx int) *Vector {
 	}
 
 	return rg.columns[idx]
+}
+
+// SetColumn replaces the column vector at the given index.
+func (rg *RowGroup) SetColumn(idx int, vec *Vector) {
+	rg.mu.Lock()
+	defer rg.mu.Unlock()
+	if idx < 0 || idx >= len(rg.columns) {
+		return
+	}
+	rg.columns[idx] = vec
 }
 
 // DropColumn removes a column from the row group at the given index.
@@ -1005,7 +1067,15 @@ func (s *TableScanner) Next() *DataChunk {
 			// Add this row to the chunk
 			values := make([]any, len(rg.columns))
 			for col, v := range rg.columns {
-				values[col] = v.GetValue(s.currentRow)
+				if rg.compressed != nil && rg.compressed[col] != nil {
+					// Decompress single row from compressed segment
+					tmpVec := DecompressSegment(rg.compressed[col], s.currentRow, 1)
+					if tmpVec != nil && tmpVec.Count() > 0 {
+						values[col] = tmpVec.GetValue(0)
+					}
+				} else {
+					values[col] = v.GetValue(s.currentRow)
+				}
 			}
 			chunk.AppendRow(values)
 			rowsAdded++
@@ -1110,6 +1180,13 @@ func (t *Table) InsertVersioned(txn MVCCTransactionContext, values []any) (RowID
 	var currentRG *RowGroup
 	var currentRGIdx int
 	if len(t.rowGroups) == 0 || t.rowGroups[len(t.rowGroups)-1].IsFull() {
+		// Compress the full row group before creating a new one
+		if len(t.rowGroups) > 0 {
+			oldRG := t.rowGroups[len(t.rowGroups)-1]
+			oldRG.mu.Lock()
+			oldRG.Compress()
+			oldRG.mu.Unlock()
+		}
 		currentRG = NewRowGroup(t.columnTypes, RowGroupSize)
 		t.rowGroups = append(t.rowGroups, currentRG)
 		currentRGIdx = len(t.rowGroups) - 1
