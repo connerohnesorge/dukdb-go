@@ -65,6 +65,7 @@ type Visitor interface {
 
 	// Session configuration statement visitors
 	VisitSetStmt(stmt *SetStmt)
+	VisitResetStmt(stmt *ResetStmt)
 	VisitShowStmt(stmt *ShowStmt)
 	VisitDescribeStmt(stmt *DescribeStmt)
 

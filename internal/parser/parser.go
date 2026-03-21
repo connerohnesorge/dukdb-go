@@ -89,6 +89,8 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseSavepoint()
 	case p.isKeyword("RELEASE"):
 		stmt, err = p.parseReleaseSavepoint()
+	case p.isKeyword("RESET"):
+		stmt, err = p.parseReset()
 	case p.isKeyword("SET"):
 		stmt, err = p.parseSet()
 	case p.isKeyword("SHOW"):
@@ -2040,7 +2042,7 @@ func (p *parser) parseCreate() (Statement, error) {
 
 	// Dispatch based on object type
 	if p.isKeyword("TABLE") {
-		return p.parseCreateTable()
+		return p.parseCreateTable(orReplace, temporary)
 	} else if p.isKeyword("VIEW") {
 		return p.parseCreateView()
 	} else if p.isKeyword("INDEX") {
@@ -2066,12 +2068,14 @@ func (p *parser) parseCreate() (Statement, error) {
 	)
 }
 
-func (p *parser) parseCreateTable() (*CreateTableStmt, error) {
+func (p *parser) parseCreateTable(orReplace bool, temporary bool) (*CreateTableStmt, error) {
 	if err := p.expectKeyword("TABLE"); err != nil {
 		return nil, err
 	}
 
 	stmt := &CreateTableStmt{}
+	stmt.OrReplace = orReplace
+	stmt.Temporary = temporary
 
 	// IF NOT EXISTS
 	if p.isKeyword("IF") {
@@ -5383,9 +5387,13 @@ func (p *parser) maybeParseWindowExpr(fn *FunctionCall) (Expr, error) {
 
 	// Check for OVER clause
 	if !p.isKeyword("OVER") {
-		// No OVER clause - if we had IGNORE NULLS or FILTER without OVER, it's an error
-		if windowExpr.IgnoreNulls || windowExpr.Filter != nil {
-			return nil, p.errorf("IGNORE NULLS and FILTER require OVER clause")
+		// FILTER without OVER is allowed for standalone aggregates
+		if windowExpr.Filter != nil {
+			fn.Filter = windowExpr.Filter
+		}
+		// IGNORE NULLS still requires OVER clause
+		if windowExpr.IgnoreNulls {
+			return nil, p.errorf("IGNORE NULLS requires OVER clause")
 		}
 		return fn, nil
 	}

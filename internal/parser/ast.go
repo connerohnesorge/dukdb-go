@@ -393,6 +393,8 @@ type CreateTableStmt struct {
 	Schema      string
 	Table       string
 	IfNotExists bool
+	OrReplace   bool              // CREATE OR REPLACE TABLE
+	Temporary   bool              // CREATE TEMP/TEMPORARY TABLE
 	Columns     []ColumnDefClause
 	PrimaryKey  []string
 	Constraints []TableConstraint // Table-level constraints (UNIQUE, CHECK)
@@ -661,6 +663,8 @@ const (
 	AlterTableAddColumn
 	AlterTableSetOption
 	AlterTableAlterColumnType
+	AlterTableAddConstraint
+	AlterTableDropConstraint
 )
 
 // AlterTableStmt represents an ALTER TABLE statement.
@@ -675,9 +679,11 @@ type AlterTableStmt struct {
 	NewColumn     string           // RENAME COLUMN
 	DropColumn    string           // DROP COLUMN
 	AddColumn     *ColumnDefClause // ADD COLUMN
-	AlterColumn   string           // ALTER COLUMN name
-	NewColumnType dukdb.Type       // resolved type (set by binder)
-	NewTypeRaw    string           // raw type string from parser
+	AlterColumn    string           // ALTER COLUMN name
+	NewColumnType  dukdb.Type       // resolved type (set by binder)
+	NewTypeRaw     string           // raw type string from parser
+	ConstraintName string           // DROP CONSTRAINT name
+	Constraint     *TableConstraint // ADD CONSTRAINT definition
 }
 
 func (*AlterTableStmt) stmtNode() {}
@@ -843,6 +849,7 @@ type FunctionCall struct {
 	Distinct  bool            // for aggregate functions like COUNT(DISTINCT x)
 	Star      bool            // for COUNT(*)
 	OrderBy   []OrderByExpr   // for aggregate functions like STRING_AGG(x, ',' ORDER BY y)
+	Filter    Expr            // FILTER (WHERE ...) clause for aggregate functions
 }
 
 func (*FunctionCall) exprNode() {}
@@ -1653,6 +1660,21 @@ func (*SetStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SET }
 // Accept implements the Visitor pattern for SetStmt.
 func (s *SetStmt) Accept(v Visitor) {
 	v.VisitSetStmt(s)
+}
+
+// ResetStmt represents a RESET statement for resetting session configuration to defaults.
+type ResetStmt struct {
+	Variable string // variable name, or "" for RESET ALL
+	All      bool   // true for RESET ALL
+}
+
+func (*ResetStmt) stmtNode() {}
+
+func (*ResetStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SET }
+
+// Accept implements the Visitor pattern for ResetStmt.
+func (s *ResetStmt) Accept(v Visitor) {
+	v.VisitResetStmt(s)
 }
 
 // ShowStmt represents a SHOW statement for querying session configuration.

@@ -539,25 +539,57 @@ func (p *parser) parseAlterTable() (*AlterTableStmt, error) {
 		}
 	} else if p.isKeyword("DROP") {
 		p.advance()
-		if err := p.expectKeyword("COLUMN"); err != nil {
-			return nil, err
+		if p.isKeyword("CONSTRAINT") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected constraint name after DROP CONSTRAINT")
+			}
+			stmt.Operation = AlterTableDropConstraint
+			stmt.ConstraintName = p.advance().value
+			// Optional IF EXISTS
+			if p.isKeyword("IF") {
+				p.advance()
+				if err := p.expectKeyword("EXISTS"); err != nil {
+					return nil, err
+				}
+				stmt.IfExists = true
+			}
+		} else if p.isKeyword("COLUMN") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected column name")
+			}
+			stmt.Operation = AlterTableDropColumn
+			stmt.DropColumn = p.advance().value
+		} else {
+			return nil, p.errorf("expected COLUMN or CONSTRAINT after DROP")
 		}
-		if p.current().typ != tokenIdent {
-			return nil, p.errorf("expected column name")
-		}
-		stmt.Operation = AlterTableDropColumn
-		stmt.DropColumn = p.advance().value
 	} else if p.isKeyword("ADD") {
 		p.advance()
-		if err := p.expectKeyword("COLUMN"); err != nil {
-			return nil, err
+		if p.isKeyword("CONSTRAINT") || p.isKeyword("UNIQUE") || p.isKeyword("CHECK") || p.isKeyword("FOREIGN") {
+			constraint, err := p.parseTableConstraint()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Operation = AlterTableAddConstraint
+			stmt.Constraint = &constraint
+		} else if p.isKeyword("COLUMN") {
+			p.advance()
+			colDef, err := p.parseColumnDef()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Operation = AlterTableAddColumn
+			stmt.AddColumn = &colDef
+		} else {
+			// Assume ADD COLUMN without explicit COLUMN keyword
+			colDef, err := p.parseColumnDef()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Operation = AlterTableAddColumn
+			stmt.AddColumn = &colDef
 		}
-		colDef, err := p.parseColumnDef()
-		if err != nil {
-			return nil, err
-		}
-		stmt.Operation = AlterTableAddColumn
-		stmt.AddColumn = &colDef
 	} else if p.isKeyword("SET") {
 		p.advance()
 		stmt.Operation = AlterTableSetOption

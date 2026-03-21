@@ -217,6 +217,25 @@ func (p *parser) parseSet() (*SetStmt, error) {
 	return stmt, nil
 }
 
+func (p *parser) parseReset() (*ResetStmt, error) {
+	p.advance() // consume RESET
+	stmt := &ResetStmt{}
+
+	// RESET ALL
+	if p.isKeyword("ALL") {
+		p.advance()
+		stmt.All = true
+		return stmt, nil
+	}
+
+	// RESET variable
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected variable name or ALL after RESET")
+	}
+	stmt.Variable = p.advance().value
+	return stmt, nil
+}
+
 // parseSetValue parses the value part of a SET statement.
 // This handles:
 //   - String literals: 'value'

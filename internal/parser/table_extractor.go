@@ -431,6 +431,11 @@ func (te *TableExtractor) VisitSetStmt(stmt *SetStmt) {
 	// No table references in SET statements
 }
 
+// VisitResetStmt is a no-op for RESET statements (no table references).
+func (te *TableExtractor) VisitResetStmt(stmt *ResetStmt) {
+	// No table references in RESET statements
+}
+
 // VisitShowStmt is a no-op for SHOW statements (no table references).
 func (te *TableExtractor) VisitShowStmt(stmt *ShowStmt) {
 	// No table references in SHOW statements
