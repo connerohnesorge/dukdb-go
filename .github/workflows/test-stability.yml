@@ -62,10 +62,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run main test suite (30s timeout for safety)
+      - name: Run main test suite (5m timeout for safety)
         run: |
-          # Run tests with 30s timeout to catch any runaway tests
-          # This prevents GitHub Actions from hanging
-          go test -timeout 30s ./...
+          # Run tests with 5m timeout to allow integration tests to complete
+          # while still catching runaway tests
+          go test -timeout 5m ./...
         env:
           GOFLAGS: "-count=1"
+          CI: "true"
