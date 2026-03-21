@@ -73,6 +73,7 @@ var aggregateWindowFunctions = map[string]bool{
 	"LIST":          true,
 	"ARRAY_AGG":     true,
 	"LIST_DISTINCT": true,
+	"LISTAGG":       true,
 
 	// Time series aggregates
 	"COUNT_IF":  true,
@@ -560,7 +561,7 @@ func inferFunctionResultType(
 		return dukdb.TYPE_DOUBLE
 
 	// String/List Aggregates
-	case "STRING_AGG", "GROUP_CONCAT":
+	case "STRING_AGG", "GROUP_CONCAT", "LISTAGG":
 		return dukdb.TYPE_VARCHAR
 	case "LIST", "ARRAY_AGG", "LIST_DISTINCT":
 		// LIST types return TYPE_ANY for now (no LIST type constant available)
@@ -1099,7 +1100,7 @@ func getFunctionArgTypes(
 		}
 
 	// String/List aggregates
-	case "STRING_AGG", "GROUP_CONCAT":
+	case "STRING_AGG", "GROUP_CONCAT", "LISTAGG":
 		// Takes (value, [delimiter])
 		if argCount >= 1 {
 			types := []dukdb.Type{dukdb.TYPE_VARCHAR}
