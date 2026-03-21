@@ -123,6 +123,10 @@ func updateManifestFilePaths(t *testing.T, tablePath string) {
 // - Deletes: positions 10, 20, 30, 40, 50
 // - Expected: 95 rows remain
 func TestIntegrationPositionalDeletes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 
@@ -201,6 +205,10 @@ func TestIntegrationPositionalDeletes(t *testing.T) {
 
 // TestIntegrationPositionalDeletesBeforeSnapshot tests reading snapshot before deletes were applied.
 func TestIntegrationPositionalDeletesBeforeSnapshot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 
@@ -237,6 +245,10 @@ func TestIntegrationPositionalDeletesBeforeSnapshot(t *testing.T) {
 // - Deletes: WHERE id IN (15, 25, 35, 45, 55)
 // - Expected: 95 rows remain
 func TestIntegrationEqualityDeletes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 
@@ -313,6 +325,10 @@ func TestIntegrationEqualityDeletes(t *testing.T) {
 
 // TestIntegrationEqualityDeletesBeforeSnapshot tests reading snapshot before deletes were applied.
 func TestIntegrationEqualityDeletesBeforeSnapshot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 
@@ -478,6 +494,10 @@ func TestIntegrationDeleteApplierCreation(t *testing.T) {
 
 // TestIntegrationVerifyDeletedPositions verifies specific positions are deleted.
 func TestIntegrationVerifyDeletedPositions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 
@@ -524,6 +544,10 @@ func TestIntegrationVerifyDeletedPositions(t *testing.T) {
 
 // TestIntegrationVerifyDeletedIDs verifies specific IDs are deleted by equality delete.
 func TestIntegrationVerifyDeletedIDs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
 

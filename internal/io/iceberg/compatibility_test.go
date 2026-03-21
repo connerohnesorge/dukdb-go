@@ -169,6 +169,10 @@ func TestCompatibility_IcebergScanOptionsNotYetSupported(t *testing.T) {
 //   - file_size_in_bytes
 //   - ... (additional columns)
 func TestCompatibility_IcebergMetadataSignature(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	t.Run("FunctionExists", func(t *testing.T) {
 		// dukdb-go provides manifest and data file metadata via the Table API
 		// and through iceberg_metadata table function

@@ -172,6 +172,10 @@ func TestDuckDBIcebergExtensionAvailability(t *testing.T) {
 // TestDukdbGoIcebergSimpleTable tests reading simple_table with dukdb-go.
 // This serves as baseline for compatibility comparison.
 func TestDukdbGoIcebergSimpleTable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getSimpleTablePath(t)
 	if tablePath == "" {
 		t.Skip("simple_table test fixture not found")
@@ -239,6 +243,10 @@ func TestDukdbGoIcebergSimpleTable(t *testing.T) {
 // If DuckDB's iceberg extension is not available, it validates the pure Go implementation
 // against expected values.
 func TestDuckDBCompatibilitySimpleTable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getSimpleTablePath(t)
 	if tablePath == "" {
 		t.Skip("simple_table test fixture not found")
@@ -308,6 +316,10 @@ func TestDuckDBCompatibilitySimpleTable(t *testing.T) {
 // If DuckDB's iceberg extension is not available, it validates the pure Go implementation
 // against expected schema.
 func TestDuckDBCompatibilitySchema(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getSimpleTablePath(t)
 	if tablePath == "" {
 		t.Skip("simple_table test fixture not found")
@@ -354,6 +366,10 @@ func TestDuckDBCompatibilitySchema(t *testing.T) {
 // If DuckDB's iceberg extension is not available, it validates the pure Go implementation
 // against expected values.
 func TestDuckDBCompatibilityTimeTravel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tablePath := getTimeTravelTablePath(t)
 	if tablePath == "" {
 		t.Skip("time_travel_table test fixture not found")

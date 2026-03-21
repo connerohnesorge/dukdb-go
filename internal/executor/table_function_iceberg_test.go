@@ -21,6 +21,10 @@ import (
 
 // TestIcebergScan tests the iceberg_scan table function.
 func TestIcebergScan(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	// Get test fixtures path
 	testTablePath := getTestIcebergTablePath(t)
 	if testTablePath == "" {
@@ -83,6 +87,10 @@ func TestIcebergScan(t *testing.T) {
 
 // TestIcebergMetadata tests the iceberg_metadata table function.
 func TestIcebergMetadata(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	testTablePath := getTestIcebergTablePath(t)
 	if testTablePath == "" {
 		t.Skip("No Iceberg test table available - run generate_fixtures.py to create")
