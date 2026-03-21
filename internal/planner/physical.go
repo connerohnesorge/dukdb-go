@@ -3425,9 +3425,19 @@ func isAggregateFunction(name string) bool {
 		"STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
 		// JSON aggregates
 		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
+		// Time series aggregates
+		"COUNT_IF", "FIRST", "LAST", "ANY_VALUE",
+		"ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY",
+		"HISTOGRAM",
+		// Boolean aggregates
+		"BOOL_AND", "BOOL_OR", "EVERY",
+		// Bitwise aggregates
+		"BIT_AND", "BIT_OR", "BIT_XOR",
 		// Regression aggregates
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
-		"CORR", "COVAR_POP", "COVAR_SAMP":
+		"CORR", "COVAR_POP", "COVAR_SAMP",
+		"REGR_COUNT", "REGR_AVGX", "REGR_AVGY",
+		"REGR_SXX", "REGR_SYY", "REGR_SXY":
 		return true
 	}
 	return false
