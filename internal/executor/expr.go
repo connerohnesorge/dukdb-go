@@ -18,6 +18,7 @@ import (
 	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/wal"
+	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -350,6 +351,22 @@ func (e *Executor) evaluateBinaryExpr(
 		case parser.OpIsNot:
 			return left != nil ||
 				right != nil, nil
+		case parser.OpIsDistinctFrom:
+			if left == nil && right == nil {
+				return false, nil
+			}
+			if left == nil || right == nil {
+				return true, nil
+			}
+			return compareValues(left, right) != 0, nil
+		case parser.OpIsNotDistinctFrom:
+			if left == nil && right == nil {
+				return true, nil
+			}
+			if left == nil || right == nil {
+				return false, nil
+			}
+			return compareValues(left, right) == 0, nil
 		default:
 			return nil, nil
 		}
@@ -379,6 +396,10 @@ func (e *Executor) evaluateBinaryExpr(
 			left,
 			right,
 		) != 0, nil
+	case parser.OpIsDistinctFrom:
+		return compareValues(left, right) != 0, nil
+	case parser.OpIsNotDistinctFrom:
+		return compareValues(left, right) == 0, nil
 	case parser.OpLt:
 		return compareValues(left, right) < 0, nil
 	case parser.OpLe:
@@ -503,6 +524,22 @@ func (e *Executor) evaluateParserBinaryOp(op parser.BinaryOp, left, right any) (
 			return left == nil && right == nil, nil
 		case parser.OpIsNot:
 			return left != nil || right != nil, nil
+		case parser.OpIsDistinctFrom:
+			if left == nil && right == nil {
+				return false, nil
+			}
+			if left == nil || right == nil {
+				return true, nil
+			}
+			return compareValues(left, right) != 0, nil
+		case parser.OpIsNotDistinctFrom:
+			if left == nil && right == nil {
+				return true, nil
+			}
+			if left == nil || right == nil {
+				return false, nil
+			}
+			return compareValues(left, right) == 0, nil
 		default:
 			return nil, nil
 		}
@@ -523,6 +560,10 @@ func (e *Executor) evaluateParserBinaryOp(op parser.BinaryOp, left, right any) (
 		return compareValues(left, right) == 0, nil
 	case parser.OpNe:
 		return compareValues(left, right) != 0, nil
+	case parser.OpIsDistinctFrom:
+		return compareValues(left, right) != 0, nil
+	case parser.OpIsNotDistinctFrom:
+		return compareValues(left, right) == 0, nil
 	case parser.OpLt:
 		return compareValues(left, right) < 0, nil
 	case parser.OpLe:
@@ -982,6 +1023,102 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return bitCountValue(args[0])
 
+	case "BIT_LENGTH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("BIT_LENGTH requires exactly 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		switch v := args[0].(type) {
+		case string:
+			return int64(len(v) * 8), nil
+		case []byte:
+			return int64(len(v) * 8), nil
+		default:
+			s := toString(args[0])
+			return int64(len(s) * 8), nil
+		}
+
+	case "GET_BIT":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("GET_BIT requires exactly 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		var getBitData []byte
+		switch v := args[0].(type) {
+		case string:
+			getBitData = []byte(v)
+		case []byte:
+			getBitData = v
+		default:
+			getBitData = []byte(toString(args[0]))
+		}
+		getBitIdx := toInt64Value(args[1])
+		if getBitIdx < 0 || getBitIdx >= int64(len(getBitData)*8) {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("GET_BIT: bit index %d out of range [0, %d)", getBitIdx, len(getBitData)*8),
+			}
+		}
+		getBitByteIdx := getBitIdx / 8
+		getBitBitIdx := uint(getBitIdx % 8)
+		return int32((getBitData[getBitByteIdx] >> (7 - getBitBitIdx)) & 1), nil
+
+	case "SET_BIT":
+		if len(args) != 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("SET_BIT requires exactly 3 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil || args[1] == nil || args[2] == nil {
+			return nil, nil
+		}
+		var setBitData []byte
+		switch v := args[0].(type) {
+		case string:
+			setBitData = []byte(v)
+		case []byte:
+			setBitData = make([]byte, len(v))
+			copy(setBitData, v)
+		default:
+			setBitData = []byte(toString(args[0]))
+		}
+		setBitIdx := toInt64Value(args[1])
+		newBit := toInt64Value(args[2])
+		if newBit != 0 && newBit != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("SET_BIT: bit value must be 0 or 1, got %d", newBit),
+			}
+		}
+		if setBitIdx < 0 || setBitIdx >= int64(len(setBitData)*8) {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("SET_BIT: bit index %d out of range [0, %d)", setBitIdx, len(setBitData)*8),
+			}
+		}
+		setBitByteIdx := setBitIdx / 8
+		setBitBitIdx := uint(setBitIdx % 8)
+		if newBit == 1 {
+			setBitData[setBitByteIdx] |= 1 << (7 - setBitBitIdx)
+		} else {
+			setBitData[setBitByteIdx] &^= 1 << (7 - setBitBitIdx)
+		}
+		if _, ok := args[0].(string); ok {
+			return string(setBitData), nil
+		}
+		return setBitData, nil
+
 	// Hyperbolic functions
 	case "SINH":
 		if len(args) != 1 {
@@ -1127,6 +1264,18 @@ func (e *Executor) evaluateFunctionCall(
 		}
 
 		return nil, nil
+
+	case "IFNULL", "NVL":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("IFNULL requires exactly 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] != nil {
+			return args[0], nil
+		}
+		return args[1], nil
 
 	case "NULLIF":
 		if len(args) != 2 {
@@ -1472,7 +1621,7 @@ func (e *Executor) evaluateFunctionCall(
 		return suffixValue(args[0], args[1])
 
 	// Encoding Functions
-	case "ASCII":
+	case "ASCII", "ORD":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeExecutor,
@@ -1498,6 +1647,94 @@ func (e *Executor) evaluateFunctionCall(
 			}
 		}
 		return unicodeValue(args[0])
+
+	case "ENCODE":
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENCODE requires 1-2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		encodeStr := toString(args[0])
+		encodeCharset := "UTF-8"
+		if len(args) == 2 && args[1] != nil {
+			encodeCharset = strings.ToUpper(toString(args[1]))
+		}
+		switch encodeCharset {
+		case "UTF-8", "UTF8":
+			return []byte(encodeStr), nil
+		case "LATIN1", "ISO-8859-1", "ISO88591":
+			encoder := charmap.ISO8859_1.NewEncoder()
+			encoded, err := encoder.Bytes([]byte(encodeStr))
+			if err != nil {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("ENCODE: cannot encode to %s: %v", encodeCharset, err),
+				}
+			}
+			return encoded, nil
+		case "ASCII":
+			result := make([]byte, 0, len(encodeStr))
+			for _, b := range []byte(encodeStr) {
+				if b <= 127 {
+					result = append(result, b)
+				}
+			}
+			return result, nil
+		default:
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENCODE: unsupported encoding %q", encodeCharset),
+			}
+		}
+
+	case "DECODE":
+		if len(args) < 1 || len(args) > 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("DECODE requires 1-2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		var decodeData []byte
+		switch v := args[0].(type) {
+		case []byte:
+			decodeData = v
+		case string:
+			decodeData = []byte(v)
+		default:
+			decodeData = []byte(toString(args[0]))
+		}
+		decodeCharset := "UTF-8"
+		if len(args) == 2 && args[1] != nil {
+			decodeCharset = strings.ToUpper(toString(args[1]))
+		}
+		switch decodeCharset {
+		case "UTF-8", "UTF8":
+			return string(decodeData), nil
+		case "LATIN1", "ISO-8859-1", "ISO88591":
+			decoder := charmap.ISO8859_1.NewDecoder()
+			decoded, err := decoder.Bytes(decodeData)
+			if err != nil {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("DECODE: cannot decode from %s: %v", decodeCharset, err),
+				}
+			}
+			return string(decoded), nil
+		case "ASCII":
+			return string(decodeData), nil
+		default:
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("DECODE: unsupported encoding %q", decodeCharset),
+			}
+		}
 
 	// Hash Functions
 	case "MD5":
@@ -1642,7 +1879,7 @@ func (e *Executor) evaluateFunctionCall(
 		return evalQuarter(args)
 
 	// Date arithmetic functions
-	case "DATE_ADD":
+	case "DATE_ADD", "DATEADD":
 		return evalDateAdd(args)
 
 	case "DATE_SUB":
@@ -1651,7 +1888,7 @@ func (e *Executor) evaluateFunctionCall(
 	case "DATE_DIFF", "DATEDIFF":
 		return evalDateDiff(args)
 
-	case "DATE_TRUNC":
+	case "DATE_TRUNC", "DATETRUNC":
 		return evalDateTrunc(args)
 
 	case "DATE_PART":
