@@ -842,16 +842,18 @@ func (*PhysicalDropSchema) OutputColumns() []ColumnBinding { return nil }
 
 // PhysicalAlterTable represents a physical ALTER TABLE operation.
 type PhysicalAlterTable struct {
-	Schema       string
-	Table        string
-	TableDef     *catalog.TableDef
-	Operation    int                // AlterTableOp from parser
-	IfExists     bool               // IF EXISTS modifier
-	NewTableName string             // RENAME TO
-	OldColumn    string             // RENAME COLUMN
-	NewColumn    string             // RENAME COLUMN
-	DropColumn   string             // DROP COLUMN
-	AddColumn    *catalog.ColumnDef // ADD COLUMN
+	Schema        string
+	Table         string
+	TableDef      *catalog.TableDef
+	Operation     int                // AlterTableOp from parser
+	IfExists      bool               // IF EXISTS modifier
+	NewTableName  string             // RENAME TO
+	OldColumn     string             // RENAME COLUMN
+	NewColumn     string             // RENAME COLUMN
+	DropColumn    string             // DROP COLUMN
+	AddColumn     *catalog.ColumnDef // ADD COLUMN
+	AlterColumn   string             // ALTER COLUMN TYPE
+	NewColumnType dukdb.Type         // ALTER COLUMN TYPE
 }
 
 func (*PhysicalAlterTable) physicalPlanNode() {}
@@ -859,6 +861,21 @@ func (*PhysicalAlterTable) physicalPlanNode() {}
 func (*PhysicalAlterTable) Children() []PhysicalPlan { return nil }
 
 func (*PhysicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalComment represents a physical COMMENT ON operation.
+type PhysicalComment struct {
+	ObjectType string
+	Schema     string
+	ObjectName string
+	ColumnName string
+	Comment    *string
+}
+
+func (*PhysicalComment) physicalPlanNode() {}
+
+func (*PhysicalComment) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalComment) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Type DDL Physical Plan Nodes ----------
 
@@ -1473,6 +1490,8 @@ func (p *Planner) createLogicalPlan(
 		return p.planDropSchema(s)
 	case *binder.BoundAlterTableStmt:
 		return p.planAlterTable(s)
+	case *binder.BoundCommentStmt:
+		return p.planComment(s)
 	// Type DDL statements
 	case *binder.BoundCreateTypeStmt:
 		return &LogicalCreateType{
@@ -1836,15 +1855,30 @@ func (p *Planner) planUpdate(
 func (p *Planner) planDelete(
 	s *binder.BoundDeleteStmt,
 ) (LogicalPlan, error) {
-	// Create scan
-	scan := &LogicalScan{
+	// Create scan of the target table
+	var source LogicalPlan = &LogicalScan{
 		Schema:    s.Schema,
 		TableName: s.Table,
 		Alias:     s.Table,
 		TableDef:  s.TableDef,
 	}
 
-	var source LogicalPlan = scan
+	// Add USING table scans as cross joins
+	if len(s.Using) > 0 {
+		for _, usingRef := range s.Using {
+			usingScan := &LogicalScan{
+				Schema:    usingRef.Schema,
+				TableName: usingRef.TableName,
+				Alias:     usingRef.Alias,
+				TableDef:  usingRef.TableDef,
+			}
+			source = &LogicalJoin{
+				Left:     source,
+				Right:    usingScan,
+				JoinType: JoinTypeCross,
+			}
+		}
+	}
 
 	// Add filter if WHERE clause exists
 	if s.Where != nil {
@@ -2019,16 +2053,30 @@ func (p *Planner) planAlterTable(
 	s *binder.BoundAlterTableStmt,
 ) (LogicalPlan, error) {
 	return &LogicalAlterTable{
-		Schema:       s.Schema,
-		Table:        s.Table,
-		TableDef:     s.TableDef,
-		Operation:    int(s.Operation),
-		IfExists:     s.IfExists,
-		NewTableName: s.NewTableName,
-		OldColumn:    s.OldColumn,
-		NewColumn:    s.NewColumn,
-		DropColumn:   s.DropColumn,
-		AddColumn:    s.AddColumn,
+		Schema:        s.Schema,
+		Table:         s.Table,
+		TableDef:      s.TableDef,
+		Operation:     int(s.Operation),
+		IfExists:      s.IfExists,
+		NewTableName:  s.NewTableName,
+		OldColumn:     s.OldColumn,
+		NewColumn:     s.NewColumn,
+		DropColumn:    s.DropColumn,
+		AddColumn:     s.AddColumn,
+		AlterColumn:   s.AlterColumn,
+		NewColumnType: s.NewColumnType,
+	}, nil
+}
+
+func (p *Planner) planComment(
+	s *binder.BoundCommentStmt,
+) (LogicalPlan, error) {
+	return &LogicalComment{
+		ObjectType: s.ObjectType,
+		Schema:     s.Schema,
+		ObjectName: s.ObjectName,
+		ColumnName: s.ColumnName,
+		Comment:    s.Comment,
 	}, nil
 }
 
@@ -2784,16 +2832,27 @@ func (p *Planner) createPhysicalPlan(
 
 	case *LogicalAlterTable:
 		return &PhysicalAlterTable{
-			Schema:       l.Schema,
-			Table:        l.Table,
-			TableDef:     l.TableDef,
-			Operation:    l.Operation,
-			IfExists:     l.IfExists,
-			NewTableName: l.NewTableName,
-			OldColumn:    l.OldColumn,
-			NewColumn:    l.NewColumn,
-			DropColumn:   l.DropColumn,
-			AddColumn:    l.AddColumn,
+			Schema:        l.Schema,
+			Table:         l.Table,
+			TableDef:      l.TableDef,
+			Operation:     l.Operation,
+			IfExists:      l.IfExists,
+			NewTableName:  l.NewTableName,
+			OldColumn:     l.OldColumn,
+			NewColumn:     l.NewColumn,
+			DropColumn:    l.DropColumn,
+			AddColumn:     l.AddColumn,
+			AlterColumn:   l.AlterColumn,
+			NewColumnType: l.NewColumnType,
+		}, nil
+
+	case *LogicalComment:
+		return &PhysicalComment{
+			ObjectType: l.ObjectType,
+			Schema:     l.Schema,
+			ObjectName: l.ObjectName,
+			ColumnName: l.ColumnName,
+			Comment:    l.Comment,
 		}, nil
 
 	// Type DDL logical to physical mappings

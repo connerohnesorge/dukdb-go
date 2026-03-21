@@ -682,16 +682,18 @@ func (*LogicalDropSchema) OutputColumns() []ColumnBinding { return nil }
 
 // LogicalAlterTable represents an ALTER TABLE operation.
 type LogicalAlterTable struct {
-	Schema       string
-	Table        string
-	TableDef     *catalog.TableDef
-	Operation    int                // AlterTableOp from parser
-	IfExists     bool               // IF EXISTS modifier
-	NewTableName string             // RENAME TO
-	OldColumn    string             // RENAME COLUMN
-	NewColumn    string             // RENAME COLUMN
-	DropColumn   string             // DROP COLUMN
-	AddColumn    *catalog.ColumnDef // ADD COLUMN
+	Schema        string
+	Table         string
+	TableDef      *catalog.TableDef
+	Operation     int                // AlterTableOp from parser
+	IfExists      bool               // IF EXISTS modifier
+	NewTableName  string             // RENAME TO
+	OldColumn     string             // RENAME COLUMN
+	NewColumn     string             // RENAME COLUMN
+	DropColumn    string             // DROP COLUMN
+	AddColumn     *catalog.ColumnDef // ADD COLUMN
+	AlterColumn   string             // ALTER COLUMN TYPE
+	NewColumnType dukdb.Type         // ALTER COLUMN TYPE
 }
 
 func (*LogicalAlterTable) logicalPlanNode() {}
@@ -699,6 +701,21 @@ func (*LogicalAlterTable) logicalPlanNode() {}
 func (*LogicalAlterTable) Children() []LogicalPlan { return nil }
 
 func (*LogicalAlterTable) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalComment represents a COMMENT ON operation.
+type LogicalComment struct {
+	ObjectType string
+	Schema     string
+	ObjectName string
+	ColumnName string
+	Comment    *string
+}
+
+func (*LogicalComment) logicalPlanNode() {}
+
+func (*LogicalComment) Children() []LogicalPlan { return nil }
+
+func (*LogicalComment) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Type DDL Logical Plan Nodes ----------
 
