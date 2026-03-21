@@ -598,19 +598,18 @@ func TestAggregateIntegration_FilterClause_MultipleFilters(t *testing.T) {
 	}
 }
 
-func TestAggregateIntegration_FilterClause_StandaloneNotSupported(t *testing.T) {
+func TestAggregateIntegration_FilterClause_StandaloneSupported(t *testing.T) {
 	exec, cat, _ := setupAggregateIntegrationTestExecutor()
 	setupTestDataTable(t, exec, cat)
 
-	// Verify that FILTER without OVER clause produces a parse error
-	// This documents the current limitation
-	_, err := executeAggregateIntegrationQuery(t, exec, cat, `
+	// FILTER without OVER clause is now supported for standalone aggregates
+	result, err := executeAggregateIntegrationQuery(t, exec, cat, `
 		SELECT COUNT(*) FILTER (WHERE amount > 100) FROM sales
 	`)
 
-	// This should fail with a parse error since FILTER requires OVER clause
-	require.Error(t, err)
-	t.Logf("Expected error for FILTER without OVER: %v", err)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	t.Logf("FILTER without OVER result: %v", result)
 }
 
 // ---------- 8.3.4 Test aggregates in subquery contexts ----------
