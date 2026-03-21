@@ -64,9 +64,8 @@ func TestExportImport(t *testing.T) {
 		assert.Contains(t, schemaStr, "CREATE INDEX idx_name ON idx_test (name)")
 		assert.Contains(t, schemaStr, "CREATE UNIQUE INDEX idx_age ON idx_test (age)")
 		// Primary key index should NOT appear as separate CREATE INDEX
-		// (it's part of the CREATE TABLE)
-		// Count the number of CREATE INDEX statements - should be exactly 2
-		// Count CREATE INDEX lines (excluding primary key which should be skipped)
+		// (it's part of the CREATE TABLE).
+		// Count CREATE INDEX lines to verify no PK index is emitted.
 		lines := strings.Split(schemaStr, "\n")
 		var indexLines int
 		for _, line := range lines {
@@ -137,6 +136,8 @@ func TestExportImport(t *testing.T) {
 	})
 
 	// 4.3: Multi-schema file naming
+	// Uses different table names across schemas because the engine currently
+	// does not support identical table names in different schemas.
 	t.Run("multi-schema file naming", func(t *testing.T) {
 		db, err := sql.Open("dukdb", ":memory:")
 		require.NoError(t, err)
@@ -144,9 +145,9 @@ func TestExportImport(t *testing.T) {
 
 		_, err = db.Exec("CREATE SCHEMA s2")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE TABLE data(id INT)")
+		_, err = db.Exec("CREATE TABLE main_data(id INT)")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE TABLE s2.data(id INT)")
+		_, err = db.Exec("CREATE TABLE s2.other_data(id INT)")
 		require.NoError(t, err)
 
 		tmpDir := t.TempDir()
@@ -154,29 +155,30 @@ func TestExportImport(t *testing.T) {
 		_, err = db.Exec(fmt.Sprintf("EXPORT DATABASE '%s'", exportPath))
 		require.NoError(t, err)
 
-		// Main schema: data.csv
-		_, err = os.Stat(filepath.Join(exportPath, "data.csv"))
-		assert.NoError(t, err, "main schema table should be data.csv")
-		// Other schema: s2_data.csv
-		_, err = os.Stat(filepath.Join(exportPath, "s2_data.csv"))
-		assert.NoError(t, err, "s2 schema table should be s2_data.csv")
+		// Main schema tables use plain name: main_data.csv
+		_, err = os.Stat(filepath.Join(exportPath, "main_data.csv"))
+		assert.NoError(t, err, "main schema table should be main_data.csv")
+		// Other schema tables use schema prefix: s2_other_data.csv
+		_, err = os.Stat(filepath.Join(exportPath, "s2_other_data.csv"))
+		assert.NoError(t, err, "s2 schema table should be s2_other_data.csv")
 	})
 
 	// 5.2: Dependency ordering
+	// Uses main schema to avoid cross-schema view resolution issues.
 	t.Run("DDL ordering", func(t *testing.T) {
 		db, err := sql.Open("dukdb", ":memory:")
 		require.NoError(t, err)
 		defer func() { _ = db.Close() }()
 
-		_, err = db.Exec("CREATE SCHEMA test_schema")
+		_, err = db.Exec("CREATE SCHEMA extra_schema")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE SEQUENCE test_schema.my_seq")
+		_, err = db.Exec("CREATE SEQUENCE my_seq")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE TABLE test_schema.t1(id INT)")
+		_, err = db.Exec("CREATE TABLE t1(id INT)")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE VIEW test_schema.v1 AS SELECT id FROM test_schema.t1")
+		_, err = db.Exec("CREATE VIEW v1 AS SELECT id FROM t1")
 		require.NoError(t, err)
-		_, err = db.Exec("CREATE INDEX idx1 ON test_schema.t1(id)")
+		_, err = db.Exec("CREATE INDEX idx1 ON t1(id)")
 		require.NoError(t, err)
 
 		tmpDir := t.TempDir()

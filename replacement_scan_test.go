@@ -403,15 +403,6 @@ func TestReplacementScanContext_DeterministicTiming(
 	)
 }
 
-// Test that no time.Sleep is used in tests
-func TestNoTimeSleepInReplacementScanTests(
-	t *testing.T,
-) {
-	// This test exists to document that we don't use time.Sleep
-	// The actual verification is done via grep in the validation phase
-	assert.True(t, true)
-}
-
 // ---------- Binder Integration Tests ----------
 
 func TestTryReplacementScan_NilConnector(
