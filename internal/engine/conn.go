@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -968,10 +969,10 @@ func (c *EngineConn) FileGlobTimeout() int {
 }
 
 // SetSetting stores a session-level setting value.
+// Note: This method is called from the executor package while the connection
+// mutex (c.mu) is already held, and during initialization before concurrent
+// access, so it must not acquire the mutex.
 func (c *EngineConn) SetSetting(key string, value string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.settings == nil {
 		c.settings = make(map[string]string)
 	}
@@ -979,10 +980,9 @@ func (c *EngineConn) SetSetting(key string, value string) {
 }
 
 // GetSetting retrieves a session-level setting value, returning empty string if not set.
+// Note: This method is called from the executor and metadata packages while the
+// connection mutex (c.mu) is already held, so it must not acquire it again.
 func (c *EngineConn) GetSetting(key string) string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.settings == nil {
 		return ""
 	}
@@ -2229,12 +2229,207 @@ func (c *EngineConn) ExtractTableNames(query string, qualified bool) ([]string, 
 	return tables, nil
 }
 
+// QueryStreaming executes a query and returns a StreamingResult for streaming consumption.
+// It follows the same parse/bind/plan flow as Query() but calls executor.ExecuteStreaming()
+// instead of executor.Execute().
+//
+// Note on mutex handling (task 3.3): In the current materialized-then-wrapped implementation,
+// the full result set is computed before returning, so the mutex is held for the duration of
+// execution (same as Query). When true lazy evaluation is implemented, the mutex will need to
+// be released after pipeline setup so the connection is not blocked while rows are consumed.
+func (c *EngineConn) QueryStreaming(
+	ctx context.Context,
+	query string,
+	args []driver.NamedValue,
+) (*dukdb.StreamingResult, []string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, nil, dukdb.ErrConnectionClosed
+	}
+
+	// Mark the start of a new statement for READ COMMITTED isolation.
+	if c.txn != nil {
+		c.txn.BeginStatement()
+	}
+
+	// Parse the query
+	stmt, err := parser.Parse(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Handle SHOW statements at connection level
+	if showStmt, ok := stmt.(*parser.ShowStmt); ok {
+		rows, cols, err := c.handleShow(showStmt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, rows, cols)
+	}
+
+	// Handle extension and database management statements
+	switch s := stmt.(type) {
+	case *parser.InstallStmt:
+		if _, err := c.handleInstall(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.LoadStmt:
+		if _, err := c.handleLoad(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.AttachStmt:
+		if _, err := c.handleAttach(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.DetachStmt:
+		if _, err := c.handleDetach(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.UseStmt:
+		if _, err := c.handleUse(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.CreateDatabaseStmt:
+		if _, err := c.handleCreateDatabase(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.DropDatabaseStmt:
+		if _, err := c.handleDropDatabase(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	default:
+		// not a special statement, continue
+	}
+
+	// Handle SQL-level prepared statement operations
+	switch s := stmt.(type) {
+	case *parser.PrepareStmt:
+		if _, err := c.handlePrepare(s, query); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	case *parser.ExecuteStmt:
+		rows, cols, err := c.handleExecuteStmtQuery(ctx, s, args)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, rows, cols)
+	case *parser.DeallocateStmt:
+		if _, err := c.handleDeallocate(s); err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, []map[string]any{}, []string{})
+	}
+
+	// Bind the statement
+	b := binder.NewBinder(c.engine.catalog)
+	boundStmt, err := b.Bind(stmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Plan the statement with optional optimization hints
+	p := planner.NewPlanner(c.engine.catalog)
+
+	// For SELECT statements, run the cost-based optimizer if enabled
+	if _, isSelect := boundStmt.(*binder.BoundSelectStmt); isSelect {
+		hints := c.getOptimizationHints(boundStmt)
+		if hints != nil {
+			p.SetHints(hints)
+		}
+	}
+
+	// For EXPLAIN statements, run the cost-based optimizer on the child query
+	if explainStmt, isExplain := boundStmt.(*binder.BoundExplainStmt); isExplain {
+		if _, isSelectChild := explainStmt.Query.(*binder.BoundSelectStmt); isSelectChild {
+			hints := c.getOptimizationHints(explainStmt.Query)
+			if hints != nil {
+				p.SetHints(hints)
+			}
+		}
+	}
+
+	plan, err := p.Plan(boundStmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Execute the plan via streaming
+	exec := executor.NewExecutor(
+		c.engine.catalog,
+		c.engine.storage,
+	)
+	exec.SetConnection(c)
+	if c.engine.extensions != nil {
+		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
+	}
+	if c.engine.ftsRegistry != nil {
+		exec.SetFTSRegistry(&ftsRegistryAdapter{registry: c.engine.ftsRegistry})
+	}
+	exec.SetQueryCache(c.engine.QueryCache())
+	if c.engine.WAL() != nil {
+		exec.SetWAL(c.engine.WAL())
+		if c.txn != nil {
+			exec.SetTxnID(c.txn.ID())
+		}
+	}
+	if c.txn != nil && c.inTxn {
+		exec.SetUndoRecorder(&undoRecorderAdapter{txn: c.txn})
+		exec.SetInTransaction(true)
+	}
+	c.configureExecutorMVCC(exec)
+
+	sr, err := exec.ExecuteStreaming(ctx, plan, args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return sr, sr.Columns(), nil
+}
+
+// wrapRowsAsStreaming wraps materialized rows in a StreamingResult.
+// This is used for special statement types (SHOW, INSTALL, etc.) that
+// return materialized results but need to be wrapped in the streaming interface.
+func (c *EngineConn) wrapRowsAsStreaming(
+	ctx context.Context,
+	data []map[string]any,
+	columns []string,
+) (*dukdb.StreamingResult, []string, error) {
+	_, cancel := context.WithCancel(ctx)
+	pos := 0
+	scanNext := func(dest []driver.Value) error {
+		if pos >= len(data) {
+			return io.EOF
+		}
+		row := data[pos]
+		for i, col := range columns {
+			dest[i] = row[col]
+		}
+		pos++
+		return nil
+	}
+
+	return dukdb.NewStreamingResult(columns, scanNext, cancel), columns, nil
+}
+
 // Verify interface implementations
 var (
 	_ dukdb.BackendConn = (*EngineConn)(
 		nil,
 	)
 	_ dukdb.BackendConnCatalog = (*EngineConn)(
+		nil,
+	)
+	_ dukdb.BackendConnStreaming = (*EngineConn)(
 		nil,
 	)
 	_ dukdb.BackendConnTableExtractor = (*EngineConn)(

@@ -252,6 +252,18 @@ func (e *Engine) Open(
 		sqlPrepared:     make(map[string]*sqlPreparedStatement),
 	}
 
+	// Expose database name for system functions
+	dbName := "dukdb"
+	if path == ":memory:" {
+		dbName = "memory"
+	} else if path != "" {
+		dbName = filepath.Base(path)
+		if dbName == "" {
+			dbName = path
+		}
+	}
+	conn.SetSetting("database_name", dbName)
+
 	return conn, nil
 }
 
