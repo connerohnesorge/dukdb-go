@@ -53,20 +53,38 @@ func (e *Executor) executeDelete(
 	}
 	var deletedRows []deletedRow
 
-	// Handle IN subqueries and other complex sources that have been converted to joins
-	// by executing the source plan first to get matching rows
+	// Handle IN subqueries, USING clauses, and other complex sources that have
+	// been converted to joins by executing the source plan first to get matching rows.
+	// This covers two cases:
+	// 1. Source is directly a join (e.g., for IN subquery without WHERE)
+	// 2. Source is a filter wrapping a join (e.g., DELETE USING with WHERE)
 	if plan.Source != nil {
+		isJoinSource := false
 		if _, isFilter := plan.Source.(*planner.PhysicalFilter); !isFilter {
-			// Source is a join (e.g., for IN subquery) - execute it to get matching rows
+			// Source is directly a join (not wrapped in a filter)
+			isJoinSource = true
+		} else if filter, ok := plan.Source.(*planner.PhysicalFilter); ok {
+			// Source is a filter - check if its child involves a join (not a simple scan).
+			// This covers DELETE ... USING where the cross join + WHERE filter produces
+			// a PhysicalFilter wrapping a join node.
+			if _, isScan := filter.Child.(*planner.PhysicalScan); !isScan {
+				isJoinSource = true
+			}
+		}
+
+		if isJoinSource {
+			// Execute the source plan (join + optional filter) to get matching rows
 			sourceResult, err := e.executeWithContext(ctx, plan.Source)
 			if err != nil {
 				return nil, err
 			}
 
-			// Build a map of matching row keys from the source result
+			// Build a map of matching row keys from the source result.
+			// Use qualified names (tableName.colName) first to avoid collisions when
+			// both the main table and a USING table share column names (e.g. both have "id").
 			matchingKeys := make(map[string]bool)
 			for _, row := range sourceResult.Rows {
-				key := buildRowKey(row, plan.TableDef.Columns)
+				key := buildRowKeyQualified(row, plan.Table, plan.TableDef.Columns)
 				matchingKeys[key] = true
 			}
 
@@ -279,11 +297,29 @@ doneScanning:
 	}, nil
 }
 
-// buildRowKey creates a unique key for a row based on its column values
+// buildRowKey creates a unique key for a row based on its column values.
+// It uses unqualified column names to look up values in the row map.
 func buildRowKey(row map[string]any, columns []*catalog.ColumnDef) string {
 	key := ""
 	for _, col := range columns {
 		if val, ok := row[col.Name]; ok {
+			key += fmt.Sprintf("%v:", val)
+		}
+	}
+	return key
+}
+
+// buildRowKeyQualified creates a unique key for a row using qualified column names
+// (tableName.colName) first, falling back to unqualified names. This avoids
+// column-name collisions when both the main table and a USING table share column
+// names (e.g. both have "id").
+func buildRowKeyQualified(row map[string]any, tableName string, columns []*catalog.ColumnDef) string {
+	key := ""
+	for _, col := range columns {
+		qualifiedName := tableName + "." + col.Name
+		if val, ok := row[qualifiedName]; ok {
+			key += fmt.Sprintf("%v:", val)
+		} else if val, ok := row[col.Name]; ok {
 			key += fmt.Sprintf("%v:", val)
 		}
 	}
