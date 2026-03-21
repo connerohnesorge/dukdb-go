@@ -1,0 +1,34 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+//
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add Filter field to FunctionCall — Add Filter Expr field to FunctionCall struct. Modify FILTER parsing to store Filter on FunctionCall when no OVER clause follows. Allow FILTER without OVER.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add Filter to BoundFunctionCall — Add Filter BoundExpr field to BoundFunctionCall. Bind the Filter expression with target type TYPE_BOOLEAN.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Apply Filter in computeAggregate — Pre-filter rows using fn.Filter before passing to aggregate logic. Evaluate filter expression, use toBool(), skip rows where filter is false/NULL.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test FILTER with COUNT, SUM, AVG, MIN, MAX. Test FILTER with GROUP BY. Test multiple aggregates with different filters. Test NULL filter handling. Verify FILTER still works with window OVER clause.",
+      "status": "completed"
+    }
+  ]
+}

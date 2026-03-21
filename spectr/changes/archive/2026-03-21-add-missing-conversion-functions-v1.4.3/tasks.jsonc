@@ -1,0 +1,32 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add TO_DATE function — Add TO_DATE case to evaluateFunctionCall(). Reuse evalStrptime() for 2-arg form, convert TIMESTAMP to DATE. For 1-arg form, parse ISO date string directly. Add TYPE_DATE return to inferFunctionResultType().",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add TO_CHAR function — Add TO_CHAR alias to existing STRFTIME case in evaluateFunctionCall(). Add to inferFunctionResultType() alongside STRFTIME.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add GENERATE_SUBSCRIPTS function — Add GENERATE_SUBSCRIPTS case to evaluateFunctionCall(). Takes array and optional dimension, returns 1-based integer indices. Add TYPE_INTEGER return to inferFunctionResultType().",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test TO_DATE with format strings, auto-detection, NULL inputs, invalid dates. Test TO_CHAR with DATE, TIMESTAMP, various formats. Test GENERATE_SUBSCRIPTS with arrays, empty arrays, NULL.",
+      "status": "completed"
+    }
+  ]
+}

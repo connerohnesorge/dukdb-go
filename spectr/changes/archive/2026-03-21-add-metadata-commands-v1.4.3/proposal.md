@@ -2,7 +2,7 @@
 
 **Change ID:** `add-metadata-commands-v1.4.3`
 **Created:** 2026-03-21
-**Status:** PROPOSED
+**Status:** IMPLEMENTED
 **Scope:** Medium — Four metadata/utility statement types across parser, binder, executor
 **Estimated Complexity:** Medium — Each statement queries catalog metadata
 **User-Visible:** Yes — New SQL statements for introspection

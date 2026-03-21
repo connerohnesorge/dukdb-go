@@ -1,0 +1,26 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add ResetStmt AST and parser — Add ResetStmt to ast.go with Variable and All fields. Add parseReset() to parser_pragma.go. Register RESET in parser.go main switch. Support RESET variable and RESET ALL.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Implement RESET execution — Handle ResetStmt in engine/conn.go. For specific variables, reset to default value. For RESET ALL, reset all settings.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Integration tests — Test RESET with SET/SHOW round-trip. Test RESET ALL. Test RESET of unknown variable.",
+      "status": "completed"
+    }
+  ]
+}
