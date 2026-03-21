@@ -622,6 +622,37 @@ func (e *Executor) executeAlterTable(
 			}
 		}
 
+	case parser.AlterTableAlterColumnType:
+		colIdx := -1
+		for i, col := range tableDef.Columns {
+			if strings.EqualFold(col.Name, plan.AlterColumn) {
+				colIdx = i
+				break
+			}
+		}
+		if colIdx == -1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("column %q not found", plan.AlterColumn),
+			}
+		}
+
+		oldType := tableDef.Columns[colIdx].Type
+		newType := plan.NewColumnType
+
+		// Convert existing data in storage
+		if storageTable, ok := e.storage.GetTable(plan.Table); ok {
+			if err := convertColumnType(storageTable, colIdx, oldType, newType); err != nil {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  fmt.Sprintf("ALTER COLUMN TYPE: %v", err),
+				}
+			}
+		}
+
+		// Update catalog type
+		tableDef.Columns[colIdx].Type = newType
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -632,6 +663,45 @@ func (e *Executor) executeAlterTable(
 	e.invalidateQueryCache(plan.Table)
 
 	return &ExecutionResult{RowsAffected: 0}, nil
+}
+
+// convertColumnType converts the data in a storage column from one type to another.
+// It creates a new Vector with the target type for each RowGroup and copies converted values.
+func convertColumnType(table *storage.Table, colIdx int, oldType, newType dukdb.Type) error {
+	for rgIdx := 0; rgIdx < table.RowGroupCount(); rgIdx++ {
+		rg := table.GetRowGroup(rgIdx)
+		if rg == nil {
+			continue
+		}
+		oldVec := rg.GetColumn(colIdx)
+		if oldVec == nil {
+			continue
+		}
+		count := oldVec.Count()
+		newVec := storage.NewVector(newType, count)
+		newVec.SetCount(count)
+		for i := 0; i < count; i++ {
+			val := oldVec.GetValue(i)
+			if val == nil {
+				newVec.SetValue(i, nil)
+				continue
+			}
+			converted, err := castValueWithValidation(val, newType)
+			if err != nil {
+				return fmt.Errorf(
+					"cannot convert value %v from %s to %s: %w",
+					val, oldType.String(), newType.String(), err,
+				)
+			}
+			newVec.SetValue(i, converted)
+		}
+		rg.SetColumn(colIdx, newVec)
+	}
+	// Update the table's column type metadata
+	if err := table.SetColumnType(colIdx, newType); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ---------- Secret DDL Execution Functions ----------
@@ -853,4 +923,97 @@ func (e *Executor) executeTruncate(
 	e.invalidateQueryCache(plan.Table)
 
 	return &ExecutionResult{RowsAffected: rowsAffected}, nil
+}
+
+// executeComment executes a COMMENT ON statement.
+func (e *Executor) executeComment(
+	ctx *ExecutionContext,
+	plan *planner.PhysicalComment,
+) (*ExecutionResult, error) {
+	schema := plan.Schema
+	if schema == "" {
+		schema = "main"
+	}
+
+	switch plan.ObjectType {
+	case "TABLE":
+		tableDef, ok := e.catalog.GetTableInSchema(schema, plan.ObjectName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("table %q does not exist", plan.ObjectName),
+			}
+		}
+		if plan.Comment != nil {
+			tableDef.Comment = *plan.Comment
+		} else {
+			tableDef.Comment = ""
+		}
+	case "COLUMN":
+		tableDef, ok := e.catalog.GetTableInSchema(schema, plan.ObjectName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("table %q does not exist", plan.ObjectName),
+			}
+		}
+		colIdx, ok := tableDef.GetColumnIndex(plan.ColumnName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("column %q not found in table %q", plan.ColumnName, plan.ObjectName),
+			}
+		}
+		if plan.Comment != nil {
+			tableDef.Columns[colIdx].Comment = *plan.Comment
+		} else {
+			tableDef.Columns[colIdx].Comment = ""
+		}
+	case "VIEW":
+		viewDef, ok := e.catalog.GetViewInSchema(schema, plan.ObjectName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("view %q does not exist", plan.ObjectName),
+			}
+		}
+		if plan.Comment != nil {
+			viewDef.Comment = *plan.Comment
+		} else {
+			viewDef.Comment = ""
+		}
+	case "INDEX":
+		indexDef, ok := e.catalog.GetIndexInSchema(schema, plan.ObjectName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("index %q does not exist", plan.ObjectName),
+			}
+		}
+		if plan.Comment != nil {
+			indexDef.Comment = *plan.Comment
+		} else {
+			indexDef.Comment = ""
+		}
+	case "SCHEMA":
+		schemaDef, ok := e.catalog.GetSchema(plan.ObjectName)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("schema %q does not exist", plan.ObjectName),
+			}
+		}
+		if plan.Comment != nil {
+			schemaDef.Comment = *plan.Comment
+		} else {
+			schemaDef.Comment = ""
+		}
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("unsupported COMMENT ON object type: %s", plan.ObjectType),
+		}
+	}
+
+	return &ExecutionResult{RowsAffected: 0}, nil
 }
