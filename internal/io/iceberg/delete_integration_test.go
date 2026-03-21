@@ -129,6 +129,7 @@ func TestIntegrationPositionalDeletes(t *testing.T) {
 
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -211,6 +212,7 @@ func TestIntegrationPositionalDeletesBeforeSnapshot(t *testing.T) {
 
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -251,6 +253,7 @@ func TestIntegrationEqualityDeletes(t *testing.T) {
 
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -331,6 +334,7 @@ func TestIntegrationEqualityDeletesBeforeSnapshot(t *testing.T) {
 
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -361,6 +365,7 @@ func TestIntegrationEqualityDeletesBeforeSnapshot(t *testing.T) {
 func TestIntegrationPositionalDeletesMetadata(t *testing.T) {
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -393,6 +398,7 @@ func TestIntegrationPositionalDeletesMetadata(t *testing.T) {
 func TestIntegrationEqualityDeletesMetadata(t *testing.T) {
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -425,6 +431,7 @@ func TestIntegrationEqualityDeletesMetadata(t *testing.T) {
 func TestIntegrationDeleteFileRowCount(t *testing.T) {
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -500,6 +507,7 @@ func TestIntegrationVerifyDeletedPositions(t *testing.T) {
 
 	tablePath := getPositionalDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 
@@ -550,6 +558,7 @@ func TestIntegrationVerifyDeletedIDs(t *testing.T) {
 
 	tablePath := getEqualityDeletesTablePath(t)
 	updateDeleteTableMetadataLocations(t, tablePath)
+	skipIfManifestsInaccessible(t, tablePath)
 
 	ctx := context.Background()
 

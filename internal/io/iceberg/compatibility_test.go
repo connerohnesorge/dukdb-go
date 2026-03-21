@@ -180,6 +180,7 @@ func TestCompatibility_IcebergMetadataSignature(t *testing.T) {
 		ctx := context.Background()
 		tablePath := getSimpleTablePath(t)
 		updateMetadataLocations(t, tablePath)
+		skipIfManifestsInaccessible(t, tablePath)
 
 		table, err := OpenTable(ctx, tablePath, nil)
 		if err != nil {
@@ -205,6 +206,7 @@ func TestCompatibility_IcebergMetadataSignature(t *testing.T) {
 		ctx := context.Background()
 		tablePath := getSimpleTablePath(t)
 		updateMetadataLocations(t, tablePath)
+		skipIfManifestsInaccessible(t, tablePath)
 
 		table, err := OpenTable(ctx, tablePath, nil)
 		if err != nil {
@@ -238,6 +240,7 @@ func TestCompatibility_IcebergSnapshotsSignature(t *testing.T) {
 		ctx := context.Background()
 		tablePath := getTimeTravelTablePath(t)
 		updateMetadataLocations(t, tablePath)
+		skipIfManifestsInaccessible(t, tablePath)
 
 		table, err := OpenTable(ctx, tablePath, nil)
 		if err != nil {
@@ -263,6 +266,7 @@ func TestCompatibility_IcebergSnapshotsSignature(t *testing.T) {
 		ctx := context.Background()
 		tablePath := getTimeTravelTablePath(t)
 		updateMetadataLocations(t, tablePath)
+		skipIfManifestsInaccessible(t, tablePath)
 
 		table, err := OpenTable(ctx, tablePath, nil)
 		if err != nil {
