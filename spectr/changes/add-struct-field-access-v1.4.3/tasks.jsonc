@@ -1,0 +1,32 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add BoundFieldAccess expression — Add BoundFieldAccess struct to binder/expressions.go. Fields: Struct (BoundExpr), Field (string), ResType (dukdb.Type).",
+      "status": "in_progress"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Modify binder to resolve struct fields — In bindColumnRef(), when table lookup fails, check if ref.Table matches a struct-typed column name. Create BoundFieldAccess wrapping BoundColumnRef.",
+      "status": "in_progress"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Evaluate BoundFieldAccess in executor — Add case for *binder.BoundFieldAccess in expression evaluation. Extract field from map[string]any. Support case-insensitive field lookup. NULL struct returns NULL.",
+      "status": "in_progress"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test struct field access with SELECT, WHERE, ORDER BY. Test mixed table.column and struct.field. Test NULL propagation. Test non-existent fields return NULL.",
+      "status": "pending"
+    }
+  ]
+}
