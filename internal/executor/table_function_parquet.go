@@ -207,7 +207,10 @@ func (e *Executor) resolveParquetFilePaths(
 		var err error
 		fs, err = provider.GetFileSystem(ctx, pathOrPattern)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get filesystem: %w", err)
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("IO Error: failed to get filesystem: %s", err),
+			}
 		}
 	} else {
 		fs = filesystem.NewLocalFileSystem("")
@@ -215,10 +218,16 @@ func (e *Executor) resolveParquetFilePaths(
 
 	exists, err := fs.Exists(pathOrPattern)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check file existence: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to check file existence: %s", err),
+		}
 	}
 	if !exists {
-		return nil, fmt.Errorf("file not found: %s", pathOrPattern)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: file not found: %s", pathOrPattern),
+		}
 	}
 
 	return []string{pathOrPattern}, nil
@@ -236,7 +245,10 @@ func (e *Executor) expandParquetGlobPattern(
 		var err error
 		fs, err = provider.GetFileSystem(ctx, pattern)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get filesystem for glob: %w", err)
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("IO Error: failed to get filesystem for glob: %s", err),
+			}
 		}
 	} else {
 		fs = filesystem.NewLocalFileSystem("")
@@ -253,7 +265,10 @@ func (e *Executor) expandParquetGlobPattern(
 				return []string{pattern}, nil
 			}
 		}
-		return nil, fmt.Errorf("glob expansion failed: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: glob expansion failed: %s", err),
+		}
 	}
 
 	if len(paths) == 0 && multiOpts.FileGlobBehavior == FileGlobFallback {

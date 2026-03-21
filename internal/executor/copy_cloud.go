@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	dukdb "github.com/dukdb/dukdb-go"
 	fileio "github.com/dukdb/dukdb-go/internal/io"
 	arrowio "github.com/dukdb/dukdb-go/internal/io/arrow"
 	csvio "github.com/dukdb/dukdb-go/internal/io/csv"
@@ -41,16 +42,24 @@ func (p *FileSystemProvider) GetFileSystem(
 	// Parse the URL to determine scheme
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to parse URL %q: %s", rawURL, err),
+		}
 	}
 
 	// Get base filesystem from factory
 	fs, err := p.factory.GetFileSystem(ctx, rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get filesystem: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to get filesystem for %q: %s", rawURL, err),
+		}
 	}
 
-	// For cloud URLs, look up secrets and apply credentials
+	// For cloud URLs, look up secrets and apply credentials.
+	// If no secret manager is configured, fall through to use default credentials
+	// (from environment variables, IAM roles, etc.).
 	if parsedURL.IsCloudScheme() && p.secretManager != nil {
 		secretType := getSecretTypeForScheme(parsedURL.Scheme)
 		if secretType != "" {
@@ -59,7 +68,10 @@ func (p *FileSystemProvider) GetFileSystem(
 				// Apply secret credentials to filesystem
 				fs, err = p.applySecretToFileSystem(ctx, fs, sec, parsedURL)
 				if err != nil {
-					return nil, fmt.Errorf("failed to apply secret: %w", err)
+					return nil, &dukdb.Error{
+						Type: dukdb.ErrorTypeIO,
+						Msg:  fmt.Sprintf("IO Error: failed to apply credentials for %q: %s", rawURL, err),
+					}
 				}
 			}
 			// If no secret found, continue with default credentials (from env, IAM, etc.)
@@ -152,7 +164,11 @@ func (p *FileSystemProvider) applyS3Secret(
 		config.Region = parsedURL.Region()
 	}
 
-	return filesystem.NewS3FileSystem(ctx, config)
+	s3fs, err := filesystem.NewS3FileSystem(ctx, config)
+	if err != nil {
+		return nil, wrapCloudFSError("S3", err)
+	}
+	return s3fs, nil
 }
 
 // applyGCSSecret creates a GCS filesystem with credentials from the secret.
@@ -171,7 +187,11 @@ func (p *FileSystemProvider) applyGCSSecret(
 		config.CredentialsJSON = saJSON
 	}
 
-	return filesystem.NewGCSFileSystem(ctx, config)
+	gcsfs, err := filesystem.NewGCSFileSystem(ctx, config)
+	if err != nil {
+		return nil, wrapCloudFSError("GCS", err)
+	}
+	return gcsfs, nil
 }
 
 // applyAzureSecret creates an Azure filesystem with credentials from the secret.
@@ -202,7 +222,11 @@ func (p *FileSystemProvider) applyAzureSecret(
 		config.ClientSecret = clientSecret
 	}
 
-	return filesystem.NewAzureFileSystem(ctx, config)
+	azfs, err := filesystem.NewAzureFileSystem(ctx, config)
+	if err != nil {
+		return nil, wrapCloudFSError("Azure", err)
+	}
+	return azfs, nil
 }
 
 // applyHTTPSecret creates an HTTP filesystem with credentials from the secret.
@@ -228,7 +252,66 @@ func (p *FileSystemProvider) applyHTTPSecret(
 		}
 	}
 
-	return filesystem.NewHTTPFileSystem(ctx, config)
+	httpfs, err := filesystem.NewHTTPFileSystem(ctx, config)
+	if err != nil {
+		return nil, wrapCloudFSError("HTTP", err)
+	}
+	return httpfs, nil
+}
+
+// wrapCloudFSError wraps a cloud filesystem creation error with a typed dukdb.Error.
+// It distinguishes authentication failures from network/endpoint errors based on
+// the error message content.
+func wrapCloudFSError(provider string, err error) *dukdb.Error {
+	errMsg := err.Error()
+	lowerMsg := strings.ToLower(errMsg)
+
+	// Detect authentication-related failures
+	if strings.Contains(lowerMsg, "access denied") ||
+		strings.Contains(lowerMsg, "forbidden") ||
+		strings.Contains(lowerMsg, "403") ||
+		strings.Contains(lowerMsg, "invalid access key") ||
+		strings.Contains(lowerMsg, "signature") ||
+		strings.Contains(lowerMsg, "credential") ||
+		strings.Contains(lowerMsg, "unauthorized") ||
+		strings.Contains(lowerMsg, "401") ||
+		strings.Contains(lowerMsg, "auth") {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg: fmt.Sprintf(
+				"IO Error: %s authentication failed: %s. "+
+					"Verify your credentials in CREATE SECRET are correct",
+				provider, errMsg,
+			),
+		}
+	}
+
+	// Detect network/endpoint unreachable errors
+	if strings.Contains(lowerMsg, "no such host") ||
+		strings.Contains(lowerMsg, "connection refused") ||
+		strings.Contains(lowerMsg, "connection reset") ||
+		strings.Contains(lowerMsg, "timeout") ||
+		strings.Contains(lowerMsg, "unreachable") ||
+		strings.Contains(lowerMsg, "dial tcp") ||
+		strings.Contains(lowerMsg, "dns") ||
+		strings.Contains(lowerMsg, "network") ||
+		strings.Contains(lowerMsg, "tls") ||
+		strings.Contains(lowerMsg, "certificate") {
+		return &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg: fmt.Sprintf(
+				"IO Error: %s endpoint unreachable: %s. "+
+					"Check the endpoint URL and network connectivity",
+				provider, errMsg,
+			),
+		}
+	}
+
+	// Generic cloud filesystem error
+	return &dukdb.Error{
+		Type: dukdb.ErrorTypeIO,
+		Msg:  fmt.Sprintf("IO Error: failed to create %s filesystem: %s", provider, errMsg),
+	}
 }
 
 // fileWithStat wraps a filesystem.File with stat capability.
@@ -255,14 +338,20 @@ func (p *FileSystemProvider) openFileWithStat(
 	if ctxFS, ok := fs.(filesystem.ContextFileSystem); ok {
 		file, err := ctxFS.OpenContext(ctx, rawURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open file: %w", err)
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("IO Error: failed to open file %q: %s", rawURL, err),
+			}
 		}
 		return file, nil
 	}
 
 	file, err := fs.Open(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to open file %q: %s", rawURL, err),
+		}
 	}
 	return file, nil
 }
@@ -280,21 +369,30 @@ func (p *FileSystemProvider) createFileForWriting(
 	// Check if filesystem supports writing
 	caps := fs.Capabilities()
 	if !caps.SupportsWrite {
-		return nil, fmt.Errorf("filesystem does not support writing: %s", rawURL)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: filesystem does not support writing: %s", rawURL),
+		}
 	}
 
 	// For cloud filesystems with context support, use CreateContext
 	if ctxFS, ok := fs.(filesystem.ContextFileSystem); ok {
 		file, err := ctxFS.CreateContext(ctx, rawURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create file: %w", err)
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeIO,
+				Msg:  fmt.Sprintf("IO Error: failed to create file %q: %s", rawURL, err),
+			}
 		}
 		return file, nil
 	}
 
 	file, err := fs.Create(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to create file %q: %s", rawURL, err),
+		}
 	}
 	return file, nil
 }
@@ -339,7 +437,10 @@ func createFileReaderFromFS(
 			info, err := file.Stat()
 			if err != nil {
 				_ = file.Close()
-				return nil, fmt.Errorf("failed to get file size: %w", err)
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeIO,
+					Msg:  fmt.Sprintf("IO Error: failed to get file size for %q: %s", path, err),
+				}
 			}
 			return parquetio.NewReader(ras, info.Size(), opts)
 		}
@@ -365,11 +466,17 @@ func createFileReaderFromFS(
 
 	case fileio.FormatUnknown:
 		_ = file.Close()
-		return nil, fmt.Errorf("unknown format specified")
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  "IO Error: unknown format specified",
+		}
 
 	default:
 		_ = file.Close()
-		return nil, fmt.Errorf("unsupported format: %v", format)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: unsupported format: %v", format),
+		}
 	}
 }
 
@@ -422,11 +529,17 @@ func createFileWriterFromFS(
 
 	case fileio.FormatUnknown:
 		_ = writer.Close()
-		return nil, fmt.Errorf("unknown format specified")
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  "IO Error: unknown format specified",
+		}
 
 	default:
 		_ = writer.Close()
-		return nil, fmt.Errorf("unsupported format: %v", format)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: unsupported format: %v", format),
+		}
 	}
 }
 
@@ -504,7 +617,10 @@ func createParquetReaderFromStream(
 	// Read entire file into memory
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read parquet data: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to read parquet data: %s", err),
+		}
 	}
 
 	// Create a bytes reader that implements ReaderAtSeeker
@@ -524,7 +640,10 @@ func createArrowReaderFromStream(
 	// Read entire file into memory
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read arrow data: %w", err)
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeIO,
+			Msg:  fmt.Sprintf("IO Error: failed to read arrow data: %s", err),
+		}
 	}
 
 	// Create a bytes reader that implements ReadAtSeeker
