@@ -922,20 +922,6 @@ func TestExtendedProtocolErrorHandling(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	// NOTE: Skipped subtest - parameterized table queries hang
-	// t.Run("no rows returned", func(t *testing.T) {
-	// 	_, err := conn.Exec(ctx, `
-	// 		CREATE TABLE no_rows_test (id INTEGER PRIMARY KEY)
-	// 	`)
-	// 	require.NoError(t, err)
-	// 	defer func() {
-	// 		_, _ = conn.Exec(ctx, "DROP TABLE no_rows_test")
-	// 	}()
-	//
-	// 	var result int
-	// 	err = conn.QueryRow(ctx, "SELECT id FROM no_rows_test WHERE id = $1", 999).Scan(&result)
-	// 	assert.ErrorIs(t, err, pgx.ErrNoRows)
-	// })
 }
 
 // TestExtendedProtocolPrepareAndReuse tests statement preparation and reuse patterns.

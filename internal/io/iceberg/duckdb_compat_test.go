@@ -425,52 +425,5 @@ func TestDuckDBCompatibilityTimeTravel(t *testing.T) {
 	}
 }
 
-// TestDuckDBCompatibilitySummary produces a summary report of compatibility status.
-func TestDuckDBCompatibilitySummary(t *testing.T) {
-	t.Log("=== DuckDB Compatibility Summary ===")
-	t.Log("")
-
-	// Check CLI availability
-	cliAvailable := isDuckDBAvailable()
-	t.Logf("DuckDB CLI available: %v", cliAvailable)
-
-	if cliAvailable {
-		// Check iceberg extension
-		icebergAvailable := isDuckDBIcebergAvailable(t)
-		t.Logf("DuckDB Iceberg extension available: %v", icebergAvailable)
-
-		if !icebergAvailable {
-			t.Log("")
-			t.Log("Note: The DuckDB Iceberg extension requires the AVRO extension,")
-			t.Log("which may not be available in all DuckDB installations.")
-			t.Log("This is a DuckDB distribution issue, not a dukdb-go issue.")
-		}
-	}
-
-	t.Log("")
-	t.Log("=== dukdb-go Iceberg Feature Status ===")
-	t.Log("")
-	t.Log("Read Support:")
-	t.Log("  [x] Read Iceberg tables from local filesystem")
-	t.Log("  [x] Column projection")
-	t.Log("  [x] Time travel by snapshot ID")
-	t.Log("  [x] Time travel by timestamp")
-	t.Log("  [x] Positional delete files")
-	t.Log("  [x] Equality delete files")
-	t.Log("  [x] Partition pruning")
-	t.Log("  [~] Schema evolution (basic support)")
-	t.Log("")
-	t.Log("Metadata Functions:")
-	t.Log("  [x] iceberg_scan() - Table scanning")
-	t.Log("  [x] iceberg_metadata() - Manifest/file metadata")
-	t.Log("  [x] iceberg_snapshots() - Snapshot history")
-	t.Log("")
-	t.Log("Not Implemented:")
-	t.Log("  [ ] REST catalog integration")
-	t.Log("  [ ] Write support")
-	t.Log("  [ ] Avro/ORC data file support")
-	t.Log("  [ ] AS OF TIMESTAMP/VERSION SQL syntax")
-}
-
 // Note: Helper functions getSimpleTablePath, getTimeTravelTablePath, and updateMetadataLocations
 // are defined in integration_test.go and are shared with these tests.

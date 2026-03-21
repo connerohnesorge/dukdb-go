@@ -311,7 +311,7 @@ func TestRoundTrip_NULLHandling(t *testing.T) {
 // =============================================================================
 
 // testdataDir is the path to the testdata directory.
-const testdataDir = "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/csv/testdata"
+const testdataDir = "testdata"
 
 // getTestdataPath returns the absolute path to a testdata file.
 func getTestdataPath(filename string) string {

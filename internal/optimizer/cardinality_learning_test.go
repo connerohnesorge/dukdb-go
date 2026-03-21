@@ -392,7 +392,6 @@ func TestCardinalityLearnerConcurrentAccess(t *testing.T) {
 	}
 
 	// Should complete without panic
-	assert.True(t, true, "Concurrent access completed successfully")
 }
 
 // TestExpectedCorrectionTrajectory verifies that corrections improve smoothly over time.
