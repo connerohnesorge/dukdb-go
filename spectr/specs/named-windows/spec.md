@@ -6,9 +6,7 @@
 
 The system MUST implement the following functionality.
 
-
 Named windows allow defining window specifications once and reusing them multiple times in a query. This improves query readability and maintainability while ensuring consistent window definitions across multiple window functions.
-
 
 #### Scenario: General Validation
 - **Given** the system is operational
@@ -18,7 +16,6 @@ Named windows allow defining window specifications once and reusing them multipl
 ### Requirement: Syntax
 
 The system MUST implement the following functionality.
-
 
 ```sql
 -- Named window in WINDOW clause
@@ -38,7 +35,6 @@ WINDOW
     w2 AS (window_specification2)
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -47,7 +43,6 @@ WINDOW
 ### Requirement: Window Specification Components
 
 The system MUST implement the following functionality.
-
 
 A window specification can include:
 - PARTITION BY clause
@@ -62,7 +57,6 @@ WINDOW w AS (
 )
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -71,7 +65,6 @@ WINDOW w AS (
 ### Requirement: Basic Usage
 
 The system MUST implement the following functionality.
-
 
 #### Simple Named Window
 ```sql
@@ -101,7 +94,6 @@ FROM products
 WINDOW price_window AS (PARTITION BY category ORDER BY price);
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -110,7 +102,6 @@ WINDOW price_window AS (PARTITION BY category ORDER BY price);
 ### Requirement: Window Inheritance
 
 The system MUST implement the following functionality.
-
 
 Named windows can be referenced and modified:
 
@@ -167,7 +158,6 @@ FROM orders
 WINDOW customer_window AS (PARTITION BY customer_id);
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -176,7 +166,6 @@ WINDOW customer_window AS (PARTITION BY customer_id);
 ### Requirement: Multiple Named Windows
 
 The system MUST implement the following functionality.
-
 
 A query can define multiple named windows:
 
@@ -199,7 +188,6 @@ WINDOW
     dept_window AS (PARTITION BY department);
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -208,7 +196,6 @@ WINDOW
 ### Requirement: Window Resolution Rules
 
 The system MUST implement the following functionality.
-
 
 #### 1. Name Resolution
 - Window names are query-scoped
@@ -226,7 +213,6 @@ The system MUST implement the following functionality.
 - No circular references allowed
 - Forward references are allowed
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -235,7 +221,6 @@ The system MUST implement the following functionality.
 ### Requirement: Valid Window Modifications
 
 The system MUST implement the following functionality.
-
 
 #### Allowed Modifications
 ```sql
@@ -263,7 +248,6 @@ WINDOW w AS (ORDER BY x)
 SELECT ... OVER (w ORDER BY y) ...  -- ERROR: conflicting ORDER BY
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -272,7 +256,6 @@ SELECT ... OVER (w ORDER BY y) ...  -- ERROR: conflicting ORDER BY
 ### Requirement: Complex Examples
 
 The system MUST implement the following functionality.
-
 
 #### Financial Analysis
 ```sql
@@ -375,7 +358,6 @@ WINDOW
     );
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -384,7 +366,6 @@ WINDOW
 ### Requirement: Implementation Details
 
 The system MUST implement the following functionality.
-
 
 #### Window Registry
 
@@ -475,7 +456,6 @@ func resolveWindow(windowRef WindowReference, registry *WindowRegistry) (*Window
    SELECT ... OVER (w ORDER BY y) ...  -- ERROR
    ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -484,7 +464,6 @@ func resolveWindow(windowRef WindowReference, registry *WindowRegistry) (*Window
 ### Requirement: Error Handling
 
 The system MUST implement the following functionality.
-
 
 #### Undefined Window Reference
 ```sql
@@ -512,7 +491,6 @@ WINDOW w1 AS (w2), w2 AS (w1)
 -- ERROR: circular window reference
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -521,7 +499,6 @@ WINDOW w1 AS (w2), w2 AS (w1)
 ### Requirement: Performance Considerations
 
 The system MUST implement the following functionality.
-
 
 #### 1. Window Reuse
 Named windows enable optimization by reusing computed partitions:
@@ -586,7 +563,6 @@ func (o *WindowOptimizer) Optimize(windows []WindowDefinition) []WindowGroup {
 }
 ```
 
-
 #### Scenario: General Validation
 - **Given** the system is operational
 - **When** this feature is accessed
@@ -595,7 +571,6 @@ func (o *WindowOptimizer) Optimize(windows []WindowDefinition) []WindowGroup {
 ### Requirement: Testing Scenarios
 
 The system MUST implement the following functionality.
-
 
 #### 1. Basic Named Windows
 ```sql
@@ -661,3 +636,95 @@ This specification provides comprehensive coverage of named window functionality
 - **When** this feature is accessed
 - **Then** it MUST function as defined
 
+### Requirement: WINDOW clause SHALL define reusable named window specifications
+
+The WINDOW clause SHALL allow defining one or more named window specifications that can be referenced by window functions in the same SELECT statement via OVER.
+
+#### Scenario: Single named window with multiple functions
+```
+Given a table "sales" with columns (dept TEXT, amount INT)
+When the user executes:
+  SELECT ROW_NUMBER() OVER w AS rn, SUM(amount) OVER w AS total
+  FROM sales
+  WINDOW w AS (PARTITION BY dept ORDER BY amount)
+Then both window functions SHALL use the same window specification
+And results SHALL be partitioned by dept and ordered by amount
+```
+
+#### Scenario: Multiple named windows in same query
+```
+Given a table "employees" with columns (dept TEXT, salary INT, hire_date DATE)
+When the user executes:
+  SELECT
+    RANK() OVER salary_w AS salary_rank,
+    RANK() OVER date_w AS date_rank
+  FROM employees
+  WINDOW salary_w AS (ORDER BY salary DESC),
+         date_w AS (ORDER BY hire_date)
+Then salary_rank SHALL rank by salary descending
+And date_rank SHALL rank by hire_date ascending
+```
+
+### Requirement: OVER SHALL accept a bare window name reference
+
+Window functions SHALL support `OVER name` syntax (without parentheses) to reference a named window definition.
+
+#### Scenario: Bare name reference
+```
+Given WINDOW w AS (ORDER BY x)
+When the user writes "SUM(x) OVER w"
+Then the window function SHALL use the specification defined for w
+```
+
+### Requirement: OVER SHALL support window inheritance with additional clauses
+
+When OVER references a named window inside parentheses, additional clauses (PARTITION BY, ORDER BY, frame) SHALL be merged with the base window. Overriding an existing clause in the base window SHALL produce an error.
+
+#### Scenario: Inherit PARTITION BY and add ORDER BY
+```
+Given a table "t" with columns (dept TEXT, x INT, y INT)
+When the user executes:
+  SELECT SUM(x) OVER (w ORDER BY y)
+  FROM t
+  WINDOW w AS (PARTITION BY dept)
+Then the effective window SHALL have PARTITION BY dept ORDER BY y
+```
+
+#### Scenario: Error on overriding base ORDER BY
+```
+Given WINDOW w AS (ORDER BY x)
+When the user writes "SUM(x) OVER (w ORDER BY y)"
+Then the system SHALL return an error indicating ORDER BY cannot be overridden
+```
+
+### Requirement: Named windows SHALL support transitive references
+
+A named window definition SHALL be able to reference another named window as its base. Circular references SHALL produce an error.
+
+#### Scenario: Transitive window reference
+```
+Given:
+  WINDOW w1 AS (PARTITION BY dept),
+         w2 AS (w1 ORDER BY salary)
+When a function uses "OVER w2"
+Then the effective window SHALL have PARTITION BY dept ORDER BY salary
+```
+
+#### Scenario: Circular reference error
+```
+Given:
+  WINDOW w1 AS (w2),
+         w2 AS (w1)
+Then the system SHALL return an error indicating a circular window reference
+```
+
+### Requirement: Undefined window name references SHALL produce an error
+
+Referencing a window name that is not defined in the WINDOW clause SHALL produce a clear error message.
+
+#### Scenario: Undefined window name
+```
+When the user executes "SELECT SUM(x) OVER undefined_window FROM t"
+And no WINDOW clause defines "undefined_window"
+Then the system SHALL return an error indicating the window is not defined
+```
