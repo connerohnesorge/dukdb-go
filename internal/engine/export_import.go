@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,8 +17,8 @@ import (
 
 // handleExportDatabase exports the entire database to a directory.
 // It creates:
-//   - schema.sql: DDL statements to recreate all schemas, tables, and views
-//   - <table>.csv: CSV data files for each table
+//   - schema.sql: DDL statements to recreate all schemas, tables, views, sequences, and indexes
+//   - <table>.<ext>: Data files for each table (CSV, Parquet, or JSON)
 //   - load.sql: COPY FROM statements to reload the data
 func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int64, error) {
 	// Create export directory
@@ -25,7 +26,32 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 		return 0, fmt.Errorf("failed to create export directory: %v", err)
 	}
 
-	// Generate schema.sql
+	// Determine export format
+	format := "CSV"
+	if opts := stmt.Options; opts != nil {
+		if f, ok := opts["FORMAT"]; ok {
+			format = strings.ToUpper(f)
+		}
+	}
+
+	var ext string
+	switch format {
+	case "CSV":
+		ext = "csv"
+	case "PARQUET":
+		ext = "parquet"
+	case "JSON":
+		ext = "json"
+	default:
+		return 0, fmt.Errorf("unsupported export format: %s", format)
+	}
+
+	// Generate schema.sql with ordered phases:
+	// 1. CREATE SCHEMA
+	// 2. CREATE SEQUENCE
+	// 3. CREATE TABLE
+	// 4. CREATE VIEW
+	// 5. CREATE INDEX
 	var schemaSql strings.Builder
 
 	// Get all schemas
@@ -34,6 +60,8 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 	sort.Slice(schemas, func(i, j int) bool {
 		return schemas[i].Name() < schemas[j].Name()
 	})
+
+	// Phase 1: CREATE SCHEMA statements
 	for _, schema := range schemas {
 		schemaName := schema.Name()
 		if schemaName != "main" && schemaName != "" {
@@ -43,6 +71,20 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 		}
 	}
 
+	// Phase 2: CREATE SEQUENCE statements
+	for _, schema := range schemas {
+		sequences := schema.ListSequences()
+		// Sort sequences for deterministic output
+		sort.Slice(sequences, func(i, j int) bool {
+			return sequences[i].Name < sequences[j].Name
+		})
+		for _, seq := range sequences {
+			schemaSql.WriteString(generateCreateSequenceSQL(seq))
+			schemaSql.WriteString("\n")
+		}
+	}
+
+	// Phase 3: CREATE TABLE statements
 	// Collect all tables from all schemas and generate DDL
 	type tableInfo struct {
 		schema   string
@@ -67,7 +109,7 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 		}
 	}
 
-	// Get all views from all schemas and generate DDL
+	// Phase 4: CREATE VIEW statements
 	for _, schema := range schemas {
 		views := schema.ListViews()
 		// Sort views for deterministic output
@@ -85,6 +127,23 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 		}
 	}
 
+	// Phase 5: CREATE INDEX statements
+	for _, schema := range schemas {
+		indexes := schema.ListIndexes()
+		// Sort indexes for deterministic output
+		sort.Slice(indexes, func(i, j int) bool {
+			return indexes[i].Name < indexes[j].Name
+		})
+		for _, idx := range indexes {
+			// Skip primary key indexes to avoid duplicate PK declarations
+			if idx.IsPrimary {
+				continue
+			}
+			schemaSql.WriteString(generateCreateIndexSQL(idx))
+			schemaSql.WriteString("\n")
+		}
+	}
+
 	// Write schema.sql
 	schemaPath := filepath.Join(stmt.Path, "schema.sql")
 	if err := os.WriteFile(schemaPath, []byte(schemaSql.String()), 0o644); err != nil {
@@ -94,24 +153,53 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 	// Export table data and generate load.sql
 	var loadSql strings.Builder
 	for _, tinfo := range allTables {
-		dataFile := tinfo.tableDef.Name + ".csv"
-		dataPath := filepath.Join(stmt.Path, dataFile)
-
-		if err := c.exportTableToCSV(tinfo.tableDef, dataPath); err != nil {
-			return 0, fmt.Errorf("failed to export table %s: %v", tinfo.tableDef.Name, err)
+		// Multi-schema data file naming
+		dataFile := tinfo.tableDef.Name + "." + ext
+		if tinfo.schema != "" && tinfo.schema != "main" {
+			dataFile = tinfo.schema + "_" + tinfo.tableDef.Name + "." + ext
 		}
+		dataPath := filepath.Join(stmt.Path, dataFile)
 
 		tableName := tinfo.tableDef.Name
 		if tinfo.schema != "" && tinfo.schema != "main" {
 			tableName = tinfo.schema + "." + tableName
 		}
-		loadSql.WriteString(
-			fmt.Sprintf(
-				"COPY %s FROM '%s' (FORMAT CSV, HEADER true);\n",
-				tableName,
-				dataPath,
-			),
-		)
+
+		switch format {
+		case "CSV":
+			if err := c.exportTableToCSV(tinfo.tableDef, dataPath); err != nil {
+				return 0, fmt.Errorf("failed to export table %s: %v", tinfo.tableDef.Name, err)
+			}
+			loadSql.WriteString(
+				fmt.Sprintf(
+					"COPY %s FROM '%s' (FORMAT CSV, HEADER true);\n",
+					tableName,
+					dataPath,
+				),
+			)
+		case "PARQUET":
+			if err := c.exportTableViaCopy(tableName, dataPath, "PARQUET"); err != nil {
+				return 0, fmt.Errorf("failed to export table %s: %v", tinfo.tableDef.Name, err)
+			}
+			loadSql.WriteString(
+				fmt.Sprintf(
+					"COPY %s FROM '%s' (FORMAT PARQUET);\n",
+					tableName,
+					dataPath,
+				),
+			)
+		case "JSON":
+			if err := c.exportTableViaCopy(tableName, dataPath, "JSON"); err != nil {
+				return 0, fmt.Errorf("failed to export table %s: %v", tinfo.tableDef.Name, err)
+			}
+			loadSql.WriteString(
+				fmt.Sprintf(
+					"COPY %s FROM '%s' (FORMAT JSON);\n",
+					tableName,
+					dataPath,
+				),
+			)
+		}
 	}
 
 	loadPath := filepath.Join(stmt.Path, "load.sql")
@@ -120,6 +208,18 @@ func (c *EngineConn) handleExportDatabase(stmt *parser.ExportDatabaseStmt) (int6
 	}
 
 	return 0, nil
+}
+
+// exportTableViaCopy exports a table using a COPY TO statement for non-CSV formats.
+func (c *EngineConn) exportTableViaCopy(tableName, path, format string) error {
+	query := fmt.Sprintf("COPY %s TO '%s' (FORMAT %s)", tableName, path, format)
+	parsed, err := parser.Parse(query)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	_, err = c.executeInnerStmt(ctx, parsed, nil)
+	return err
 }
 
 // exportTableToCSV exports a table's data to a CSV file.
@@ -298,6 +398,10 @@ func generateCreateTableSQL(table *catalog.TableDef) string {
 		if !col.Nullable {
 			sb.WriteString(" NOT NULL")
 		}
+		if col.HasDefault {
+			sb.WriteString(" DEFAULT ")
+			sb.WriteString(formatDefaultValue(col.DefaultValue))
+		}
 	}
 
 	// Primary key
@@ -316,6 +420,73 @@ func generateCreateTableSQL(table *catalog.TableDef) string {
 
 	sb.WriteString(");")
 	return sb.String()
+}
+
+// generateCreateSequenceSQL generates a CREATE SEQUENCE statement from a catalog.SequenceDef.
+func generateCreateSequenceSQL(seq *catalog.SequenceDef) string {
+	var sb strings.Builder
+	sb.WriteString("CREATE SEQUENCE ")
+	if seq.Schema != "" && seq.Schema != "main" {
+		sb.WriteString(seq.Schema)
+		sb.WriteString(".")
+	}
+	sb.WriteString(seq.Name)
+	if seq.StartWith != 1 {
+		sb.WriteString(fmt.Sprintf(" START WITH %d", seq.StartWith))
+	}
+	if seq.IncrementBy != 1 {
+		sb.WriteString(fmt.Sprintf(" INCREMENT BY %d", seq.IncrementBy))
+	}
+	if seq.MinValue != math.MinInt64 {
+		sb.WriteString(fmt.Sprintf(" MINVALUE %d", seq.MinValue))
+	}
+	if seq.MaxValue != math.MaxInt64 {
+		sb.WriteString(fmt.Sprintf(" MAXVALUE %d", seq.MaxValue))
+	}
+	if seq.IsCycle {
+		sb.WriteString(" CYCLE")
+	}
+	sb.WriteString(";")
+	return sb.String()
+}
+
+// generateCreateIndexSQL generates a CREATE INDEX statement from a catalog.IndexDef.
+func generateCreateIndexSQL(idx *catalog.IndexDef) string {
+	var sb strings.Builder
+	sb.WriteString("CREATE ")
+	if idx.IsUnique {
+		sb.WriteString("UNIQUE ")
+	}
+	sb.WriteString("INDEX ")
+	sb.WriteString(idx.Name)
+	sb.WriteString(" ON ")
+	if idx.Schema != "" && idx.Schema != "main" {
+		sb.WriteString(idx.Schema)
+		sb.WriteString(".")
+	}
+	sb.WriteString(idx.Table)
+	sb.WriteString(" (")
+	sb.WriteString(strings.Join(idx.Columns, ", "))
+	sb.WriteString(");")
+	return sb.String()
+}
+
+// formatDefaultValue formats a default value as a SQL literal.
+func formatDefaultValue(val any) string {
+	if val == nil {
+		return "NULL"
+	}
+	switch v := val.(type) {
+	case string:
+		return "'" + strings.ReplaceAll(v, "'", "''") + "'"
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // formatCSVValue formats a value for CSV output.
