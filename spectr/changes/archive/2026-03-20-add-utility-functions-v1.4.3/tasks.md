@@ -1,0 +1,27 @@
+# Tasks: Add Missing Utility Functions for DuckDB v1.4.3
+
+- [ ] 1. Expose database name as a connection setting — In `internal/engine/engine.go`, in the `Open()` method, after calling `registerInformationSchema()` (which computes `dbName` at lines 258-278), replicate the same dbName logic and call `conn.SetSetting("database_name", dbName)` on the new connection. This enables system functions to access it via `ctx.conn.GetSetting("database_name")`. Validate: `conn.GetSetting("database_name")` returns "memory" for in-memory databases and the filename for file-based databases.
+
+- [ ] 2. Add system functions to executor — In `internal/executor/expr.go`, in `evaluateFunctionCall()` (line 587), add cases for `CURRENT_DATABASE`, `CURRENT_SCHEMA`, and `VERSION`. CURRENT_DATABASE reads `ctx.conn.GetSetting("database_name")` (falls back to "memory"). CURRENT_SCHEMA reads `ctx.conn.GetSetting("search_path")` (falls back to "main"). VERSION returns `"v1.4.3 (dukdb-go)"`. Validate: `SELECT CURRENT_DATABASE()` returns "memory" for in-memory DB, `SELECT CURRENT_SCHEMA()` returns "main", `SELECT VERSION()` contains "v1.4.3".
+
+- [ ] 3. Add system function type inference to binder — In `internal/binder/utils.go`, in `inferFunctionResultType()`, add cases for `CURRENT_DATABASE`, `CURRENT_SCHEMA`, and `VERSION` returning `dukdb.TYPE_VARCHAR`. Validate: queries using these functions in expressions compile without type errors.
+
+- [ ] 4. Add date/time functions to executor — In `internal/executor/expr.go`, in `evaluateFunctionCall()`, add cases for `DAYNAME`, `MONTHNAME`, `YEARWEEK`, and `EPOCH_US`. All use `toTime()` (signature: `toTime(v any) (time.Time, error)` at `temporal_functions.go:708`) to convert the single argument. Error handling uses `if err != nil`, not bool check. DAYNAME returns `t.Weekday().String()`, MONTHNAME returns `t.Month().String()`, YEARWEEK returns `int64(year*100 + week)` via `t.ISOWeek()`, EPOCH_US returns `t.UnixMicro()`. NULL args return nil. Validate: `SELECT DAYNAME(DATE '2024-01-15')` returns "Monday", `SELECT MONTHNAME(DATE '2024-01-15')` returns "January", `SELECT YEARWEEK(DATE '2024-01-15')` returns 202403, `SELECT EPOCH_US(TIMESTAMP '1970-01-01 00:00:01')` returns 1000000.
+
+- [ ] 5. Add date/time function type inference to binder — In `internal/binder/utils.go`, add cases for `DAYNAME` (TYPE_VARCHAR), `MONTHNAME` (TYPE_VARCHAR), `YEARWEEK` (TYPE_BIGINT — executor returns int64), and `EPOCH_US` (TYPE_BIGINT). Validate: queries compile without type errors.
+
+- [ ] 6. Add TRANSLATE string function to executor — In `internal/executor/expr.go`, add case for `TRANSLATE`. Requires 3 args: string, from, to. Build rune-level mapping from `from` to `to`; characters in `from` with no corresponding `to` character are deleted. Use `strings.Builder` for output. NULL first arg returns nil. Validate: `SELECT TRANSLATE('hello', 'el', 'ip')` returns "hippo".
+
+- [ ] 7. Add STRIP_ACCENTS string function to executor — In `internal/executor/expr.go`, add case for `STRIP_ACCENTS`. Uses `golang.org/x/text/unicode/norm` (already in go.mod as indirect via golang.org/x/text v0.32.0). NFD-normalize the input, then filter out combining diacritical marks (`unicode.Mn` category). NULL arg returns nil. Validate: `SELECT STRIP_ACCENTS('café')` returns "cafe".
+
+- [ ] 8. Add string function type inference to binder — In `internal/binder/utils.go`, add cases for `TRANSLATE` (TYPE_VARCHAR) and `STRIP_ACCENTS` (TYPE_VARCHAR). Validate: queries compile without type errors.
+
+- [ ] 9. Add temporal standard functions to executor — In `internal/executor/expr.go`, add cases for `NOW`/`CURRENT_TIMESTAMP` (returns `time.Now()`), `CURRENT_DATE` (returns today's date as `time.Date(y,m,d,0,0,0,0,loc)`), and `CURRENT_TIME` (returns `now.Format("15:04:05")`). These are zero-argument functions. Validate: `SELECT NOW()` returns a non-null timestamp, `SELECT CURRENT_DATE` returns today's date.
+
+- [ ] 10. Add temporal standard function type inference to binder — In `internal/binder/utils.go`, add cases for `NOW`/`CURRENT_TIMESTAMP` (TYPE_TIMESTAMP), `CURRENT_DATE` (TYPE_DATE), `CURRENT_TIME` (TYPE_VARCHAR — returns formatted "HH:MM:SS" string). Validate: queries compile without type errors.
+
+- [ ] 11. Add IFNULL/NVL functions to executor — In `internal/executor/expr.go`, add case for `IFNULL`/`NVL`. Takes exactly 2 args. Returns first arg if non-NULL, otherwise second arg. Equivalent to COALESCE(a, b) but strictly 2 arguments. Validate: `SELECT IFNULL(NULL, 42)` returns 42, `SELECT IFNULL(1, 42)` returns 1.
+
+- [ ] 12. Add IFNULL/NVL type inference to binder — In `internal/binder/utils.go`, add cases for `IFNULL`/`NVL` returning common type of both arguments (same logic as COALESCE). Validate: queries compile without type errors.
+
+- [ ] 13. Integration tests — Write tests covering all 15 functions: CURRENT_DATABASE (in-memory returns "memory"), CURRENT_SCHEMA (default "main"), VERSION (contains "v1.4.3"), DAYNAME/MONTHNAME/YEARWEEK with known dates, EPOCH_US with known timestamps, NOW/CURRENT_TIMESTAMP (returns non-null timestamp), CURRENT_DATE (returns today), CURRENT_TIME (returns valid time), TRANSLATE character replacement and deletion, STRIP_ACCENTS accent removal, IFNULL/NVL with NULL and non-NULL inputs. Include NULL input tests for date/time and string functions. Verify no regressions in existing function tests.

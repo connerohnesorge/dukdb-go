@@ -1,0 +1,40 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+//
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add ReplacementScan AST node to parser/ast.go.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Parse string literals in FROM position in parseTableRef().",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add file extension to table function mapping in binder.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Bind replacement scans to table function calls.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Integration tests for replacement scans.",
+      "status": "completed"
+    }
+  ]
+}
