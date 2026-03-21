@@ -75,7 +75,7 @@
       "id": "12",
       "section": "Integration Tests",
       "description": "Integration tests — Test all three features: COMMENT ON (set, drop, column comments, errors), ALTER COLUMN TYPE (conversion, errors), DELETE USING (single table, multi-table, with RETURNING).",
-      "status": "pending"
+      "status": "in_progress"
     }
   ]
 }
