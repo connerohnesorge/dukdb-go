@@ -89,19 +89,28 @@ type ValuesClause struct {
 	ColumnAliases []string // Optional column aliases from AS alias(col1, col2)
 }
 
+// ReplacementScan represents a file path used directly as a table reference.
+// When a string literal appears in FROM position (e.g., SELECT * FROM 'data.csv'),
+// it is parsed as a ReplacementScan and later rewritten to the appropriate
+// table function call (e.g., read_csv_auto) based on the file extension.
+type ReplacementScan struct {
+	Path string
+}
+
 // TableRef represents a table reference.
 type TableRef struct {
-	Catalog       string // Optional catalog name (e.g., "main")
-	Schema        string
-	TableName     string
-	Alias         string
-	Subquery      *SelectStmt
-	TableFunction *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
-	PivotRef      *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
-	UnpivotRef    *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
-	ValuesRef     *ValuesClause     // VALUES clause (when VALUES is used in FROM clause)
-	Lateral       bool              // LATERAL join (subquery can reference columns from outer scope)
-	TimeTravel    *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
+	Catalog        string // Optional catalog name (e.g., "main")
+	Schema         string
+	TableName      string
+	Alias          string
+	Subquery       *SelectStmt
+	TableFunction  *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
+	ReplacementScan *ReplacementScan  // Replacement scan (e.g., SELECT * FROM 'file.csv')
+	PivotRef       *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
+	UnpivotRef     *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
+	ValuesRef      *ValuesClause     // VALUES clause (when VALUES is used in FROM clause)
+	Lateral        bool              // LATERAL join (subquery can reference columns from outer scope)
+	TimeTravel     *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
 }
 
 // TimeTravelType represents the type of time travel specification.

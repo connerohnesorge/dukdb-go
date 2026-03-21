@@ -823,6 +823,16 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		} else {
 			ref.TableName = name
 		}
+	} else if p.current().typ == tokenString {
+		// String literal in FROM position: SELECT * FROM 'file.csv'
+		// This is a replacement scan that will be rewritten to a table function call.
+		path := p.advance().value
+		// Remove surrounding quotes from the token value
+		if len(path) >= 2 && (path[0] == '\'' || path[0] == '"') {
+			path = path[1 : len(path)-1]
+		}
+		ref.ReplacementScan = &ReplacementScan{Path: path}
+		ref.TableName = path // For alias resolution
 	} else {
 		return ref, p.errorf("expected table name or subquery")
 	}
