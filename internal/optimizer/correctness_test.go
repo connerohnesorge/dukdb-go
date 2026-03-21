@@ -69,8 +69,12 @@ func shouldSkipForDatabaseError(err error) bool {
 		return false
 	}
 	errStr := err.Error()
-	// Only skip if no backend is registered - format issues should now be handled
 	if strings.Contains(errStr, "no backend registered") {
+		return true
+	}
+	// DuckDB binary format files cannot be read by this implementation yet
+	if strings.Contains(errStr, "failed to import database") ||
+		strings.Contains(errStr, "unknown database format") {
 		return true
 	}
 	return false
@@ -155,8 +159,11 @@ func TestCorrectnessBasicSelectQueries(t *testing.T) {
 
 			// Just verify query executes without error
 			rows, err := suite.db.QueryContext(ctx, tc.query)
+			if shouldSkipForDatabaseError(err) {
+				t.Skipf("Database not available: %v (query: %s)", err, tc.query)
+			}
 			if err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 			defer rows.Close()
 
@@ -267,7 +274,10 @@ func TestCorrectnessJoinCorrectness(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}
@@ -361,7 +371,10 @@ func TestCorrectnessSubqueryCorrectness(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}
@@ -430,7 +443,10 @@ func TestCorrectnessAggregateCorrectness(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}
@@ -518,7 +534,10 @@ func TestCorrectnessFilterCorrectness(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}
@@ -589,7 +608,10 @@ func TestCorrectnessCTECorrectness(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}
@@ -641,7 +663,10 @@ func TestCorrectnessEdgeCases(t *testing.T) {
 			}
 
 			if err := executeTestQuery(ctx, suite.db, tc.query); err != nil {
-				t.Skipf("Query failed: %v (query: %s)", err, tc.query)
+				if shouldSkipForDatabaseError(err) {
+					t.Skipf("Database not available: %v", err)
+				}
+				t.Fatalf("Query failed: %v (query: %s)", err, tc.query)
 			}
 		})
 	}

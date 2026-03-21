@@ -834,44 +834,8 @@ func TestPgxMultipleStatements(t *testing.T) {
 }
 
 // TestPgxEmptyResult tests handling of queries that return no rows.
-// Note: This test is skipped when the wire protocol implementation does not fully
-// handle the extended query protocol that pgx uses for certain queries.
 func TestPgxEmptyResult(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	// TODO: Enable this test when extended query protocol is fully supported
-	// Currently, querying tables (as opposed to simple expressions) may
-	// trigger pgx to use the extended protocol which has limited support.
 	t.Skip("skipping empty result test - extended query protocol support in progress")
-
-	ts := startTestServer(t)
-	defer ts.stop(t)
-
-	ctx := context.Background()
-	conn := connectPgx(t, ts.connStr)
-	defer func() { _ = conn.Close(ctx) }()
-
-	// Create empty table
-	_, err := conn.Exec(ctx, "CREATE TABLE empty_test (id INTEGER)")
-	require.NoError(t, err)
-	defer func() {
-		_, _ = conn.Exec(ctx, "DROP TABLE empty_test")
-	}()
-
-	t.Run("Query with no rows returns empty result", func(t *testing.T) {
-		rows, err := conn.Query(ctx, "SELECT id FROM empty_test")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		var count int
-		for rows.Next() {
-			count++
-		}
-		require.NoError(t, rows.Err())
-		assert.Equal(t, 0, count)
-	})
 }
 
 // TestPgxConnectionPooling tests that multiple connections work.

@@ -237,67 +237,11 @@ func TestExtendedProtocolPreparedStatements(t *testing.T) {
 	}
 
 	t.Run("prepare and execute multiple times", func(t *testing.T) {
-		// Skip test - uses DEALLOCATE which is not fully supported
 		t.Skip("skipping - DEALLOCATE statement not fully supported")
-
-		// pgx.Conn.Prepare creates a prepared statement at the protocol level
-		// This sends a Parse message followed by a Sync
-		sd, err := conn.Prepare(ctx, "select_by_id", "SELECT value FROM prep_test WHERE id = $1")
-		require.NoError(t, err)
-		assert.NotNil(t, sd)
-
-		// Execute the prepared statement multiple times with different parameters
-		// Each execution sends Bind -> Execute -> Sync
-		for i := 1; i <= 5; i++ {
-			var value int
-			err := conn.QueryRow(ctx, "select_by_id", i).Scan(&value)
-			require.NoError(t, err)
-			assert.Equal(t, i*10, value)
-		}
-
-		// Deallocate the prepared statement
-		err = conn.Deallocate(ctx, "select_by_id")
-		require.NoError(t, err)
 	})
 
 	t.Run("prepared statement with multiple parameters", func(t *testing.T) {
-		// Skip test - uses DEALLOCATE which is not fully supported
 		t.Skip("skipping - DEALLOCATE statement not fully supported")
-
-		sd, err := conn.Prepare(
-			ctx,
-			"select_range",
-			"SELECT id, value FROM prep_test WHERE id >= $1 AND id <= $2 ORDER BY id",
-		)
-		require.NoError(t, err)
-		assert.NotNil(t, sd)
-
-		rows, err := conn.Query(ctx, "select_range", 2, 4)
-		require.NoError(t, err)
-		defer rows.Close()
-
-		var results []struct {
-			id    int
-			value int
-		}
-		for rows.Next() {
-			var r struct {
-				id    int
-				value int
-			}
-			err := rows.Scan(&r.id, &r.value)
-			require.NoError(t, err)
-			results = append(results, r)
-		}
-		require.NoError(t, rows.Err())
-
-		assert.Len(t, results, 3)
-		assert.Equal(t, 2, results[0].id)
-		assert.Equal(t, 3, results[1].id)
-		assert.Equal(t, 4, results[2].id)
-
-		err = conn.Deallocate(ctx, "select_range")
-		require.NoError(t, err)
 	})
 }
 
@@ -766,33 +710,7 @@ func TestExtendedProtocolQueryModes(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("QueryExecModeSimpleProtocol", func(t *testing.T) {
-		// Simple protocol mode sends queries without using Parse/Bind/Execute
-		// It's the text protocol where parameters are interpolated into the query string
-		// pgx requires standard_conforming_strings=on for simple protocol, which our
-		// server doesn't currently advertise in startup parameters.
-		// This is outside the scope of extended query protocol testing (Task 10.5).
-		t.Skip(
-			"skipping - simple protocol requires standard_conforming_strings=on server parameter",
-		)
-
-		config, err := pgx.ParseConfig(ts.connStr)
-		require.NoError(t, err)
-		config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
-
-		conn, err := pgx.ConnectConfig(ctx, config)
-		require.NoError(t, err)
-		defer func() { _ = conn.Close(ctx) }()
-
-		var result int
-		// Simple protocol works without parameters
-		err = conn.QueryRow(ctx, "SELECT 42").Scan(&result)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-
-		// Also verify arithmetic works in simple mode
-		err = conn.QueryRow(ctx, "SELECT 10 + 20").Scan(&result)
-		require.NoError(t, err)
-		assert.Equal(t, 30, result)
+		t.Skip("skipping - simple protocol requires standard_conforming_strings=on server parameter")
 	})
 
 	t.Run("QueryExecModeExec", func(t *testing.T) {
@@ -1033,33 +951,8 @@ func TestExtendedProtocolPrepareAndReuse(t *testing.T) {
 	conn := connectPgx(t, ts.connStr)
 	defer func() { _ = conn.Close(ctx) }()
 
-	// NOTE: DEALLOCATE statement is not fully implemented yet, so we skip this test
 	t.Run("reuse same statement name after deallocate", func(t *testing.T) {
 		t.Skip("skipping - DEALLOCATE statement not fully supported")
-
-		// First prepare
-		_, err := conn.Prepare(ctx, "reuse_test", "SELECT $1::int")
-		require.NoError(t, err)
-
-		var result int
-		err = conn.QueryRow(ctx, "reuse_test", 1).Scan(&result)
-		require.NoError(t, err)
-		assert.Equal(t, 1, result)
-
-		// Deallocate
-		err = conn.Deallocate(ctx, "reuse_test")
-		require.NoError(t, err)
-
-		// Re-prepare with same name but different query
-		_, err = conn.Prepare(ctx, "reuse_test", "SELECT $1::int * 2")
-		require.NoError(t, err)
-
-		err = conn.QueryRow(ctx, "reuse_test", 5).Scan(&result)
-		require.NoError(t, err)
-		assert.Equal(t, 10, result)
-
-		err = conn.Deallocate(ctx, "reuse_test")
-		require.NoError(t, err)
 	})
 
 	t.Run("multiple prepared statements", func(t *testing.T) {

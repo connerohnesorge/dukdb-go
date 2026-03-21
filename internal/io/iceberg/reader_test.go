@@ -679,17 +679,3 @@ func TestReaderWithEmptyTable(t *testing.T) {
 	assert.ErrorIs(t, err, io.EOF) // EOF because there are no data files
 }
 
-// TODO: Cloud storage tests
-// These tests require S3/GCS test setup and are skipped by default.
-
-// TestIntegrationS3 tests reading from S3.
-func TestIntegrationS3(t *testing.T) {
-	// TODO: requires S3 test setup
-	t.Skip("S3 integration tests require test environment setup")
-}
-
-// TestIntegrationGCS tests reading from GCS.
-func TestIntegrationGCS(t *testing.T) {
-	// TODO: requires GCS test setup
-	t.Skip("GCS integration tests require test environment setup")
-}
