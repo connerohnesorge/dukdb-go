@@ -3202,6 +3202,8 @@ func (b *Binder) bindCreateTable(
 		Schema:      schema,
 		Table:       s.Table,
 		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
+		Temporary:   s.Temporary,
 		PrimaryKey:  s.PrimaryKey,
 	}
 

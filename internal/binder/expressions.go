@@ -17,6 +17,17 @@ func (*BoundColumnRef) boundExprNode() {}
 
 func (c *BoundColumnRef) ResultType() dukdb.Type { return c.ColType }
 
+// BoundFieldAccess represents struct.field dot notation access.
+type BoundFieldAccess struct {
+	Struct  BoundExpr  // The struct-typed expression
+	Field   string     // Field name to extract
+	ResType dukdb.Type // Resolved field type
+}
+
+func (*BoundFieldAccess) boundExprNode() {}
+
+func (f *BoundFieldAccess) ResultType() dukdb.Type { return f.ResType }
+
 // BoundLiteral represents a bound literal value.
 type BoundLiteral struct {
 	Value   any
@@ -69,6 +80,7 @@ type BoundFunctionCall struct {
 	Star      bool
 	OrderBy   []BoundOrderByExpr // ORDER BY within aggregate functions
 	ResType   dukdb.Type
+	Filter    BoundExpr // FILTER (WHERE ...) clause for aggregate functions
 }
 
 // BoundOrderByExpr represents a bound ORDER BY expression within an aggregate function.

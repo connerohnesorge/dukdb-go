@@ -510,8 +510,10 @@ func inferFunctionResultType(
 	case "MAKE_TIME":
 		return dukdb.TYPE_TIME
 	// Formatting/parsing functions (tasks 1.15, 1.16, 1.17, 1.18, 1.19)
-	case "STRFTIME":
+	case "STRFTIME", "TO_CHAR":
 		return dukdb.TYPE_VARCHAR
+	case "TO_DATE":
+		return dukdb.TYPE_DATE
 	case "STRPTIME", "TO_TIMESTAMP":
 		return dukdb.TYPE_TIMESTAMP
 	case "EPOCH":
@@ -520,6 +522,9 @@ func inferFunctionResultType(
 		return dukdb.TYPE_BIGINT
 	case "EPOCH_US":
 		return dukdb.TYPE_BIGINT
+	// Array utility functions
+	case "GENERATE_SUBSCRIPTS":
+		return dukdb.TYPE_INTEGER
 	// System functions
 	case "CURRENT_DATABASE", "CURRENT_SCHEMA", "VERSION":
 		return dukdb.TYPE_VARCHAR
@@ -1051,9 +1056,13 @@ func getFunctionArgTypes(
 			return []dukdb.Type{dukdb.TYPE_INTEGER, dukdb.TYPE_INTEGER, dukdb.TYPE_DOUBLE}
 		}
 	// Formatting/parsing functions
-	case "STRFTIME":
+	case "STRFTIME", "TO_CHAR":
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_TIMESTAMP}
+		}
+	case "TO_DATE":
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
 		}
 	case "STRPTIME":
 		if argCount >= 2 {

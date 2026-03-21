@@ -415,6 +415,18 @@ func (b *Binder) bindAlterTable(
 		bound.AlterColumn = s.AlterColumn
 		bound.NewColumnType = info.InternalType()
 
+	case parser.AlterTableAddConstraint:
+		if s.Constraint == nil {
+			return nil, b.errorf("constraint definition is required for ADD CONSTRAINT")
+		}
+		bound.Constraint = s.Constraint
+
+	case parser.AlterTableDropConstraint:
+		if s.ConstraintName == "" {
+			return nil, b.errorf("constraint name is required for DROP CONSTRAINT")
+		}
+		bound.ConstraintName = s.ConstraintName
+
 	case parser.AlterTableSetOption:
 		// Not yet implemented
 		return nil, b.errorf("ALTER TABLE SET OPTION is not yet implemented")

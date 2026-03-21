@@ -112,35 +112,56 @@ func (b *Binder) bindExpr(
 
 func (b *Binder) bindColumnRef(
 	ref *parser.ColumnRef,
-) (*BoundColumnRef, error) {
+) (BoundExpr, error) {
 	if ref.Table != "" {
-		// Qualified column reference
+		// Qualified column reference -- try as table.column first
 		tableRef, ok := b.scope.tables[ref.Table]
-		if !ok {
+		if ok {
+			for _, col := range tableRef.Columns {
+				if strings.EqualFold(
+					col.Column,
+					ref.Column,
+				) {
+					return &BoundColumnRef{
+						Table:     ref.Table,
+						Column:    col.Column,
+						ColumnIdx: col.ColumnIdx,
+						ColType:   col.Type,
+					}, nil
+				}
+			}
 			return nil, b.errorf(
-				"table not found: %s",
+				"column not found: %s.%s",
 				ref.Table,
+				ref.Column,
 			)
 		}
 
-		for _, col := range tableRef.Columns {
-			if strings.EqualFold(
-				col.Column,
-				ref.Column,
-			) {
-				return &BoundColumnRef{
-					Table:     ref.Table,
-					Column:    col.Column,
-					ColumnIdx: col.ColumnIdx,
-					ColType:   col.Type,
-				}, nil
+		// Table not found -- try as struct_column.field_name
+		for _, tRef := range b.scope.tables {
+			for _, col := range tRef.Columns {
+				if strings.EqualFold(col.Column, ref.Table) && col.Type == dukdb.TYPE_STRUCT {
+					structRef := &BoundColumnRef{
+						Table:     tRef.Alias,
+						Column:    col.Column,
+						ColumnIdx: col.ColumnIdx,
+						ColType:   col.Type,
+					}
+					if structRef.Table == "" {
+						structRef.Table = tRef.TableName
+					}
+					return &BoundFieldAccess{
+						Struct:  structRef,
+						Field:   ref.Column,
+						ResType: dukdb.TYPE_ANY,
+					}, nil
+				}
 			}
 		}
 
 		return nil, b.errorf(
-			"column not found: %s.%s",
+			"table or struct column not found: %s",
 			ref.Table,
-			ref.Column,
 		)
 	}
 
@@ -440,6 +461,16 @@ func (b *Binder) bindFunctionCall(
 		})
 	}
 
+	// Bind FILTER expression
+	var boundFilter BoundExpr
+	if f.Filter != nil {
+		var filterErr error
+		boundFilter, filterErr = b.bindExpr(f.Filter, dukdb.TYPE_BOOLEAN)
+		if filterErr != nil {
+			return nil, fmt.Errorf("binding FILTER in %s: %w", f.Name, filterErr)
+		}
+	}
+
 	return &BoundFunctionCall{
 		Name:      f.Name,
 		Args:      args,
@@ -448,6 +479,7 @@ func (b *Binder) bindFunctionCall(
 		Star:      f.Star,
 		OrderBy:   boundOrderBy,
 		ResType:   resType,
+		Filter:    boundFilter,
 	}, nil
 }
 
@@ -1260,9 +1292,13 @@ func (b *Binder) bindGroupingCall(f *parser.FunctionCall) (*BoundGroupingCall, e
 			return nil, b.errorf("GROUPING() arguments must be column references")
 		}
 
-		boundRef, err := b.bindColumnRef(colRef)
+		boundExpr, err := b.bindColumnRef(colRef)
 		if err != nil {
 			return nil, err
+		}
+		boundRef, ok := boundExpr.(*BoundColumnRef)
+		if !ok {
+			return nil, b.errorf("GROUPING() arguments must be simple column references, not struct field access")
 		}
 		args = append(args, boundRef)
 	}
