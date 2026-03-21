@@ -75,13 +75,17 @@ var aggregateWindowFunctions = map[string]bool{
 	"LIST_DISTINCT": true,
 
 	// Time series aggregates
-	"COUNT_IF": true,
-	"FIRST":    true,
-	"LAST":     true,
-	"ARGMIN":   true,
-	"ARGMAX":   true,
-	"MIN_BY":   true,
-	"MAX_BY":   true,
+	"COUNT_IF":  true,
+	"FIRST":     true,
+	"LAST":      true,
+	"ANY_VALUE": true,
+	"ARGMIN":    true,
+	"ARG_MIN":   true,
+	"ARGMAX":    true,
+	"ARG_MAX":   true,
+	"MIN_BY":    true,
+	"MAX_BY":    true,
+	"HISTOGRAM": true,
 
 	// Regression aggregates
 	"COVAR_POP":      true,
@@ -428,6 +432,7 @@ func inferFunctionResultType(
 		"CHR",
 		"MD5",
 		"SHA256",
+		"SHA1",
 		"TRANSLATE",
 		"STRIP_ACCENTS":
 		return dukdb.TYPE_VARCHAR
@@ -570,6 +575,8 @@ func inferFunctionResultType(
 		return dukdb.TYPE_LIST
 	case "STRUCT_INSERT":
 		return dukdb.TYPE_STRUCT
+	case "LIST_VALUE", "LIST_PACK":
+		return dukdb.TYPE_ANY
 	case "MAP":
 		return dukdb.TYPE_MAP
 	case "MAP_KEYS", "MAP_VALUES", "MAP_ENTRIES":
@@ -597,13 +604,15 @@ func inferFunctionResultType(
 	// Time Series Aggregates
 	case "COUNT_IF":
 		return dukdb.TYPE_BIGINT
-	case "FIRST", "LAST":
-		// FIRST/LAST return same type as input
+	case "FIRST", "LAST", "ANY_VALUE":
+		// FIRST/LAST/ANY_VALUE return same type as input
 		if len(args) > 0 {
 			return args[0].ResultType()
 		}
 		return dukdb.TYPE_ANY
-	case "ARGMIN", "ARGMAX", "MIN_BY", "MAX_BY":
+	case "HISTOGRAM":
+		return dukdb.TYPE_ANY
+	case "ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY":
 		// These return the type of the first argument (the value being returned)
 		if len(args) > 0 {
 			return args[0].ResultType()
@@ -688,6 +697,8 @@ func inferFunctionResultType(
 	// Utility functions
 	case "PI", "RANDOM", "RAND":
 		return dukdb.TYPE_DOUBLE
+	case "SETSEED":
+		return dukdb.TYPE_ANY
 	case "SIGN":
 		// SIGN returns INTEGER (-1, 0, or 1)
 		return dukdb.TYPE_INTEGER
@@ -771,6 +782,12 @@ func inferFunctionResultType(
 		return dukdb.TYPE_ANY
 
 	case "TYPEOF", "PG_TYPEOF":
+		return dukdb.TYPE_VARCHAR
+
+	// Enum utility functions
+	case "ENUM_RANGE":
+		return dukdb.TYPE_ANY
+	case "ENUM_FIRST", "ENUM_LAST":
 		return dukdb.TYPE_VARCHAR
 
 	// String formatting functions
@@ -915,7 +932,7 @@ func getFunctionArgTypes(
 			}
 			return types
 		}
-	case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "ASCII", "ORD", "UNICODE", "MD5", "SHA256":
+	case "REVERSE", "STRIP", "LSTRIP", "RSTRIP", "ASCII", "ORD", "UNICODE", "MD5", "SHA256", "SHA1":
 		// Single string argument functions
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR}
@@ -1096,17 +1113,27 @@ func getFunctionArgTypes(
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_ANY}
 		}
+	case "LIST_VALUE", "LIST_PACK":
+		types := make([]dukdb.Type, argCount)
+		for i := range types {
+			types[i] = dukdb.TYPE_ANY
+		}
+		return types
 
 	// Time series aggregates
 	case "COUNT_IF":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_BOOLEAN}
 		}
-	case "FIRST", "LAST":
+	case "FIRST", "LAST", "ANY_VALUE":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_ANY}
 		}
-	case "ARGMIN", "ARGMAX", "MIN_BY", "MAX_BY":
+	case "HISTOGRAM":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_ANY}
+		}
+	case "ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY":
 		// Takes (return_value, sort_value)
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_ANY, dukdb.TYPE_ANY}
@@ -1181,6 +1208,10 @@ func getFunctionArgTypes(
 	case "PI", "RANDOM", "RAND":
 		// No arguments needed
 		return nil
+	case "SETSEED":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_DOUBLE}
+		}
 	case "SIGN":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_DOUBLE}
@@ -1296,6 +1327,12 @@ func getFunctionArgTypes(
 	case "ST_MAKEPOLYGON":
 		if argCount >= 1 {
 			return []dukdb.Type{dukdb.TYPE_GEOMETRY}
+		}
+
+	// Enum utility functions
+	case "ENUM_RANGE", "ENUM_FIRST", "ENUM_LAST":
+		if argCount >= 1 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR}
 		}
 	}
 
