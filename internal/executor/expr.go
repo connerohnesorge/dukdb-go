@@ -957,7 +957,34 @@ func (e *Executor) evaluateFunctionCall(
 				Msg:  "RANDOM requires 0 arguments",
 			}
 		}
-		return randomValue()
+		return randomValue(ctx)
+
+	case "SETSEED":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SETSEED requires exactly 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		seedFloat, ok := toFloat64(args[0])
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SETSEED: argument must be a numeric value",
+			}
+		}
+		if seedFloat < 0 || seedFloat > 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SETSEED: seed must be between 0 and 1",
+			}
+		}
+		seed := int64(seedFloat * float64(1<<63))
+		ctx.conn.SetSetting("random_seed", fmt.Sprintf("%d", seed))
+		return nil, nil
 
 	case "SIGN":
 		if len(args) != 1 {
@@ -1755,6 +1782,15 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return sha256Value(args[0])
 
+	case "SHA1":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SHA1 requires 1 argument",
+			}
+		}
+		return sha1Value(args[0])
+
 	case "HASH":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
@@ -2217,6 +2253,12 @@ func (e *Executor) evaluateFunctionCall(
 			return nil, nil
 		}
 		return val, nil
+
+	// ---- List constructor functions ----
+	case "LIST_VALUE", "LIST_PACK":
+		result := make([]any, 0, len(args))
+		result = append(result, args...)
+		return result, nil
 
 	// ---- Map functions ----
 	case "MAP":
@@ -3082,6 +3124,82 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return euTime.UnixMicro(), nil
 
+	case "ENUM_RANGE":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_RANGE requires exactly 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		typeName := toString(args[0])
+		typeEntry, ok := e.catalog.GetType(typeName, "")
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_RANGE: type %q not found", typeName),
+			}
+		}
+		if typeEntry.TypeKind != "ENUM" {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_RANGE: type %q is not an ENUM type", typeName),
+			}
+		}
+		result := make([]any, len(typeEntry.EnumValues))
+		for i, v := range typeEntry.EnumValues {
+			result[i] = stripEnumQuotes(v)
+		}
+		return result, nil
+
+	case "ENUM_FIRST":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_FIRST requires exactly 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		typeName := toString(args[0])
+		typeEntry, ok := e.catalog.GetType(typeName, "")
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_FIRST: type %q not found", typeName),
+			}
+		}
+		if len(typeEntry.EnumValues) == 0 {
+			return nil, nil
+		}
+		return stripEnumQuotes(typeEntry.EnumValues[0]), nil
+
+	case "ENUM_LAST":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_LAST requires exactly 1 argument, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		typeName := toString(args[0])
+		typeEntry, ok := e.catalog.GetType(typeName, "")
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("ENUM_LAST: type %q not found", typeName),
+			}
+		}
+		if len(typeEntry.EnumValues) == 0 {
+			return nil, nil
+		}
+		return stripEnumQuotes(typeEntry.EnumValues[len(typeEntry.EnumValues)-1]), nil
+
 	default:
 		// For aggregate functions called in scalar context, return NULL
 		// The main fix for aggregate functions in projections is in executeProject
@@ -3103,7 +3221,7 @@ func (e *Executor) evaluateFunctionCall(
 		case "STRING_AGG", "GROUP_CONCAT", "LIST", "ARRAY_AGG", "LIST_DISTINCT":
 			return nil, nil
 		// Time series aggregates
-		case "COUNT_IF", "FIRST", "LAST", "ARGMIN", "ARGMAX", "MIN_BY", "MAX_BY":
+		case "COUNT_IF", "FIRST", "LAST", "ANY_VALUE", "ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY", "HISTOGRAM":
 			return nil, nil
 		// Regression aggregates
 		case "COVAR_POP", "COVAR_SAMP", "CORR",
@@ -3737,6 +3855,127 @@ func (e *Executor) computeAggregate(
 			return nil, err
 		}
 		return computeJSONGroupObject(keys, vals)
+
+	// Time series aggregate functions
+	case "COUNT_IF":
+		if len(fn.Args) == 0 {
+			return int64(0), nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCountIf(values)
+
+	case "FIRST", "ANY_VALUE":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeFirst(values)
+
+	case "LAST":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeLast(values)
+
+	case "HISTOGRAM":
+		if len(fn.Args) != 1 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeHistogram(values)
+
+	case "ARGMIN", "ARG_MIN", "MIN_BY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		argValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		valValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeArgmin(argValues, valValues)
+
+	case "ARGMAX", "ARG_MAX", "MAX_BY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		argValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		valValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeArgmax(argValues, valValues)
+
+	// Boolean aggregate functions
+	case "BOOL_AND", "EVERY":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBoolAnd(values)
+
+	case "BOOL_OR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBoolOr(values)
+
+	// Bitwise aggregate functions
+	case "BIT_AND":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitAnd(values)
+
+	case "BIT_OR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitOr(values)
+
+	case "BIT_XOR":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeBitXor(values)
 
 	default:
 		return nil, &dukdb.Error{
@@ -5821,4 +6060,14 @@ func evaluateListAggregate(list []any, aggName string, extraArgs []any) (any, er
 	default:
 		return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("list_aggregate: unknown aggregate %q", aggName)}
 	}
+}
+
+// stripEnumQuotes removes surrounding single quotes from an enum value string.
+// Enum values are stored with their original quote delimiters from the parser (e.g., "'sad'").
+// This function returns the unquoted value (e.g., "sad").
+func stripEnumQuotes(s string) string {
+	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/bits"
 	"math/rand"
+	"strconv"
 
 	dukdb "github.com/dukdb/dukdb-go"
 )
@@ -762,8 +763,20 @@ func piValue() (any, error) {
 
 // randomValue implements RANDOM().
 // Returns a random float64 between 0 (inclusive) and 1 (exclusive).
-func randomValue() (any, error) {
-	return rand.Float64(), nil
+// If a seed has been set via SETSEED, uses a deterministic random source.
+func randomValue(ctx *ExecutionContext) (any, error) {
+	if ctx != nil && ctx.conn != nil {
+		seedStr := ctx.conn.GetSetting("random_seed")
+		if seedStr != "" {
+			seed, _ := strconv.ParseInt(seedStr, 10, 64)
+			src := rand.NewSource(seed)
+			rng := rand.New(src) //nolint:gosec
+			// Increment seed so next call gives different value
+			ctx.conn.SetSetting("random_seed", strconv.FormatInt(seed+1, 10))
+			return rng.Float64(), nil
+		}
+	}
+	return rand.Float64(), nil //nolint:gosec
 }
 
 // signValue implements SIGN(value).

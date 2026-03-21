@@ -119,3 +119,23 @@ func computeArgmax(argValues []any, valValues []any) (any, error) {
 	}
 	return maxArg, nil
 }
+
+// computeHistogram returns a map of value counts for the given values.
+func computeHistogram(values []any) (any, error) {
+	counts := make(map[string]any)
+	for _, v := range values {
+		if v == nil {
+			continue
+		}
+		key := toString(v)
+		if existing, ok := counts[key]; ok {
+			counts[key] = existing.(int64) + 1
+		} else {
+			counts[key] = int64(1)
+		}
+	}
+	if len(counts) == 0 {
+		return nil, nil
+	}
+	return counts, nil
+}
