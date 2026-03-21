@@ -284,6 +284,11 @@ func (te *TableExtractor) VisitDropSchemaStmt(stmt *DropSchemaStmt) {
 	// No table references in DROP SCHEMA statements
 }
 
+// VisitCommentStmt is a no-op for COMMENT ON statements (no table references).
+func (te *TableExtractor) VisitCommentStmt(stmt *CommentStmt) {
+	// No table references in COMMENT ON statements
+}
+
 // VisitAlterTableStmt extracts table references from ALTER TABLE statements.
 func (te *TableExtractor) VisitAlterTableStmt(stmt *AlterTableStmt) {
 	// Extract the table being altered

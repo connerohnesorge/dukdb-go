@@ -41,6 +41,7 @@ type SelectStmt struct {
 	GroupBy    []Expr
 	Having     Expr
 	Qualify    Expr // QUALIFY clause - filters rows after window function evaluation
+	Windows    []WindowDef   // WINDOW clause - named window definitions
 	OrderBy    []OrderByExpr
 	Limit        Expr
 	Offset       Expr
@@ -358,6 +359,7 @@ type SetClause struct {
 type DeleteStmt struct {
 	Schema string
 	Table  string
+	Using  []TableRef // USING clause table references for multi-table delete
 	Where  Expr
 	// Returning specifies columns to return after the delete operation.
 	// If non-empty, the DELETE becomes a query that returns the specified columns
@@ -658,6 +660,7 @@ const (
 	AlterTableDropColumn
 	AlterTableAddColumn
 	AlterTableSetOption
+	AlterTableAlterColumnType
 )
 
 // AlterTableStmt represents an ALTER TABLE statement.
@@ -667,11 +670,14 @@ type AlterTableStmt struct {
 	IfExists  bool
 	Operation AlterTableOp
 	// Operation-specific fields:
-	NewTableName string           // RENAME TO
-	OldColumn    string           // RENAME COLUMN
-	NewColumn    string           // RENAME COLUMN
-	DropColumn   string           // DROP COLUMN
-	AddColumn    *ColumnDefClause // ADD COLUMN
+	NewTableName  string           // RENAME TO
+	OldColumn     string           // RENAME COLUMN
+	NewColumn     string           // RENAME COLUMN
+	DropColumn    string           // DROP COLUMN
+	AddColumn     *ColumnDefClause // ADD COLUMN
+	AlterColumn   string           // ALTER COLUMN name
+	NewColumnType dukdb.Type       // resolved type (set by binder)
+	NewTypeRaw    string           // raw type string from parser
 }
 
 func (*AlterTableStmt) stmtNode() {}
@@ -681,6 +687,24 @@ func (*AlterTableStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER
 // Accept implements the Visitor pattern for AlterTableStmt.
 func (s *AlterTableStmt) Accept(v Visitor) {
 	v.VisitAlterTableStmt(s)
+}
+
+// CommentStmt represents COMMENT ON object IS 'text'.
+type CommentStmt struct {
+	ObjectType string  // "TABLE", "COLUMN", "VIEW", "INDEX", "SCHEMA"
+	Schema     string  // optional schema qualifier
+	ObjectName string  // table/view/index/schema name
+	ColumnName string  // for COLUMN comments: column name
+	Comment    *string // comment text; nil to drop comment (IS NULL)
+}
+
+func (*CommentStmt) stmtNode() {}
+
+func (*CommentStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
+
+// Accept implements the Visitor pattern for CommentStmt.
+func (s *CommentStmt) Accept(v Visitor) {
+	v.VisitCommentStmt(s)
 }
 
 // ---------- Expression Types ----------
@@ -786,6 +810,9 @@ const (
 	OpBitwiseXor // ^ (bitwise XOR)
 	OpShiftLeft  // << (left shift)
 	OpShiftRight // >> (right shift)
+
+	OpIsDistinctFrom    // IS DISTINCT FROM (NULL-safe inequality)
+	OpIsNotDistinctFrom // IS NOT DISTINCT FROM (NULL-safe equality)
 )
 
 // UnaryExpr represents a unary expression (op a).
@@ -1113,6 +1140,7 @@ func (*DeallocateStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DEALL
 // Example: ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC)
 type WindowExpr struct {
 	Function    *FunctionCall   // The window function (ROW_NUMBER, RANK, etc.)
+	RefName     string          // Named window reference (e.g., "w" in OVER w or OVER (w ORDER BY x))
 	PartitionBy []Expr          // PARTITION BY expressions
 	OrderBy     []WindowOrderBy // ORDER BY within window (with NULLS FIRST/LAST)
 	Frame       *WindowFrame    // Optional frame specification
@@ -1122,6 +1150,16 @@ type WindowExpr struct {
 }
 
 func (*WindowExpr) exprNode() {}
+
+// WindowDef represents a named window definition in the WINDOW clause.
+// Example: WINDOW w AS (PARTITION BY dept ORDER BY salary)
+type WindowDef struct {
+	Name        string          // Window name
+	RefName     string          // Optional base window reference
+	PartitionBy []Expr          // PARTITION BY expressions
+	OrderBy     []WindowOrderBy // ORDER BY within window
+	Frame       *WindowFrame    // Optional frame specification
+}
 
 // WindowOrderBy extends OrderByExpr with NULLS FIRST/LAST support.
 type WindowOrderBy struct {

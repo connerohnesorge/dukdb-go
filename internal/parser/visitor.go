@@ -27,6 +27,7 @@ type Visitor interface {
 	VisitCreateSchemaStmt(stmt *CreateSchemaStmt)
 	VisitDropSchemaStmt(stmt *DropSchemaStmt)
 	VisitAlterTableStmt(stmt *AlterTableStmt)
+	VisitCommentStmt(stmt *CommentStmt)
 
 	// PIVOT/UNPIVOT statement visitors
 	VisitPivotStmt(stmt *PivotStmt)

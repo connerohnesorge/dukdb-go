@@ -563,8 +563,121 @@ func (p *parser) parseAlterTable() (*AlterTableStmt, error) {
 		stmt.Operation = AlterTableSetOption
 		// SET option parsing would go here (future extension)
 		return nil, p.errorf("ALTER TABLE SET not yet implemented")
+	} else if p.isKeyword("ALTER") {
+		p.advance() // consume ALTER
+		if p.isKeyword("COLUMN") {
+			p.advance() // consume optional COLUMN
+		}
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name after ALTER [COLUMN]")
+		}
+		colName := p.advance().value
+
+		// Handle SET DATA TYPE or just TYPE
+		if p.isKeyword("SET") {
+			p.advance() // consume SET
+			if err := p.expectKeyword("DATA"); err != nil {
+				return nil, err
+			}
+		}
+		if err := p.expectKeyword("TYPE"); err != nil {
+			return nil, p.errorf("expected TYPE or SET DATA TYPE after column name")
+		}
+
+		// Collect the type specification using collectTypeSpec
+		typeSpec, err := p.collectTypeSpec(
+			map[tokenType]bool{tokenSemicolon: true, tokenEOF: true},
+			map[string]bool{},
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		stmt.Operation = AlterTableAlterColumnType
+		stmt.AlterColumn = colName
+		stmt.NewTypeRaw = typeSpec
 	} else {
-		return nil, p.errorf("expected RENAME, DROP, ADD, or SET after ALTER TABLE")
+		return nil, p.errorf("expected RENAME, DROP, ADD, ALTER, or SET after ALTER TABLE")
+	}
+
+	return stmt, nil
+}
+
+// parseComment parses a COMMENT ON statement.
+// Syntax: COMMENT ON {TABLE|COLUMN|VIEW|INDEX|SCHEMA} name IS {'text'|NULL}
+func (p *parser) parseComment() (*CommentStmt, error) {
+	p.advance() // consume COMMENT
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	stmt := &CommentStmt{}
+
+	// Parse object type
+	switch {
+	case p.isKeyword("TABLE"):
+		stmt.ObjectType = "TABLE"
+	case p.isKeyword("COLUMN"):
+		stmt.ObjectType = "COLUMN"
+	case p.isKeyword("VIEW"):
+		stmt.ObjectType = "VIEW"
+	case p.isKeyword("INDEX"):
+		stmt.ObjectType = "INDEX"
+	case p.isKeyword("SCHEMA"):
+		stmt.ObjectType = "SCHEMA"
+	default:
+		return nil, p.errorf("expected TABLE, COLUMN, VIEW, INDEX, or SCHEMA after COMMENT ON")
+	}
+	p.advance() // consume object type keyword
+
+	// Parse object name (may be schema-qualified: schema.name or schema.table.column)
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected object name")
+	}
+	name := p.advance().value
+
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected name after dot")
+		}
+		secondName := p.advance().value
+
+		if stmt.ObjectType == "COLUMN" && p.current().typ == tokenDot {
+			// schema.table.column
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected column name after dot")
+			}
+			stmt.Schema = name
+			stmt.ObjectName = secondName
+			stmt.ColumnName = p.advance().value
+		} else if stmt.ObjectType == "COLUMN" {
+			// table.column
+			stmt.ObjectName = name
+			stmt.ColumnName = secondName
+		} else {
+			// schema.object
+			stmt.Schema = name
+			stmt.ObjectName = secondName
+		}
+	} else {
+		stmt.ObjectName = name
+	}
+
+	// Parse IS clause
+	if err := p.expectKeyword("IS"); err != nil {
+		return nil, err
+	}
+
+	if p.isKeyword("NULL") {
+		p.advance()
+		stmt.Comment = nil // NULL drops the comment
+	} else if p.current().typ == tokenString {
+		comment := p.advance().value
+		stmt.Comment = &comment
+	} else {
+		return nil, p.errorf("expected string literal or NULL after IS")
 	}
 
 	return stmt, nil

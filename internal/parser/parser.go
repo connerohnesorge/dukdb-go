@@ -113,6 +113,8 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseDetach()
 	case p.isKeyword("USE"):
 		stmt, err = p.parseUse()
+	case p.isKeyword("COMMENT"):
+		stmt, err = p.parseComment()
 	case p.isKeyword("VALUES"):
 		stmt, err = p.parseStandaloneValues()
 	default:
@@ -381,6 +383,16 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			return nil, err
 		}
 		stmt.Qualify = qualify
+	}
+
+	// WINDOW - named window definitions
+	if p.isKeyword("WINDOW") {
+		p.advance()
+		windowDefs, err := p.parseWindowDefs()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Windows = windowDefs
 	}
 
 	// ORDER BY
@@ -652,6 +664,7 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 				!p.isKeyword("OFFSET") && !p.isKeyword("FETCH") &&
 				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+				!p.isKeyword("WINDOW") &&
 				!p.isKeyword("EXCLUDE") && !p.isKeyword("REPLACE") &&
 				!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 				tok := p.current()
@@ -683,7 +696,8 @@ func (p *parser) parseSelectColumns() ([]SelectColumn, error) {
 				!p.isKeyword("ORDER") && !p.isKeyword("LIMIT") &&
 				!p.isKeyword("OFFSET") && // OFFSET can appear without LIMIT (PostgreSQL compatibility)
 				!p.isKeyword("FETCH") && // FETCH FIRST/NEXT (SQL standard alternative to LIMIT)
-				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("INNER") &&
+				!p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") && !p.isKeyword("WINDOW") &&
+				!p.isKeyword("INNER") &&
 				!p.isKeyword("LEFT") && !p.isKeyword("RIGHT") &&
 				!p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 				!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
@@ -862,6 +876,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+			!p.isKeyword("WINDOW") &&
 			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 			// Check if this looks like a keyword typo
 			tok := p.current()
@@ -901,6 +916,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			!p.isKeyword("JOIN") && !p.isKeyword("INNER") && !p.isKeyword("LEFT") &&
 			!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 			!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+			!p.isKeyword("WINDOW") &&
 			!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") {
 			// Check if this looks like a keyword typo
 			tok := p.current()
@@ -950,6 +966,7 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("RIGHT") && !p.isKeyword("FULL") && !p.isKeyword("CROSS") &&
 		!p.isKeyword("NATURAL") && !p.isKeyword("ASOF") && !p.isKeyword("POSITIONAL") &&
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
+		!p.isKeyword("WINDOW") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
 		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
 		// Check if this looks like a keyword typo - if so, don't consume it as an alias
@@ -1888,6 +1905,22 @@ func (p *parser) parseDelete() (*DeleteStmt, error) {
 			)
 		}
 		stmt.Table = p.advance().value
+	}
+
+	// Parse optional USING clause for multi-table delete
+	if p.isKeyword("USING") {
+		p.advance() // consume USING
+		for {
+			tableRef, err := p.parseTableRef()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Using = append(stmt.Using, tableRef)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance() // consume comma
+		}
 	}
 
 	// WHERE
@@ -4118,7 +4151,7 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 		return nil, err
 	}
 
-	// IS NULL / IS NOT NULL
+	// IS NULL / IS NOT NULL / IS [NOT] DISTINCT FROM
 	if p.isKeyword("IS") {
 		p.advance()
 		not := false
@@ -4126,6 +4159,27 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			p.advance()
 			not = true
 		}
+		// IS [NOT] DISTINCT FROM
+		if p.isKeyword("DISTINCT") {
+			p.advance()
+			if err := p.expectKeyword("FROM"); err != nil {
+				return nil, err
+			}
+			right, err := p.parseBitwiseOrExpr()
+			if err != nil {
+				return nil, err
+			}
+			op := OpIsDistinctFrom
+			if not {
+				op = OpIsNotDistinctFrom
+			}
+			return &BinaryExpr{
+				Left:  left,
+				Op:    op,
+				Right: right,
+			}, nil
+		}
+		// IS [NOT] NULL
 		if err := p.expectKeyword("NULL"); err != nil {
 			return nil, err
 		}
@@ -5305,8 +5359,35 @@ func (p *parser) maybeParseWindowExpr(fn *FunctionCall) (Expr, error) {
 	// Parse OVER clause
 	p.advance() // consume OVER
 
+	// Check for bare identifier: OVER w (without parens)
+	if p.current().typ == tokenIdent && p.current().typ != tokenLParen {
+		// Check it's not a keyword that starts a window spec
+		val := strings.ToUpper(p.current().value)
+		if val != "PARTITION" && val != "ORDER" && val != "ROWS" && val != "RANGE" && val != "GROUPS" {
+			windowExpr.RefName = p.advance().value
+			return windowExpr, nil
+		}
+	}
+
 	if _, err := p.expect(tokenLParen); err != nil {
 		return nil, err
+	}
+
+	// Check for named window reference inside parens: OVER (w ...)
+	if p.current().typ == tokenIdent && !p.isKeyword("PARTITION") && !p.isKeyword("ORDER") &&
+		!p.isKeyword("ROWS") && !p.isKeyword("RANGE") && !p.isKeyword("GROUPS") {
+		// Could be a base window reference or a column reference
+		// If followed by ORDER, PARTITION, ROWS, RANGE, GROUPS, or ), it's a window ref
+		next := p.peek()
+		isWindowRef := next.typ == tokenRParen ||
+			(next.typ == tokenIdent && (strings.EqualFold(next.value, "PARTITION") ||
+				strings.EqualFold(next.value, "ORDER") ||
+				strings.EqualFold(next.value, "ROWS") ||
+				strings.EqualFold(next.value, "RANGE") ||
+				strings.EqualFold(next.value, "GROUPS")))
+		if isWindowRef {
+			windowExpr.RefName = p.advance().value
+		}
 	}
 
 	// Parse window specification
@@ -5359,6 +5440,61 @@ func (p *parser) parseWindowSpec(windowExpr *WindowExpr) error {
 	}
 
 	return nil
+}
+
+// parseWindowDefs parses WINDOW name AS (spec) [, name AS (spec) ...].
+func (p *parser) parseWindowDefs() ([]WindowDef, error) {
+	var defs []WindowDef
+
+	for {
+		// Parse window name
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected window name")
+		}
+		name := p.advance().value
+
+		// Expect AS
+		if err := p.expectKeyword("AS"); err != nil {
+			return nil, err
+		}
+
+		// Expect (
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+
+		def := WindowDef{Name: name}
+
+		// Check for base window reference (identifier before PARTITION/ORDER/ROWS/RANGE/GROUPS/))
+		if p.current().typ == tokenIdent && !p.isKeyword("PARTITION") && !p.isKeyword("ORDER") &&
+			!p.isKeyword("ROWS") && !p.isKeyword("RANGE") && !p.isKeyword("GROUPS") {
+			def.RefName = p.advance().value
+		}
+
+		// Parse window spec contents (reuse parseWindowSpec with a temp WindowExpr)
+		tempExpr := &WindowExpr{}
+		if err := p.parseWindowSpec(tempExpr); err != nil {
+			return nil, err
+		}
+		def.PartitionBy = tempExpr.PartitionBy
+		def.OrderBy = tempExpr.OrderBy
+		def.Frame = tempExpr.Frame
+
+		// Expect )
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		defs = append(defs, def)
+
+		// Check for comma to continue
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance() // consume comma
+	}
+
+	return defs, nil
 }
 
 // parseWindowExprList parses a comma-separated list of expressions for PARTITION BY.
