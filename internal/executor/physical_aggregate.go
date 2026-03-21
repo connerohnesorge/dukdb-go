@@ -704,7 +704,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeCountIf(values)
 
-	case "FIRST":
+	case "FIRST", "ANY_VALUE":
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -724,7 +724,17 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeLast(values)
 
-	case "ARGMIN", "MIN_BY":
+	case "HISTOGRAM":
+		if len(fn.Args) != 1 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeHistogram(values)
+
+	case "ARGMIN", "ARG_MIN", "MIN_BY":
 		if len(fn.Args) < 2 {
 			return nil, nil
 		}
@@ -739,7 +749,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeArgmin(argValues, valValues)
 
-	case "ARGMAX", "MAX_BY":
+	case "ARGMAX", "ARG_MAX", "MAX_BY":
 		if len(fn.Args) < 2 {
 			return nil, nil
 		}
