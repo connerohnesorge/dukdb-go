@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -624,6 +625,21 @@ func parsePositiveInt(s string, name string, minVal, maxVal int) (int, error) {
 // handleShow handles the SHOW statement for session configuration.
 // Returns a single row with the value of the requested variable.
 func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []string, error) {
+	// Handle SHOW TABLES
+	if stmt.Variable == "__tables" {
+		return c.handleShowTables()
+	}
+
+	// Handle SHOW ALL TABLES
+	if stmt.Variable == "__all_tables" {
+		return c.handleShowAllTables()
+	}
+
+	// Handle SHOW COLUMNS FROM table
+	if stmt.Variable == "__columns" {
+		return c.describeTable(stmt.TableName, "", describeColumns())
+	}
+
 	var value string
 
 	switch stmt.Variable {
@@ -654,6 +670,428 @@ func (c *EngineConn) handleShow(stmt *parser.ShowStmt) ([]map[string]any, []stri
 		{stmt.Variable: value},
 	}
 	columns := []string{stmt.Variable}
+
+	return rows, columns, nil
+}
+
+// describeColumns returns the standard column names for DESCRIBE output.
+func describeColumns() []string {
+	return []string{"column_name", "column_type", "null", "key", "default", "extra"}
+}
+
+// handleDescribe handles the DESCRIBE statement.
+func (c *EngineConn) handleDescribe(stmt *parser.DescribeStmt) ([]map[string]any, []string, error) {
+	columns := describeColumns()
+
+	if stmt.Query != nil {
+		return c.describeQuery(stmt.Query, columns)
+	}
+
+	return c.describeTable(stmt.TableName, stmt.Schema, columns)
+}
+
+// describeTable returns column metadata for a table.
+func (c *EngineConn) describeTable(tableName, schemaName string, columns []string) ([]map[string]any, []string, error) {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	tableDef, ok := c.engine.catalog.GetTableInSchema(schemaName, tableName)
+	if !ok || tableDef == nil {
+		return nil, nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("Table with name %s does not exist!", tableName),
+		}
+	}
+
+	rows := make([]map[string]any, 0, len(tableDef.Columns))
+	for i, col := range tableDef.Columns {
+		isPK := "NO"
+		for _, pkIdx := range tableDef.PrimaryKey {
+			if pkIdx == i {
+				isPK = "YES"
+				break
+			}
+		}
+
+		nullStr := "YES"
+		if !col.Nullable {
+			nullStr = "NO"
+		}
+
+		var defaultVal any
+		if col.HasDefault {
+			defaultVal = fmt.Sprintf("%v", col.DefaultValue)
+		}
+
+		rows = append(rows, map[string]any{
+			"column_name": col.Name,
+			"column_type": col.Type.String(),
+			"null":        nullStr,
+			"key":         isPK,
+			"default":     defaultVal,
+			"extra":       "",
+		})
+	}
+
+	return rows, columns, nil
+}
+
+// describeQuery returns column metadata for a query by binding it and extracting
+// output column names and types without executing the query.
+func (c *EngineConn) describeQuery(query parser.Statement, columns []string) ([]map[string]any, []string, error) {
+	b := binder.NewBinder(c.engine.catalog)
+	boundStmt, err := b.Bind(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	boundSelect, ok := boundStmt.(*binder.BoundSelectStmt)
+	if !ok {
+		return nil, nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "DESCRIBE query must be a SELECT statement",
+		}
+	}
+
+	rows := make([]map[string]any, 0, len(boundSelect.Columns))
+	for _, col := range boundSelect.Columns {
+		colName := col.Alias
+		if colName == "" {
+			colName = fmt.Sprintf("col%d", len(rows))
+		}
+
+		colType := "VARCHAR"
+		if col.Expr != nil {
+			rt := col.Expr.ResultType()
+			if rt != dukdb.TYPE_INVALID {
+				colType = rt.String()
+			}
+		}
+
+		rows = append(rows, map[string]any{
+			"column_name": colName,
+			"column_type": colType,
+			"null":        "YES",
+			"key":         "NO",
+			"default":     nil,
+			"extra":       "",
+		})
+	}
+
+	return rows, columns, nil
+}
+
+// handleSummarize handles the SUMMARIZE statement by computing per-column statistics.
+func (c *EngineConn) handleSummarize(stmt *parser.SummarizeStmt) ([]map[string]any, []string, error) {
+	if stmt.Query != nil {
+		return nil, nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "SUMMARIZE SELECT is not yet supported; use SUMMARIZE table_name",
+		}
+	}
+
+	schemaName := stmt.Schema
+	if schemaName == "" {
+		schemaName = "main"
+	}
+
+	tableDef, ok := c.engine.catalog.GetTableInSchema(schemaName, stmt.TableName)
+	if !ok || tableDef == nil {
+		return nil, nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("Table with name %s does not exist!", stmt.TableName),
+		}
+	}
+
+	// Build and execute SELECT * FROM table
+	var querySQL string
+	if stmt.Schema != "" {
+		querySQL = fmt.Sprintf("SELECT * FROM %s.%s", stmt.Schema, stmt.TableName)
+	} else {
+		querySQL = fmt.Sprintf("SELECT * FROM %s", stmt.TableName)
+	}
+
+	innerStmt, err := parser.Parse(querySQL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dataRows, dataCols, err := c.queryInnerStmt(context.Background(), innerStmt, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Build per-column statistics
+	columns := []string{"column_name", "column_type", "min", "max", "unique_count", "null_count", "avg", "std", "count"}
+	totalCount := len(dataRows)
+
+	resultRows := make([]map[string]any, 0, len(dataCols))
+	for colIdx, colName := range dataCols {
+		colType := "VARCHAR"
+		if colIdx < len(tableDef.Columns) {
+			colType = tableDef.Columns[colIdx].Type.String()
+		}
+
+		var (
+			minVal      any
+			maxVal      any
+			nullCount   int
+			uniqueSet   = make(map[any]struct{})
+			sum         float64
+			sumSq       float64
+			numericVals int
+			isNumeric   bool
+		)
+
+		// Check if column type is numeric
+		if colIdx < len(tableDef.Columns) {
+			ct := tableDef.Columns[colIdx].Type
+			switch ct {
+			case dukdb.TYPE_TINYINT, dukdb.TYPE_SMALLINT, dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT,
+				dukdb.TYPE_UTINYINT, dukdb.TYPE_USMALLINT, dukdb.TYPE_UINTEGER, dukdb.TYPE_UBIGINT,
+				dukdb.TYPE_FLOAT, dukdb.TYPE_DOUBLE, dukdb.TYPE_HUGEINT, dukdb.TYPE_DECIMAL:
+				isNumeric = true
+			}
+		}
+
+		for _, row := range dataRows {
+			val := row[colName]
+			if val == nil {
+				nullCount++
+				continue
+			}
+
+			uniqueSet[val] = struct{}{}
+
+			// Track min/max using string comparison for non-numeric, numeric for numeric
+			valStr := fmt.Sprintf("%v", val)
+			if minVal == nil {
+				minVal = valStr
+				maxVal = valStr
+			} else {
+				minStr := fmt.Sprintf("%v", minVal)
+				maxStr := fmt.Sprintf("%v", maxVal)
+				if valStr < minStr {
+					minVal = valStr
+				}
+				if valStr > maxStr {
+					maxVal = valStr
+				}
+			}
+
+			if isNumeric {
+				fVal := toFloat64(val)
+				if fVal != nil {
+					sum += *fVal
+					sumSq += (*fVal) * (*fVal)
+					numericVals++
+				}
+			}
+		}
+
+		row := map[string]any{
+			"column_name":  colName,
+			"column_type":  colType,
+			"min":          minVal,
+			"max":          maxVal,
+			"unique_count": int64(len(uniqueSet)),
+			"null_count":   int64(nullCount),
+			"avg":          nil,
+			"std":          nil,
+			"count":        int64(totalCount),
+		}
+
+		if isNumeric && numericVals > 0 {
+			avg := sum / float64(numericVals)
+			row["avg"] = avg
+			if numericVals > 1 {
+				variance := (sumSq / float64(numericVals)) - (avg * avg)
+				if variance < 0 {
+					variance = 0
+				}
+				row["std"] = math.Sqrt(variance)
+			} else {
+				row["std"] = 0.0
+			}
+		}
+
+		resultRows = append(resultRows, row)
+	}
+
+	return resultRows, columns, nil
+}
+
+// toFloat64 converts a value to float64 for statistical computation.
+func toFloat64(val any) *float64 {
+	var f float64
+	switch v := val.(type) {
+	case int:
+		f = float64(v)
+	case int8:
+		f = float64(v)
+	case int16:
+		f = float64(v)
+	case int32:
+		f = float64(v)
+	case int64:
+		f = float64(v)
+	case uint8:
+		f = float64(v)
+	case uint16:
+		f = float64(v)
+	case uint32:
+		f = float64(v)
+	case uint64:
+		f = float64(v)
+	case float32:
+		f = float64(v)
+	case float64:
+		f = v
+	default:
+		return nil
+	}
+	return &f
+}
+
+// handleCall handles the CALL statement by converting it to a SELECT * FROM function(args).
+func (c *EngineConn) handleCall(stmt *parser.CallStmt) ([]map[string]any, []string, error) {
+	// Serialize arguments to SQL
+	argParts := make([]string, 0, len(stmt.Args))
+	for _, arg := range stmt.Args {
+		argParts = append(argParts, exprToSQL(arg))
+	}
+
+	argsStr := strings.Join(argParts, ", ")
+	querySQL := fmt.Sprintf("SELECT * FROM %s(%s)", stmt.FunctionName, argsStr)
+
+	innerStmt, err := parser.Parse(querySQL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.queryInnerStmt(context.Background(), innerStmt, nil)
+}
+
+// exprToSQL converts a parser Expr to its SQL string representation.
+// Handles common expression types used in CALL arguments.
+func exprToSQL(expr parser.Expr) string {
+	switch e := expr.(type) {
+	case *parser.Literal:
+		if e.Value == nil {
+			return "NULL"
+		}
+		switch e.Type {
+		case dukdb.TYPE_VARCHAR:
+			return fmt.Sprintf("'%s'", strings.ReplaceAll(fmt.Sprintf("%v", e.Value), "'", "''"))
+		default:
+			return fmt.Sprintf("%v", e.Value)
+		}
+	case *parser.ColumnRef:
+		if e.Table != "" {
+			return fmt.Sprintf("%s.%s", e.Table, e.Column)
+		}
+		return e.Column
+	case *parser.FunctionCall:
+		args := make([]string, 0, len(e.Args))
+		for _, arg := range e.Args {
+			args = append(args, exprToSQL(arg))
+		}
+		if e.Star {
+			return fmt.Sprintf("%s(*)", e.Name)
+		}
+		return fmt.Sprintf("%s(%s)", e.Name, strings.Join(args, ", "))
+	case *parser.UnaryExpr:
+		switch e.Op {
+		case parser.OpNeg:
+			return fmt.Sprintf("-%s", exprToSQL(e.Expr))
+		case parser.OpNot:
+			return fmt.Sprintf("NOT %s", exprToSQL(e.Expr))
+		default:
+			return exprToSQL(e.Expr)
+		}
+	case *parser.BinaryExpr:
+		left := exprToSQL(e.Left)
+		right := exprToSQL(e.Right)
+		op := "+"
+		switch e.Op {
+		case parser.OpAdd:
+			op = "+"
+		case parser.OpSub:
+			op = "-"
+		case parser.OpMul:
+			op = "*"
+		case parser.OpDiv:
+			op = "/"
+		case parser.OpMod:
+			op = "%"
+		case parser.OpEq:
+			op = "="
+		case parser.OpNe:
+			op = "!="
+		case parser.OpLt:
+			op = "<"
+		case parser.OpLe:
+			op = "<="
+		case parser.OpGt:
+			op = ">"
+		case parser.OpGe:
+			op = ">="
+		case parser.OpAnd:
+			op = "AND"
+		case parser.OpOr:
+			op = "OR"
+		case parser.OpConcat:
+			op = "||"
+		}
+		return fmt.Sprintf("(%s %s %s)", left, op, right)
+	case *parser.CastExpr:
+		return fmt.Sprintf("CAST(%s AS %s)", exprToSQL(e.Expr), e.TargetType.String())
+	default:
+		return fmt.Sprintf("%v", expr)
+	}
+}
+
+// handleShowTables returns all tables in the default schema.
+func (c *EngineConn) handleShowTables() ([]map[string]any, []string, error) {
+	tables := c.engine.catalog.ListTables()
+	columns := []string{"name"}
+
+	rows := make([]map[string]any, 0, len(tables))
+	for _, t := range tables {
+		rows = append(rows, map[string]any{
+			"name": t.Name,
+		})
+	}
+
+	return rows, columns, nil
+}
+
+// handleShowAllTables returns all tables across all schemas.
+func (c *EngineConn) handleShowAllTables() ([]map[string]any, []string, error) {
+	schemas := c.engine.catalog.ListSchemas()
+	columns := []string{"database", "schema", "name", "column_names", "column_types", "temporary"}
+
+	var rows []map[string]any
+	for _, s := range schemas {
+		tables := c.engine.catalog.ListTablesInSchema(s.Name())
+		for _, t := range tables {
+			colNames := make([]string, len(t.Columns))
+			colTypes := make([]string, len(t.Columns))
+			for i, col := range t.Columns {
+				colNames[i] = col.Name
+				colTypes[i] = col.Type.String()
+			}
+			rows = append(rows, map[string]any{
+				"database":     "memory",
+				"schema":       s.Name(),
+				"name":         t.Name,
+				"column_names": colNames,
+				"column_types": colTypes,
+				"temporary":    false,
+			})
+		}
+	}
 
 	return rows, columns, nil
 }
@@ -1023,6 +1461,21 @@ func (c *EngineConn) Query(
 	// Handle SHOW statements at connection level
 	if showStmt, ok := stmt.(*parser.ShowStmt); ok {
 		return c.handleShow(showStmt)
+	}
+
+	// Handle DESCRIBE statements at connection level
+	if describeStmt, ok := stmt.(*parser.DescribeStmt); ok {
+		return c.handleDescribe(describeStmt)
+	}
+
+	// Handle SUMMARIZE statements at connection level
+	if summarizeStmt, ok := stmt.(*parser.SummarizeStmt); ok {
+		return c.handleSummarize(summarizeStmt)
+	}
+
+	// Handle CALL statements at connection level
+	if callStmt, ok := stmt.(*parser.CallStmt); ok {
+		return c.handleCall(callStmt)
 	}
 
 	// Handle extension and database management statements
@@ -2263,6 +2716,33 @@ func (c *EngineConn) QueryStreaming(
 	// Handle SHOW statements at connection level
 	if showStmt, ok := stmt.(*parser.ShowStmt); ok {
 		rows, cols, err := c.handleShow(showStmt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, rows, cols)
+	}
+
+	// Handle DESCRIBE statements at connection level
+	if describeStmt, ok := stmt.(*parser.DescribeStmt); ok {
+		rows, cols, err := c.handleDescribe(describeStmt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, rows, cols)
+	}
+
+	// Handle SUMMARIZE statements at connection level
+	if summarizeStmt, ok := stmt.(*parser.SummarizeStmt); ok {
+		rows, cols, err := c.handleSummarize(summarizeStmt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.wrapRowsAsStreaming(ctx, rows, cols)
+	}
+
+	// Handle CALL statements at connection level
+	if callStmt, ok := stmt.(*parser.CallStmt); ok {
+		rows, cols, err := c.handleCall(callStmt)
 		if err != nil {
 			return nil, nil, err
 		}
