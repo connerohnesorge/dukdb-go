@@ -620,7 +620,7 @@ func TestUtilityFunctions(t *testing.T) {
 	t.Run("randomValue", func(t *testing.T) {
 		// Test that RANDOM returns values in [0, 1)
 		for i := 0; i < 100; i++ {
-			result, err := randomValue()
+			result, err := randomValue(nil)
 			require.NoError(t, err)
 			val, ok := result.(float64)
 			require.True(t, ok, "RANDOM should return float64")
@@ -629,9 +629,9 @@ func TestUtilityFunctions(t *testing.T) {
 		}
 
 		// Test that RANDOM returns different values (non-deterministic)
-		result1, _ := randomValue()
-		result2, _ := randomValue()
-		result3, _ := randomValue()
+		result1, _ := randomValue(nil)
+		result2, _ := randomValue(nil)
+		result3, _ := randomValue(nil)
 		// It's extremely unlikely all three would be equal
 		allSame := result1 == result2 && result2 == result3
 		assert.False(t, allSame, "RANDOM should return different values")
