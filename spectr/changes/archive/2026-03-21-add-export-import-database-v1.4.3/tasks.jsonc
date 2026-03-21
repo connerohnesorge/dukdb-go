@@ -58,7 +58,7 @@
       "id": "1.4",
       "section": "Sequence DDL Generation",
       "description": "Write tests for sequence DDL generation with various options (START WITH, INCREMENT BY, CYCLE, schema-qualified names)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "2.1",
@@ -88,7 +88,7 @@
       "id": "2.5",
       "section": "Index DDL Generation",
       "description": "Write tests for index DDL generation (unique, multi-column, schema-qualified, primary key skip)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3.1",
@@ -130,7 +130,7 @@
       "id": "3.7",
       "section": "FORMAT Option Support",
       "description": "Write tests for each format (CSV default, PARQUET, JSON, unknown format error)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "4.1",
@@ -148,7 +148,7 @@
       "id": "4.3",
       "section": "Multi-Schema Data File Naming",
       "description": "Write tests for multi-schema file naming with colliding table names across schemas",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.1",
@@ -160,7 +160,7 @@
       "id": "5.2",
       "section": "Dependency Ordering",
       "description": "Write test verifying DDL order in schema.sql with all object types present",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "6.1",
@@ -178,25 +178,25 @@
       "id": "6.3",
       "section": "DEFAULT Clause Support",
       "description": "Write tests for DEFAULT clause generation with various types (string, integer, boolean, nil)",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.1",
       "section": "Integration Tests",
       "description": "Write round-trip test: create database with schemas, sequences, tables, views, indexes, defaults; export; import into fresh database; verify all objects and data match",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Integration Tests",
       "description": "Write round-trip test with FORMAT PARQUET",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Integration Tests",
       "description": "Write round-trip test with FORMAT JSON",
-      "status": "pending"
+      "status": "completed"
     }
   ]
 }

@@ -1,0 +1,39 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "Named Windows",
+      "description": "Add WindowDef, WindowSpec AST types and SelectStmt.Windows field in internal/parser/ast.go",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "Named Windows",
+      "description": "Parse WINDOW clause in SELECT and parseWindowDefs() in internal/parser/parser.go",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "Named Windows",
+      "description": "Support OVER with named reference (bare identifier and inheritance) in parser.go",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "Named Windows",
+      "description": "Resolve named windows in binder with merge, duplicate check, cycle detection",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "Named Windows",
+      "description": "Integration tests for named windows, inheritance, errors, no regressions",
+      "status": "completed"
+    }
+  ]
+}

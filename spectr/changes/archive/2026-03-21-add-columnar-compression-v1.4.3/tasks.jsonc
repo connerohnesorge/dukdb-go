@@ -1,0 +1,189 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1.1",
+      "section": "Core Compression Types and Interface",
+      "description": "Define SegmentCompressionType enum (None, Constant, Dictionary, RLE) in internal/storage/compression.go",
+      "status": "completed"
+    },
+    {
+      "id": "1.2",
+      "section": "Core Compression Types and Interface",
+      "description": "Define CompressedSegment struct with Type, DataType, Count, NullCount, Validity, and Data fields",
+      "status": "completed"
+    },
+    {
+      "id": "1.3",
+      "section": "Core Compression Types and Interface",
+      "description": "Define ConstantPayload, DictionaryPayload, and RLEPayload structs",
+      "status": "completed"
+    },
+    {
+      "id": "1.4",
+      "section": "Core Compression Types and Interface",
+      "description": "Write unit tests for type definitions and String() methods",
+      "status": "completed"
+    },
+    {
+      "id": "2.1",
+      "section": "Constant Compression Implementation",
+      "description": "Implement CompressConstant(vec *Vector) *CompressedSegment",
+      "status": "completed"
+    },
+    {
+      "id": "2.2",
+      "section": "Constant Compression Implementation",
+      "description": "Implement DecompressConstant(seg *CompressedSegment, startRow, count int) *Vector",
+      "status": "completed"
+    },
+    {
+      "id": "2.3",
+      "section": "Constant Compression Implementation",
+      "description": "Handle edge cases: all-NULL segment, single-row segment, empty segment",
+      "status": "completed"
+    },
+    {
+      "id": "2.4",
+      "section": "Constant Compression Implementation",
+      "description": "Write unit tests for Constant compress/decompress round-trip",
+      "status": "completed"
+    },
+    {
+      "id": "3.1",
+      "section": "Dictionary Compression Implementation",
+      "description": "Implement CompressDictionary(vec *Vector, threshold int) *CompressedSegment",
+      "status": "completed"
+    },
+    {
+      "id": "3.2",
+      "section": "Dictionary Compression Implementation",
+      "description": "Implement DecompressDictionary(seg *CompressedSegment, startRow, count int) *Vector",
+      "status": "completed"
+    },
+    {
+      "id": "3.3",
+      "section": "Dictionary Compression Implementation",
+      "description": "Handle NULL values (tracked via validity mask, not in dictionary)",
+      "status": "completed"
+    },
+    {
+      "id": "3.4",
+      "section": "Dictionary Compression Implementation",
+      "description": "Write unit tests for Dictionary compress/decompress",
+      "status": "completed"
+    },
+    {
+      "id": "4.1",
+      "section": "RLE Compression Implementation",
+      "description": "Implement CompressRLE(vec *Vector, minAvgRunLength float64) *CompressedSegment",
+      "status": "completed"
+    },
+    {
+      "id": "4.2",
+      "section": "RLE Compression Implementation",
+      "description": "Implement DecompressRLE(seg *CompressedSegment, startRow, count int) *Vector",
+      "status": "completed"
+    },
+    {
+      "id": "4.3",
+      "section": "RLE Compression Implementation",
+      "description": "Handle NULL values as run breaks in the RLE encoding",
+      "status": "completed"
+    },
+    {
+      "id": "4.4",
+      "section": "RLE Compression Implementation",
+      "description": "Write unit tests for RLE compress/decompress",
+      "status": "completed"
+    },
+    {
+      "id": "5.1",
+      "section": "Compression Selection",
+      "description": "Implement AnalyzeAndCompress(vec *Vector) *CompressedSegment with waterfall selection",
+      "status": "completed"
+    },
+    {
+      "id": "5.2",
+      "section": "Compression Selection",
+      "description": "Implement DecompressSegment(seg *CompressedSegment, startRow, count int) *Vector dispatcher",
+      "status": "completed"
+    },
+    {
+      "id": "5.3",
+      "section": "Compression Selection",
+      "description": "Add configurable thresholds (DictionaryThreshold, RLEMinRunLength) with defaults",
+      "status": "completed"
+    },
+    {
+      "id": "5.4",
+      "section": "Compression Selection",
+      "description": "Write unit tests verifying correct scheme selection",
+      "status": "completed"
+    },
+    {
+      "id": "6.1",
+      "section": "Row Group Integration",
+      "description": "Add compressed []*CompressedSegment field to RowGroup struct in internal/storage/table.go",
+      "status": "completed"
+    },
+    {
+      "id": "6.2",
+      "section": "Row Group Integration",
+      "description": "Add Compress() method to RowGroup",
+      "status": "completed"
+    },
+    {
+      "id": "6.3",
+      "section": "Row Group Integration",
+      "description": "Trigger compression when row group fills up in AppendChunk and InsertVersioned",
+      "status": "completed"
+    },
+    {
+      "id": "6.4",
+      "section": "Row Group Integration",
+      "description": "Write unit tests verifying row group compression triggers at capacity",
+      "status": "completed"
+    },
+    {
+      "id": "7.1",
+      "section": "Scanner Integration",
+      "description": "Update TableScanner.Next() to check for compressed segments and decompress on read",
+      "status": "completed"
+    },
+    {
+      "id": "7.2",
+      "section": "Scanner Integration",
+      "description": "Ensure all existing table scan tests continue to pass with compression enabled",
+      "status": "completed"
+    },
+    {
+      "id": "7.3",
+      "section": "Scanner Integration",
+      "description": "Write integration test: insert data, verify compression occurs, scan and verify correctness",
+      "status": "completed"
+    },
+    {
+      "id": "8.1",
+      "section": "Verification and Cleanup",
+      "description": "Run full test suite and confirm no regressions",
+      "status": "completed"
+    },
+    {
+      "id": "8.2",
+      "section": "Verification and Cleanup",
+      "description": "Run linter and fix any issues",
+      "status": "completed"
+    },
+    {
+      "id": "8.3",
+      "section": "Verification and Cleanup",
+      "description": "Verify compression reduces memory for representative workloads",
+      "status": "completed"
+    }
+  ]
+}

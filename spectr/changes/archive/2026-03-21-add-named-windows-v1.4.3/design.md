@@ -366,7 +366,7 @@ Locations to update (all in `parser.go`):
 - `parseWindowExprList()` — `parser.go:5366` — parses comma-separated expression list
 - `parseWindowOrderBy()` — `parser.go:5399` — parses ORDER BY with NULLS FIRST/LAST
 - `parseWindowSpec(windowExpr *WindowExpr)` — `parser.go:5325` — parses window spec into WindowExpr
-- `bindWindowExpr(e *parser.WindowExpr)` — `bind_expr.go:785` — binds WindowExpr to BoundWindowExpr
+- `bindWindowExpr(e *parser.WindowExpr)` — `bind_expr.go:788` — binds WindowExpr to BoundWindowExpr
 
 ## Testing Strategy
 

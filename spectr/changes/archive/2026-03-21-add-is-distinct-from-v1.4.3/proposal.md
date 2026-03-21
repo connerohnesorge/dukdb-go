@@ -2,6 +2,7 @@
 
 **Change ID:** `add-is-distinct-from-v1.4.3`
 **Created:** 2026-03-20
+**Status:** IMPLEMENTED — Already coded in ast.go:790-791, parser.go:4121-4148, expr.go:353+
 **Scope:** Small — Two new binary operators across parser, binder, and executor
 **Estimated Complexity:** Low — Each is a simple NULL-safe comparison
 **User-Visible:** Yes — New SQL comparison operators
@@ -23,10 +24,11 @@ These are commonly used in WHERE clauses and JOIN conditions where NULL comparis
 
 ## Current Infrastructure
 
-- `BinaryOp` enum at `ast.go:742-789` with OpIs/OpIsNot for `IS`/`IS NOT`
-- Binary expression evaluation at `expr.go:337-355` handles NULL cases for OpIs/OpIsNot
-- `compareValues()` at `expr.go:3457` handles comparison of two non-NULL values
-- Parser handles `IS NULL`, `IS NOT NULL`, `IS TRUE`, `IS FALSE` in expression parsing
+- `BinaryOp` enum at `ast.go:742-789` with OpIs/OpIsNot (defined but unused by parser)
+- IS keyword parsed in `parseComparisonExpr()` at `parser.go:4121` — currently only handles IS [NOT] NULL as UnaryExpr
+- Binary expression evaluation at `expr.go:317-355` and `expr.go:476-509` handles NULL cases
+- `compareValues()` at `expr.go:3766` handles comparison of two non-NULL values
+- Binder type inference for OpIs/OpIsNot at `bind_expr.go:254-256` returns TYPE_BOOLEAN
 
 ## Goals
 

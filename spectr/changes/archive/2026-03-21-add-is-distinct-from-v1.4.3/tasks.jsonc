@@ -1,0 +1,39 @@
+// Spectr Tasks File (JSONC)
+//
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "IS DISTINCT FROM",
+      "description": "Add BinaryOp enum values OpIsDistinctFrom and OpIsNotDistinctFrom in internal/parser/ast.go",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "IS DISTINCT FROM",
+      "description": "Parse IS [NOT] DISTINCT FROM syntax in parseComparisonExpr() at internal/parser/parser.go",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "IS DISTINCT FROM",
+      "description": "Evaluate IS [NOT] DISTINCT FROM in executor expr.go with NULL-safe semantics",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "IS DISTINCT FROM",
+      "description": "Add type inference for OpIsDistinctFrom and OpIsNotDistinctFrom in binder bind_expr.go",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "IS DISTINCT FROM",
+      "description": "Write integration tests covering all NULL combinations, WHERE clause, JOIN ON, various types",
+      "status": "completed"
+    }
+  ]
+}
