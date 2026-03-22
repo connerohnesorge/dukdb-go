@@ -2118,7 +2118,7 @@ func (e *Executor) evaluateFunctionCall(
 	case "DATE_TRUNC", "DATETRUNC":
 		return evalDateTrunc(args)
 
-	case "DATE_PART":
+	case "DATE_PART", "DATEPART":
 		return evalDatePart(args)
 
 	case "AGE":
@@ -2131,8 +2131,71 @@ func (e *Executor) evaluateFunctionCall(
 	case "MAKE_DATE":
 		return evalMakeDate(args)
 
+	case "TIME_BUCKET":
+		if len(args) < 2 || len(args) > 3 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "TIME_BUCKET requires 2 or 3 arguments"}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		tbInterval, tbErr := toInterval(args[0])
+		if tbErr != nil {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("TIME_BUCKET: invalid interval: %v", tbErr)}
+		}
+		tbTs, tbErr := toTime(args[1])
+		if tbErr != nil {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("TIME_BUCKET: invalid timestamp: %v", tbErr)}
+		}
+		tbOrigin := time.Date(2000, 1, 3, 0, 0, 0, 0, tbTs.Location())
+		if len(args) == 3 && args[2] != nil {
+			tbOrigin, tbErr = toTime(args[2])
+			if tbErr != nil {
+				return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("TIME_BUCKET: invalid origin: %v", tbErr)}
+			}
+		}
+		tbBucketMicros := tbInterval.Micros + int64(tbInterval.Days)*24*60*60*1_000_000
+		if tbBucketMicros <= 0 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "TIME_BUCKET: bucket width must be positive"}
+		}
+		tbTsMicros := tbTs.UnixMicro()
+		tbOriginMicros := tbOrigin.UnixMicro()
+		tbDiff := tbTsMicros - tbOriginMicros
+		tbBucketStart := tbOriginMicros + (tbDiff/tbBucketMicros)*tbBucketMicros
+		if tbDiff < 0 && tbDiff%tbBucketMicros != 0 {
+			tbBucketStart -= tbBucketMicros
+		}
+		return time.UnixMicro(tbBucketStart), nil
+
 	case "MAKE_TIMESTAMP":
 		return evalMakeTimestamp(args)
+
+	case "MAKE_TIMESTAMPTZ":
+		if len(args) < 6 || len(args) > 7 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "MAKE_TIMESTAMPTZ requires 6 or 7 arguments"}
+		}
+		for _, mtzArg := range args[:6] {
+			if mtzArg == nil {
+				return nil, nil
+			}
+		}
+		mtzYear := int(toInt64Value(args[0]))
+		mtzMonth := time.Month(toInt64Value(args[1]))
+		mtzDay := int(toInt64Value(args[2]))
+		mtzHour := int(toInt64Value(args[3]))
+		mtzMin := int(toInt64Value(args[4]))
+		mtzSec := toFloat64Value(args[5])
+		mtzWholeSec := int(mtzSec)
+		mtzNsec := int((mtzSec - float64(mtzWholeSec)) * 1e9)
+		mtzLoc := time.UTC
+		if len(args) == 7 && args[6] != nil {
+			mtzTzName := toString(args[6])
+			var mtzErr error
+			mtzLoc, mtzErr = time.LoadLocation(mtzTzName)
+			if mtzErr != nil {
+				return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("MAKE_TIMESTAMPTZ: unknown timezone: %s", mtzTzName)}
+			}
+		}
+		return time.Date(mtzYear, mtzMonth, mtzDay, mtzHour, mtzMin, mtzWholeSec, mtzNsec, mtzLoc), nil
 
 	case "MAKE_TIME":
 		return evalMakeTime(args)
@@ -2198,6 +2261,34 @@ func (e *Executor) evaluateFunctionCall(
 
 	case "EPOCH_MS":
 		return evalEpochMs(args)
+
+	case "EPOCH_NS":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "EPOCH_NS requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		epochNs := toInt64Value(args[0])
+		return time.Unix(0, epochNs), nil
+
+	case "TIMEZONE":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "TIMEZONE requires 2 arguments"}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		tzName := toString(args[0])
+		tzLoc, tzErr := time.LoadLocation(tzName)
+		if tzErr != nil {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("TIMEZONE: unknown timezone: %s", tzName)}
+		}
+		tzTs, tzErr := toTime(args[1])
+		if tzErr != nil {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf("TIMEZONE: invalid timestamp: %v", tzErr)}
+		}
+		return tzTs.In(tzLoc), nil
 
 	// Interval extraction functions
 	case "TO_YEARS":

@@ -532,6 +532,14 @@ func inferFunctionResultType(
 		return dukdb.TYPE_BIGINT
 	case "EPOCH_US":
 		return dukdb.TYPE_BIGINT
+	case "TIME_BUCKET":
+		return dukdb.TYPE_TIMESTAMP
+	case "MAKE_TIMESTAMPTZ", "TIMEZONE":
+		return dukdb.TYPE_TIMESTAMP_TZ
+	case "EPOCH_NS":
+		return dukdb.TYPE_TIMESTAMP
+	case "DATEPART":
+		return dukdb.TYPE_DOUBLE
 	// Array utility functions
 	case "GENERATE_SUBSCRIPTS":
 		return dukdb.TYPE_INTEGER

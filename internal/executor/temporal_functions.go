@@ -29,6 +29,9 @@ const (
 	DatePartMillisecond DatePart = "millisecond"
 	DatePartMicrosecond DatePart = "microsecond"
 	DatePartEpoch       DatePart = "epoch"
+	DatePartISODow     DatePart = "isodow"
+	DatePartISOYear    DatePart = "isoyear"
+	DatePartNanosecond DatePart = "nanosecond"
 )
 
 // parseDatePart parses a string into a DatePart, case-insensitively.
@@ -60,6 +63,16 @@ func parseDatePart(s string) (DatePart, error) {
 		return DatePartMicrosecond, nil
 	case "epoch":
 		return DatePartEpoch, nil
+	case "isodow":
+		return DatePartISODow, nil
+	case "isoyear":
+		return DatePartISOYear, nil
+	case "weekday":
+		return DatePartDayOfWeek, nil
+	case "weekofyear":
+		return DatePartWeek, nil
+	case "nanosecond", "nanoseconds", "ns":
+		return DatePartNanosecond, nil
 	default:
 		return "", &dukdb.Error{
 			Type: dukdb.ErrorTypeBinder,
@@ -985,6 +998,20 @@ func extractPart(t time.Time, part DatePart) float64 {
 
 	case DatePartEpoch:
 		return float64(t.UnixMicro()) / 1e6
+
+	case DatePartISODow:
+		dow := int(t.Weekday())
+		if dow == 0 {
+			dow = 7
+		}
+		return float64(dow)
+
+	case DatePartISOYear:
+		year, _ := t.ISOWeek()
+		return float64(year)
+
+	case DatePartNanosecond:
+		return float64(t.Nanosecond())
 
 	default:
 		return 0
