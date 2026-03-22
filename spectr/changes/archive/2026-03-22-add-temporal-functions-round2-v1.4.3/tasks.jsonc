@@ -1,0 +1,20 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add date part specifiers (ISODOW, ISOYEAR, nanosecond) and DATEPART alias. Add TIME_BUCKET, MAKE_TIMESTAMPTZ, TIMEZONE, EPOCH_NS functions. Add type inference.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Integration tests — Test all temporal functions with NULL propagation, edge cases, type verification.",
+      "status": "completed"
+    }
+  ]
+}
