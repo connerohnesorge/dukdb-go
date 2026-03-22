@@ -152,6 +152,9 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundInSubqueryExpr:
 		return e.evaluateInSubqueryExpr(ctx, ex, row)
 
+	case *binder.BoundQuantifiedComparison:
+		return e.evaluateQuantifiedComparison(ctx, ex, row)
+
 	case *binder.BoundExtractExpr:
 		return e.evaluateExtractExpr(ctx, ex, row)
 
@@ -852,6 +855,60 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return log2Value(args[0])
 
+	case "SIGNBIT":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "SIGNBIT requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return math.Signbit(toFloat64Value(args[0])), nil
+
+	case "WIDTH_BUCKET":
+		if len(args) != 4 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "WIDTH_BUCKET requires 4 arguments"}
+		}
+		for _, a := range args {
+			if a == nil {
+				return nil, nil
+			}
+		}
+		wbValue := toFloat64Value(args[0])
+		wbMin := toFloat64Value(args[1])
+		wbMax := toFloat64Value(args[2])
+		wbBuckets := toInt64Value(args[3])
+		if wbBuckets <= 0 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "WIDTH_BUCKET: number of buckets must be positive"}
+		}
+		if wbMin >= wbMax {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "WIDTH_BUCKET: min must be less than max"}
+		}
+		if wbValue < wbMin {
+			return int64(0), nil
+		}
+		if wbValue >= wbMax {
+			return wbBuckets + 1, nil
+		}
+		wbBucket := int64((wbValue-wbMin)/(wbMax-wbMin)*float64(wbBuckets)) + 1
+		if wbBucket > wbBuckets {
+			wbBucket = wbBuckets
+		}
+		return wbBucket, nil
+
+	case "BETA":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "BETA requires 2 arguments"}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		betaA := toFloat64Value(args[0])
+		betaB := toFloat64Value(args[1])
+		lgA, _ := math.Lgamma(betaA)
+		lgB, _ := math.Lgamma(betaB)
+		lgAB, _ := math.Lgamma(betaA + betaB)
+		return math.Exp(lgA + lgB - lgAB), nil
+
 	case "GAMMA":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
@@ -1230,7 +1287,7 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return atanhValue(args[0])
 
-	case "UPPER":
+	case "UPPER", "UCASE":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeExecutor,
@@ -1242,7 +1299,7 @@ func (e *Executor) evaluateFunctionCall(
 			toString(args[0]),
 		), nil
 
-	case "LOWER":
+	case "LOWER", "LCASE":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeExecutor,
@@ -1253,6 +1310,102 @@ func (e *Executor) evaluateFunctionCall(
 		return strings.ToLower(
 			toString(args[0]),
 		), nil
+
+	case "OCTET_LENGTH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "OCTET_LENGTH requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		return int64(len(toString(args[0]))), nil
+
+	case "INITCAP":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "INITCAP requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		initcapStr := toString(args[0])
+		initcapResult := make([]byte, 0, len(initcapStr))
+		capitalizeNext := true
+		for i := 0; i < len(initcapStr); i++ {
+			ch := initcapStr[i]
+			if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+				ch == '_' || ch == '-' || ch == '.' || ch == ',' ||
+				ch == ';' || ch == ':' || ch == '!' || ch == '?' {
+				capitalizeNext = true
+				initcapResult = append(initcapResult, ch)
+			} else if capitalizeNext {
+				if ch >= 'a' && ch <= 'z' {
+					initcapResult = append(initcapResult, ch-32)
+				} else {
+					initcapResult = append(initcapResult, ch)
+				}
+				capitalizeNext = false
+			} else {
+				if ch >= 'A' && ch <= 'Z' {
+					initcapResult = append(initcapResult, ch+32)
+				} else {
+					initcapResult = append(initcapResult, ch)
+				}
+			}
+		}
+		return string(initcapResult), nil
+
+	case "SOUNDEX":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "SOUNDEX requires 1 argument"}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		soundexStr := strings.ToUpper(toString(args[0]))
+		if len(soundexStr) == 0 {
+			return "", nil
+		}
+		soundexMap := map[byte]byte{
+			'B': '1', 'F': '1', 'P': '1', 'V': '1',
+			'C': '2', 'G': '2', 'J': '2', 'K': '2', 'Q': '2', 'S': '2', 'X': '2', 'Z': '2',
+			'D': '3', 'T': '3',
+			'L': '4',
+			'M': '5', 'N': '5',
+			'R': '6',
+		}
+		soundexResult := []byte{soundexStr[0]}
+		lastCode := soundexMap[soundexStr[0]]
+		for i := 1; i < len(soundexStr) && len(soundexResult) < 4; i++ {
+			code, ok := soundexMap[soundexStr[i]]
+			if ok && code != lastCode {
+				soundexResult = append(soundexResult, code)
+				lastCode = code
+			} else if !ok {
+				lastCode = 0
+			}
+		}
+		for len(soundexResult) < 4 {
+			soundexResult = append(soundexResult, '0')
+		}
+		return string(soundexResult), nil
+
+	case "LIKE_ESCAPE":
+		if len(args) != 3 {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: "LIKE_ESCAPE requires 3 arguments (string, pattern, escape_char)"}
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		likeEscStr := toString(args[0])
+		likeEscPattern := toString(args[1])
+		likeEscChar := byte(0)
+		if args[2] != nil {
+			esc := toString(args[2])
+			if len(esc) > 0 {
+				likeEscChar = esc[0]
+			}
+		}
+		return matchLikeWithEscape(likeEscStr, likeEscPattern, likeEscChar), nil
 
 	case "LENGTH",
 		"CHAR_LENGTH",
@@ -1490,6 +1643,15 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return regexpMatchesValue(args[0], args[1])
 
+	case "REGEXP_FULL_MATCH":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("REGEXP_FULL_MATCH requires 2 arguments, got %d", len(args)),
+			}
+		}
+		return regexpFullMatchValue(args[0], args[1])
+
 	case "REGEXP_REPLACE":
 		if len(args) < 3 || len(args) > 4 {
 			return nil, &dukdb.Error{
@@ -1548,7 +1710,7 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return concatWSValue(args[0], args[1:]...)
 
-	case "STRING_SPLIT":
+	case "STRING_SPLIT", "STRING_TO_ARRAY":
 		if len(args) != 2 {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeExecutor,
@@ -2019,6 +2181,17 @@ func (e *Executor) evaluateFunctionCall(
 
 	case "TO_TIMESTAMP":
 		return evalToTimestamp(args)
+
+	case "NOW", "CURRENT_TIMESTAMP":
+		return time.Now(), nil
+
+	case "CURRENT_DATE", "TODAY":
+		now := time.Now()
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
+
+	case "CURRENT_TIME":
+		now := time.Now()
+		return time.Date(0, 1, 1, now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), now.Location()), nil
 
 	case "EPOCH":
 		return evalEpoch(args)
@@ -2599,7 +2772,7 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return nil, nil
 
-	case "LIST_CONTAINS", "ARRAY_CONTAINS":
+	case "LIST_CONTAINS", "ARRAY_CONTAINS", "LIST_HAS":
 		if len(args) < 2 {
 			return nil, &dukdb.Error{
 				Type: dukdb.ErrorTypeExecutor,
@@ -2650,6 +2823,51 @@ func (e *Executor) evaluateFunctionCall(
 			}
 		}
 		return nil, nil
+
+	case "LIST_APPEND", "ARRAY_APPEND", "ARRAY_PUSH_BACK":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("LIST_APPEND requires 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		laSlice, laOk := toSlice(args[0])
+		if !laOk {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LIST_APPEND first argument must be a list",
+			}
+		}
+		laResult := make([]any, len(laSlice)+1)
+		copy(laResult, laSlice)
+		laResult[len(laSlice)] = args[1]
+		return laResult, nil
+
+	case "LIST_PREPEND", "ARRAY_PREPEND", "ARRAY_PUSH_FRONT":
+		// DuckDB signature: LIST_PREPEND(element, list) — element FIRST
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("LIST_PREPEND requires 2 arguments, got %d", len(args)),
+			}
+		}
+		if args[1] == nil {
+			return nil, nil
+		}
+		lpList, lpListOk := toSlice(args[1])
+		if !lpListOk {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LIST_PREPEND second argument must be a list",
+			}
+		}
+		lpResult := make([]any, len(lpList)+1)
+		lpResult[0] = args[0]
+		copy(lpResult[1:], lpList)
+		return lpResult, nil
 
 	case "LIST_CONCAT", "ARRAY_CONCAT", "ARRAY_CAT":
 		if len(args) < 2 {
@@ -3325,6 +3543,9 @@ func (e *Executor) evaluateFunctionCall(
 		// JSON aggregates
 		case "JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT":
 			return nil, nil
+		// Round 3 aggregates
+		case "PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG":
+			return nil, nil
 		}
 
 		return nil, &dukdb.Error{
@@ -3558,6 +3779,95 @@ func (e *Executor) evaluateInSubqueryExpr(
 	}
 
 	return false, nil
+}
+
+func (e *Executor) evaluateQuantifiedComparison(
+	ctx *ExecutionContext,
+	expr *binder.BoundQuantifiedComparison,
+	row map[string]any,
+) (any, error) {
+	leftVal, err := e.evaluateExpr(ctx, expr.Left, row)
+	if err != nil {
+		return nil, err
+	}
+	if leftVal == nil {
+		return nil, nil // NULL op ANY/ALL -> NULL
+	}
+
+	// Execute subquery
+	plan, err := e.planner.Plan(expr.Subquery)
+	if err != nil {
+		return nil, err
+	}
+	subqueryResult, err := e.Execute(ctx.Context, plan, ctx.Args)
+	if err != nil {
+		return nil, err
+	}
+
+	if expr.Quantifier == "ANY" {
+		hasNull := false
+		for _, subRow := range subqueryResult.Rows {
+			for _, v := range subRow {
+				if v == nil {
+					hasNull = true
+				} else {
+					cmp := compareValues(leftVal, v)
+					match := applyComparisonOp(cmp, expr.Op)
+					if match {
+						return true, nil
+					}
+				}
+				break // only first column
+			}
+		}
+		if hasNull {
+			return nil, nil
+		}
+		return false, nil
+	}
+	// ALL
+	hasNull := false
+	for _, subRow := range subqueryResult.Rows {
+		for _, v := range subRow {
+			if v == nil {
+				hasNull = true
+			} else {
+				cmp := compareValues(leftVal, v)
+				match := applyComparisonOp(cmp, expr.Op)
+				if !match {
+					return false, nil
+				}
+			}
+			break // only first column
+		}
+	}
+	if len(subqueryResult.Rows) == 0 {
+		return true, nil // vacuous truth for ALL
+	}
+	if hasNull {
+		return nil, nil
+	}
+	return true, nil
+}
+
+// applyComparisonOp applies a comparison operator to a compareValues result.
+func applyComparisonOp(cmp int, op parser.BinaryOp) bool {
+	switch op {
+	case parser.OpEq:
+		return cmp == 0
+	case parser.OpNe:
+		return cmp != 0
+	case parser.OpLt:
+		return cmp < 0
+	case parser.OpLe:
+		return cmp <= 0
+	case parser.OpGt:
+		return cmp > 0
+	case parser.OpGe:
+		return cmp >= 0
+	default:
+		return false
+	}
 }
 
 // computeAggregate computes an aggregate function over a set of rows.
@@ -4012,6 +4322,105 @@ func (e *Executor) computeAggregate(
 		}
 		return computeJSONGroupObject(keys, vals)
 
+	// Conditional aggregate functions
+	case "SUM_IF":
+		sum := 0.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := e.evaluateExpr(ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						sum += toFloat64Value(val)
+						hasValue = true
+					}
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return sum, nil
+
+	case "AVG_IF":
+		avgIfSum := 0.0
+		avgIfCount := int64(0)
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := e.evaluateExpr(ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						avgIfSum += toFloat64Value(val)
+						avgIfCount++
+					}
+				}
+			}
+		}
+		if avgIfCount == 0 {
+			return nil, nil
+		}
+		return avgIfSum / float64(avgIfCount), nil
+
+	case "MIN_IF":
+		var minIfVal any
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := e.evaluateExpr(ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						if minIfVal == nil || compareValues(val, minIfVal) < 0 {
+							minIfVal = val
+						}
+					}
+				}
+			}
+		}
+		return minIfVal, nil
+
+	case "MAX_IF":
+		var maxIfVal any
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := e.evaluateExpr(ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						if maxIfVal == nil || compareValues(val, maxIfVal) > 0 {
+							maxIfVal = val
+						}
+					}
+				}
+			}
+		}
+		return maxIfVal, nil
+
 	// Time series aggregate functions
 	case "COUNT_IF":
 		if len(fn.Args) == 0 {
@@ -4132,6 +4541,126 @@ func (e *Executor) computeAggregate(
 			return nil, err
 		}
 		return computeBitXor(values)
+
+	case "PRODUCT":
+		product := 1.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					product *= toFloat64Value(val)
+					hasValue = true
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return product, nil
+
+	case "MAD":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		if len(values) == 0 {
+			return nil, nil
+		}
+		medianVal, err := computeMedian(values)
+		if err != nil {
+			return nil, err
+		}
+		if medianVal == nil {
+			return nil, nil
+		}
+		median := toFloat64Value(medianVal)
+		deviations := make([]any, 0, len(values))
+		for _, v := range values {
+			if v != nil {
+				deviations = append(deviations, math.Abs(toFloat64Value(v)-median))
+			}
+		}
+		if len(deviations) == 0 {
+			return nil, nil
+		}
+		return computeMedian(deviations)
+
+	case "FAVG":
+		sum := 0.0
+		compensation := 0.0
+		count := int64(0)
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					y := toFloat64Value(val) - compensation
+					t := sum + y
+					compensation = (t - sum) - y
+					sum = t
+					count++
+				}
+			}
+		}
+		if count == 0 {
+			return nil, nil
+		}
+		return sum / float64(count), nil
+
+	case "FSUM":
+		sum := 0.0
+		compensation := 0.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					y := toFloat64Value(val) - compensation
+					t := sum + y
+					compensation = (t - sum) - y
+					sum = t
+					hasValue = true
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return sum, nil
+
+	case "BITSTRING_AGG":
+		var bits []byte
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := e.evaluateExpr(ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					if toBool(val) {
+						bits = append(bits, '1')
+					} else {
+						bits = append(bits, '0')
+					}
+				}
+			}
+		}
+		if len(bits) == 0 {
+			return nil, nil
+		}
+		return string(bits), nil
 
 	default:
 		return nil, &dukdb.Error{
@@ -4688,6 +5217,51 @@ func matchLike(
 		pi++
 	}
 
+	return pi == len(pattern)
+}
+
+// matchLikeWithEscape performs LIKE pattern matching with a custom escape character.
+func matchLikeWithEscape(s, pattern string, escapeChar byte) bool {
+	si, pi := 0, 0
+	starIdx, matchIdx := -1, 0
+
+	for si < len(s) {
+		if pi < len(pattern) {
+			// Handle escape character
+			if escapeChar != 0 && pattern[pi] == escapeChar && pi+1 < len(pattern) {
+				pi++ // skip escape char
+				if si < len(s) && s[si] == pattern[pi] {
+					si++
+					pi++
+					continue
+				}
+				return false
+			}
+			// Handle wildcards
+			if pattern[pi] == '%' {
+				starIdx = pi
+				matchIdx = si
+				pi++
+				continue
+			}
+			if pattern[pi] == '_' || pattern[pi] == s[si] {
+				si++
+				pi++
+				continue
+			}
+		}
+		if starIdx >= 0 {
+			pi = starIdx + 1
+			matchIdx++
+			si = matchIdx
+			continue
+		}
+		return false
+	}
+	// Consume trailing %
+	for pi < len(pattern) && pattern[pi] == '%' {
+		pi++
+	}
 	return pi == len(pattern)
 }
 

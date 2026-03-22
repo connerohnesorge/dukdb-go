@@ -1,0 +1,32 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Parser bare keyword support — Add CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP to parseIdentExpr() keyword switch. Create zero-arg FunctionCall when not followed by '('.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Executor function dispatch — Add NOW/CURRENT_TIMESTAMP, CURRENT_DATE/TODAY, CURRENT_TIME cases to evaluateFunctionCall().",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Binder and cache updates — Add TODAY to type inference alongside CURRENT_DATE. Add TODAY to volatileFuncs in query_cache.go.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test all function names with and without parentheses. Test type correctness.",
+      "status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add LCASE/UCASE aliases — Add to existing LOWER/UPPER case labels in evaluateFunctionCall(). Add type inference.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add OCTET_LENGTH function — Return byte count of string. Add type inference returning TYPE_INTEGER.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add INITCAP function — Capitalize first letter of each word, lowercase rest. Add type inference returning TYPE_VARCHAR.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Add SOUNDEX function — Standard American SOUNDEX algorithm (4-char code). Add type inference returning TYPE_VARCHAR.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Add LIKE_ESCAPE function — LIKE pattern matching with custom escape character. Add matchLikeWithEscape helper. Add type inference returning TYPE_BOOLEAN.",
+      "status": "completed"
+    },
+    {
+      "id": "6",
+      "section": "",
+      "description": "Integration tests — Test all functions with NULL propagation, edge cases, type verification.",
+      "status": "completed"
+    }
+  ]
+}

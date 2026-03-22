@@ -8,7 +8,7 @@ All functions are simple scalar additions to the evaluateFunctionCall() dispatch
 
 Returns the number of bytes in a string (vs LENGTH which returns character count — though in Go, len(string) returns bytes, so LENGTH currently returns bytes too). OCTET_LENGTH is SQL standard and always returns byte count.
 
-Add near the existing LENGTH case at expr.go:1259:
+Add near the existing LENGTH case at expr.go:1257 (multi-label case "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH"):
 
 ```go
 case "OCTET_LENGTH":
@@ -26,19 +26,19 @@ case "OCTET_LENGTH":
 
 Type inference: `return dukdb.TYPE_INTEGER`
 
-Note: In Go, `len(string)` returns byte count, which is correct for OCTET_LENGTH. The existing LENGTH at line 1259 also uses `len(toString(...))` which actually returns bytes too — this is a pre-existing inconsistency (LENGTH should return rune count via `utf8.RuneCountInString()`), but fixing that is out of scope for this proposal.
+Note: In Go, `len(string)` returns byte count, which is correct for OCTET_LENGTH. The existing LENGTH at line 1257 also uses `len(toString(...))` which actually returns bytes too — this is a pre-existing inconsistency (LENGTH should return rune count via `utf8.RuneCountInString()`), but fixing that is out of scope for this proposal.
 
 ## 2. LCASE / UCASE (aliases for LOWER / UPPER)
 
 Simply add to the existing case labels:
 
 ```go
-// BEFORE (line 1235):
+// BEFORE (line 1233):
 case "UPPER":
 // AFTER:
 case "UPPER", "UCASE":
 
-// BEFORE (line 1247):
+// BEFORE (line 1245):
 case "LOWER":
 // AFTER:
 case "LOWER", "LCASE":
@@ -175,13 +175,14 @@ case "LIKE_ESCAPE":
             escapeChar = esc[0]
         }
     }
-    // Convert LIKE pattern to regex with custom escape
-    // Reuse existing LIKE matching logic if available, or build regex
-    matched := matchLikePattern(s, pattern, escapeChar)
+    // Existing matchLike(s, pattern, caseSensitive) at expr.go:4777 does NOT support
+    // escape characters. Must create new matchLikeWithEscape(s, pattern, escapeChar) helper
+    // that extends the existing matchLike logic to handle custom escape characters.
+    matched := matchLikeWithEscape(s, pattern, escapeChar)
     return matched, nil
 ```
 
-Note: Need to check if there's an existing `matchLikePattern()` helper or similar LIKE matching code in the executor.
+Note: The existing `matchLike(s, pattern, caseSensitive)` at expr.go:4777 only supports case-sensitivity toggling, not custom escape characters. A new helper `matchLikeWithEscape()` must be created that converts the LIKE pattern to a regex while treating escapeChar as a literal escape prefix.
 
 Type inference: `return dukdb.TYPE_BOOLEAN`
 
@@ -198,14 +199,20 @@ case "LIKE_ESCAPE":
 
 LCASE/UCASE: Add alongside existing UPPER/LOWER type inference entries.
 
+## NULL Handling Note
+
+Existing string functions (UPPER, LOWER, LENGTH, etc.) do NOT explicitly check for NULL — they use `toString()` which converts nil to empty string. The new functions (OCTET_LENGTH, INITCAP, SOUNDEX) use explicit `if args[0] == nil { return nil, nil }` for SQL-standard NULL propagation. This is the correct behavior for new functions — the existing functions have a pre-existing inconsistency where NULL inputs produce empty strings instead of NULL.
+
 ## Helper Signatures Reference (Verified)
 
-- `evaluateFunctionCall()` — expr.go:661 — function dispatch
+- `evaluateFunctionCall()` — expr.go:659 — function dispatch
 - `inferFunctionResultType()` — binder/utils.go:347 — type inference
-- UPPER case — expr.go:1235 — existing uppercase function
-- LOWER case — expr.go:1247 — existing lowercase function
-- LENGTH case — expr.go:1259 — existing length function
-- `toString()` — expr.go:4202 — any → string conversion
+- Main switch fn.Name — expr.go:717 — function name dispatch (ABS at line 718)
+- UPPER case — expr.go:1233 — existing uppercase function
+- LOWER case — expr.go:1245 — existing lowercase function
+- LENGTH case — expr.go:1257 — multi-label case (LENGTH, CHAR_LENGTH, CHARACTER_LENGTH)
+- `toString()` — expr.go:4425 — any → string conversion
+- `matchLike()` — expr.go:4777 — existing LIKE matching (no escape char support)
 - Error pattern: `&dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf(...)}`
 
 ## Testing Strategy

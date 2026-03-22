@@ -636,6 +636,9 @@ func (te *TableExtractor) visitExpr(expr Expr) {
 		// Subquery in WHERE...IN clause
 		te.VisitSelectStmt(e.Subquery)
 
+	case *QuantifiedComparisonExpr:
+		te.VisitSelectStmt(e.Subquery)
+
 	case *ExistsExpr:
 		// Subquery in WHERE EXISTS clause
 		te.VisitSelectStmt(e.Subquery)

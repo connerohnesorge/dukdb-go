@@ -899,7 +899,9 @@ func isSystemTableFunction(name string) bool {
 		"duckdb_keywords",
 		"duckdb_extensions",
 		"duckdb_memory_usage",
-		"duckdb_temp_directory":
+		"duckdb_temp_directory",
+		"duckdb_schemas",
+		"duckdb_types":
 		return true
 	default:
 		return false
@@ -951,6 +953,10 @@ func (b *Binder) bindSystemTableFunction(ref parser.TableRef) (*BoundTableRef, e
 		columns = metadata.DuckDBMemoryUsageColumns()
 	case "duckdb_temp_directory":
 		columns = metadata.DuckDBTempDirectoryColumns()
+	case "duckdb_schemas":
+		columns = metadata.DuckDBSchemasColumns()
+	case "duckdb_types":
+		columns = metadata.DuckDBTypesColumns()
 	default:
 		return nil, b.errorf("unknown system table function: %s", tableFunc.Name)
 	}

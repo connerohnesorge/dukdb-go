@@ -186,6 +186,18 @@ func (*BoundInSubqueryExpr) boundExprNode() {}
 
 func (*BoundInSubqueryExpr) ResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
 
+// BoundQuantifiedComparison represents a bound expr op ANY|ALL (subquery).
+type BoundQuantifiedComparison struct {
+	Left       BoundExpr
+	Op         parser.BinaryOp
+	Quantifier string // "ANY" or "ALL"
+	Subquery   *BoundSelectStmt
+}
+
+func (*BoundQuantifiedComparison) boundExprNode() {}
+
+func (*BoundQuantifiedComparison) ResultType() dukdb.Type { return dukdb.TYPE_BOOLEAN }
+
 // BoundExistsExpr represents a bound EXISTS expression.
 type BoundExistsExpr struct {
 	Subquery *BoundSelectStmt

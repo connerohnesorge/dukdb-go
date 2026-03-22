@@ -8,7 +8,7 @@ Three areas of change: (1) new date part specifiers in parseDatePart/extractPart
 
 ### 1.1 parseDatePart() additions (line 35)
 
-Add to the switch at temporal_functions.go:36-62:
+Add to the switch at temporal_functions.go:36-68 (default error case at 63-68):
 
 ```go
 case "isodow":
@@ -66,7 +66,7 @@ Note on DayOfWeek behavior:
 DATEPART is an alias for DATE_PART. Add to the existing case:
 
 ```go
-// BEFORE (expr.go:1961):
+// BEFORE (expr.go:1959):
 case "DATE_PART":
 // AFTER:
 case "DATE_PART", "DATEPART":
@@ -132,7 +132,7 @@ case "TIME_BUCKET":
     return time.UnixMicro(bucketStart), nil
 ```
 
-Note: Need helper `intervalToMicros(interval)` to convert Interval to total microseconds. The Interval type has Months, Days, Micros fields (types.go). For TIME_BUCKET, only the Micros and Days fields are meaningful (months have variable length).
+Note: Need helper `intervalToMicros(interval)` to convert Interval to total microseconds. The Interval type has Days, Months, Micros fields (types.go — field order is Days, Months, Micros). For TIME_BUCKET, only the Micros and Days fields are meaningful (months have variable length). Note: There are two Interval types in the codebase — `dukdb.Interval` (types.go, the public type) and a local `executor.Interval` (temporal_functions.go:77-81). Use `dukdb.Interval` for consistency.
 
 ```go
 func intervalToMicros(iv dukdb.Interval) int64 {
@@ -158,11 +158,11 @@ case "MAKE_TIMESTAMPTZ":
     for _, a := range args[:6] {
         if a == nil { return nil, nil }
     }
-    year := int(toInt64(args[0]))
-    month := time.Month(toInt64(args[1]))
-    day := int(toInt64(args[2]))
-    hour := int(toInt64(args[3]))
-    min := int(toInt64(args[4]))
+    year := int(toInt64Value(args[0]))
+    month := time.Month(toInt64Value(args[1]))
+    day := int(toInt64Value(args[2]))
+    hour := int(toInt64Value(args[3]))
+    min := int(toInt64Value(args[4]))
     sec := toFloat64Value(args[5])
     wholeSec := int(sec)
     nsec := int((sec - float64(wholeSec)) * 1e9)
@@ -234,7 +234,7 @@ case "EPOCH_NS":
         }
     }
     if args[0] == nil { return nil, nil }
-    ns := toInt64(args[0])
+    ns := toInt64Value(args[0])
     return time.Unix(0, ns), nil
 ```
 
@@ -242,19 +242,20 @@ Type inference: `return dukdb.TYPE_TIMESTAMP`
 
 ## Helper Signatures Reference (Verified)
 
-- `evaluateFunctionCall()` — expr.go:661 — function dispatch
-- DATE_PART case — expr.go:1961 — existing date part dispatch
+- `evaluateFunctionCall()` — expr.go:659 — function dispatch
+- DATE_PART case — expr.go:1959 — existing date part dispatch
 - `evalDatePart()` — temporal_functions.go:904 — calls parseDatePart + extractPart
-- `parseDatePart()` — temporal_functions.go:35 — string → DatePart mapping
+- `parseDatePart()` — temporal_functions.go:35 — string → DatePart mapping (switch at 36-68)
 - `extractPart()` — temporal_functions.go:946 — DatePart → float64 extraction
 - DatePart constants — temporal_functions.go:19-31 — Year, Quarter, Month, etc.
-- MAKE_TIMESTAMP — expr.go:1974 — `evalMakeTimestamp(args)`
+- MAKE_TIMESTAMP — expr.go:1972 — `evalMakeTimestamp(args)`
 - MAKE_DATE — expr.go:1971 — `evalMakeDate(args)`
-- `toTime()` — temporal_functions.go helper for any → time.Time
-- `toInt64()` — expr.go numeric conversion
-- `toFloat64Value()` — expr.go numeric conversion
-- `toString()` — expr.go:4202 — any → string
-- Interval type — dukdb.Interval{Months int32, Days int32, Micros int64}
+- `toTime()` — temporal_functions.go:708 — any → time.Time
+- `toInt64Value()` — expr.go:4487 — integer conversion (NOT toInt64)
+- `toFloat64Value()` — expr.go:4509 — numeric conversion
+- `toString()` — expr.go:4425 — any → string
+- Interval type — dukdb.Interval{Days int32, Months int32, Micros int64} (field order: Days, Months, Micros)
+- Local Interval — temporal_functions.go:77-81 — duplicate type (prefer dukdb.Interval)
 - `inferFunctionResultType()` — binder/utils.go:347 — type inference
 - Error pattern: `&dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf(...)}`
 

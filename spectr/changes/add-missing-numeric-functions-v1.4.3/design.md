@@ -45,7 +45,7 @@ case "WIDTH_BUCKET":
     value := toFloat64Value(args[0])
     minVal := toFloat64Value(args[1])
     maxVal := toFloat64Value(args[2])
-    numBuckets := toInt64(args[3])
+    numBuckets := toInt64Value(args[3])
     if numBuckets <= 0 {
         return nil, &dukdb.Error{
             Type: dukdb.ErrorTypeExecutor,
@@ -233,17 +233,18 @@ case "MIN_IF", "MAX_IF":
 
 ## Helper Signatures Reference (Verified)
 
-- `evaluateFunctionCall()` — expr.go:661 — scalar function dispatch
+- `evaluateFunctionCall()` — expr.go:659 — scalar function dispatch
 - `computeAggregate()` — physical_aggregate.go:295 — aggregate dispatch
-- `isAggregateFunc()` — operator.go:99-122 — aggregate name registration
-- COUNT_IF pattern — physical_aggregate.go:764 — conditional aggregate reference
+- `isAggregateFunc()` — operator.go:99-124 — aggregate name registration
+- COUNT_IF pattern — physical_aggregate.go:765 — conditional aggregate reference
+- FILTER clause pre-filtering — physical_aggregate.go:308-319 — already implemented
 - `inferFunctionResultType()` — binder/utils.go:347 — type inference
-- `toFloat64Value()` — expr.go — numeric conversion
-- `toInt64()` — expr.go — integer conversion
-- `toBool()` — expr.go:4184 — boolean conversion
-- `compareValues()` — expr.go — value comparison for MIN/MAX
+- `toFloat64Value()` — expr.go:4509 — numeric conversion
+- `toInt64Value()` — expr.go:4487 — integer conversion (NOT toInt64)
+- `toBool()` — expr.go:4461 — boolean conversion
+- `compareValues()` — expr.go:4575 — value comparison for MIN/MAX
 - `math.Signbit()` — Go stdlib — sign bit check
-- `math.Lgamma()` — Go stdlib — log gamma function
+- `math.Lgamma()` — Go stdlib — log gamma function (returns lgamma float64, sign int)
 - Error pattern: `&dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: fmt.Sprintf(...)}`
 
 ## Testing Strategy

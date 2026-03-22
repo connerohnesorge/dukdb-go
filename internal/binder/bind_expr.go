@@ -60,6 +60,8 @@ func (b *Binder) bindExpr(
 		return b.bindInListExpr(e)
 	case *parser.InSubqueryExpr:
 		return b.bindInSubqueryExpr(e)
+	case *parser.QuantifiedComparisonExpr:
+		return b.bindQuantifiedComparisonExpr(e)
 	case *parser.ExistsExpr:
 		return b.bindExistsExpr(e)
 	case *parser.StarExpr:
@@ -662,6 +664,27 @@ func (b *Binder) bindInSubqueryExpr(
 		Expr:     expr,
 		Subquery: subquery,
 		Not:      e.Not,
+	}, nil
+}
+
+func (b *Binder) bindQuantifiedComparisonExpr(
+	e *parser.QuantifiedComparisonExpr,
+) (*BoundQuantifiedComparison, error) {
+	left, err := b.bindExpr(e.Left, dukdb.TYPE_ANY)
+	if err != nil {
+		return nil, err
+	}
+
+	subquery, err := b.bindSelect(e.Subquery)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BoundQuantifiedComparison{
+		Left:       left,
+		Op:         e.Op,
+		Quantifier: e.Quantifier,
+		Subquery:   subquery,
 	}, nil
 }
 

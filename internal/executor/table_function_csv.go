@@ -138,6 +138,10 @@ func (e *Executor) executeTableFunctionScan(
 		return e.executeDuckDBExtensions(ctx, plan)
 	case "duckdb_memory_usage":
 		return e.executeDuckDBMemoryUsage(ctx, plan)
+	case "duckdb_schemas":
+		return e.executeDuckDBSchemas(ctx, plan)
+	case "duckdb_types":
+		return e.executeDuckDBTypes(ctx, plan)
 	case "duckdb_temp_directory":
 		return e.executeDuckDBTempDirectory(ctx, plan)
 	// Series generation functions

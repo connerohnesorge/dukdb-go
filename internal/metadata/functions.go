@@ -66,6 +66,8 @@ func GetFunctions(registry *pgfunctions.FunctionAliasRegistry, databaseName stri
 		"duckdb_keywords",
 		"duckdb_extensions",
 		"duckdb_memory_usage",
+		"duckdb_schemas",
+		"duckdb_types",
 		"duckdb_temp_directory",
 	}
 

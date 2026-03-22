@@ -3438,7 +3438,7 @@ func isAggregateFunction(name string) bool {
 		// JSON aggregates
 		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
 		// Time series aggregates
-		"COUNT_IF", "FIRST", "LAST", "ANY_VALUE",
+		"COUNT_IF", "SUM_IF", "AVG_IF", "MIN_IF", "MAX_IF", "FIRST", "LAST", "ANY_VALUE",
 		"ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY",
 		"HISTOGRAM",
 		// Boolean aggregates
@@ -3449,7 +3449,9 @@ func isAggregateFunction(name string) bool {
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
 		"CORR", "COVAR_POP", "COVAR_SAMP",
 		"REGR_COUNT", "REGR_AVGX", "REGR_AVGY",
-		"REGR_SXX", "REGR_SYY", "REGR_SXY":
+		"REGR_SXX", "REGR_SYY", "REGR_SXY",
+		// Multiplicative, deviation, and precision aggregates
+		"PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG":
 		return true
 	}
 	return false

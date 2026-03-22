@@ -12,7 +12,8 @@ These are among the most commonly used SQL functions. Any DuckDB-compatible appl
 
 - **Parser**: Add CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP as bare keywords (no parentheses required) in parseIdentExpr() at parser.go:5035-5083
 - **Executor**: Add function dispatch cases in evaluateFunctionCall() for NOW, CURRENT_TIMESTAMP, CURRENT_DATE, TODAY, CURRENT_TIME
-- **Binder**: Already handles type inference (utils.go:475-479) — no changes needed
+- **Binder**: Add TODAY to type inference (utils.go:475-479) alongside CURRENT_DATE
+- **Query Cache**: Add TODAY to volatileFuncs map (query_cache.go:211-217)
 
 ## Files Affected
 

@@ -916,6 +916,17 @@ func (s *Schema) DropType(name string) error {
 	return nil
 }
 
+// ListTypes returns all user-defined types in this schema.
+func (s *Schema) ListTypes() []*TypeEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	types := make([]*TypeEntry, 0, len(s.types))
+	for _, t := range s.types {
+		types = append(types, t)
+	}
+	return types
+}
+
 // GetType returns a user-defined type by name (case-insensitive).
 func (s *Schema) GetType(name string) (*TypeEntry, bool) {
 	s.mu.RLock()
@@ -1123,6 +1134,22 @@ func (c *Catalog) GetType(name, schemaName string) (*TypeEntry, bool) {
 		return nil, false
 	}
 	return schema.GetType(name)
+}
+
+// ListTypes returns all user-defined types across all schemas.
+func (c *Catalog) ListTypes() []*TypeEntry {
+	c.mu.RLock()
+	schemas := make([]*Schema, 0, len(c.schemas))
+	for _, s := range c.schemas {
+		schemas = append(schemas, s)
+	}
+	c.mu.RUnlock()
+
+	var result []*TypeEntry
+	for _, s := range schemas {
+		result = append(result, s.ListTypes()...)
+	}
+	return result
 }
 
 // ---------- Macro Catalog Methods ----------
