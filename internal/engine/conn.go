@@ -243,6 +243,8 @@ func (c *EngineConn) Execute(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE
+	exec.SetDatabaseManager(c.engine.dbManager)
 	// Set extension registry for duckdb_extensions()
 	if c.engine.extensions != nil {
 		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
@@ -1148,6 +1150,8 @@ func (c *EngineConn) executeInnerStmt(ctx context.Context, stmt parser.Statement
 
 	exec := executor.NewExecutor(c.engine.catalog, c.engine.storage)
 	exec.SetConnection(c)
+	// Set database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE
+	exec.SetDatabaseManager(c.engine.dbManager)
 	if c.engine.extensions != nil {
 		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
 	}
@@ -1191,6 +1195,8 @@ func (c *EngineConn) queryInnerStmt(ctx context.Context, stmt parser.Statement, 
 
 	exec := executor.NewExecutor(c.engine.catalog, c.engine.storage)
 	exec.SetConnection(c)
+	// Set database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE
+	exec.SetDatabaseManager(c.engine.dbManager)
 	if c.engine.extensions != nil {
 		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
 	}
@@ -1473,6 +1479,8 @@ func (c *EngineConn) Query(
 	)
 	// Set connection for accessing session-level settings
 	exec.SetConnection(c)
+	// Set database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE
+	exec.SetDatabaseManager(c.engine.dbManager)
 	// Set extension registry for duckdb_extensions()
 	if c.engine.extensions != nil {
 		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
@@ -2720,6 +2728,8 @@ func (c *EngineConn) QueryStreaming(
 		c.engine.storage,
 	)
 	exec.SetConnection(c)
+	// Set database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE
+	exec.SetDatabaseManager(c.engine.dbManager)
 	if c.engine.extensions != nil {
 		exec.SetExtensionRegistry(&extensionRegistryAdapter{registry: c.engine.extensions})
 	}

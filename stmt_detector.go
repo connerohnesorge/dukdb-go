@@ -137,6 +137,8 @@ func keywordToStmtType(keyword string) StmtType {
 		return STATEMENT_TYPE_LOAD
 	case "EXPORT":
 		return STATEMENT_TYPE_EXPORT
+	case "IMPORT":
+		return STATEMENT_TYPE_COPY_DATABASE
 	case "ATTACH":
 		return STATEMENT_TYPE_ATTACH
 	case "DETACH":
