@@ -98,7 +98,7 @@ type PhysicalOperator interface {
 // This list should match the functions implemented in expr.go computeAggregate.
 func isAggregateFunc(name string) bool {
 	switch name {
-	case "COUNT", "SUM", "AVG", "MIN", "MAX",
+	case "COUNT", "SUM", "AVG", "MEAN", "MIN", "MAX",
 		// Statistical aggregates
 		"MEDIAN", "MODE", "QUANTILE", "PERCENTILE_CONT", "PERCENTILE_DISC",
 		"ENTROPY", "SKEWNESS", "KURTOSIS",
@@ -109,15 +109,23 @@ func isAggregateFunc(name string) bool {
 		"STRING_AGG", "GROUP_CONCAT", "LISTAGG", "LIST", "ARRAY_AGG", "LIST_DISTINCT",
 		// JSON aggregates
 		"JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT",
+		// Boolean aggregates
+		"BOOL_AND", "BOOL_OR", "EVERY",
+		// Bitwise aggregates
+		"BIT_AND", "BIT_OR", "BIT_XOR",
 		// Time series aggregates
-		"COUNT_IF", "SUM_IF", "AVG_IF", "MIN_IF", "MAX_IF", "FIRST", "LAST", "ANY_VALUE",
+		"COUNT_IF", "SUM_IF", "AVG_IF", "MIN_IF", "MAX_IF",
+		"FIRST", "LAST", "ANY_VALUE", "ARBITRARY",
 		"ARGMIN", "ARG_MIN", "ARGMAX", "ARG_MAX", "MIN_BY", "MAX_BY",
 		"HISTOGRAM",
 		// Regression aggregates
 		"REGR_SLOPE", "REGR_INTERCEPT", "REGR_R2",
+		"REGR_COUNT", "REGR_AVGX", "REGR_AVGY", "REGR_SXX", "REGR_SYY", "REGR_SXY",
 		"CORR", "COVAR_POP", "COVAR_SAMP",
 		// Multiplicative, deviation, and precision aggregates
-		"PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG":
+		"PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG",
+		// Geometric and weighted aggregates
+		"GEOMETRIC_MEAN", "GEOMEAN", "WEIGHTED_AVG":
 		return true
 	}
 	return false
@@ -2304,8 +2312,36 @@ func (e *Executor) executeInsert(
 				[]any,
 				len(plan.TableDef.Columns),
 			)
+			specifiedCols := make(map[int]bool, len(plan.Columns))
 			for i, col := range sourceResult.Columns {
 				values[plan.Columns[i]] = row[col]
+				specifiedCols[plan.Columns[i]] = true
+			}
+
+			// Fill in default values for unspecified columns
+			for i, col := range plan.TableDef.Columns {
+				if !specifiedCols[i] && col.HasDefault {
+					values[i] = col.DefaultValue
+				}
+			}
+
+			// Check NOT NULL constraints
+			for i, col := range plan.TableDef.Columns {
+				if !col.Nullable && values[i] == nil {
+					isPK := false
+					for _, pkIdx := range pkIndices {
+						if pkIdx == i {
+							isPK = true
+							break
+						}
+					}
+					if !isPK {
+						return nil, constraintErrorf(
+							"NOT NULL constraint failed: column %q does not allow NULL values",
+							col.Name,
+						)
+					}
+				}
 			}
 			conflictHandled, err := checkPrimaryKey(values)
 			if err != nil {
@@ -2380,12 +2416,41 @@ func (e *Executor) executeInsert(
 
 			// Evaluate each expression in the row
 			values := make([]any, len(plan.TableDef.Columns))
+			specifiedCols := make(map[int]bool, len(plan.Columns))
 			for i, expr := range valueRow {
 				val, err := e.evaluateExpr(ctx, expr, nil)
 				if err != nil {
 					return nil, err
 				}
 				values[plan.Columns[i]] = val
+				specifiedCols[plan.Columns[i]] = true
+			}
+
+			// Fill in default values for unspecified columns
+			for i, col := range plan.TableDef.Columns {
+				if !specifiedCols[i] && col.HasDefault {
+					values[i] = col.DefaultValue
+				}
+			}
+
+			// Check NOT NULL constraints
+			for i, col := range plan.TableDef.Columns {
+				if !col.Nullable && values[i] == nil {
+					// Check if this is a PK column (PK null check is done separately)
+					isPK := false
+					for _, pkIdx := range pkIndices {
+						if pkIdx == i {
+							isPK = true
+							break
+						}
+					}
+					if !isPK {
+						return nil, constraintErrorf(
+							"NOT NULL constraint failed: column %q does not allow NULL values",
+							col.Name,
+						)
+					}
+				}
 			}
 			conflictHandled, err := checkPrimaryKey(values)
 			if err != nil {

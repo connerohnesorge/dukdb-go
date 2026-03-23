@@ -757,6 +757,95 @@ func (e *Executor) executeAlterTable(
 			}
 		}
 
+	case parser.AlterTableSetColumnDefault:
+		colIdx := -1
+		for i, col := range tableDef.Columns {
+			if strings.EqualFold(col.Name, plan.AlterColumn) {
+				colIdx = i
+				break
+			}
+		}
+		if colIdx == -1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("column %q not found in table %q", plan.AlterColumn, plan.Table),
+			}
+		}
+		// Evaluate the default expression to get the value
+		defaultVal, err := e.evaluateExpr(ctx, plan.DefaultExpr, nil)
+		if err != nil {
+			return nil, err
+		}
+		tableDef.Columns[colIdx].DefaultValue = defaultVal
+		tableDef.Columns[colIdx].HasDefault = true
+
+	case parser.AlterTableDropColumnDefault:
+		colIdx := -1
+		for i, col := range tableDef.Columns {
+			if strings.EqualFold(col.Name, plan.AlterColumn) {
+				colIdx = i
+				break
+			}
+		}
+		if colIdx == -1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("column %q not found in table %q", plan.AlterColumn, plan.Table),
+			}
+		}
+		tableDef.Columns[colIdx].DefaultValue = nil
+		tableDef.Columns[colIdx].HasDefault = false
+
+	case parser.AlterTableSetColumnNotNull:
+		colIdx := -1
+		for i, col := range tableDef.Columns {
+			if strings.EqualFold(col.Name, plan.AlterColumn) {
+				colIdx = i
+				break
+			}
+		}
+		if colIdx == -1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("column %q not found in table %q", plan.AlterColumn, plan.Table),
+			}
+		}
+		// Check existing data for NULLs
+		if storageTable, ok := e.storage.GetTable(plan.Table); ok {
+			for rgIdx := 0; rgIdx < storageTable.RowGroupCount(); rgIdx++ {
+				rg := storageTable.GetRowGroup(rgIdx)
+				if rg == nil {
+					continue
+				}
+				for rowIdx := 0; rowIdx < rg.Count(); rowIdx++ {
+					val := rg.GetValue(rowIdx, colIdx)
+					if val == nil {
+						return nil, &dukdb.Error{
+							Type: dukdb.ErrorTypeConstraint,
+							Msg:  fmt.Sprintf("column %q contains NULL values, cannot set NOT NULL", plan.AlterColumn),
+						}
+					}
+				}
+			}
+		}
+		tableDef.Columns[colIdx].Nullable = false
+
+	case parser.AlterTableDropColumnNotNull:
+		colIdx := -1
+		for i, col := range tableDef.Columns {
+			if strings.EqualFold(col.Name, plan.AlterColumn) {
+				colIdx = i
+				break
+			}
+		}
+		if colIdx == -1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("column %q not found in table %q", plan.AlterColumn, plan.Table),
+			}
+		}
+		tableDef.Columns[colIdx].Nullable = true
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

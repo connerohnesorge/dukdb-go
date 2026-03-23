@@ -379,7 +379,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		// Return as int64 if all inputs were integers
 		return sum, nil
 
-	case "AVG":
+	case "AVG", "MEAN":
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -871,7 +871,7 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeCountIf(values)
 
-	case "FIRST", "ANY_VALUE":
+	case "FIRST", "ANY_VALUE", "ARBITRARY":
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -1310,6 +1310,65 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 			return nil, nil
 		}
 		return string(bits), nil
+
+	case "GEOMETRIC_MEAN", "GEOMEAN":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		var logSum float64
+		count := 0
+		for _, val := range values {
+			if val == nil {
+				continue
+			}
+			f := toFloat64Value(val)
+			if f <= 0 {
+				// Non-positive values: geometric mean is undefined
+				return nil, nil
+			}
+			logSum += math.Log(f)
+			count++
+		}
+		if count == 0 {
+			return nil, nil
+		}
+		return math.Exp(logSum / float64(count)), nil
+
+	case "WEIGHTED_AVG":
+		if len(fn.Args) < 2 {
+			return nil, fmt.Errorf("WEIGHTED_AVG requires 2 arguments (value, weight)")
+		}
+		valValues, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		weightValues, err := op.collectValues(fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		var sumVW, sumW float64
+		hasValues := false
+		for i, val := range valValues {
+			if val == nil {
+				continue
+			}
+			if i >= len(weightValues) || weightValues[i] == nil {
+				continue
+			}
+			v := toFloat64Value(val)
+			w := toFloat64Value(weightValues[i])
+			sumVW += v * w
+			sumW += w
+			hasValues = true
+		}
+		if !hasValues || sumW == 0 {
+			return nil, nil
+		}
+		return sumVW / sumW, nil
 
 	default:
 		return nil, &dukdb.Error{
