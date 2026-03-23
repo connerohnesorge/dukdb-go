@@ -1,6 +1,6 @@
 ## 0. Remove Existing Partial Implementation
 
-- [ ] 0.1 Remove `handleSummarize()` from `internal/engine/conn.go` (lines ~811-949) and its dispatch call site. This partial implementation bypasses the planner/executor architecture and has incorrect column names (`unique_count`, `null_count`), missing columns (`q25`, `q50`, `q75`), wrong `count` semantics (total rows instead of non-NULL count), biased std dev (N instead of N-1), and string-based min/max comparison. The `toFloat64()` helper can be kept or moved to a shared utility.
+- [x] 0.1 Remove `handleSummarize()` from `internal/engine/conn.go` (lines ~811-949) and its dispatch call site. This partial implementation bypasses the planner/executor architecture and has incorrect column names (`unique_count`, `null_count`), missing columns (`q25`, `q50`, `q75`), wrong `count` semantics (total rows instead of non-NULL count), biased std dev (N instead of N-1), and string-based min/max comparison. The `toFloat64()` helper can be kept or moved to a shared utility.
 
 ## 1. Binder
 
