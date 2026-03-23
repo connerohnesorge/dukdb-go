@@ -9,13 +9,13 @@
       "id": "7.1",
       "section": "Operator Registration",
       "description": "Register `PhysicalPlanExportDatabase` and `PhysicalPlanImportDatabase` operator types in `internal/executor/operator.go`.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Operator Registration",
       "description": "Add execution dispatch in the main executor switch statement.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"

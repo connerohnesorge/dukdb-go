@@ -9,49 +9,49 @@
       "id": "5.1",
       "section": "Executor — EXPORT DATABASE",
       "description": "Create `internal/executor/export_database.go` with `executeExportDatabase()` function.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.2",
       "section": "Executor — EXPORT DATABASE",
       "description": "Implement directory creation and validation.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.3",
       "section": "Executor — EXPORT DATABASE",
       "description": "Generate `schema.sql` with CREATE SCHEMA, CREATE TYPE, CREATE SEQUENCE, CREATE TABLE (topologically sorted), CREATE VIEW, CREATE MACRO statements.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.4",
       "section": "Executor — EXPORT DATABASE",
       "description": "Implement topological sort for tables based on foreign key dependencies (Kahn's algorithm; fall back to alphabetical on cycles).",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.5",
       "section": "Executor — EXPORT DATABASE",
       "description": "Export data files using existing COPY TO infrastructure for each table. Support FORMAT option (CSV default, PARQUET, JSON).",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.6",
       "section": "Executor — EXPORT DATABASE",
       "description": "Generate `load.sql` with COPY FROM statements matching the exported data files.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.7",
       "section": "Executor — EXPORT DATABASE",
       "description": "Handle OPTIONS passthrough (DELIMITER, HEADER, NULL, etc.) to COPY TO.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "5.8",
       "section": "Executor — EXPORT DATABASE",
       "description": "Add integration test: create tables with data, EXPORT DATABASE, verify schema.sql and load.sql content, verify data files exist.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "5"

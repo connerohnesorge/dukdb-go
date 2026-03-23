@@ -9,13 +9,13 @@
       "id": "8.1",
       "section": "Parser: Multiple Statement Parsing",
       "description": "Ensure parser can handle multiple semicolon-separated statements from a string (for executing schema.sql and load.sql). Add `ParseMultiple()` if not already available.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "Parser: Multiple Statement Parsing",
       "description": "Add unit test for parsing multi-statement SQL strings.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"
