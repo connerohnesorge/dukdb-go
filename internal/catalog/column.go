@@ -27,6 +27,16 @@ type ColumnDef struct {
 
 	// Comment is an optional user-defined comment for the column.
 	Comment string
+
+	// IsGenerated indicates this is a generated (computed) column.
+	IsGenerated bool
+
+	// GeneratedExpr is the SQL expression text for generated columns.
+	GeneratedExpr string
+
+	// GeneratedStored indicates a STORED generated column (value persisted).
+	// When false, the column is VIRTUAL (computed on read).
+	GeneratedStored bool
 }
 
 // NewColumnDef creates a new ColumnDef instance.
@@ -63,12 +73,15 @@ func (c *ColumnDef) WithDefault(
 // Clone creates a deep copy of the ColumnDef.
 func (c *ColumnDef) Clone() *ColumnDef {
 	return &ColumnDef{
-		Name:         c.Name,
-		Type:         c.Type,
-		TypeInfo:     c.TypeInfo,
-		Nullable:     c.Nullable,
-		DefaultValue: c.DefaultValue,
-		HasDefault:   c.HasDefault,
+		Name:            c.Name,
+		Type:            c.Type,
+		TypeInfo:        c.TypeInfo,
+		Nullable:        c.Nullable,
+		DefaultValue:    c.DefaultValue,
+		HasDefault:      c.HasDefault,
+		IsGenerated:     c.IsGenerated,
+		GeneratedExpr:   c.GeneratedExpr,
+		GeneratedStored: c.GeneratedStored,
 	}
 }
 

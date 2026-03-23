@@ -427,18 +427,29 @@ type ForeignKeyRef struct {
 	OnUpdate ForeignKeyAction // ON UPDATE action (default NoAction)
 }
 
+// GeneratedKind specifies whether a generated column is STORED or VIRTUAL.
+type GeneratedKind int
+
+const (
+	GeneratedKindStored  GeneratedKind = iota
+	GeneratedKindVirtual
+)
+
 // ColumnDefClause represents a column definition in CREATE TABLE.
 type ColumnDefClause struct {
-	Name       string
-	DataType   dukdb.Type
-	TypeInfo   dukdb.TypeInfo
-	NotNull    bool
-	Default    Expr
-	PrimaryKey bool
-	Unique     bool            // Column-level UNIQUE constraint
-	Check      Expr            // Column-level CHECK expression
-	Collation  string          // COLLATE collation_name (empty = default)
-	ForeignKey *ForeignKeyRef  // Column-level REFERENCES constraint
+	Name          string
+	DataType      dukdb.Type
+	TypeInfo      dukdb.TypeInfo
+	NotNull       bool
+	Default       Expr
+	PrimaryKey    bool
+	Unique        bool            // Column-level UNIQUE constraint
+	Check         Expr            // Column-level CHECK expression
+	Collation     string          // COLLATE collation_name (empty = default)
+	ForeignKey    *ForeignKeyRef  // Column-level REFERENCES constraint
+	IsGenerated   bool            // GENERATED ALWAYS AS
+	GeneratedExpr Expr            // The expression for generated columns
+	GeneratedKind GeneratedKind   // STORED or VIRTUAL
 }
 
 // DropTableStmt represents a DROP TABLE statement.

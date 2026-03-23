@@ -2467,6 +2467,8 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 			"CHECK":      true,
 			"REFERENCES": true,
 			"COLLATE":    true,
+			"GENERATED":  true,
+			"AS":         true,
 		},
 	)
 	if err != nil {
@@ -2534,6 +2536,55 @@ func (p *parser) parseColumnDef() (ColumnDefClause, error) {
 				return col, err
 			}
 			col.ForeignKey = ref
+		case p.isKeyword("GENERATED"):
+			p.advance() // consume GENERATED
+			if err := p.expectKeyword("ALWAYS"); err != nil {
+				return col, err
+			}
+			if err := p.expectKeyword("AS"); err != nil {
+				return col, err
+			}
+			if _, err := p.expect(tokenLParen); err != nil {
+				return col, err
+			}
+			expr, err := p.parseExpr()
+			if err != nil {
+				return col, err
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return col, err
+			}
+			col.IsGenerated = true
+			col.GeneratedExpr = expr
+			col.GeneratedKind = GeneratedKindStored // Default to STORED
+			if p.isKeyword("STORED") {
+				p.advance()
+			} else if p.isKeyword("VIRTUAL") {
+				p.advance()
+				col.GeneratedKind = GeneratedKindVirtual
+			}
+		case p.isKeyword("AS"):
+			// Shorthand: AS (expr) [STORED|VIRTUAL]
+			p.advance() // consume AS
+			if _, err := p.expect(tokenLParen); err != nil {
+				return col, err
+			}
+			expr, err := p.parseExpr()
+			if err != nil {
+				return col, err
+			}
+			if _, err := p.expect(tokenRParen); err != nil {
+				return col, err
+			}
+			col.IsGenerated = true
+			col.GeneratedExpr = expr
+			col.GeneratedKind = GeneratedKindStored // Default to STORED
+			if p.isKeyword("STORED") {
+				p.advance()
+			} else if p.isKeyword("VIRTUAL") {
+				p.advance()
+				col.GeneratedKind = GeneratedKindVirtual
+			}
 		default:
 			// Unknown constraint, stop parsing constraints
 			goto done

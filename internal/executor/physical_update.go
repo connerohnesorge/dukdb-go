@@ -142,6 +142,15 @@ func (e *Executor) executeUpdate(
 				}
 			}
 
+			// Recompute generated columns after base column updates
+			if plan.TableDef != nil {
+				if err := e.recomputeGeneratedColumnsForUpdate(
+					ctx, plan.TableDef, rowMap, columnValues,
+				); err != nil {
+					return nil, err
+				}
+			}
+
 			// Record this row's update
 			updates = append(updates, rowUpdate{
 				rowID:        *rowID,
