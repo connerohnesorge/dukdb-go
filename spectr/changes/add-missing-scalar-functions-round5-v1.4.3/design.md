@@ -101,7 +101,7 @@ case "SPLIT_PART":
     return parts[idx-1], nil
 ```
 
-Note: `toString()` is at expr.go:4425, `toInt64Value()` is at expr.go:4487. `strings` is already imported in expr.go.
+Note: `toString()` is at expr.go:4922, `toInt64Value()` is at expr.go:4930. `strings` is already imported in expr.go.
 
 Type inference: `return dukdb.TYPE_VARCHAR`.
 
@@ -221,7 +221,7 @@ case "MICROSECOND":
     return int64(ts.Nanosecond() / 1_000), nil
 ```
 
-Note: `toTime()` is at temporal_functions.go:708. Returns (time.Time, error).
+Note: `toTime()` is at temporal_functions.go:721. Returns (time.Time, error).
 
 DuckDB MILLISECOND behavior: Returns the millisecond component only (0-999), NOT total milliseconds. Same for MICROSECOND: returns 0-999999 component.
 
@@ -239,10 +239,10 @@ Type inference: both return `dukdb.TYPE_INTEGER`.
 - `sha256Value()` — hash.go:25-35 — hash helper pattern (NULL check, toString, hex encode)
 - YEAR case — expr.go:2078 — temporal extraction pattern
 - SECOND case — expr.go:2093 — temporal extraction (nearest to MILLISECOND)
-- `toTime()` — temporal_functions.go:708 — any → time.Time conversion
-- `toString()` — expr.go:4425 — any → string conversion
-- `toInt64Value()` — expr.go:4487 — any → int64 conversion
-- `toFloat64Value()` — expr.go:4509 — any → float64 conversion
+- `toTime()` — temporal_functions.go:721 — any → time.Time conversion
+- `toString()` — expr.go:4922 — any → string conversion
+- `toInt64Value()` — expr.go:4930 — any → int64 conversion
+- `toFloat64Value()` — expr.go:4952 — any → float64 conversion
 - `inferFunctionResultType()` — binder/utils.go:347 — type inference
 - `volatileFuncs` — query_cache.go:211-217 — non-deterministic function exclusion map
 - `github.com/google/uuid` — go.mod:14 — UUID v4 generation (already in go.mod)
