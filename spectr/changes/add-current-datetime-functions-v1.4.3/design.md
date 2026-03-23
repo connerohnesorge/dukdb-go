@@ -63,38 +63,43 @@ case "CURRENT_TIME":
 ### Where exactly in expr.go
 
 The evaluateFunctionCall() function at line 661 has this structure:
-1. Lines 668-718: Lambda-accepting functions (LIST_TRANSFORM, STRUCT_PACK, etc.) — special handling before arg evaluation
-2. Lines 720-730: Argument evaluation loop
-3. Lines 731+: Main `switch fn.Name` dispatch for all functions
+1. Lines 668-706: Lambda-accepting functions (LIST_TRANSFORM, STRUCT_PACK, etc.) — special handling before arg evaluation
+2. Lines 708-716: Argument evaluation loop
+3. Line 719+: Main `switch fn.Name` dispatch for all functions (starts with ABS at line 720)
 
-The current datetime functions should go in the main `switch fn.Name` dispatch since they need no argument evaluation (zero args). Add them after the argument evaluation loop completes, as early cases in the switch.
+The current datetime functions should go in the main `switch fn.Name` dispatch since they need no argument evaluation (zero args). Add them as early cases in the switch.
 
 ### Import note
 
 `time` package is already imported in expr.go (used by temporal functions like DATE_ADD, STRFTIME, etc.).
 
-## 3. Binder — No Changes Needed
+## 3. Binder — Minor Addition Needed
 
-Type inference at internal/binder/utils.go:475-479 already handles:
+Type inference at internal/binder/utils.go:475-479 already handles NOW, CURRENT_TIMESTAMP, CURRENT_DATE, CURRENT_TIME but is **missing TODAY**. Add TODAY alongside CURRENT_DATE:
+
 ```go
 case "NOW", "CURRENT_TIMESTAMP":
     return dukdb.TYPE_TIMESTAMP
-case "CURRENT_DATE":
+case "CURRENT_DATE", "TODAY":
     return dukdb.TYPE_DATE
 case "CURRENT_TIME":
     return dukdb.TYPE_TIME
 ```
 
-## 4. Query Cache — Already Correct
+## 4. Query Cache — Minor Addition Needed
 
-The query cache at internal/engine/query_cache.go:214-216 already marks these as non-deterministic:
+The query cache at internal/engine/query_cache.go:211-217 marks volatile functions in a `volatileFuncs` map. It currently includes NOW, CURRENT_TIMESTAMP, CURRENT_TIME, CURRENT_DATE but is **missing TODAY**. Add "TODAY" to the map:
+
 ```go
-"CURRENT_TIMESTAMP": {},
-"CURRENT_TIME":      {},
-"CURRENT_DATE":      {},
+volatileFuncs := map[string]struct{}{
+    "RANDOM":            {},
+    "NOW":               {},
+    "CURRENT_TIMESTAMP": {},
+    "CURRENT_TIME":      {},
+    "CURRENT_DATE":      {},
+    "TODAY":             {},  // ADD THIS
+}
 ```
-
-This prevents queries containing these functions from being cached.
 
 ## Helper Signatures Reference (Verified)
 
@@ -102,12 +107,12 @@ This prevents queries containing these functions from being cached.
 - Keyword switch — parser.go:5039-5083 — NULL, TRUE, FALSE, CASE, CAST, etc.
 - Function call fallthrough — parser.go:5086-5087 — `if p.current().typ == tokenLParen`
 - `evaluateFunctionCall()` — expr.go:661 — function dispatch
-- Argument evaluation — expr.go:720-730 — evaluates fn.Args
-- Main switch fn.Name — expr.go:731+ — function name dispatch
-- Error location — expr.go:3332 — "unknown function" error
+- Argument evaluation — expr.go:708-716 — evaluates fn.Args
+- Main switch fn.Name — expr.go:719+ — function name dispatch (ABS at line 720)
+- Error location — expr.go:3335 — "unknown function" error
 - `FunctionCall` — ast.go:845-853 — Name, Args, NamedArgs, Distinct, Star, OrderBy, Filter
-- Type inference — binder/utils.go:475-479 — already handles NOW, CURRENT_DATE, CURRENT_TIME
-- Query cache exclusion — query_cache.go:214-216 — already marks as non-deterministic
+- Type inference — binder/utils.go:475-479 — handles NOW, CURRENT_DATE, CURRENT_TIME (needs TODAY added)
+- Query cache exclusion — query_cache.go:211-217 — volatileFuncs map (needs TODAY added)
 - `time` package — already imported in expr.go
 
 ## Testing Strategy

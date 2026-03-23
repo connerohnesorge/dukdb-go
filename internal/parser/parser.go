@@ -4499,6 +4499,31 @@ func (p *parser) parseComparisonExpr() (Expr, error) {
 			return left, nil
 		}
 		p.advance()
+		// Check for quantified comparison: op ANY|ALL|SOME (subquery)
+		if p.current().typ == tokenIdent {
+			upper := strings.ToUpper(p.current().value)
+			if (upper == "ANY" || upper == "ALL" || upper == "SOME") && p.peek().typ == tokenLParen {
+				quantifier := upper
+				if quantifier == "SOME" {
+					quantifier = "ANY"
+				}
+				p.advance() // consume ANY/ALL/SOME
+				p.advance() // consume (
+				subquery, err := p.parseSelect()
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
+				}
+				return &QuantifiedComparisonExpr{
+					Left:       left,
+					Op:         op,
+					Quantifier: quantifier,
+					Subquery:   subquery,
+				}, nil
+			}
+		}
 		right, err := p.parseBitwiseOrExpr()
 		if err != nil {
 			return nil, err
@@ -5064,6 +5089,12 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		return p.parseExtract()
 	case "INTERVAL":
 		return p.parseInterval()
+	case "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP":
+		// SQL standard: these keywords work without parentheses
+		if p.current().typ != tokenLParen {
+			return &FunctionCall{Name: strings.ToUpper(name)}, nil
+		}
+		// Fall through to parseFunctionCall for CURRENT_DATE() syntax
 	case "COLUMNS":
 		if p.current().typ == tokenLParen {
 			p.advance()

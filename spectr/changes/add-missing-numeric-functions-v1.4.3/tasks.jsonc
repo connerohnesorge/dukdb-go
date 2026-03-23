@@ -1,0 +1,44 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add SIGNBIT function — Add case in evaluateFunctionCall(). Use math.Signbit(). Add type inference returning TYPE_BOOLEAN.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add WIDTH_BUCKET function — Add case in evaluateFunctionCall(). SQL standard equi-width histogram bucketing. Add type inference returning TYPE_INTEGER.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add BETA function — Add case in evaluateFunctionCall(). Use exp(lgamma(a) + lgamma(b) - lgamma(a+b)). Add type inference returning TYPE_DOUBLE.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Register conditional aggregates — Add SUM_IF, AVG_IF, MIN_IF, MAX_IF to isAggregateFunc() and planner isAggregateFunction(). Add type inference entries.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Implement conditional aggregates — Add SUM_IF, AVG_IF, MIN_IF, MAX_IF cases in computeAggregate(). Follow COUNT_IF pattern.",
+      "status": "completed"
+    },
+    {
+      "id": "6",
+      "section": "",
+      "description": "Integration tests — Test all scalar and aggregate functions with NULL propagation, edge cases, type verification.",
+      "status": "completed"
+    }
+  ]
+}

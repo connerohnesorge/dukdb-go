@@ -1,0 +1,20 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add ListTypes() to catalog and schema metadata + executor for duckdb_schemas() and duckdb_types(). Register in dispatch and function names.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Integration tests — Test duckdb_schemas() and duckdb_types() with built-in and user-created entries.",
+      "status": "completed"
+    }
+  ]
+}

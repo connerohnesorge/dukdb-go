@@ -923,6 +923,16 @@ type InSubqueryExpr struct {
 
 func (*InSubqueryExpr) exprNode() {}
 
+// QuantifiedComparisonExpr represents expr op ANY|ALL|SOME (subquery).
+type QuantifiedComparisonExpr struct {
+	Left       Expr
+	Op         BinaryOp
+	Quantifier string // "ANY" or "ALL" (SOME normalized to ANY)
+	Subquery   *SelectStmt
+}
+
+func (*QuantifiedComparisonExpr) exprNode() {}
+
 // ExistsExpr represents an EXISTS expression.
 type ExistsExpr struct {
 	Subquery *SelectStmt

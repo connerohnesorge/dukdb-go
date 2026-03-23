@@ -344,3 +344,47 @@ func (e *Executor) executeDuckDBTempDirectory(
 		Columns: metadata.ColumnNames(metadata.DuckDBTempDirectoryColumns()),
 	}, nil
 }
+
+func (e *Executor) executeDuckDBSchemas(
+	_ *ExecutionContext,
+	_ *planner.PhysicalTableFunctionScan,
+) (*ExecutionResult, error) {
+	schemas := metadata.GetSchemas(e.catalog, e.storage, metadata.DefaultDatabaseName)
+	rows := make([]map[string]any, 0, len(schemas))
+	for _, s := range schemas {
+		rows = append(rows, map[string]any{
+			"database_name": s.DatabaseName,
+			"schema_name":   s.SchemaName,
+			"schema_oid":    s.SchemaOID,
+			"internal":      s.Internal,
+			"sql":           s.SQL,
+		})
+	}
+	return &ExecutionResult{
+		Rows:    rows,
+		Columns: metadata.ColumnNames(metadata.DuckDBSchemasColumns()),
+	}, nil
+}
+
+func (e *Executor) executeDuckDBTypes(
+	_ *ExecutionContext,
+	_ *planner.PhysicalTableFunctionScan,
+) (*ExecutionResult, error) {
+	types := metadata.GetTypes(e.catalog, e.storage, metadata.DefaultDatabaseName)
+	rows := make([]map[string]any, 0, len(types))
+	for _, t := range types {
+		rows = append(rows, map[string]any{
+			"database_name": t.DatabaseName,
+			"schema_name":   t.SchemaName,
+			"type_name":     t.TypeName,
+			"type_size":     t.TypeSize,
+			"type_category": t.TypeCategory,
+			"internal":      t.Internal,
+			"sql":           t.SQL,
+		})
+	}
+	return &ExecutionResult{
+		Rows:    rows,
+		Columns: metadata.ColumnNames(metadata.DuckDBTypesColumns()),
+	}, nil
+}

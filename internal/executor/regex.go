@@ -32,6 +32,26 @@ func regexpMatchesValue(str any, pattern any) (any, error) {
 	return re.MatchString(s), nil
 }
 
+func regexpFullMatchValue(str any, pattern any) (any, error) {
+	if str == nil || pattern == nil {
+		return nil, nil
+	}
+
+	s := toString(str)
+	p := toString(pattern)
+
+	fullPattern := "^(?:" + p + ")$"
+	re, err := regexp.Compile(fullPattern)
+	if err != nil {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("REGEXP_FULL_MATCH: invalid pattern: %s", err),
+		}
+	}
+
+	return re.MatchString(s), nil
+}
+
 func regexpReplaceValue(str any, pattern any, replacement any, flags any) (any, error) {
 	// NULL check FIRST before any processing
 	if str == nil || pattern == nil || replacement == nil {

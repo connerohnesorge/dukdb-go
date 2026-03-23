@@ -409,7 +409,9 @@ func inferFunctionResultType(
 
 		return dukdb.TYPE_DOUBLE
 	case "UPPER",
+		"UCASE",
 		"LOWER",
+		"LCASE",
 		"TRIM",
 		"LTRIM",
 		"RTRIM",
@@ -435,10 +437,17 @@ func inferFunctionResultType(
 		"SHA256",
 		"SHA1",
 		"TRANSLATE",
-		"STRIP_ACCENTS":
+		"STRIP_ACCENTS",
+		"INITCAP",
+		"SOUNDEX":
 		return dukdb.TYPE_VARCHAR
+	case "OCTET_LENGTH":
+		return dukdb.TYPE_INTEGER
+	case "LIKE_ESCAPE":
+		return dukdb.TYPE_BOOLEAN
 	// String functions returning BOOLEAN
 	case "REGEXP_MATCHES",
+		"REGEXP_FULL_MATCH",
 		"CONTAINS",
 		"PREFIX",
 		"SUFFIX",
@@ -466,7 +475,8 @@ func inferFunctionResultType(
 	case "REGEXP_EXTRACT_ALL",
 		"REGEXP_SPLIT_TO_ARRAY",
 		"STRING_SPLIT",
-		"STRING_SPLIT_REGEX":
+		"STRING_SPLIT_REGEX",
+		"STRING_TO_ARRAY":
 		return dukdb.TYPE_ANY // Arrays represented as TYPE_ANY
 	case "LENGTH",
 		"CHAR_LENGTH",
@@ -474,7 +484,7 @@ func inferFunctionResultType(
 		return dukdb.TYPE_INTEGER
 	case "NOW", "CURRENT_TIMESTAMP":
 		return dukdb.TYPE_TIMESTAMP
-	case "CURRENT_DATE":
+	case "CURRENT_DATE", "TODAY":
 		return dukdb.TYPE_DATE
 	case "CURRENT_TIME":
 		return dukdb.TYPE_TIME
@@ -598,6 +608,9 @@ func inferFunctionResultType(
 	case "LIST_TRANSFORM", "ARRAY_APPLY", "APPLY",
 		"LIST_FILTER", "ARRAY_FILTER", "FILTER":
 		return dukdb.TYPE_LIST
+	case "LIST_APPEND", "ARRAY_APPEND", "ARRAY_PUSH_BACK",
+		"LIST_PREPEND", "ARRAY_PREPEND", "ARRAY_PUSH_FRONT":
+		return dukdb.TYPE_LIST
 	case "LIST_SORT", "ARRAY_SORT":
 		return dukdb.TYPE_LIST
 	case "LIST_REVERSE_SORT", "ARRAY_REVERSE_SORT":
@@ -645,6 +658,12 @@ func inferFunctionResultType(
 	case "BIT_AND", "BIT_OR", "BIT_XOR":
 		return dukdb.TYPE_BIGINT
 
+	// Multiplicative, deviation, and precision aggregates
+	case "PRODUCT", "FAVG", "FSUM", "MAD":
+		return dukdb.TYPE_DOUBLE
+	case "BITSTRING_AGG":
+		return dukdb.TYPE_VARCHAR
+
 	// Rounding functions - preserve input type for integers, return DOUBLE for floats
 	case "ROUND", "ROUND_EVEN":
 		// ROUND preserves integer types for integer inputs, returns DOUBLE for floats
@@ -677,6 +696,19 @@ func inferFunctionResultType(
 	// Scientific functions - always return DOUBLE
 	case "SQRT", "CBRT", "POW", "POWER", "EXP", "LN", "LOG", "LOG10", "LOG2":
 		return dukdb.TYPE_DOUBLE
+	case "SIGNBIT":
+		return dukdb.TYPE_BOOLEAN
+	case "WIDTH_BUCKET":
+		return dukdb.TYPE_INTEGER
+	case "BETA":
+		return dukdb.TYPE_DOUBLE
+	case "SUM_IF", "AVG_IF":
+		return dukdb.TYPE_DOUBLE
+	case "MIN_IF", "MAX_IF":
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_ANY
 	case "GAMMA", "LGAMMA":
 		return dukdb.TYPE_DOUBLE
 
@@ -837,7 +869,9 @@ func getFunctionArgTypes(
 			return []dukdb.Type{dukdb.TYPE_DOUBLE}
 		}
 	case "UPPER",
+		"UCASE",
 		"LOWER",
+		"LCASE",
 		"TRIM",
 		"LTRIM",
 		"RTRIM",
@@ -924,8 +958,13 @@ func getFunctionArgTypes(
 			types[i] = dukdb.TYPE_VARCHAR
 		}
 		return types
-	case "STRING_SPLIT", "STRING_SPLIT_REGEX":
+	case "STRING_SPLIT", "STRING_SPLIT_REGEX", "STRING_TO_ARRAY":
 		// STRING_SPLIT(string, separator)
+		if argCount >= 2 {
+			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
+		}
+	case "REGEXP_FULL_MATCH":
+		// REGEXP_FULL_MATCH(string, pattern)
 		if argCount >= 2 {
 			return []dukdb.Type{dukdb.TYPE_VARCHAR, dukdb.TYPE_VARCHAR}
 		}

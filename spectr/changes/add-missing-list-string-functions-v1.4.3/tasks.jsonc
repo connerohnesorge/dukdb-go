@@ -1,0 +1,32 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "Add LIST_APPEND and LIST_PREPEND — New list manipulation functions with aliases ARRAY_APPEND, ARRAY_PUSH_BACK, ARRAY_PREPEND, ARRAY_PUSH_FRONT.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Add alias functions — LIST_HAS alias for LIST_CONTAINS, STRING_TO_ARRAY alias for STRING_SPLIT.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Add REGEXP_FULL_MATCH — Full-string regex matching returning boolean.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Integration tests — Test all functions with NULL inputs, empty lists, edge cases.",
+      "status": "completed"
+    }
+  ]
+}

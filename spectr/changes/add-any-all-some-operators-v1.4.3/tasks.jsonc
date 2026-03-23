@@ -1,0 +1,38 @@
+// Spectr Tasks File (JSONC)
+// Status Values: "pending", "in_progress", "completed"
+
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "1",
+      "section": "",
+      "description": "AST node — Add QuantifiedComparisonExpr to ast.go after InSubqueryExpr. Fields: Left (Expr), Op (BinaryOp), Quantifier (string), Subquery (*SelectStmt). Add exprNode() method. Add to Visitor interface and table_extractor.go.",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "section": "",
+      "description": "Parser — After parsing comparison operator, check if next token is ANY/ALL/SOME identifier followed by '('. Parse subquery inside parens and return QuantifiedComparisonExpr. Normalize SOME → ANY.",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "section": "",
+      "description": "Binder — Add BoundQuantifiedComparison to binder/expressions.go. Add case for QuantifiedComparisonExpr in bind_expr.go following InSubqueryExpr binding pattern. ResultType() returns TYPE_BOOLEAN.",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "section": "",
+      "description": "Executor — Add case for BoundQuantifiedComparison in expr.go. Execute subquery, iterate results. ANY: true if any match. ALL: true if all match. Handle NULL semantics. Empty set: ANY→false, ALL→true.",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "section": "",
+      "description": "Integration tests — Test ANY, ALL, SOME with all comparison operators. Test NULL handling. Test empty subqueries. Test with WHERE clauses.",
+      "status": "completed"
+    }
+  ]
+}

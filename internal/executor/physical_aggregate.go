@@ -3,6 +3,7 @@ package executor
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"runtime"
 	"sort"
 	"sync"
@@ -760,6 +761,105 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 		}
 		return computeListDistinct(values)
 
+	// Conditional aggregate functions
+	case "SUM_IF":
+		sum := 0.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						sum += toFloat64Value(val)
+						hasValue = true
+					}
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return sum, nil
+
+	case "AVG_IF":
+		avgIfSum := 0.0
+		avgIfCount := int64(0)
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						avgIfSum += toFloat64Value(val)
+						avgIfCount++
+					}
+				}
+			}
+		}
+		if avgIfCount == 0 {
+			return nil, nil
+		}
+		return avgIfSum / float64(avgIfCount), nil
+
+	case "MIN_IF":
+		var minIfVal any
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						if minIfVal == nil || compareValues(val, minIfVal) < 0 {
+							minIfVal = val
+						}
+					}
+				}
+			}
+		}
+		return minIfVal, nil
+
+	case "MAX_IF":
+		var maxIfVal any
+		for _, row := range rows {
+			if len(fn.Args) >= 2 {
+				condVal, err := op.executor.evaluateExpr(op.ctx, fn.Args[1], row)
+				if err != nil {
+					return nil, err
+				}
+				if condVal != nil && toBool(condVal) {
+					val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+					if err != nil {
+						return nil, err
+					}
+					if val != nil {
+						if maxIfVal == nil || compareValues(val, maxIfVal) > 0 {
+							maxIfVal = val
+						}
+					}
+				}
+			}
+		}
+		return maxIfVal, nil
+
 	// Time series aggregate functions
 	case "COUNT_IF":
 		if len(fn.Args) == 0 {
@@ -1090,6 +1190,126 @@ func (op *PhysicalAggregateOperator) computeAggregate(
 			return nil, err
 		}
 		return computeJSONGroupObject(keys, vals)
+
+	case "PRODUCT":
+		product := 1.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					product *= toFloat64Value(val)
+					hasValue = true
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return product, nil
+
+	case "MAD":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := op.collectValues(fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		if len(values) == 0 {
+			return nil, nil
+		}
+		medianVal, err := computeMedian(values)
+		if err != nil {
+			return nil, err
+		}
+		if medianVal == nil {
+			return nil, nil
+		}
+		median := toFloat64Value(medianVal)
+		deviations := make([]any, 0, len(values))
+		for _, v := range values {
+			if v != nil {
+				deviations = append(deviations, math.Abs(toFloat64Value(v)-median))
+			}
+		}
+		if len(deviations) == 0 {
+			return nil, nil
+		}
+		return computeMedian(deviations)
+
+	case "FAVG":
+		sum := 0.0
+		compensation := 0.0
+		count := int64(0)
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					y := toFloat64Value(val) - compensation
+					t := sum + y
+					compensation = (t - sum) - y
+					sum = t
+					count++
+				}
+			}
+		}
+		if count == 0 {
+			return nil, nil
+		}
+		return sum / float64(count), nil
+
+	case "FSUM":
+		sum := 0.0
+		compensation := 0.0
+		hasValue := false
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					y := toFloat64Value(val) - compensation
+					t := sum + y
+					compensation = (t - sum) - y
+					sum = t
+					hasValue = true
+				}
+			}
+		}
+		if !hasValue {
+			return nil, nil
+		}
+		return sum, nil
+
+	case "BITSTRING_AGG":
+		var bits []byte
+		for _, row := range rows {
+			if len(fn.Args) > 0 {
+				val, err := op.executor.evaluateExpr(op.ctx, fn.Args[0], row)
+				if err != nil {
+					return nil, err
+				}
+				if val != nil {
+					if toBool(val) {
+						bits = append(bits, '1')
+					} else {
+						bits = append(bits, '0')
+					}
+				}
+			}
+		}
+		if len(bits) == 0 {
+			return nil, nil
+		}
+		return string(bits), nil
 
 	default:
 		return nil, &dukdb.Error{

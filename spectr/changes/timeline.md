@@ -2,145 +2,156 @@
 
 This document describes the chronological order in which all active change proposals should be implemented. Proposals are ordered by dependency and complexity.
 
-## Active Proposals
+## Active Proposals (8 total)
 
 | # | Proposal | Scope | Effort | Dependencies | Status |
 |---|----------|-------|--------|-------------|--------|
-| 1 | `add-ddl-dml-extensions-v1.4.3` | COMMENT ON, ALTER COLUMN TYPE, DELETE USING | Medium | None | IMPLEMENTED |
-| 2 | `add-enum-utility-functions-v1.4.3` | ENUM_RANGE, ENUM_FIRST, ENUM_LAST | Small | None | IMPLEMENTED & ARCHIVED |
-| 3 | `add-missing-functions-round2-v1.4.3` | SHA1, SETSEED, LIST_VALUE, ANY_VALUE, HISTOGRAM, ARG_MIN/ARG_MAX | Small | None | IMPLEMENTED & ARCHIVED |
-| 4 | `add-function-aliases-v1.4.3` | DATETRUNC, DATEADD, ORD, IFNULL/NVL, BIT_LENGTH, etc. | Small | None | IMPLEMENTED & ARCHIVED |
-| 5 | `add-ordered-set-aggregates-v1.4.3` | WITHIN GROUP syntax + LISTAGG aggregate | Small (2-3 days) | None | PROPOSED |
-| 6 | `add-s3-query-integration-v1.4.3` | Harden S3/cloud filesystem + tests | Medium (5-7 days) | None | PROPOSED |
-| 7 | `add-metadata-commands-v1.4.3` | DESCRIBE, SHOW TABLES/COLUMNS, SUMMARIZE, CALL | Medium (3-5 days) | None | IMPLEMENTED |
-| 8 | `add-table-ddl-extensions-v1.4.3` | CREATE OR REPLACE TABLE, TEMP TABLE, ADD/DROP CONSTRAINT | Medium (3-5 days) | None | PROPOSED |
-| 9 | `add-standalone-aggregate-filter-v1.4.3` | FILTER (WHERE) on non-window aggregates | Small (1-2 days) | None | PROPOSED |
-| 10 | `add-missing-conversion-functions-v1.4.3` | TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS | Small (1-2 days) | None | PROPOSED |
-| 11 | `add-missing-list-string-functions-v1.4.3` | LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH | Small (1-2 days) | None | PROPOSED |
-| 12 | `add-missing-aggregates-round3-v1.4.3` | PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG | Small (1-2 days) | None | PROPOSED |
-| 13 | `add-reset-statement-v1.4.3` | RESET variable, RESET ALL | Small (1 day) | None | PROPOSED |
-| 14 | `add-struct-field-access-v1.4.3` | struct_col.field dot notation | Small (1-2 days) | None | PROPOSED |
+| 1 | `add-current-datetime-functions-v1.4.3` | NOW(), CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, TODAY() | Small (1-2 days) | None | GRADED & READY |
+| 2 | `add-missing-string-functions-round4-v1.4.3` | OCTET_LENGTH, INITCAP, SOUNDEX, LCASE/UCASE, LIKE_ESCAPE | Small (1-2 days) | None | GRADED & READY |
+| 3 | `add-missing-list-string-functions-v1.4.3` | LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH | Small (1-2 days) | None | GRADED & READY |
+| 4 | `add-missing-aggregates-round3-v1.4.3` | PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG | Small (1-2 days) | None | GRADED & READY |
+| 5 | `add-missing-numeric-functions-v1.4.3` | SIGNBIT, WIDTH_BUCKET, BETA, SUM_IF/AVG_IF/MIN_IF/MAX_IF | Small-Medium (2-3 days) | None | GRADED & READY |
+| 6 | `add-temporal-functions-round2-v1.4.3` | TIME_BUCKET, MAKE_TIMESTAMPTZ, ISODOW/ISOYEAR, DATEPART, EPOCH_NS, TIMEZONE | Medium (2-3 days) | None | GRADED & READY |
+| 7 | `add-missing-system-views-v1.4.3` | duckdb_schemas(), duckdb_types() table functions | Medium (2-3 days) | Requires catalog.ListTypes() | GRADED & READY |
+| 8 | `add-any-all-some-operators-v1.4.3` | ANY/ALL/SOME quantified comparison operators | Medium-Large (3-5 days) | None | GRADED & READY |
 
 ## Dependency Graph
 
 ```
-Phase 1 (no dependencies — fully parallelizable)
-├── add-reset-statement-v1.4.3                 [1 day]     ← smallest, parser+conn only
-├── add-missing-conversion-functions-v1.4.3    [1-2 days]  ← TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS
-├── add-missing-list-string-functions-v1.4.3   [1-2 days]  ← LIST_APPEND/PREPEND, aliases, REGEXP_FULL_MATCH
-├── add-missing-aggregates-round3-v1.4.3       [1-2 days]  ← PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG
-├── add-standalone-aggregate-filter-v1.4.3     [1-2 days]  ← FILTER (WHERE) on non-window aggs
-├── add-struct-field-access-v1.4.3             [1-2 days]  ← binder disambiguates struct.field
-├── add-ordered-set-aggregates-v1.4.3          [2-3 days]  ← WITHIN GROUP + LISTAGG
-├── add-table-ddl-extensions-v1.4.3            [3-5 days]  ← OR REPLACE, TEMP, constraints
-└── add-s3-query-integration-v1.4.3            [5-7 days]  ← integration testing
+Phase 1 — Pure executor additions (no dependencies, fully parallelizable)
+├── add-current-datetime-functions-v1.4.3    [1-2 days]  ← parser + executor + binder
+├── add-missing-string-functions-round4-v1.4.3 [1-2 days] ← executor only (+ matchLikeWithEscape helper)
+├── add-missing-list-string-functions-v1.4.3 [1-2 days]  ← executor only
+├── add-missing-aggregates-round3-v1.4.3     [1-2 days]  ← aggregate dispatch only
+├── add-missing-numeric-functions-v1.4.3     [2-3 days]  ← executor + aggregate dispatch
+└── add-temporal-functions-round2-v1.4.3     [2-3 days]  ← executor + temporal_functions.go
 
-Already Completed:
-├── add-ddl-dml-extensions-v1.4.3              [DONE]
-├── add-enum-utility-functions-v1.4.3          [DONE]
-├── add-missing-functions-round2-v1.4.3        [DONE]
-├── add-function-aliases-v1.4.3                [DONE]
-└── add-metadata-commands-v1.4.3               [DONE]
+Phase 2 — Requires new infrastructure
+├── add-missing-system-views-v1.4.3          [2-3 days]  ← needs catalog.ListTypes() added first
+└── add-any-all-some-operators-v1.4.3        [3-5 days]  ← full stack: parser + AST + binder + executor
 ```
 
-## Phase 1 — Independent Features (All Parallelizable)
+## Phase 1 — Executor-Level Additions (All Parallelizable)
 
-All nine remaining proposals touch different parts of the codebase and can be implemented simultaneously.
+All six Phase 1 proposals add functions to existing dispatch switches and require no new AST nodes or parser changes (except datetime functions which need bare keyword handling).
 
-### add-reset-statement-v1.4.3
+### add-current-datetime-functions-v1.4.3
 
-**Scope**: RESET variable, RESET ALL statement
+**Scope**: NOW(), CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, TODAY()
 
-**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/parser/parser_pragma.go`, `internal/engine/conn.go`
+**Files touched**: `internal/parser/parser.go` (parseIdentExpr bare keyword cases), `internal/executor/expr.go` (evaluateFunctionCall dispatch), `internal/binder/utils.go` (add TODAY to type inference), `internal/engine/query_cache.go` (add TODAY to volatileFuncs)
 
-**Why first**: Smallest proposal — one new AST node, parser function, and handler. Follows SET pattern exactly. ~50 lines total.
-
----
-
-### add-missing-conversion-functions-v1.4.3
-
-**Scope**: TO_DATE, TO_CHAR (STRFTIME alias), GENERATE_SUBSCRIPTS
-
-**Files touched**: `internal/executor/expr.go`, `internal/binder/utils.go`
-
-**Why first**: Three functions following established patterns. TO_CHAR is just an alias addition. Smallest change — ~30 lines total.
+**Why first**: Extremely common SQL functions — most applications expect `SELECT NOW()` and `SELECT CURRENT_DATE` to work. Parser change is minimal (3-line case addition to existing keyword switch at parser.go:5039-5083).
 
 ---
 
-### add-standalone-aggregate-filter-v1.4.3
+### add-missing-string-functions-round4-v1.4.3
 
-**Scope**: FILTER (WHERE ...) clause on non-window aggregate functions
+**Scope**: OCTET_LENGTH, INITCAP, SOUNDEX, LCASE/UCASE aliases, LIKE_ESCAPE
 
-**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/binder/expressions.go`, `internal/binder/bind_expr.go`, `internal/executor/physical_aggregate.go`
+**Files touched**: `internal/executor/expr.go` (5 new cases + matchLikeWithEscape helper), `internal/binder/utils.go` (type inference)
 
-**Why Phase 1**: Parser already parses FILTER; just need to allow it without OVER and thread through binder/executor. Window FILTER pattern already exists as reference.
-
----
-
-### add-ordered-set-aggregates-v1.4.3
-
-**Scope**: WITHIN GROUP (ORDER BY ...) syntax + LISTAGG aggregate function
-
-**Files touched**: `internal/parser/parser.go`, `internal/executor/physical_aggregate.go`, `internal/executor/operator.go`, `internal/binder/utils.go`
-
-**Why Phase 1**: Parser change (WITHIN GROUP maps to existing OrderBy field) + one new aggregate. No executor changes for existing ordered-set aggregates.
+**Why first**: Standard string functions expected by SQL applications. LCASE/UCASE are just alias additions to existing UPPER (line 1233) and LOWER (line 1245) cases. LIKE_ESCAPE requires a new `matchLikeWithEscape()` helper extending the existing `matchLike()` at expr.go:4777.
 
 ---
 
 ### add-missing-list-string-functions-v1.4.3
 
-**Scope**: LIST_APPEND/PREPEND, LIST_HAS alias, STRING_TO_ARRAY alias, REGEXP_FULL_MATCH
+**Scope**: LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH
 
 **Files touched**: `internal/executor/expr.go`, `internal/binder/utils.go`
 
-**Why Phase 1**: Two new list functions (follow LIST_CONCAT pattern), two alias additions, one new regex function. All in executor function dispatch. ~80 lines total.
+**Why first**: Two new list functions (follow LIST_CONCAT pattern), two alias additions, one regex function. All in executor function dispatch. ~80 lines total.
 
 ---
 
 ### add-missing-aggregates-round3-v1.4.3
 
-**Scope**: PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG aggregate functions
+**Scope**: PRODUCT, MAD (Median Absolute Deviation), FAVG, FSUM, BITSTRING_AGG
 
-**Files touched**: `internal/executor/physical_aggregate.go`, `internal/executor/operator.go`, `internal/binder/utils.go`
+**Files touched**: `internal/executor/physical_aggregate.go` (computeAggregate dispatch), `internal/executor/operator.go` (isAggregateFunc), `internal/binder/utils.go`
 
-**Why Phase 1**: Five aggregates following established SUM/AVG/MEDIAN patterns. All in aggregate dispatch. ~120 lines total.
-
----
-
-### add-struct-field-access-v1.4.3
-
-**Scope**: `struct_col.field` dot notation syntax
-
-**Files touched**: `internal/binder/expressions.go`, `internal/binder/bind_expr.go`, `internal/executor/expr.go`
-
-**Why Phase 1**: New BoundFieldAccess expression type. Binder disambiguates table.column vs struct.field. Follows STRUCT_EXTRACT pattern for evaluation.
+**Why first**: Five aggregates following established SUM/AVG/MEDIAN patterns at physical_aggregate.go:295. Uses existing helpers: `op.collectValues(expr, rows)` at line 1094, `computeMedian()` at aggregate_stats.go:135.
 
 ---
 
-### add-table-ddl-extensions-v1.4.3
+### add-missing-numeric-functions-v1.4.3
 
-**Scope**: CREATE OR REPLACE TABLE, CREATE TEMP TABLE, ALTER TABLE ADD/DROP CONSTRAINT
+**Scope**: SIGNBIT, WIDTH_BUCKET, BETA scalar functions + SUM_IF, AVG_IF, MIN_IF, MAX_IF conditional aggregates
 
-**Files touched**: `internal/parser/ast.go`, `internal/parser/parser.go`, `internal/parser/parser_ddl.go`, `internal/binder/bind_stmt.go`, `internal/binder/statements.go`, `internal/planner/physical.go`, `internal/executor/operator.go`, `internal/executor/ddl.go`
+**Files touched**: `internal/executor/expr.go` (3 scalar cases), `internal/executor/physical_aggregate.go` (4 aggregate cases), `internal/executor/operator.go` (register in isAggregateFunc), `internal/binder/utils.go`
 
-**Why Phase 1**: Threading flags through existing pipeline. Parser already parses OR REPLACE and TEMPORARY but doesn't pass them to CREATE TABLE. Constraint infrastructure already exists.
+**Why Phase 1**: Scalar functions use Go stdlib (`math.Signbit`, `math.Lgamma`). Conditional aggregates follow COUNT_IF pattern at physical_aggregate.go:765. Uses `toBool()` at expr.go:4461 and `compareValues()` at expr.go:4575.
+
+---
+
+### add-temporal-functions-round2-v1.4.3
+
+**Scope**: TIME_BUCKET, MAKE_TIMESTAMPTZ, ISODOW/ISOYEAR date parts, DATEPART alias, EPOCH_NS, TIMEZONE
+
+**Files touched**: `internal/executor/temporal_functions.go` (new DatePart constants + extractPart cases + parseDatePart cases), `internal/executor/expr.go` (DATEPART alias at line 1959, new function cases), `internal/binder/utils.go`
+
+**Why Phase 1**: Extends existing temporal infrastructure. New DatePart constants (DatePartISODow, DatePartISOYear, DatePartNanosecond) at temporal_functions.go:19-31. DATEPART is an alias addition to existing DATE_PART case. TIME_BUCKET needs `intervalToMicros()` helper. Uses `toInt64Value()` at expr.go:4487 (NOT toInt64).
 
 ---
 
-### add-s3-query-integration-v1.4.3
+## Phase 2 — Infrastructure-Dependent Features
 
-**Scope**: Harden cloud filesystem integration, add LocalStack integration tests
+### add-missing-system-views-v1.4.3
 
-**Files touched**: `internal/executor/table_function_csv.go`, `internal/executor/table_function_json.go`, `internal/executor/table_function_parquet.go`, `internal/executor/copy_cloud.go`
+**Scope**: duckdb_schemas() and duckdb_types() table functions
 
-**Why Phase 1**: Primarily testing and error handling hardening. Core functionality already exists. Independent of all other proposals.
+**Files touched**: `internal/catalog/catalog.go` (add ListTypes() method), `internal/metadata/` (new GetSchemas/GetTypes functions), `internal/executor/system_functions.go` (executeDuckDBSchemas/executeDuckDBTypes), `internal/executor/table_function_csv.go` (register in dispatch at line 112), `internal/metadata/functions.go` (add to systemFunctionNames at line 54)
+
+**Why Phase 2**: Requires adding `ListTypes()` to catalog.Catalog (currently has `ListSchemas()` at line 51 and `ListTables()` at line 244 but no ListTypes). Follows executeDuckDBTables() pattern at system_functions.go:30-53. GetSchemas/GetTypes take 3 params: `(cat *catalog.Catalog, stor *storage.Storage, dbName string)`. ListSchemas() returns `[]*Schema` — must call `.Name()` on each.
 
 ---
+
+### add-any-all-some-operators-v1.4.3
+
+**Scope**: `x = ANY (subquery)`, `x > ALL (subquery)`, `x = SOME (subquery)`
+
+**Files touched**: `internal/parser/ast.go` (new QuantifiedComparisonExpr after InSubqueryExpr at line 924), `internal/parser/parser.go` (intercept ANY/ALL/SOME after comparison operators in parseIdentExpr at line 5035), `internal/binder/expressions.go` (new BoundQuantifiedComparison type), `internal/binder/bind_expr.go` (bindQuantifiedComparisonExpr following bindInSubqueryExpr at line 645), `internal/executor/expr.go` (evaluateQuantifiedComparison following evaluateInSubqueryExpr at line 3506)
+
+**Why Phase 2**: Full-stack feature requiring new AST node, parser changes, binder type, and executor evaluation. Most complex remaining proposal. Follows InSubqueryExpr pattern closely. SOME normalizes to ANY. NULL semantics and vacuous truth (empty ALL = true) must be handled.
+
+---
+
+## Implementation Schedule
+
+```
+Day 1:      Start all Phase 1 proposals (fully parallelizable)
+            ├── Datetime functions (1-2 days)       ← parser bare keywords + executor
+            ├── String functions round 4 (1-2 days)  ← executor + matchLikeWithEscape
+            ├── List/string functions (1-2 days)     ← executor only
+            ├── Aggregates round 3 (1-2 days)        ← aggregate dispatch
+            ├── Numeric functions (2-3 days)          ← executor + aggregates
+            └── Temporal functions round 2 (2-3 days) ← temporal_functions + executor
+
+Day 2:      Datetime, string, list/string, aggregates round 3 complete
+            Start Phase 2 proposals
+            ├── System views (2-3 days)              ← catalog.ListTypes() first
+            └── ANY/ALL/SOME operators (3-5 days)    ← full stack
+
+Day 3:      Numeric functions, temporal functions round 2 complete
+Day 4-5:    System views complete
+Day 5-7:    ANY/ALL/SOME operators complete
+```
+
+**Total estimated effort**: 15-23 person-days
+**With full parallelization**: 5-7 days elapsed time
+**Critical path**: ANY/ALL/SOME operators (3-5 days, starts Day 2)
 
 ## Completed Proposals (Already Implemented)
 
 | Proposal | Status | Date |
 |----------|--------|------|
+| `add-struct-field-access-v1.4.3` | Implemented & Archived | 2026-03-21 |
+| `add-reset-statement-v1.4.3` | Implemented | 2026-03-21 |
+| `add-missing-conversion-functions-v1.4.3` | Implemented | 2026-03-21 |
+| `add-standalone-aggregate-filter-v1.4.3` | Implemented | 2026-03-21 |
+| `add-ordered-set-aggregates-v1.4.3` | Implemented | 2026-03-21 |
+| `add-table-ddl-extensions-v1.4.3` | Implemented | 2026-03-21 |
 | `add-metadata-commands-v1.4.3` | Implemented | 2026-03-21 |
 | `add-ddl-dml-extensions-v1.4.3` | Implemented | 2026-03-21 |
 | `add-enum-utility-functions-v1.4.3` | Implemented & Archived | 2026-03-21 |
@@ -163,63 +174,13 @@ All nine remaining proposals touch different parts of the codebase and can be im
 | `add-adaptive-optimization` | Implemented & Archived | 2026-03-20 |
 | `add-attach-detach-database` | Implemented & Archived | 2026-03-20 |
 
-## Implementation Schedule
+## Remaining Gaps (This Timeline)
 
-```
-Day 1:      Quick wins (all parallelizable — start everything)
-            ├── RESET statement (1 day)                    ← parser + conn handler
-            ├── Conversion functions (1-2 days)            ← TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS
-            ├── List/string functions (1-2 days)           ← LIST_APPEND/PREPEND, aliases, REGEXP_FULL_MATCH
-            ├── Aggregates round 3 (1-2 days)              ← PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG
-            ├── Aggregate FILTER clause (1-2 days)         ← parser lift + executor
-            ├── Struct field access (1-2 days)             ← binder + evaluator
-            ├── Ordered-set aggregates (2-3 days)          ← WITHIN GROUP + LISTAGG
-            ├── Table DDL extensions (3-5 days)            ← OR REPLACE, TEMP, constraints
-            └── S3 integration hardening (5-7 days)        ← longest, start day 1
-
-Day 1:      RESET statement complete
-Day 2:      Conversion functions, list/string functions, aggregates round 3,
-            aggregate FILTER, struct field access complete
-Day 3-4:    Ordered-set aggregates complete, table DDL continues
-Day 5-7:    Table DDL + S3 integration complete
-```
-
-**Total estimated effort**: 19-30 person-days
-**With full parallelization**: 5-7 days elapsed time
-**Critical path**: S3 integration (5-7 days) or Table DDL extensions (3-5 days)
-
-## Coverage Summary
-
-### Fully Implemented DuckDB v1.4.3 Features
-
-- All SQL syntax: SELECT, INSERT, UPDATE, DELETE, MERGE
-- All DDL: CREATE/ALTER/DROP TABLE/VIEW/INDEX/SEQUENCE/SCHEMA/TYPE
-- All joins: INNER, LEFT, RIGHT, FULL, CROSS, NATURAL, LATERAL, ASOF, POSITIONAL
-- All set operations: UNION [ALL], INTERSECT [ALL], EXCEPT [ALL], BY NAME
-- Window functions: All aggregate/ranking/value functions + WINDOW clause + FILTER
-- CTEs: WITH, WITH RECURSIVE
-- Grouping: GROUP BY, GROUPING SETS, ROLLUP, CUBE
-- Advanced: PIVOT/UNPIVOT, QUALIFY, SAMPLE, IS DISTINCT FROM
-- File formats: Parquet, CSV, JSON, NDJSON, XLSX, Arrow
-- Storage: Columnar compression (Dictionary, RLE, Constant), WAL, MVCC
-- Transactions: READ UNCOMMITTED through SERIALIZABLE, savepoints
-- Extensions: INSTALL/LOAD, ATTACH/DETACH, EXPORT/IMPORT DATABASE
-- System: PRAGMA, SET/RESET, information_schema, pg_catalog
-- 200+ scalar functions, 40+ aggregate functions
-- IF/IFF, FORMAT/PRINTF, TYPEOF/PG_TYPEOF, BASE64 encode/decode, URL encode/decode
-- ENUM_RANGE/ENUM_FIRST/ENUM_LAST, SHA1, SETSEED, LIST_VALUE
-- ANY_VALUE, HISTOGRAM, ARG_MIN/ARG_MAX, COMMENT ON, ALTER COLUMN TYPE
-
-### Remaining Gaps (This Timeline)
-
-1. RESET variable / RESET ALL statement
-2. TO_DATE, TO_CHAR, GENERATE_SUBSCRIPTS functions
-3. LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH
-4. PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG aggregates
-5. FILTER clause on non-window aggregates
-6. Struct dot notation field access (struct_col.field)
-7. WITHIN GROUP syntax + LISTAGG aggregate
-8. CREATE OR REPLACE TABLE
-9. CREATE TEMP/TEMPORARY TABLE
-10. ALTER TABLE ADD/DROP CONSTRAINT
-11. S3 integration hardening + tests
+1. NOW(), CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, TODAY() — datetime functions
+2. OCTET_LENGTH, INITCAP, SOUNDEX, LCASE/UCASE, LIKE_ESCAPE — string functions
+3. LIST_APPEND, LIST_PREPEND, LIST_HAS, STRING_TO_ARRAY, REGEXP_FULL_MATCH — list/string functions
+4. PRODUCT, MAD, FAVG, FSUM, BITSTRING_AGG — aggregate functions
+5. SIGNBIT, WIDTH_BUCKET, BETA, SUM_IF/AVG_IF/MIN_IF/MAX_IF — numeric functions + conditional aggregates
+6. TIME_BUCKET, MAKE_TIMESTAMPTZ, ISODOW/ISOYEAR, DATEPART, EPOCH_NS, TIMEZONE — temporal functions
+7. duckdb_schemas(), duckdb_types() — system views
+8. ANY/ALL/SOME quantified comparison operators
