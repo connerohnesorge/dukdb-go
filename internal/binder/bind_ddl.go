@@ -427,6 +427,47 @@ func (b *Binder) bindAlterTable(
 		}
 		bound.ConstraintName = s.ConstraintName
 
+	case parser.AlterTableSetColumnDefault:
+		if s.AlterColumn == "" {
+			return nil, b.errorf("column name is required for ALTER COLUMN SET DEFAULT")
+		}
+		if _, ok := tableDef.GetColumnIndex(s.AlterColumn); !ok {
+			return nil, b.errorf("column not found: %s", s.AlterColumn)
+		}
+		boundExpr, err := b.bindExpr(s.DefaultExpr, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		bound.AlterColumn = s.AlterColumn
+		bound.DefaultExpr = boundExpr
+
+	case parser.AlterTableDropColumnDefault:
+		if s.AlterColumn == "" {
+			return nil, b.errorf("column name is required for ALTER COLUMN DROP DEFAULT")
+		}
+		if _, ok := tableDef.GetColumnIndex(s.AlterColumn); !ok {
+			return nil, b.errorf("column not found: %s", s.AlterColumn)
+		}
+		bound.AlterColumn = s.AlterColumn
+
+	case parser.AlterTableSetColumnNotNull:
+		if s.AlterColumn == "" {
+			return nil, b.errorf("column name is required for ALTER COLUMN SET NOT NULL")
+		}
+		if _, ok := tableDef.GetColumnIndex(s.AlterColumn); !ok {
+			return nil, b.errorf("column not found: %s", s.AlterColumn)
+		}
+		bound.AlterColumn = s.AlterColumn
+
+	case parser.AlterTableDropColumnNotNull:
+		if s.AlterColumn == "" {
+			return nil, b.errorf("column name is required for ALTER COLUMN DROP NOT NULL")
+		}
+		if _, ok := tableDef.GetColumnIndex(s.AlterColumn); !ok {
+			return nil, b.errorf("column not found: %s", s.AlterColumn)
+		}
+		bound.AlterColumn = s.AlterColumn
+
 	case parser.AlterTableSetOption:
 		// Not yet implemented
 		return nil, b.errorf("ALTER TABLE SET OPTION is not yet implemented")

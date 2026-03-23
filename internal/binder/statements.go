@@ -329,6 +329,7 @@ type BoundAlterTableStmt struct {
 	NewColumnType  dukdb.Type            // ALTER COLUMN TYPE
 	ConstraintName string                // DROP CONSTRAINT
 	Constraint     *parser.TableConstraint // ADD CONSTRAINT
+	DefaultExpr    BoundExpr             // SET DEFAULT expression
 }
 
 func (*BoundAlterTableStmt) boundStmtNode() {}

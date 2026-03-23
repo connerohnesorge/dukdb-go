@@ -366,11 +366,29 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 		if err := p.expectKeyword("BY"); err != nil {
 			return nil, err
 		}
-		groupBy, err := p.parseGroupByList()
-		if err != nil {
-			return nil, err
+		// Check for GROUP BY ALL
+		if p.isKeyword("ALL") {
+			// Disambiguate: if next token after ALL is comma, it's a column named "all"
+			next := p.peek()
+			if next.typ == tokenComma {
+				// "GROUP BY all, ..." — "all" is a column name
+				groupBy, err := p.parseGroupByList()
+				if err != nil {
+					return nil, err
+				}
+				stmt.GroupBy = groupBy
+			} else {
+				// GROUP BY ALL — auto-group
+				p.advance() // consume ALL
+				stmt.GroupByAll = true
+			}
+		} else {
+			groupBy, err := p.parseGroupByList()
+			if err != nil {
+				return nil, err
+			}
+			stmt.GroupBy = groupBy
 		}
-		stmt.GroupBy = groupBy
 
 		// HAVING
 		if p.isKeyword("HAVING") {
@@ -1510,6 +1528,22 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 	if err := p.expectKeyword("INSERT"); err != nil {
 		return nil, err
 	}
+
+	// Check for OR REPLACE / OR IGNORE (SQLite-compatible syntax)
+	var orAction string // "", "REPLACE", or "IGNORE"
+	if p.isKeyword("OR") {
+		p.advance()
+		if p.isKeyword("REPLACE") {
+			orAction = "REPLACE"
+			p.advance()
+		} else if p.isKeyword("IGNORE") {
+			orAction = "IGNORE"
+			p.advance()
+		} else {
+			return nil, p.errorf("expected REPLACE or IGNORE after INSERT OR")
+		}
+	}
+
 	if err := p.expectKeyword("INTO"); err != nil {
 		return nil, err
 	}
@@ -1611,6 +1645,24 @@ func (p *parser) parseInsert() (*InsertStmt, error) {
 			return nil, err
 		}
 		stmt.Returning = returning
+	}
+
+	// Desugar OR REPLACE/IGNORE to ON CONFLICT clause
+	if orAction != "" && stmt.OnConflict == nil {
+		switch orAction {
+		case "IGNORE":
+			stmt.OnConflict = &OnConflictClause{
+				Action: OnConflictDoNothing,
+			}
+		case "REPLACE":
+			// OnConflictDoUpdate with empty UpdateSet signals the binder
+			// to auto-generate SET col = EXCLUDED.col for all non-PK columns.
+			stmt.OnConflict = &OnConflictClause{
+				Action: OnConflictDoUpdate,
+			}
+		}
+	} else if orAction != "" && stmt.OnConflict != nil {
+		return nil, p.errorf("INSERT OR %s cannot be combined with ON CONFLICT clause", orAction)
 	}
 
 	return stmt, nil

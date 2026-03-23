@@ -698,6 +698,7 @@ type LogicalAlterTable struct {
 	NewColumnType  dukdb.Type              // ALTER COLUMN TYPE
 	ConstraintName string                  // DROP CONSTRAINT
 	Constraint     *parser.TableConstraint // ADD CONSTRAINT
+	DefaultExpr    binder.BoundExpr       // SET DEFAULT expression
 }
 
 func (*LogicalAlterTable) logicalPlanNode() {}

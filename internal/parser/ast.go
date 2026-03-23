@@ -39,6 +39,7 @@ type SelectStmt struct {
 	From       *FromClause
 	Where      Expr
 	GroupBy    []Expr
+	GroupByAll bool // GROUP BY ALL — auto-group by non-aggregate columns
 	Having     Expr
 	Qualify    Expr // QUALIFY clause - filters rows after window function evaluation
 	Windows    []WindowDef   // WINDOW clause - named window definitions
@@ -665,6 +666,10 @@ const (
 	AlterTableAlterColumnType
 	AlterTableAddConstraint
 	AlterTableDropConstraint
+	AlterTableSetColumnDefault
+	AlterTableDropColumnDefault
+	AlterTableSetColumnNotNull
+	AlterTableDropColumnNotNull
 )
 
 // AlterTableStmt represents an ALTER TABLE statement.
@@ -684,6 +689,7 @@ type AlterTableStmt struct {
 	NewTypeRaw     string           // raw type string from parser
 	ConstraintName string           // DROP CONSTRAINT name
 	Constraint     *TableConstraint // ADD CONSTRAINT definition
+	DefaultExpr    Expr             // SET DEFAULT expression
 }
 
 func (*AlterTableStmt) stmtNode() {}

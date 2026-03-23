@@ -604,30 +604,73 @@ func (p *parser) parseAlterTable() (*AlterTableStmt, error) {
 			return nil, p.errorf("expected column name after ALTER [COLUMN]")
 		}
 		colName := p.advance().value
+		stmt.AlterColumn = colName
 
-		// Handle SET DATA TYPE or just TYPE
 		if p.isKeyword("SET") {
 			p.advance() // consume SET
-			if err := p.expectKeyword("DATA"); err != nil {
+			if p.isKeyword("DATA") {
+				// SET DATA TYPE ...
+				p.advance() // consume DATA
+				if err := p.expectKeyword("TYPE"); err != nil {
+					return nil, err
+				}
+				typeSpec, err := p.collectTypeSpec(
+					map[tokenType]bool{tokenSemicolon: true, tokenEOF: true},
+					map[string]bool{},
+				)
+				if err != nil {
+					return nil, err
+				}
+				stmt.Operation = AlterTableAlterColumnType
+				stmt.NewTypeRaw = typeSpec
+			} else if p.isKeyword("DEFAULT") {
+				// SET DEFAULT expr
+				p.advance() // consume DEFAULT
+				expr, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				stmt.Operation = AlterTableSetColumnDefault
+				stmt.DefaultExpr = expr
+			} else if p.isKeyword("NOT") {
+				// SET NOT NULL
+				p.advance() // consume NOT
+				if err := p.expectKeyword("NULL"); err != nil {
+					return nil, err
+				}
+				stmt.Operation = AlterTableSetColumnNotNull
+			} else {
+				return nil, p.errorf("expected DATA TYPE, DEFAULT, or NOT NULL after ALTER COLUMN ... SET")
+			}
+		} else if p.isKeyword("DROP") {
+			p.advance() // consume DROP
+			if p.isKeyword("DEFAULT") {
+				p.advance() // consume DEFAULT
+				stmt.Operation = AlterTableDropColumnDefault
+			} else if p.isKeyword("NOT") {
+				p.advance() // consume NOT
+				if err := p.expectKeyword("NULL"); err != nil {
+					return nil, err
+				}
+				stmt.Operation = AlterTableDropColumnNotNull
+			} else {
+				return nil, p.errorf("expected DEFAULT or NOT NULL after ALTER COLUMN ... DROP")
+			}
+		} else if p.isKeyword("TYPE") {
+			// TYPE ... (without SET DATA prefix)
+			p.advance() // consume TYPE
+			typeSpec, err := p.collectTypeSpec(
+				map[tokenType]bool{tokenSemicolon: true, tokenEOF: true},
+				map[string]bool{},
+			)
+			if err != nil {
 				return nil, err
 			}
+			stmt.Operation = AlterTableAlterColumnType
+			stmt.NewTypeRaw = typeSpec
+		} else {
+			return nil, p.errorf("expected SET, DROP, or TYPE after ALTER COLUMN column_name")
 		}
-		if err := p.expectKeyword("TYPE"); err != nil {
-			return nil, p.errorf("expected TYPE or SET DATA TYPE after column name")
-		}
-
-		// Collect the type specification using collectTypeSpec
-		typeSpec, err := p.collectTypeSpec(
-			map[tokenType]bool{tokenSemicolon: true, tokenEOF: true},
-			map[string]bool{},
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		stmt.Operation = AlterTableAlterColumnType
-		stmt.AlterColumn = colName
-		stmt.NewTypeRaw = typeSpec
 	} else {
 		return nil, p.errorf("expected RENAME, DROP, ADD, ALTER, or SET after ALTER TABLE")
 	}

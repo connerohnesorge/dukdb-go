@@ -189,6 +189,22 @@ func (b *Binder) bindSelect(
 		bound.Where = where
 	}
 
+	// Expand GROUP BY ALL
+	if s.GroupByAll {
+		for _, col := range s.Columns {
+			if col.Star {
+				continue // Skip * — it expands to all columns later
+			}
+			expr := col.Expr
+			if expr == nil {
+				continue
+			}
+			if !containsAggregate(expr) {
+				s.GroupBy = append(s.GroupBy, expr)
+			}
+		}
+	}
+
 	// Bind GROUP BY
 	for _, g := range s.GroupBy {
 		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
@@ -2870,27 +2886,53 @@ func (b *Binder) bindInsert(
 
 		// Bind SET clauses for DO UPDATE
 		if oc.Action == parser.OnConflictDoUpdate {
-			for _, sc := range oc.UpdateSet {
-				colIdx, ok := tableDef.GetColumnIndex(sc.Column)
-				if !ok {
-					return nil, b.errorf("column %q not found in SET clause", sc.Column)
+			// If UpdateSet is empty, this came from INSERT OR REPLACE.
+			// Auto-generate SET col = EXCLUDED.col for all non-PK columns.
+			if len(oc.UpdateSet) == 0 {
+				for i, col := range tableDef.Columns {
+					// Skip primary key columns — they are the conflict target
+					isPK := false
+					for _, pkIdx := range boundOC.ConflictColumnIndices {
+						if pkIdx == i {
+							isPK = true
+							break
+						}
+					}
+					if isPK {
+						continue
+					}
+					boundOC.UpdateSet = append(boundOC.UpdateSet, &BoundSetClause{
+						ColumnIdx: i,
+						Value: &BoundExcludedColumnRef{
+							ColumnIndex: i,
+							ColumnName:  col.Name,
+							DataType:    col.Type,
+						},
+					})
 				}
-				// Bind the value expression, resolving EXCLUDED.col references
-				boundVal, err := b.bindExprWithExcluded(sc.Value, tableDef)
-				if err != nil {
-					return nil, err
+			} else {
+				for _, sc := range oc.UpdateSet {
+					colIdx, ok := tableDef.GetColumnIndex(sc.Column)
+					if !ok {
+						return nil, b.errorf("column %q not found in SET clause", sc.Column)
+					}
+					// Bind the value expression, resolving EXCLUDED.col references
+					boundVal, err := b.bindExprWithExcluded(sc.Value, tableDef)
+					if err != nil {
+						return nil, err
+					}
+					boundOC.UpdateSet = append(boundOC.UpdateSet, &BoundSetClause{
+						ColumnIdx: colIdx,
+						Value:     boundVal,
+					})
 				}
-				boundOC.UpdateSet = append(boundOC.UpdateSet, &BoundSetClause{
-					ColumnIdx: colIdx,
-					Value:     boundVal,
-				})
-			}
-			if oc.UpdateWhere != nil {
-				boundWhere, err := b.bindExprWithExcluded(oc.UpdateWhere, tableDef)
-				if err != nil {
-					return nil, err
+				if oc.UpdateWhere != nil {
+					boundWhere, err := b.bindExprWithExcluded(oc.UpdateWhere, tableDef)
+					if err != nil {
+						return nil, err
+					}
+					boundOC.UpdateWhere = boundWhere
 				}
-				boundOC.UpdateWhere = boundWhere
 			}
 		}
 
@@ -4006,6 +4048,7 @@ func (b *Binder) bindSelectWithoutSetOp(s *parser.SelectStmt) (*BoundSelectStmt,
 		From:       s.From,
 		Where:      s.Where,
 		GroupBy:    s.GroupBy,
+		GroupByAll: s.GroupByAll,
 		Having:     s.Having,
 		Qualify:    s.Qualify,
 		Windows:    s.Windows,
@@ -4207,6 +4250,22 @@ func (b *Binder) bindLateralSubquery(
 		bound.Where = where
 	}
 
+	// Expand GROUP BY ALL
+	if s.GroupByAll {
+		for _, col := range s.Columns {
+			if col.Star {
+				continue // Skip * — it expands to all columns later
+			}
+			expr := col.Expr
+			if expr == nil {
+				continue
+			}
+			if !containsAggregate(expr) {
+				s.GroupBy = append(s.GroupBy, expr)
+			}
+		}
+	}
+
 	// Bind GROUP BY
 	for _, g := range s.GroupBy {
 		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
@@ -4394,4 +4453,64 @@ func (b *Binder) resolveWindowDef(name string, visited []string) (*parser.Window
 	def.RefName = ""
 
 	return def, nil
+}
+
+// aggregateFunctions is the set of known aggregate function names (upper-cased).
+var aggregateFunctions = map[string]struct{}{
+	"COUNT": {}, "SUM": {}, "AVG": {}, "MIN": {}, "MAX": {},
+	"MEDIAN": {}, "MODE": {}, "QUANTILE": {},
+	"PERCENTILE_CONT": {}, "PERCENTILE_DISC": {},
+	"ENTROPY": {}, "SKEWNESS": {}, "KURTOSIS": {},
+	"STDDEV": {}, "STDDEV_SAMP": {}, "STDDEV_POP": {},
+	"VARIANCE": {}, "VAR_SAMP": {}, "VAR_POP": {},
+	"COVAR_SAMP": {}, "COVAR_POP": {}, "CORR": {},
+	"REGR_SLOPE": {}, "REGR_INTERCEPT": {}, "REGR_COUNT": {},
+	"REGR_R2": {}, "REGR_AVGX": {}, "REGR_AVGY": {},
+	"REGR_SXX": {}, "REGR_SYY": {}, "REGR_SXY": {},
+	"STRING_AGG": {}, "LISTAGG": {}, "GROUP_CONCAT": {},
+	"ARRAY_AGG": {}, "LIST": {}, "FIRST": {}, "LAST": {},
+	"ANY_VALUE": {}, "COUNT_IF": {}, "SUM_IF": {},
+	"AVG_IF": {}, "MIN_IF": {}, "MAX_IF": {},
+	"APPROX_COUNT_DISTINCT": {}, "APPROX_QUANTILE": {},
+	"RESERVOIR_QUANTILE": {}, "HISTOGRAM": {},
+	"ARG_MIN": {}, "ARGMIN": {}, "MIN_BY": {},
+	"ARG_MAX": {}, "ARGMAX": {}, "MAX_BY": {},
+	"PRODUCT": {}, "BITSTRING_AGG": {},
+	"BOOL_AND": {}, "BOOL_OR": {}, "EVERY": {},
+	"BIT_AND": {}, "BIT_OR": {}, "BIT_XOR": {},
+	"FAVG": {}, "FSUM": {},
+	"ARBITRARY": {}, "MEAN": {},
+	"GEOMETRIC_MEAN": {}, "GEOMEAN": {}, "WEIGHTED_AVG": {},
+}
+
+// containsAggregate checks whether a parser expression contains an aggregate
+// function call. Used by GROUP BY ALL expansion to distinguish grouping columns
+// from aggregate expressions.
+func containsAggregate(expr parser.Expr) bool {
+	switch e := expr.(type) {
+	case *parser.FunctionCall:
+		if e.Star {
+			// COUNT(*) is always an aggregate
+			return true
+		}
+		_, ok := aggregateFunctions[strings.ToUpper(e.Name)]
+		if ok {
+			return true
+		}
+		// Check arguments recursively (e.g. SUM(a+b) nested inside another func)
+		for _, arg := range e.Args {
+			if containsAggregate(arg) {
+				return true
+			}
+		}
+		return false
+	case *parser.BinaryExpr:
+		return containsAggregate(e.Left) || containsAggregate(e.Right)
+	case *parser.UnaryExpr:
+		return containsAggregate(e.Expr)
+	case *parser.CastExpr:
+		return containsAggregate(e.Expr)
+	default:
+		return false
+	}
 }

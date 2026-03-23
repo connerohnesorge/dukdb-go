@@ -858,6 +858,7 @@ type PhysicalAlterTable struct {
 	NewColumnType  dukdb.Type              // ALTER COLUMN TYPE
 	ConstraintName string                  // DROP CONSTRAINT
 	Constraint     *parser.TableConstraint // ADD CONSTRAINT
+	DefaultExpr    binder.BoundExpr       // SET DEFAULT expression
 }
 
 func (*PhysicalAlterTable) physicalPlanNode() {}
@@ -2073,6 +2074,7 @@ func (p *Planner) planAlterTable(
 		NewColumnType:  s.NewColumnType,
 		ConstraintName: s.ConstraintName,
 		Constraint:     s.Constraint,
+		DefaultExpr:    s.DefaultExpr,
 	}, nil
 }
 
@@ -2856,6 +2858,7 @@ func (p *Planner) createPhysicalPlan(
 			NewColumnType:  l.NewColumnType,
 			ConstraintName: l.ConstraintName,
 			Constraint:     l.Constraint,
+			DefaultExpr:    l.DefaultExpr,
 		}, nil
 
 	case *LogicalComment:
