@@ -51,21 +51,25 @@
 - [ ] 8.3 Add integration test: ATTACH db, then `SELECT * FROM db.main.table_name`.
 - [ ] 8.4 Add integration test: cross-database JOIN (`SELECT a.* FROM db1.t1 a JOIN db2.t2 b ON a.id = b.id`).
 
-## 9. Operator Registration
+## 9. Parser Fix
 
-- [ ] 9.1 Register all five new operator types in `internal/executor/operator.go`.
-- [ ] 9.2 Add execution dispatch in the main executor switch statement.
+- [ ] 9.1 Fix `UseStmt.Type()` at `internal/parser/ast.go:1615` — currently returns `STATEMENT_TYPE_SET` which conflates USE with SET statements. Consider adding a dedicated `STATEMENT_TYPE_USE` or using `STATEMENT_TYPE_ATTACH` to properly distinguish it.
 
-## 10. System Functions
+## 10. Operator Registration
 
-- [ ] 10.1 Add `SHOW DATABASES` support that lists all attached databases with name, path, read_only status.
-- [ ] 10.2 Add `duckdb_databases()` table function as an alternative interface.
-- [ ] 10.3 Add integration tests for SHOW DATABASES.
+- [ ] 10.1 Register all five new operator types in `internal/executor/operator.go`.
+- [ ] 10.2 Add execution dispatch in the main executor switch statement.
 
-## 11. End-to-End Integration Tests
+## 11. System Functions
 
-- [ ] 11.1 Full workflow: ATTACH -> CREATE TABLE -> INSERT -> SELECT -> DETACH.
-- [ ] 11.2 Multiple attached databases with cross-database queries.
-- [ ] 11.3 Read-only ATTACH prevents writes.
-- [ ] 11.4 ATTACH with duplicate alias returns error.
-- [ ] 11.5 File persistence: ATTACH, INSERT, DETACH, re-ATTACH, verify data persists.
+- [ ] 11.1 Add `SHOW DATABASES` support that lists all attached databases with name, path, read_only status.
+- [ ] 11.2 Add `duckdb_databases()` table function as an alternative interface.
+- [ ] 11.3 Add integration tests for SHOW DATABASES.
+
+## 12. End-to-End Integration Tests
+
+- [ ] 12.1 Full workflow: ATTACH -> CREATE TABLE -> INSERT -> SELECT -> DETACH.
+- [ ] 12.2 Multiple attached databases with cross-database queries.
+- [ ] 12.3 Read-only ATTACH prevents writes.
+- [ ] 12.4 ATTACH with duplicate alias returns error.
+- [ ] 12.5 File persistence: ATTACH, INSERT, DETACH, re-ATTACH, verify data persists.
