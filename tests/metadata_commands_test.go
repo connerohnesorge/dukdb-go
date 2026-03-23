@@ -227,16 +227,15 @@ func TestMetadataCommands(t *testing.T) {
 		assert.Equal(t, "DOUBLE", fmt.Sprintf("%v", results[1]["column_type"]))
 		assert.Equal(t, "VARCHAR", fmt.Sprintf("%v", results[2]["column_type"]))
 
-		// Verify count equals total rows (5) for each column
-		for i := range 3 {
-			assert.Equal(t, int64(5), results[i]["count"],
-				"count should be 5 for column %s", results[i]["column_name"])
-		}
+		// Verify count is non-null count (new schema: count = non-null count)
+		assert.Equal(t, int64(5), results[0]["count"], "id has 5 non-null values")
+		assert.Equal(t, int64(4), results[1]["count"], "value has 4 non-null values")
+		assert.Equal(t, int64(4), results[2]["count"], "label has 4 non-null values")
 
-		// Verify null_count > 0 for value (1 NULL) and label (1 NULL)
-		assert.Equal(t, int64(0), results[0]["null_count"], "id has no NULLs")
-		assert.Equal(t, int64(1), results[1]["null_count"], "value has 1 NULL")
-		assert.Equal(t, int64(1), results[2]["null_count"], "label has 1 NULL")
+		// Verify null_percentage > 0 for value (1 NULL) and label (1 NULL)
+		assert.InDelta(t, 0.0, results[0]["null_percentage"], 0.01, "id has no NULLs")
+		assert.InDelta(t, 20.0, results[1]["null_percentage"], 0.01, "value has 1/5 NULLs = 20%%")
+		assert.InDelta(t, 20.0, results[2]["null_percentage"], 0.01, "label has 1/5 NULLs = 20%%")
 
 		// Clean up
 		_, err = db.Exec(`DROP TABLE stats_data`)
@@ -256,7 +255,7 @@ func TestMetadataCommands(t *testing.T) {
 
 		for _, r := range results {
 			assert.Equal(t, int64(0), r["count"], "count should be 0 for empty table")
-			assert.Equal(t, int64(0), r["null_count"], "null_count should be 0 for empty table")
+			assert.InDelta(t, 0.0, r["null_percentage"], 0.01, "null_percentage should be 0 for empty table")
 		}
 
 		// Clean up
