@@ -1544,6 +1544,8 @@ func (p *Planner) createLogicalPlan(
 	case *binder.BoundAlterSecretStmt:
 		return p.planAlterSecret(s)
 	// Database maintenance statements
+	case *binder.BoundSummarizeStmt:
+		return p.planSummarize(s)
 	case *binder.BoundPragmaStmt:
 		return p.planPragma(s)
 	case *binder.BoundExplainStmt:
@@ -2122,6 +2124,22 @@ func (p *Planner) planAlterSecret(
 	return &LogicalAlterSecret{
 		Name:    s.Name,
 		Options: s.Options,
+	}, nil
+}
+
+// planSummarize creates a logical plan for a SUMMARIZE statement.
+func (p *Planner) planSummarize(s *binder.BoundSummarizeStmt) (LogicalPlan, error) {
+	if s.Query != nil {
+		queryPlan, err := p.planSelect(s.Query)
+		if err != nil {
+			return nil, err
+		}
+		return &LogicalSummarize{Query: queryPlan}, nil
+	}
+	return &LogicalSummarize{
+		Schema:    s.Schema,
+		TableName: s.TableName,
+		TableDef:  s.TableDef,
 	}, nil
 }
 
@@ -3059,6 +3077,22 @@ func (p *Planner) createPhysicalPlan(
 	case *LogicalIcebergScan:
 		return p.createPhysicalIcebergScan(l)
 
+	case *LogicalSummarize:
+		var queryPlan PhysicalPlan
+		if l.Query != nil {
+			var err error
+			queryPlan, err = p.createPhysicalPlan(l.Query)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &PhysicalSummarize{
+			Schema:    l.Schema,
+			TableName: l.TableName,
+			TableDef:  l.TableDef,
+			Query:     queryPlan,
+		}, nil
+
 	case *LogicalSetOp:
 		left, err := p.createPhysicalPlan(l.Left)
 		if err != nil {
@@ -3454,7 +3488,9 @@ func isAggregateFunction(name string) bool {
 		"REGR_COUNT", "REGR_AVGX", "REGR_AVGY",
 		"REGR_SXX", "REGR_SYY", "REGR_SXY",
 		// Multiplicative, deviation, and precision aggregates
-		"PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG":
+		"PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG",
+		// Aliases and geometric/weighted aggregates
+		"ARBITRARY", "MEAN", "GEOMETRIC_MEAN", "GEOMEAN", "WEIGHTED_AVG":
 		return true
 	}
 	return false
@@ -3808,6 +3844,27 @@ func extractGroupingCalls(
 	}
 	return calls
 }
+
+// ---------- SUMMARIZE Physical Plan Node ----------
+
+// PhysicalSummarize represents a physical SUMMARIZE operation.
+type PhysicalSummarize struct {
+	Schema    string
+	TableName string
+	TableDef  *catalog.TableDef
+	Query     PhysicalPlan // Inner query plan (nil for SUMMARIZE table)
+}
+
+func (*PhysicalSummarize) physicalPlanNode() {}
+
+func (s *PhysicalSummarize) Children() []PhysicalPlan {
+	if s.Query != nil {
+		return []PhysicalPlan{s.Query}
+	}
+	return nil
+}
+
+func (*PhysicalSummarize) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Database Maintenance Physical Plan Nodes ----------
 

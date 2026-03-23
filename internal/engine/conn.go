@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -808,146 +807,6 @@ func (c *EngineConn) describeQuery(query parser.Statement, columns []string) ([]
 	return rows, columns, nil
 }
 
-// handleSummarize handles the SUMMARIZE statement by computing per-column statistics.
-func (c *EngineConn) handleSummarize(stmt *parser.SummarizeStmt) ([]map[string]any, []string, error) {
-	if stmt.Query != nil {
-		return nil, nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "SUMMARIZE SELECT is not yet supported; use SUMMARIZE table_name",
-		}
-	}
-
-	schemaName := stmt.Schema
-	if schemaName == "" {
-		schemaName = "main"
-	}
-
-	tableDef, ok := c.engine.catalog.GetTableInSchema(schemaName, stmt.TableName)
-	if !ok || tableDef == nil {
-		return nil, nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("Table with name %s does not exist!", stmt.TableName),
-		}
-	}
-
-	// Build and execute SELECT * FROM table
-	var querySQL string
-	if stmt.Schema != "" {
-		querySQL = fmt.Sprintf("SELECT * FROM %s.%s", stmt.Schema, stmt.TableName)
-	} else {
-		querySQL = fmt.Sprintf("SELECT * FROM %s", stmt.TableName)
-	}
-
-	innerStmt, err := parser.Parse(querySQL)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	dataRows, dataCols, err := c.queryInnerStmt(context.Background(), innerStmt, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Build per-column statistics
-	columns := []string{"column_name", "column_type", "min", "max", "unique_count", "null_count", "avg", "std", "count"}
-	totalCount := len(dataRows)
-
-	resultRows := make([]map[string]any, 0, len(dataCols))
-	for colIdx, colName := range dataCols {
-		colType := "VARCHAR"
-		if colIdx < len(tableDef.Columns) {
-			colType = tableDef.Columns[colIdx].Type.String()
-		}
-
-		var (
-			minVal      any
-			maxVal      any
-			nullCount   int
-			uniqueSet   = make(map[any]struct{})
-			sum         float64
-			sumSq       float64
-			numericVals int
-			isNumeric   bool
-		)
-
-		// Check if column type is numeric
-		if colIdx < len(tableDef.Columns) {
-			ct := tableDef.Columns[colIdx].Type
-			switch ct {
-			case dukdb.TYPE_TINYINT, dukdb.TYPE_SMALLINT, dukdb.TYPE_INTEGER, dukdb.TYPE_BIGINT,
-				dukdb.TYPE_UTINYINT, dukdb.TYPE_USMALLINT, dukdb.TYPE_UINTEGER, dukdb.TYPE_UBIGINT,
-				dukdb.TYPE_FLOAT, dukdb.TYPE_DOUBLE, dukdb.TYPE_HUGEINT, dukdb.TYPE_DECIMAL:
-				isNumeric = true
-			}
-		}
-
-		for _, row := range dataRows {
-			val := row[colName]
-			if val == nil {
-				nullCount++
-				continue
-			}
-
-			uniqueSet[val] = struct{}{}
-
-			// Track min/max using string comparison for non-numeric, numeric for numeric
-			valStr := fmt.Sprintf("%v", val)
-			if minVal == nil {
-				minVal = valStr
-				maxVal = valStr
-			} else {
-				minStr := fmt.Sprintf("%v", minVal)
-				maxStr := fmt.Sprintf("%v", maxVal)
-				if valStr < minStr {
-					minVal = valStr
-				}
-				if valStr > maxStr {
-					maxVal = valStr
-				}
-			}
-
-			if isNumeric {
-				fVal := toFloat64(val)
-				if fVal != nil {
-					sum += *fVal
-					sumSq += (*fVal) * (*fVal)
-					numericVals++
-				}
-			}
-		}
-
-		row := map[string]any{
-			"column_name":  colName,
-			"column_type":  colType,
-			"min":          minVal,
-			"max":          maxVal,
-			"unique_count": int64(len(uniqueSet)),
-			"null_count":   int64(nullCount),
-			"avg":          nil,
-			"std":          nil,
-			"count":        int64(totalCount),
-		}
-
-		if isNumeric && numericVals > 0 {
-			avg := sum / float64(numericVals)
-			row["avg"] = avg
-			if numericVals > 1 {
-				variance := (sumSq / float64(numericVals)) - (avg * avg)
-				if variance < 0 {
-					variance = 0
-				}
-				row["std"] = math.Sqrt(variance)
-			} else {
-				row["std"] = 0.0
-			}
-		}
-
-		resultRows = append(resultRows, row)
-	}
-
-	return resultRows, columns, nil
-}
-
 // toFloat64 converts a value to float64 for statistical computation.
 func toFloat64(val any) *float64 {
 	var f float64
@@ -1492,11 +1351,6 @@ func (c *EngineConn) Query(
 	// Handle DESCRIBE statements at connection level
 	if describeStmt, ok := stmt.(*parser.DescribeStmt); ok {
 		return c.handleDescribe(describeStmt)
-	}
-
-	// Handle SUMMARIZE statements at connection level
-	if summarizeStmt, ok := stmt.(*parser.SummarizeStmt); ok {
-		return c.handleSummarize(summarizeStmt)
 	}
 
 	// Handle CALL statements at connection level
@@ -2751,15 +2605,6 @@ func (c *EngineConn) QueryStreaming(
 	// Handle DESCRIBE statements at connection level
 	if describeStmt, ok := stmt.(*parser.DescribeStmt); ok {
 		rows, cols, err := c.handleDescribe(describeStmt)
-		if err != nil {
-			return nil, nil, err
-		}
-		return c.wrapRowsAsStreaming(ctx, rows, cols)
-	}
-
-	// Handle SUMMARIZE statements at connection level
-	if summarizeStmt, ok := stmt.(*parser.SummarizeStmt); ok {
-		rows, cols, err := c.handleSummarize(summarizeStmt)
 		if err != nil {
 			return nil, nil, err
 		}

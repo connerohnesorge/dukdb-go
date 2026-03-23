@@ -531,6 +531,20 @@ func (*BoundAlterSecretStmt) boundStmtNode() {}
 
 func (*BoundAlterSecretStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ALTER }
 
+// ---------- SUMMARIZE Bound Statement Type ----------
+
+// BoundSummarizeStmt represents a bound SUMMARIZE statement.
+type BoundSummarizeStmt struct {
+	Schema    string
+	TableName string
+	TableDef  *catalog.TableDef // Resolved table definition (nil for SUMMARIZE SELECT)
+	Query     *BoundSelectStmt  // Bound inner query (nil for SUMMARIZE table)
+}
+
+func (*BoundSummarizeStmt) boundStmtNode() {}
+
+func (*BoundSummarizeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
+
 // ---------- Database Maintenance Bound Statement Types ----------
 
 // PragmaType represents the category of a PRAGMA statement.

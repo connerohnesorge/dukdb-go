@@ -1171,6 +1171,27 @@ func (u *LogicalUnpivot) OutputColumns() []ColumnBinding {
 	return u.columns
 }
 
+// ---------- SUMMARIZE Logical Plan Node ----------
+
+// LogicalSummarize represents a logical SUMMARIZE operation.
+type LogicalSummarize struct {
+	Schema    string
+	TableName string
+	TableDef  *catalog.TableDef
+	Query     LogicalPlan // Inner query plan (nil for SUMMARIZE table)
+}
+
+func (*LogicalSummarize) logicalPlanNode() {}
+
+func (s *LogicalSummarize) Children() []LogicalPlan {
+	if s.Query != nil {
+		return []LogicalPlan{s.Query}
+	}
+	return nil
+}
+
+func (*LogicalSummarize) OutputColumns() []ColumnBinding { return nil }
+
 // ---------- Database Maintenance Logical Plan Nodes ----------
 
 // LogicalPragma represents a PRAGMA operation.

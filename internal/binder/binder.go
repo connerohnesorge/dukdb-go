@@ -234,6 +234,8 @@ func (b *Binder) Bind(
 		return b.bindDropSecret(s)
 	case *parser.AlterSecretStmt:
 		return b.bindAlterSecret(s)
+	case *parser.SummarizeStmt:
+		return b.bindSummarize(s)
 	case *parser.PragmaStmt:
 		return b.bindPragma(s)
 	case *parser.ExplainStmt:
