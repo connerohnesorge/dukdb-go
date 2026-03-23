@@ -9,25 +9,25 @@
       "id": "8.1",
       "section": "ALTER TABLE Interactions",
       "description": "Allow ALTER TABLE DROP COLUMN on generated columns.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.2",
       "section": "ALTER TABLE Interactions",
       "description": "Reject ALTER TABLE DROP COLUMN on base columns referenced by generated columns (error: \"column X is referenced by generated column Y\").",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.3",
       "section": "ALTER TABLE Interactions",
       "description": "Allow ALTER TABLE ADD COLUMN with GENERATED ALWAYS AS syntax.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "8.4",
       "section": "ALTER TABLE Interactions",
       "description": "Add ALTER TABLE integration tests for all generated column interactions.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "8"

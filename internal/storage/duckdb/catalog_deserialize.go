@@ -24,10 +24,10 @@ func skipPropertyValue(r *BinaryReader, propID uint32) error {
 		PropSeqCycle:
 		_ = r.ReadBool()
 	// Uint8 properties
-	case PropOnConflict, PropColType, PropColCompression, PropConstraintType, PropFKOnDelete,
-		PropFKOnUpdate, PropIndexType, PropIndexConstraint, PropSeqUsage, PropDepType, PropDepDepType,
-		PropTypeID, PropTypeModWidth, PropTypeModScale, PropTypeModChildTypeID, PropTypeModKeyTypeID,
-		PropTypeModValueTypeID:
+	case PropOnConflict, PropColType, PropColCompression, PropColGeneratedKind, PropConstraintType,
+		PropFKOnDelete, PropFKOnUpdate, PropIndexType, PropIndexConstraint, PropSeqUsage,
+		PropDepType, PropDepDepType, PropTypeID, PropTypeModWidth, PropTypeModScale,
+		PropTypeModChildTypeID, PropTypeModKeyTypeID, PropTypeModValueTypeID:
 		_ = r.ReadUint8()
 	// Uint32 properties
 	case PropTypeModLength:

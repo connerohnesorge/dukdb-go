@@ -209,6 +209,9 @@ func (um *UnionMember) Serialize(w *BinaryWriter) error {
 }
 
 // Serialize writes a ColumnDefinition to the binary writer.
+// For generated columns, this serializes the expression using PropColGeneratedEx
+// (equivalent to PropColumnDefExpression) and the kind using PropColGeneratedKind
+// (equivalent to ColumnCategoryGenerated).
 func (cd *ColumnDefinition) Serialize(w *BinaryWriter) error {
 	w.WritePropertyID(PropColName)
 	w.WriteString(cd.Name)
@@ -229,8 +232,12 @@ func (cd *ColumnDefinition) Serialize(w *BinaryWriter) error {
 	w.WritePropertyID(PropColGenerated)
 	w.WriteBool(cd.Generated)
 	if cd.Generated {
+		// PropColGeneratedEx corresponds to PropColumnDefExpression in the BinarySerializer format.
 		w.WritePropertyID(PropColGeneratedEx)
 		w.WriteString(cd.GeneratedExpression)
+		// PropColGeneratedKind encodes the ColumnCategoryGenerated kind (STORED=0, VIRTUAL=1).
+		w.WritePropertyID(PropColGeneratedKind)
+		w.WriteUint8(cd.GeneratedKind)
 	}
 	w.WritePropertyID(PropColCompression)
 	w.WriteUint8(uint8(cd.CompressionType))

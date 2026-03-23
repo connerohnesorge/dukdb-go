@@ -189,6 +189,10 @@ type ColumnDefinition struct {
 	// GeneratedExpression is the expression for generated columns.
 	GeneratedExpression string
 
+	// GeneratedKind indicates whether the generated column is STORED or VIRTUAL.
+	// 0 = STORED (default), 1 = VIRTUAL.
+	GeneratedKind uint8
+
 	// CompressionType is the compression hint for this column.
 	CompressionType CompressionType
 }
@@ -836,17 +840,27 @@ const (
 	PropTypeModifier = 242 // Type modifiers
 )
 
+// GeneratedColumnKind indicates whether a generated column is STORED or VIRTUAL.
+// These values match the ColumnCategoryGenerated semantics used in DuckDB's BinarySerializer.
+const (
+	// GeneratedColumnStored indicates a STORED generated column (materialized on write).
+	GeneratedColumnStored uint8 = 0
+	// GeneratedColumnVirtual indicates a VIRTUAL generated column (computed on read).
+	GeneratedColumnVirtual uint8 = 1
+)
+
 // Property IDs for ColumnDefinition.
 const (
-	PropColName        = 250 // Column name
-	PropColType        = 251 // Column type
-	PropColTypeMod     = 252 // Type modifiers
-	PropColNullable    = 253 // Nullable flag
-	PropColHasDefault  = 254 // Has default flag
-	PropColDefault     = 255 // Default value
-	PropColGenerated   = 256 // Generated flag
-	PropColGeneratedEx = 257 // Generated expression
-	PropColCompression = 258 // Compression type
+	PropColName           = 250 // Column name
+	PropColType           = 251 // Column type
+	PropColTypeMod        = 252 // Type modifiers
+	PropColNullable       = 253 // Nullable flag
+	PropColHasDefault     = 254 // Has default flag
+	PropColDefault        = 255 // Default value
+	PropColGenerated      = 256 // Generated flag
+	PropColGeneratedEx    = 257 // Generated expression (PropColumnDefExpression equivalent)
+	PropColCompression    = 258 // Compression type
+	PropColGeneratedKind  = 259 // Generated column kind (STORED=0, VIRTUAL=1; ColumnCategoryGenerated)
 )
 
 // Property IDs for Constraint.

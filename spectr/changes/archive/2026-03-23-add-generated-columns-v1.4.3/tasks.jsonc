@@ -84,14 +84,14 @@
       "id": "7",
       "section": "Storage Serialization",
       "description": "Storage Serialization tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-7.jsonc"
     },
     {
       "id": "8",
       "section": "ALTER TABLE Interactions",
       "description": "ALTER TABLE Interactions tasks",
-      "status": "pending",
+      "status": "completed",
       "children": "$ref:tasks-8.jsonc"
     },
     {

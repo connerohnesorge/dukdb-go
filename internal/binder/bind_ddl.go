@@ -2,6 +2,7 @@ package binder
 
 import (
 	"fmt"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
@@ -369,12 +370,29 @@ func (b *Binder) bindAlterTable(
 			return nil, b.errorf("column name is required for DROP COLUMN")
 		}
 		// Check if column exists
-		if _, ok := tableDef.GetColumnIndex(s.DropColumn); !ok {
+		colIdx, ok := tableDef.GetColumnIndex(s.DropColumn)
+		if !ok {
 			return nil, b.errorf("column not found: %s", s.DropColumn)
 		}
 		// Cannot drop the last column
 		if len(tableDef.Columns) == 1 {
 			return nil, b.errorf("cannot drop the last column of a table")
+		}
+		// Reject dropping a base column that is referenced by a generated column expression.
+		// Generated columns themselves can be dropped freely.
+		droppingCol := tableDef.Columns[colIdx]
+		if !droppingCol.IsGenerated {
+			for _, col := range tableDef.Columns {
+				if col.IsGenerated && col.GeneratedExpr != "" {
+					if generatedExprReferencesColumn(col.GeneratedExpr, s.DropColumn) {
+						return nil, b.errorf(
+							"column %q is referenced by generated column %q",
+							s.DropColumn,
+							col.Name,
+						)
+					}
+				}
+			}
 		}
 		bound.DropColumn = s.DropColumn
 
@@ -397,6 +415,11 @@ func (b *Binder) bindAlterTable(
 			if lit, ok := s.AddColumn.Default.(*parser.Literal); ok {
 				colDef.DefaultValue = lit.Value
 			}
+		}
+		if s.AddColumn.IsGenerated {
+			colDef.IsGenerated = true
+			colDef.GeneratedExpr = serializeExpr(s.AddColumn.GeneratedExpr)
+			colDef.GeneratedStored = (s.AddColumn.GeneratedKind == parser.GeneratedKindStored)
 		}
 		bound.AddColumn = colDef
 
@@ -1091,4 +1114,40 @@ func (b *Binder) bindComment(s *parser.CommentStmt) (*BoundCommentStmt, error) {
 		ColumnName: s.ColumnName,
 		Comment:    s.Comment,
 	}, nil
+}
+
+// generatedExprReferencesColumn checks whether the serialized expression text of a generated
+// column references a specific base column name.  The check is a simple word-boundary scan:
+// identifiers in the serialized expression are separated by non-alphanumeric/non-underscore
+// characters, so we scan for an exact token match (case-insensitive).
+func generatedExprReferencesColumn(exprText, colName string) bool {
+	expr := strings.ToLower(exprText)
+	target := strings.ToLower(colName)
+	n := len(expr)
+	tn := len(target)
+
+	for i := 0; i <= n-tn; i++ {
+		// Check if expr[i:i+tn] matches target
+		if expr[i:i+tn] != target {
+			continue
+		}
+		// Check left boundary
+		if i > 0 {
+			ch := expr[i-1]
+			if ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+				continue
+			}
+		}
+		// Check right boundary
+		end := i + tn
+		if end < n {
+			ch := expr[end]
+			if ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+				continue
+			}
+		}
+		return true
+	}
+
+	return false
 }

@@ -169,7 +169,11 @@ func (cd *ColumnDefinition) Deserialize(r *BinaryReader) error {
 		case PropColGenerated:
 			cd.Generated = r.ReadBool()
 		case PropColGeneratedEx:
+			// PropColGeneratedEx corresponds to PropColumnDefExpression in BinarySerializer format.
 			cd.GeneratedExpression = r.ReadString()
+		case PropColGeneratedKind:
+			// PropColGeneratedKind corresponds to ColumnCategoryGenerated kind (STORED=0, VIRTUAL=1).
+			cd.GeneratedKind = r.ReadUint8()
 		case PropColCompression:
 			cd.CompressionType = CompressionType(r.ReadUint8())
 		default:

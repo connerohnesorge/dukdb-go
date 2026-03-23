@@ -1043,3 +1043,192 @@ func TestCreateInfoRoundTrip(t *testing.T) {
 	require.Equal(t, len(original.Dependencies), len(deserialized.Dependencies))
 	assert.Equal(t, original.Dependencies[0].Name, deserialized.Dependencies[0].Name)
 }
+
+// TestGeneratedColumnStoredRoundTrip verifies that a STORED generated column
+// serializes and deserializes correctly, preserving Generated, GeneratedExpression,
+// and GeneratedKind fields.
+func TestGeneratedColumnStoredRoundTrip(t *testing.T) {
+	original := ColumnDefinition{
+		Name:                "full_name",
+		Type:                TypeVarchar,
+		Nullable:            true,
+		Generated:           true,
+		GeneratedExpression: "first_name || ' ' || last_name",
+		GeneratedKind:       GeneratedColumnStored,
+	}
+
+	var buf bytes.Buffer
+	w := NewBinaryWriter(&buf)
+
+	err := original.Serialize(w)
+	require.NoError(t, err)
+
+	r := NewBinaryReader(&buf)
+	var deserialized ColumnDefinition
+	err = deserialized.Deserialize(r)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.Name, deserialized.Name)
+	assert.Equal(t, original.Type, deserialized.Type)
+	assert.Equal(t, original.Nullable, deserialized.Nullable)
+	assert.True(t, deserialized.Generated, "Generated flag should be true")
+	assert.Equal(
+		t,
+		original.GeneratedExpression,
+		deserialized.GeneratedExpression,
+		"GeneratedExpression (PropColumnDefExpression) should be preserved",
+	)
+	assert.Equal(
+		t,
+		original.GeneratedKind,
+		deserialized.GeneratedKind,
+		"GeneratedKind (ColumnCategoryGenerated) should be STORED (0)",
+	)
+	assert.Equal(t, GeneratedColumnStored, deserialized.GeneratedKind)
+}
+
+// TestGeneratedColumnVirtualRoundTrip verifies that a VIRTUAL generated column
+// serializes and deserializes correctly, preserving Generated, GeneratedExpression,
+// and GeneratedKind fields.
+func TestGeneratedColumnVirtualRoundTrip(t *testing.T) {
+	original := ColumnDefinition{
+		Name:                "price_with_tax",
+		Type:                TypeDouble,
+		Nullable:            true,
+		Generated:           true,
+		GeneratedExpression: "price * 1.1",
+		GeneratedKind:       GeneratedColumnVirtual,
+	}
+
+	var buf bytes.Buffer
+	w := NewBinaryWriter(&buf)
+
+	err := original.Serialize(w)
+	require.NoError(t, err)
+
+	r := NewBinaryReader(&buf)
+	var deserialized ColumnDefinition
+	err = deserialized.Deserialize(r)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.Name, deserialized.Name)
+	assert.Equal(t, original.Type, deserialized.Type)
+	assert.True(t, deserialized.Generated, "Generated flag should be true")
+	assert.Equal(
+		t,
+		original.GeneratedExpression,
+		deserialized.GeneratedExpression,
+		"GeneratedExpression (PropColumnDefExpression) should be preserved",
+	)
+	assert.Equal(
+		t,
+		original.GeneratedKind,
+		deserialized.GeneratedKind,
+		"GeneratedKind (ColumnCategoryGenerated) should be VIRTUAL (1)",
+	)
+	assert.Equal(t, GeneratedColumnVirtual, deserialized.GeneratedKind)
+}
+
+// TestTableWithGeneratedColumnsRoundTrip verifies that a table with mixed generated
+// (STORED and VIRTUAL) columns serializes and deserializes correctly.
+func TestTableWithGeneratedColumnsRoundTrip(t *testing.T) {
+	original := NewTableCatalogEntry("products")
+	original.Schema = testSchemaPublic
+	original.Catalog = testCatalogMain
+	original.SQL = "CREATE TABLE products (id INTEGER, price DOUBLE, name VARCHAR, full_price DOUBLE GENERATED ALWAYS AS (price * 1.1) VIRTUAL, display_name VARCHAR GENERATED ALWAYS AS (name || ' ($' || CAST(price AS VARCHAR) || ')') STORED);"
+
+	original.AddColumn(ColumnDefinition{
+		Name:     "id",
+		Type:     TypeInteger,
+		Nullable: false,
+	})
+	original.AddColumn(ColumnDefinition{
+		Name:     "price",
+		Type:     TypeDouble,
+		Nullable: false,
+	})
+	original.AddColumn(ColumnDefinition{
+		Name:     "name",
+		Type:     TypeVarchar,
+		Nullable: false,
+	})
+	// VIRTUAL generated column: computed on read, not stored
+	original.AddColumn(ColumnDefinition{
+		Name:                "full_price",
+		Type:                TypeDouble,
+		Nullable:            true,
+		Generated:           true,
+		GeneratedExpression: "price * 1.1",
+		GeneratedKind:       GeneratedColumnVirtual,
+	})
+	// STORED generated column: materialized on write, uses PropColumnDefExpression semantics
+	original.AddColumn(ColumnDefinition{
+		Name:                "display_name",
+		Type:                TypeVarchar,
+		Nullable:            true,
+		Generated:           true,
+		GeneratedExpression: "name || ' ($' || CAST(price AS VARCHAR) || ')'",
+		GeneratedKind:       GeneratedColumnStored,
+	})
+
+	var buf bytes.Buffer
+	w := NewBinaryWriter(&buf)
+
+	err := original.Serialize(w)
+	require.NoError(t, err)
+
+	r := NewBinaryReader(&buf)
+	entry, err := DeserializeCatalogEntry(r)
+	require.NoError(t, err)
+
+	deserialized, ok := entry.(*TableCatalogEntry)
+	require.True(t, ok, "deserialized entry should be a TableCatalogEntry")
+
+	assert.Equal(t, original.Name, deserialized.Name)
+	assert.Equal(t, original.Schema, deserialized.Schema)
+	require.Equal(t, len(original.Columns), len(deserialized.Columns))
+
+	// Check non-generated columns
+	assert.Equal(t, "id", deserialized.Columns[0].Name)
+	assert.False(t, deserialized.Columns[0].Generated)
+
+	assert.Equal(t, "price", deserialized.Columns[1].Name)
+	assert.False(t, deserialized.Columns[1].Generated)
+
+	assert.Equal(t, "name", deserialized.Columns[2].Name)
+	assert.False(t, deserialized.Columns[2].Generated)
+
+	// Check VIRTUAL generated column (full_price)
+	virtualCol := deserialized.Columns[3]
+	assert.Equal(t, "full_price", virtualCol.Name)
+	assert.True(t, virtualCol.Generated, "full_price should be a generated column")
+	assert.Equal(
+		t,
+		"price * 1.1",
+		virtualCol.GeneratedExpression,
+		"VIRTUAL generated expression should be preserved",
+	)
+	assert.Equal(
+		t,
+		GeneratedColumnVirtual,
+		virtualCol.GeneratedKind,
+		"full_price should have VIRTUAL kind (ColumnCategoryGenerated=1)",
+	)
+
+	// Check STORED generated column (display_name)
+	storedCol := deserialized.Columns[4]
+	assert.Equal(t, "display_name", storedCol.Name)
+	assert.True(t, storedCol.Generated, "display_name should be a generated column")
+	assert.Equal(
+		t,
+		"name || ' ($' || CAST(price AS VARCHAR) || ')'",
+		storedCol.GeneratedExpression,
+		"STORED generated expression should be preserved",
+	)
+	assert.Equal(
+		t,
+		GeneratedColumnStored,
+		storedCol.GeneratedKind,
+		"display_name should have STORED kind (ColumnCategoryGenerated=0)",
+	)
+}

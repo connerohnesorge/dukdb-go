@@ -9,19 +9,19 @@
       "id": "7.1",
       "section": "Storage Serialization",
       "description": "In `internal/storage/duckdb/catalog_serialize.go`, serialize generated column metadata using `PropColumnDefExpression` and `ColumnCategoryGenerated` constants.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.2",
       "section": "Storage Serialization",
       "description": "In `internal/storage/duckdb/catalog_deserialize.go`, deserialize generated column metadata and reconstruct `IsGenerated`, `GeneratedExpr`, `GeneratedKind`.",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "7.3",
       "section": "Storage Serialization",
       "description": "Add round-trip serialization tests for tables with generated columns.",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "parent": "7"
