@@ -115,6 +115,13 @@ var aggregateWindowFunctions = map[string]bool{
 	"BIT_AND": true,
 	"BIT_OR":  true,
 	"BIT_XOR": true,
+
+	// Aliases and geometric/weighted aggregates
+	"ARBITRARY":      true,
+	"MEAN":           true,
+	"GEOMETRIC_MEAN": true,
+	"GEOMEAN":        true,
+	"WEIGHTED_AVG":   true,
 }
 
 // IsWindowFunction returns true if the function name is a window function.
@@ -380,8 +387,15 @@ func inferFunctionResultType(
 		}
 
 		return dukdb.TYPE_BIGINT
-	case "AVG":
+	case "AVG", "MEAN":
 		return dukdb.TYPE_DOUBLE
+	case "GEOMETRIC_MEAN", "GEOMEAN", "WEIGHTED_AVG":
+		return dukdb.TYPE_DOUBLE
+	case "ARBITRARY":
+		if len(args) > 0 {
+			return args[0].ResultType()
+		}
+		return dukdb.TYPE_ANY
 	case "MIN", "MAX":
 		if len(args) > 0 {
 			return args[0].ResultType()
@@ -436,6 +450,8 @@ func inferFunctionResultType(
 		"MD5",
 		"SHA256",
 		"SHA1",
+		"SHA512",
+		"SPLIT_PART",
 		"TRANSLATE",
 		"STRIP_ACCENTS",
 		"INITCAP",
@@ -493,6 +509,8 @@ func inferFunctionResultType(
 		return dukdb.TYPE_INTEGER
 	case "SECOND":
 		return dukdb.TYPE_DOUBLE
+	case "MILLISECOND", "MICROSECOND":
+		return dukdb.TYPE_INTEGER
 	case "DAYOFWEEK", "DAYOFYEAR", "WEEK", "QUARTER":
 		return dukdb.TYPE_INTEGER
 	// Date arithmetic functions (tasks 1.5, 1.6, 1.7, 1.8, 1.9, 1.10)
@@ -741,8 +759,10 @@ func inferFunctionResultType(
 		return dukdb.TYPE_DOUBLE
 
 	// Utility functions
-	case "PI", "RANDOM", "RAND":
+	case "PI", "RANDOM", "RAND", "E", "INF", "INFINITY", "NAN":
 		return dukdb.TYPE_DOUBLE
+	case "UUID", "GEN_RANDOM_UUID":
+		return dukdb.TYPE_VARCHAR
 	case "SETSEED":
 		return dukdb.TYPE_ANY
 	case "SIGN":
@@ -1262,7 +1282,7 @@ func getFunctionArgTypes(
 		}
 
 	// Utility functions
-	case "PI", "RANDOM", "RAND":
+	case "PI", "RANDOM", "RAND", "E", "INF", "INFINITY", "NAN", "UUID", "GEN_RANDOM_UUID":
 		// No arguments needed
 		return nil
 	case "SETSEED":

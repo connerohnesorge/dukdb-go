@@ -332,6 +332,64 @@ func evalSecond(args []any) (any, error) {
 	}
 }
 
+// evalMillisecond extracts the millisecond component (0-999) from a TIMESTAMP or TIME value.
+func evalMillisecond(args []any) (any, error) {
+	if len(args) != 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "MILLISECOND requires exactly 1 argument",
+		}
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	switch v := args[0].(type) {
+	case int32: // DATE - millisecond is always 0
+		return int32(0), nil
+	case int64:
+		t := timestampToTime(v)
+		return int32(t.Nanosecond() / 1_000_000), nil
+	case time.Time:
+		return int32(v.Nanosecond() / 1_000_000), nil
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("MILLISECOND: unsupported type %T", args[0]),
+		}
+	}
+}
+
+// evalMicrosecond extracts the microsecond component (0-999999) from a TIMESTAMP or TIME value.
+func evalMicrosecond(args []any) (any, error) {
+	if len(args) != 1 {
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "MICROSECOND requires exactly 1 argument",
+		}
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	switch v := args[0].(type) {
+	case int32: // DATE - microsecond is always 0
+		return int32(0), nil
+	case int64:
+		t := timestampToTime(v)
+		return int32(t.Nanosecond() / 1_000), nil
+	case time.Time:
+		return int32(v.Nanosecond() / 1_000), nil
+	default:
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("MICROSECOND: unsupported type %T", args[0]),
+		}
+	}
+}
+
 // evalDayOfWeek extracts the day of week from a DATE or TIMESTAMP value.
 // Returns int32 where 0=Sunday, 6=Saturday (matching DuckDB convention).
 func evalDayOfWeek(args []any) (any, error) {

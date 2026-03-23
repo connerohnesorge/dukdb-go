@@ -215,6 +215,8 @@ func exprUsesVolatile(expr binder.BoundExpr) bool {
 		"CURRENT_TIME":      {},
 		"CURRENT_DATE":      {},
 		"TODAY":             {},
+		"UUID":              {},
+		"GEN_RANDOM_UUID":   {},
 	}
 
 	switch e := expr.(type) {

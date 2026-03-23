@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"hash/fnv"
 )
@@ -41,6 +42,16 @@ func sha1Value(str any) (any, error) {
 
 	s := toString(str)
 	hash := sha1.Sum([]byte(s))
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func sha512Value(str any) (any, error) {
+	if str == nil {
+		return nil, nil
+	}
+
+	s := toString(str)
+	hash := sha512.Sum512([]byte(s))
 	return hex.EncodeToString(hash[:]), nil
 }
 

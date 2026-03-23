@@ -18,6 +18,7 @@ import (
 	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
 	"github.com/dukdb/dukdb-go/internal/wal"
+	"github.com/google/uuid"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/unicode/norm"
 )
@@ -292,6 +293,42 @@ func (e *Executor) evaluateExpr(
 			return val != nil, nil
 		}
 		return nil, nil
+
+	case *parser.FunctionCall:
+		// Handle raw parser function calls (used by generated column expressions).
+		// Evaluate arguments, wrap as BoundLiterals, and delegate to the function evaluator.
+		boundArgs := make([]binder.BoundExpr, len(ex.Args))
+		for i, arg := range ex.Args {
+			val, err := e.evaluateExpr(ctx, arg, row)
+			if err != nil {
+				return nil, err
+			}
+			boundArgs[i] = &binder.BoundLiteral{Value: val, ValType: dukdb.TYPE_ANY}
+		}
+		boundFn := &binder.BoundFunctionCall{
+			Name:     strings.ToUpper(ex.Name),
+			Args:     boundArgs,
+			Distinct: ex.Distinct,
+			Star:     ex.Star,
+		}
+		return e.evaluateFunctionCall(ctx, boundFn, row)
+
+	case *parser.CastExpr:
+		val, err := e.evaluateExpr(ctx, ex.Expr, row)
+		if err != nil {
+			if ex.TryCast {
+				return nil, nil
+			}
+			return nil, err
+		}
+		result, err := castValue(val, ex.TargetType)
+		if err != nil {
+			if ex.TryCast {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return result, nil
 
 	case *binder.BoundLambdaExpr:
 		// Lambda expressions should not be evaluated directly; they are passed to
@@ -608,6 +645,24 @@ func (e *Executor) evaluateParserBinaryOp(op parser.BinaryOp, left, right any) (
 		return toBool(left) && toBool(right), nil
 	case parser.OpOr:
 		return toBool(left) || toBool(right), nil
+	case parser.OpLike:
+		return matchLike(toString(left), toString(right), true), nil
+	case parser.OpILike:
+		return matchLike(
+			strings.ToLower(toString(left)),
+			strings.ToLower(toString(right)),
+			true,
+		), nil
+	case parser.OpNotLike:
+		return !matchLike(toString(left), toString(right), true), nil
+	case parser.OpNotILike:
+		return !matchLike(
+			strings.ToLower(toString(left)),
+			strings.ToLower(toString(right)),
+			true,
+		), nil
+	case parser.OpConcat:
+		return toString(left) + toString(right), nil
 	default:
 		return nil, fmt.Errorf("unsupported parser binary operator: %d", op)
 	}
@@ -838,13 +893,31 @@ func (e *Executor) evaluateFunctionCall(
 		return lnValue(args[0])
 
 	case "LOG", "LOG10":
-		if len(args) != 1 {
-			return nil, &dukdb.Error{
-				Type: dukdb.ErrorTypeExecutor,
-				Msg:  "LOG10 requires 1 argument",
-			}
+		if len(args) == 1 {
+			return log10Value(args[0])
 		}
-		return log10Value(args[0])
+		if len(args) == 2 {
+			// LOG(x, base) = ln(x) / ln(base)
+			if args[0] == nil || args[1] == nil {
+				return nil, nil
+			}
+			x, ok1 := toFloat64(args[0])
+			base, ok2 := toFloat64(args[1])
+			if !ok1 || !ok2 {
+				return nil, &dukdb.Error{
+					Type: dukdb.ErrorTypeExecutor,
+					Msg:  "LOG: arguments must be numeric",
+				}
+			}
+			if base <= 0 || base == 1 || x <= 0 {
+				return nil, nil // NULL for invalid inputs
+			}
+			return math.Log(x) / math.Log(base), nil
+		}
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "LOG requires 1 or 2 arguments",
+		}
 
 	case "LOG2":
 		if len(args) != 1 {
@@ -1036,6 +1109,33 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return piValue()
 
+	case "E":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "E requires 0 arguments",
+			}
+		}
+		return math.E, nil
+
+	case "INF", "INFINITY":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "INF requires 0 arguments",
+			}
+		}
+		return math.Inf(1), nil
+
+	case "NAN":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "NAN requires 0 arguments",
+			}
+		}
+		return math.NaN(), nil
+
 	case "RANDOM", "RAND":
 		if len(args) != 0 {
 			return nil, &dukdb.Error{
@@ -1044,6 +1144,15 @@ func (e *Executor) evaluateFunctionCall(
 			}
 		}
 		return randomValue(ctx)
+
+	case "UUID", "GEN_RANDOM_UUID":
+		if len(args) != 0 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "UUID requires 0 arguments",
+			}
+		}
+		return uuid.New().String(), nil
 
 	case "SETSEED":
 		if len(args) != 1 {
@@ -1418,6 +1527,45 @@ func (e *Executor) evaluateFunctionCall(
 		}
 
 		return int64(len(toString(args[0]))), nil
+
+	case "SPLIT_PART":
+		if len(args) != 3 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SPLIT_PART requires 3 arguments (string, delimiter, index)",
+			}
+		}
+		if args[0] == nil || args[1] == nil || args[2] == nil {
+			return nil, nil
+		}
+		str := toString(args[0])
+		delim := toString(args[1])
+		spIdx, spOk := toInt64(args[2])
+		if !spOk {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SPLIT_PART: index must be integer",
+			}
+		}
+		parts := strings.Split(str, delim)
+		if spIdx > 0 {
+			// 1-based positive indexing
+			if int(spIdx) > len(parts) {
+				return "", nil
+			}
+			return parts[spIdx-1], nil
+		} else if spIdx < 0 {
+			// Negative indexing from end
+			pos := len(parts) + int(spIdx)
+			if pos < 0 {
+				return "", nil
+			}
+			return parts[pos], nil
+		}
+		return nil, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  "SPLIT_PART: index must not be zero",
+		}
 
 	case "TRIM":
 		if len(args) != 1 {
@@ -1982,6 +2130,15 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return sha1Value(args[0])
 
+	case "SHA512":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "SHA512 requires 1 argument",
+			}
+		}
+		return sha512Value(args[0])
+
 	case "HASH":
 		if len(args) != 1 {
 			return nil, &dukdb.Error{
@@ -2092,6 +2249,12 @@ func (e *Executor) evaluateFunctionCall(
 
 	case "SECOND":
 		return evalSecond(args)
+
+	case "MILLISECOND":
+		return evalMillisecond(args)
+
+	case "MICROSECOND":
+		return evalMicrosecond(args)
 
 	case "DAYOFWEEK":
 		return evalDayOfWeek(args)
@@ -3637,6 +3800,9 @@ func (e *Executor) evaluateFunctionCall(
 		// Round 3 aggregates
 		case "PRODUCT", "MAD", "FAVG", "FSUM", "BITSTRING_AGG":
 			return nil, nil
+		// Round 4 aggregates
+		case "ARBITRARY", "MEAN", "GEOMETRIC_MEAN", "GEOMEAN", "WEIGHTED_AVG":
+			return nil, nil
 		}
 
 		return nil, &dukdb.Error{
@@ -4047,7 +4213,7 @@ func (e *Executor) computeAggregate(
 
 		return sum, nil
 
-	case "AVG":
+	case "AVG", "MEAN":
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -4523,7 +4689,7 @@ func (e *Executor) computeAggregate(
 		}
 		return computeCountIf(values)
 
-	case "FIRST", "ANY_VALUE":
+	case "FIRST", "ANY_VALUE", "ARBITRARY":
 		if len(fn.Args) == 0 {
 			return nil, nil
 		}
@@ -4752,6 +4918,232 @@ func (e *Executor) computeAggregate(
 			return nil, nil
 		}
 		return string(bits), nil
+
+	case "GEOMETRIC_MEAN", "GEOMEAN":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		var logSum float64
+		count := 0
+		for _, val := range values {
+			if val == nil {
+				continue
+			}
+			f := toFloat64Value(val)
+			if f <= 0 {
+				return nil, nil
+			}
+			logSum += math.Log(f)
+			count++
+		}
+		if count == 0 {
+			return nil, nil
+		}
+		return math.Exp(logSum / float64(count)), nil
+
+	case "WEIGHTED_AVG":
+		if len(fn.Args) < 2 {
+			return nil, fmt.Errorf("WEIGHTED_AVG requires 2 arguments (value, weight)")
+		}
+		valValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		weightValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		var sumVW, sumW float64
+		hasValues := false
+		for i, val := range valValues {
+			if val == nil {
+				continue
+			}
+			if i >= len(weightValues) || weightValues[i] == nil {
+				continue
+			}
+			v := toFloat64Value(val)
+			w := toFloat64Value(weightValues[i])
+			sumVW += v * w
+			sumW += w
+			hasValues = true
+		}
+		if !hasValues || sumW == 0 {
+			return nil, nil
+		}
+		return sumVW / sumW, nil
+
+	case "COVAR_POP":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCovarPop(yValues, xValues)
+
+	case "COVAR_SAMP":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCovarSamp(yValues, xValues)
+
+	case "CORR":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeCorr(yValues, xValues)
+
+	case "REGR_SLOPE":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSlope(yValues, xValues)
+
+	case "REGR_INTERCEPT":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrIntercept(yValues, xValues)
+
+	case "REGR_R2":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrR2(yValues, xValues)
+
+	case "REGR_COUNT":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrCount(yValues, xValues)
+
+	case "REGR_AVGX":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrAvgX(yValues, xValues)
+
+	case "REGR_AVGY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrAvgY(yValues, xValues)
+
+	case "REGR_SXX":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSXX(yValues, xValues)
+
+	case "REGR_SYY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSYY(yValues, xValues)
+
+	case "REGR_SXY":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		yValues, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		xValues, err := e.collectAggValues(ctx, fn.Args[1], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeRegrSXY(yValues, xValues)
 
 	default:
 		return nil, &dukdb.Error{
