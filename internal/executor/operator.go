@@ -503,6 +503,8 @@ func (e *Executor) executeWithContext(
 		return e.executePhysicalIcebergScan(execCtx, p)
 	case *planner.PhysicalSetOp:
 		return e.executeSetOp(execCtx, p)
+	case *planner.PhysicalSummarize:
+		return e.executeSummarize(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -2325,6 +2327,11 @@ func (e *Executor) executeInsert(
 				}
 			}
 
+			// Evaluate generated column expressions
+			if err := e.evaluateGeneratedColumns(ctx, plan.TableDef, values); err != nil {
+				return nil, err
+			}
+
 			// Check NOT NULL constraints
 			for i, col := range plan.TableDef.Columns {
 				if !col.Nullable && values[i] == nil {
@@ -2431,6 +2438,11 @@ func (e *Executor) executeInsert(
 				if !specifiedCols[i] && col.HasDefault {
 					values[i] = col.DefaultValue
 				}
+			}
+
+			// Evaluate generated column expressions
+			if err := e.evaluateGeneratedColumns(ctx, plan.TableDef, values); err != nil {
+				return nil, err
 			}
 
 			// Check NOT NULL constraints

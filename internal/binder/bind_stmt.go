@@ -383,6 +383,38 @@ func isArrowPath(path string) bool {
 	return ext == ".arrow" || ext == ".ipc" || ext == ".feather"
 }
 
+func (b *Binder) bindSummarize(s *parser.SummarizeStmt) (BoundStatement, error) {
+	if s.Query != nil {
+		// SUMMARIZE SELECT ...
+		boundQuery, err := b.Bind(s.Query)
+		if err != nil {
+			return nil, err
+		}
+		selectStmt, ok := boundQuery.(*BoundSelectStmt)
+		if !ok {
+			return nil, b.errorf("SUMMARIZE query must be a SELECT statement")
+		}
+		return &BoundSummarizeStmt{
+			Query: selectStmt,
+		}, nil
+	}
+
+	// SUMMARIZE table_name
+	schema := s.Schema
+	if schema == "" {
+		schema = "main"
+	}
+	tableDef, ok := b.catalog.GetTableInSchema(schema, s.TableName)
+	if !ok || tableDef == nil {
+		return nil, b.errorf("Table with name %s does not exist!", s.TableName)
+	}
+	return &BoundSummarizeStmt{
+		Schema:    schema,
+		TableName: s.TableName,
+		TableDef:  tableDef,
+	}, nil
+}
+
 func (b *Binder) bindTableRef(
 	ref parser.TableRef,
 ) (*BoundTableRef, error) {
@@ -2807,8 +2839,11 @@ func (b *Binder) bindInsert(
 
 	// Resolve column indices
 	if len(s.Columns) == 0 {
-		// Insert into all columns
-		for i := range tableDef.Columns {
+		// Insert into all columns — but exclude generated columns
+		for i, col := range tableDef.Columns {
+			if col.IsGenerated {
+				continue
+			}
 			bound.Columns = append(
 				bound.Columns,
 				i,
@@ -2819,6 +2854,13 @@ func (b *Binder) bindInsert(
 			idx, ok := tableDef.GetColumnIndex(colName)
 			if !ok {
 				return nil, b.errorf("column not found: %s", colName)
+			}
+			// Reject explicit insert into generated column
+			if tableDef.Columns[idx].IsGenerated {
+				return nil, b.errorf(
+					"cannot insert a non-DEFAULT value into column %q: column is a generated column",
+					colName,
+				)
 			}
 			bound.Columns = append(bound.Columns, idx)
 		}
@@ -3091,6 +3133,14 @@ func (b *Binder) bindUpdate(
 			)
 		}
 
+		// Reject direct SET on generated columns
+		if tableDef.Columns[idx].IsGenerated {
+			return nil, b.errorf(
+				"column %q is a generated column",
+				set.Column,
+			)
+		}
+
 		// Get column type for parameter inference
 		colType := tableDef.Columns[idx].Type
 
@@ -3271,6 +3321,11 @@ func (b *Binder) bindCreateTable(
 			if lit, ok := col.Default.(*parser.Literal); ok {
 				colDef.DefaultValue = lit.Value
 			}
+		}
+		if col.IsGenerated {
+			colDef.IsGenerated = true
+			colDef.GeneratedExpr = serializeExpr(col.GeneratedExpr)
+			colDef.GeneratedStored = (col.GeneratedKind == parser.GeneratedKindStored)
 		}
 		bound.Columns = append(
 			bound.Columns,
