@@ -31,20 +31,24 @@
 - [ ] 4.3 Compute the same statistics over the query result set (reuse the same columnStats accumulation logic).
 - [ ] 4.4 Add integration test: `SUMMARIZE SELECT price FROM products WHERE category = 'A'`.
 
-## 5. Operator Registration
+## 5. Parser Fix
 
-- [ ] 5.1 Register `PhysicalPlanSummarize` in `internal/executor/operator.go`.
-- [ ] 5.2 Add execution dispatch in the main executor switch statement.
+- [ ] 5.1 Fix `SummarizeStmt.Type()` at `internal/parser/ast.go:1753` — currently returns `STATEMENT_TYPE_SELECT` which makes it indistinguishable from regular SELECT. Consider adding a dedicated `STATEMENT_TYPE_SUMMARIZE` constant or reusing an appropriate existing type.
 
-## 6. Integration Tests
+## 6. Operator Registration
 
-- [ ] 6.1 Test `SUMMARIZE table_name` with numeric, string, date, and boolean columns.
-- [ ] 6.2 Test `SUMMARIZE schema.table_name` with schema-qualified table.
-- [ ] 6.3 Test `SUMMARIZE SELECT ...` with a query (verifying it works, not just errors).
-- [ ] 6.4 Test SUMMARIZE on an empty table returns zero counts.
-- [ ] 6.5 Test SUMMARIZE with NULL values shows correct null_percentage.
-- [ ] 6.6 Test SUMMARIZE output column types match DuckDB format (VARCHAR for min/max/q*, BIGINT for count/approx_unique, DOUBLE for avg/std/null_percentage).
-- [ ] 6.7 Verify SUMMARIZE on a table with 100+ rows produces reasonable statistics (min <= q25 <= q50 <= q75 <= max).
-- [ ] 6.8 Test that `count` returns non-NULL count per column (not total row count). Insert rows with NULLs in some columns and verify count differs per column.
-- [ ] 6.9 Test that numeric min/max comparison is correct (e.g., a table with values 2, 10, 100 should have min=2 and max=100, not min="10" and max="2").
-- [ ] 6.10 Test that std uses sample standard deviation (N-1). For values [2, 4], std should be sqrt(2) ~ 1.414, not 1.0.
+- [ ] 6.1 Register `PhysicalPlanSummarize` in `internal/executor/operator.go`.
+- [ ] 6.2 Add execution dispatch in the main executor switch statement.
+
+## 7. Integration Tests
+
+- [ ] 7.1 Test `SUMMARIZE table_name` with numeric, string, date, and boolean columns.
+- [ ] 7.2 Test `SUMMARIZE schema.table_name` with schema-qualified table.
+- [ ] 7.3 Test `SUMMARIZE SELECT ...` with a query (verifying it works, not just errors).
+- [ ] 7.4 Test SUMMARIZE on an empty table returns zero counts.
+- [ ] 7.5 Test SUMMARIZE with NULL values shows correct null_percentage.
+- [ ] 7.6 Test SUMMARIZE output column types match DuckDB format (VARCHAR for min/max/q*, BIGINT for count/approx_unique, DOUBLE for avg/std/null_percentage).
+- [ ] 7.7 Verify SUMMARIZE on a table with 100+ rows produces reasonable statistics (min <= q25 <= q50 <= q75 <= max).
+- [ ] 7.8 Test that `count` returns non-NULL count per column (not total row count). Insert rows with NULLs in some columns and verify count differs per column.
+- [ ] 7.9 Test that numeric min/max comparison is correct (e.g., a table with values 2, 10, 100 should have min=2 and max=100, not min="10" and max="2").
+- [ ] 7.10 Test that std uses sample standard deviation (N-1). For values [2, 4], std should be sqrt(2) ~ 1.414, not 1.0.
