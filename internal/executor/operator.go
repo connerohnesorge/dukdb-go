@@ -205,6 +205,16 @@ type UndoRecorder interface {
 	RecordUndo(op UndoOperation)
 }
 
+// DatabaseManager is an interface for managing attached databases.
+// This allows the executor to work with database management without importing the engine package directly.
+type DatabaseManager interface {
+	Attach(name, path string, readOnly bool, cat *catalog.Catalog, stor *storage.Storage) error
+	Detach(name string, ifExists bool) error
+	Use(database string) error
+	CreateDatabase(name string, ifNotExists bool) error
+	DropDatabase(name string, ifExists bool) error
+}
+
 // SecretManager is an interface for managing secrets.
 // This allows the executor to work with secrets without importing the secret package directly.
 type SecretManager interface {
@@ -232,7 +242,8 @@ type Executor struct {
 	txnID         uint64        // Current transaction ID for WAL entries
 	undoRecorder  UndoRecorder  // Undo recorder for transaction rollback (optional, may be nil)
 	inTxn         bool          // Whether we're in an explicit transaction (BEGIN was called)
-	secretManager SecretManager // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
+	secretManager SecretManager  // Secret manager for CREATE/DROP/ALTER SECRET (optional, may be nil)
+	dbManager     DatabaseManager // Database manager for ATTACH/DETACH/USE/CREATE/DROP DATABASE (optional, may be nil)
 
 	// MVCC isolation level support
 	visibility       storage.VisibilityChecker  // Visibility checker based on isolation level (optional, may be nil)
@@ -250,6 +261,11 @@ type Executor struct {
 
 	// Full-text search registry for FTS index operations
 	ftsRegistry FTSRegistryInterface // FTS registry (optional, may be nil)
+
+	// sqlExecFunc is a callback for executing SQL statements from within the executor.
+	// Used by EXPORT/IMPORT DATABASE to execute sub-statements (COPY TO/FROM, DDL).
+	// If nil, EXPORT/IMPORT DATABASE operations will return an error.
+	sqlExecFunc func(ctx context.Context, sql string) error
 }
 
 // NewExecutor creates a new Executor.
@@ -290,6 +306,12 @@ func (e *Executor) SetInTransaction(inTxn bool) {
 // If set to nil, secret operations will return an error.
 func (e *Executor) SetSecretManager(mgr SecretManager) {
 	e.secretManager = mgr
+}
+
+// SetDatabaseManager sets the database manager for handling ATTACH/DETACH/USE/CREATE/DROP DATABASE operations.
+// If set to nil, database management operations will return an error.
+func (e *Executor) SetDatabaseManager(mgr DatabaseManager) {
+	e.dbManager = mgr
 }
 
 // SetVisibility sets the visibility checker for MVCC isolation.
@@ -339,6 +361,12 @@ func (e *Executor) SetExtensionRegistry(registry ExtensionRegistryInterface) {
 // SetFTSRegistry sets the full-text search registry for FTS operations.
 func (e *Executor) SetFTSRegistry(registry FTSRegistryInterface) {
 	e.ftsRegistry = registry
+}
+
+// SetSQLExecFunc sets the callback for executing SQL statements from within the executor.
+// This is used by EXPORT/IMPORT DATABASE to execute sub-statements (COPY TO/FROM, DDL).
+func (e *Executor) SetSQLExecFunc(fn func(ctx context.Context, sql string) error) {
+	e.sqlExecFunc = fn
 }
 
 func (e *Executor) invalidateQueryCache(tables ...string) {
@@ -503,8 +531,23 @@ func (e *Executor) executeWithContext(
 		return e.executePhysicalIcebergScan(execCtx, p)
 	case *planner.PhysicalSetOp:
 		return e.executeSetOp(execCtx, p)
+	case *planner.PhysicalExportDatabase:
+		return e.executeExportDatabase(execCtx, p)
+	case *planner.PhysicalImportDatabase:
+		return e.executeImportDatabase(execCtx, p)
 	case *planner.PhysicalSummarize:
 		return e.executeSummarize(execCtx, p)
+	// Database management operations
+	case *planner.PhysicalAttach:
+		return e.executeAttach(execCtx, p)
+	case *planner.PhysicalDetach:
+		return e.executeDetach(execCtx, p)
+	case *planner.PhysicalUse:
+		return e.executeUse(execCtx, p)
+	case *planner.PhysicalCreateDatabase:
+		return e.executeCreateDatabase(execCtx, p)
+	case *planner.PhysicalDropDatabase:
+		return e.executeDropDatabase(execCtx, p)
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

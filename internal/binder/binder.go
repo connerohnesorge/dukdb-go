@@ -236,6 +236,10 @@ func (b *Binder) Bind(
 		return b.bindAlterSecret(s)
 	case *parser.SummarizeStmt:
 		return b.bindSummarize(s)
+	case *parser.ExportDatabaseStmt:
+		return &BoundExportDatabaseStmt{Path: s.Path, Options: s.Options}, nil
+	case *parser.ImportDatabaseStmt:
+		return &BoundImportDatabaseStmt{Path: s.Path}, nil
 	case *parser.PragmaStmt:
 		return b.bindPragma(s)
 	case *parser.ExplainStmt:
@@ -293,6 +297,33 @@ func (b *Binder) Bind(
 			Name:         s.Name,
 			IfExists:     s.IfExists,
 			IsTableMacro: s.IsTableMacro,
+		}, nil
+	case *parser.AttachStmt:
+		return &BoundAttachStmt{
+			Path:     s.Path,
+			Alias:    s.Alias,
+			ReadOnly: s.ReadOnly,
+			Options:  s.Options,
+		}, nil
+	case *parser.DetachStmt:
+		return &BoundDetachStmt{
+			Name:     s.Name,
+			IfExists: s.IfExists,
+		}, nil
+	case *parser.UseStmt:
+		return &BoundUseStmt{
+			Database: s.Database,
+			Schema:   s.Schema,
+		}, nil
+	case *parser.CreateDatabaseStmt:
+		return &BoundCreateDatabaseStmt{
+			Name:        s.Name,
+			IfNotExists: s.IfNotExists,
+		}, nil
+	case *parser.DropDatabaseStmt:
+		return &BoundDropDatabaseStmt{
+			Name:     s.Name,
+			IfExists: s.IfExists,
 		}, nil
 	default:
 		return nil, b.errorf("unsupported statement type: %T", stmt)

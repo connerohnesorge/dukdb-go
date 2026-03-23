@@ -545,6 +545,27 @@ func (*BoundSummarizeStmt) boundStmtNode() {}
 
 func (*BoundSummarizeStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SELECT }
 
+// ---------- Export/Import Database Bound Statement Types ----------
+
+// BoundExportDatabaseStmt represents a bound EXPORT DATABASE statement.
+type BoundExportDatabaseStmt struct {
+	Path    string
+	Options map[string]string
+}
+
+func (*BoundExportDatabaseStmt) boundStmtNode() {}
+
+func (*BoundExportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_EXPORT }
+
+// BoundImportDatabaseStmt represents a bound IMPORT DATABASE statement.
+type BoundImportDatabaseStmt struct {
+	Path string
+}
+
+func (*BoundImportDatabaseStmt) boundStmtNode() {}
+
+func (*BoundImportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY_DATABASE }
+
 // ---------- Database Maintenance Bound Statement Types ----------
 
 // PragmaType represents the category of a PRAGMA statement.
@@ -667,3 +688,57 @@ type BoundDropMacroStmt struct {
 func (*BoundDropMacroStmt) boundStmtNode() {}
 
 func (*BoundDropMacroStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }
+
+// ---------- Database Management Bound Statement Types ----------
+
+// BoundAttachStmt represents a bound ATTACH statement.
+type BoundAttachStmt struct {
+	Path     string
+	Alias    string
+	ReadOnly bool
+	Options  map[string]string
+}
+
+func (*BoundAttachStmt) boundStmtNode() {}
+
+func (*BoundAttachStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_ATTACH }
+
+// BoundDetachStmt represents a bound DETACH statement.
+type BoundDetachStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (*BoundDetachStmt) boundStmtNode() {}
+
+func (*BoundDetachStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DETACH }
+
+// BoundUseStmt represents a bound USE statement.
+type BoundUseStmt struct {
+	Database string
+	Schema   string
+}
+
+func (*BoundUseStmt) boundStmtNode() {}
+
+func (*BoundUseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_SET }
+
+// BoundCreateDatabaseStmt represents a bound CREATE DATABASE statement.
+type BoundCreateDatabaseStmt struct {
+	Name        string
+	IfNotExists bool
+}
+
+func (*BoundCreateDatabaseStmt) boundStmtNode() {}
+
+func (*BoundCreateDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_CREATE }
+
+// BoundDropDatabaseStmt represents a bound DROP DATABASE statement.
+type BoundDropDatabaseStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (*BoundDropDatabaseStmt) boundStmtNode() {}
+
+func (*BoundDropDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_DROP }

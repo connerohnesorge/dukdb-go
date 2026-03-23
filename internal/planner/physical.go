@@ -1157,6 +1157,70 @@ func (s *PhysicalTableFunctionScan) OutputColumns() []ColumnBinding {
 	return s.columns
 }
 
+// ---------- Database Management Physical Plan Nodes ----------
+
+// PhysicalAttach represents a physical ATTACH DATABASE operation.
+type PhysicalAttach struct {
+	Path     string
+	Alias    string
+	ReadOnly bool
+	Options  map[string]string
+}
+
+func (*PhysicalAttach) physicalPlanNode() {}
+
+func (*PhysicalAttach) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalAttach) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDetach represents a physical DETACH DATABASE operation.
+type PhysicalDetach struct {
+	Name     string
+	IfExists bool
+}
+
+func (*PhysicalDetach) physicalPlanNode() {}
+
+func (*PhysicalDetach) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDetach) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalUse represents a physical USE DATABASE operation.
+type PhysicalUse struct {
+	Database string
+	Schema   string
+}
+
+func (*PhysicalUse) physicalPlanNode() {}
+
+func (*PhysicalUse) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalUse) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalCreateDatabase represents a physical CREATE DATABASE operation.
+type PhysicalCreateDatabase struct {
+	Name        string
+	IfNotExists bool
+}
+
+func (*PhysicalCreateDatabase) physicalPlanNode() {}
+
+func (*PhysicalCreateDatabase) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalCreateDatabase) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalDropDatabase represents a physical DROP DATABASE operation.
+type PhysicalDropDatabase struct {
+	Name     string
+	IfExists bool
+}
+
+func (*PhysicalDropDatabase) physicalPlanNode() {}
+
+func (*PhysicalDropDatabase) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalDropDatabase) OutputColumns() []ColumnBinding { return nil }
+
 // ---------- Sample Physical Plan Node ----------
 
 // PhysicalSample represents a physical sample operation.
@@ -1543,7 +1607,39 @@ func (p *Planner) createLogicalPlan(
 		return p.planDropSecret(s)
 	case *binder.BoundAlterSecretStmt:
 		return p.planAlterSecret(s)
+	// Database management statements
+	case *binder.BoundAttachStmt:
+		return &LogicalAttach{
+			Path:     s.Path,
+			Alias:    s.Alias,
+			ReadOnly: s.ReadOnly,
+			Options:  s.Options,
+		}, nil
+	case *binder.BoundDetachStmt:
+		return &LogicalDetach{
+			Name:     s.Name,
+			IfExists: s.IfExists,
+		}, nil
+	case *binder.BoundUseStmt:
+		return &LogicalUse{
+			Database: s.Database,
+			Schema:   s.Schema,
+		}, nil
+	case *binder.BoundCreateDatabaseStmt:
+		return &LogicalCreateDatabase{
+			Name:        s.Name,
+			IfNotExists: s.IfNotExists,
+		}, nil
+	case *binder.BoundDropDatabaseStmt:
+		return &LogicalDropDatabase{
+			Name:     s.Name,
+			IfExists: s.IfExists,
+		}, nil
 	// Database maintenance statements
+	case *binder.BoundExportDatabaseStmt:
+		return &LogicalExportDatabase{Path: s.Path, Options: s.Options}, nil
+	case *binder.BoundImportDatabaseStmt:
+		return &LogicalImportDatabase{Path: s.Path}, nil
 	case *binder.BoundSummarizeStmt:
 		return p.planSummarize(s)
 	case *binder.BoundPragmaStmt:
@@ -3074,8 +3170,47 @@ func (p *Planner) createPhysicalPlan(
 			Force:    l.Force,
 		}, nil
 
+	// Database management logical to physical mappings
+	case *LogicalAttach:
+		return &PhysicalAttach{
+			Path:     l.Path,
+			Alias:    l.Alias,
+			ReadOnly: l.ReadOnly,
+			Options:  l.Options,
+		}, nil
+
+	case *LogicalDetach:
+		return &PhysicalDetach{
+			Name:     l.Name,
+			IfExists: l.IfExists,
+		}, nil
+
+	case *LogicalUse:
+		return &PhysicalUse{
+			Database: l.Database,
+			Schema:   l.Schema,
+		}, nil
+
+	case *LogicalCreateDatabase:
+		return &PhysicalCreateDatabase{
+			Name:        l.Name,
+			IfNotExists: l.IfNotExists,
+		}, nil
+
+	case *LogicalDropDatabase:
+		return &PhysicalDropDatabase{
+			Name:     l.Name,
+			IfExists: l.IfExists,
+		}, nil
+
 	case *LogicalIcebergScan:
 		return p.createPhysicalIcebergScan(l)
+
+	case *LogicalExportDatabase:
+		return &PhysicalExportDatabase{Path: l.Path, Options: l.Options}, nil
+
+	case *LogicalImportDatabase:
+		return &PhysicalImportDatabase{Path: l.Path}, nil
 
 	case *LogicalSummarize:
 		var queryPlan PhysicalPlan
@@ -3865,6 +4000,31 @@ func (s *PhysicalSummarize) Children() []PhysicalPlan {
 }
 
 func (*PhysicalSummarize) OutputColumns() []ColumnBinding { return nil }
+
+// ---------- Export/Import Database Physical Plan Nodes ----------
+
+// PhysicalExportDatabase represents a physical EXPORT DATABASE operation.
+type PhysicalExportDatabase struct {
+	Path    string
+	Options map[string]string
+}
+
+func (*PhysicalExportDatabase) physicalPlanNode() {}
+
+func (*PhysicalExportDatabase) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalExportDatabase) OutputColumns() []ColumnBinding { return nil }
+
+// PhysicalImportDatabase represents a physical IMPORT DATABASE operation.
+type PhysicalImportDatabase struct {
+	Path string
+}
+
+func (*PhysicalImportDatabase) physicalPlanNode() {}
+
+func (*PhysicalImportDatabase) Children() []PhysicalPlan { return nil }
+
+func (*PhysicalImportDatabase) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Database Maintenance Physical Plan Nodes ----------
 

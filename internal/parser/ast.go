@@ -1360,7 +1360,7 @@ type ImportDatabaseStmt struct {
 
 func (*ImportDatabaseStmt) stmtNode() {}
 
-func (*ImportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY }
+func (*ImportDatabaseStmt) Type() dukdb.StmtType { return dukdb.STATEMENT_TYPE_COPY_DATABASE }
 
 // Accept implements the Visitor pattern for ImportDatabaseStmt.
 func (s *ImportDatabaseStmt) Accept(v Visitor) {

@@ -1192,6 +1192,31 @@ func (s *LogicalSummarize) Children() []LogicalPlan {
 
 func (*LogicalSummarize) OutputColumns() []ColumnBinding { return nil }
 
+// ---------- Export/Import Database Logical Plan Nodes ----------
+
+// LogicalExportDatabase represents a logical EXPORT DATABASE operation.
+type LogicalExportDatabase struct {
+	Path    string
+	Options map[string]string
+}
+
+func (*LogicalExportDatabase) logicalPlanNode() {}
+
+func (*LogicalExportDatabase) Children() []LogicalPlan { return nil }
+
+func (*LogicalExportDatabase) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalImportDatabase represents a logical IMPORT DATABASE operation.
+type LogicalImportDatabase struct {
+	Path string
+}
+
+func (*LogicalImportDatabase) logicalPlanNode() {}
+
+func (*LogicalImportDatabase) Children() []LogicalPlan { return nil }
+
+func (*LogicalImportDatabase) OutputColumns() []ColumnBinding { return nil }
+
 // ---------- Database Maintenance Logical Plan Nodes ----------
 
 // LogicalPragma represents a PRAGMA operation.
@@ -1350,6 +1375,70 @@ func (s *LogicalIcebergScan) OutputColumns() []ColumnBinding {
 
 	return s.columns
 }
+
+// ---------- Database Management Logical Plan Nodes ----------
+
+// LogicalAttach represents an ATTACH DATABASE operation.
+type LogicalAttach struct {
+	Path     string
+	Alias    string
+	ReadOnly bool
+	Options  map[string]string
+}
+
+func (*LogicalAttach) logicalPlanNode() {}
+
+func (*LogicalAttach) Children() []LogicalPlan { return nil }
+
+func (*LogicalAttach) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDetach represents a DETACH DATABASE operation.
+type LogicalDetach struct {
+	Name     string
+	IfExists bool
+}
+
+func (*LogicalDetach) logicalPlanNode() {}
+
+func (*LogicalDetach) Children() []LogicalPlan { return nil }
+
+func (*LogicalDetach) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalUse represents a USE DATABASE operation.
+type LogicalUse struct {
+	Database string
+	Schema   string
+}
+
+func (*LogicalUse) logicalPlanNode() {}
+
+func (*LogicalUse) Children() []LogicalPlan { return nil }
+
+func (*LogicalUse) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalCreateDatabase represents a CREATE DATABASE operation.
+type LogicalCreateDatabase struct {
+	Name        string
+	IfNotExists bool
+}
+
+func (*LogicalCreateDatabase) logicalPlanNode() {}
+
+func (*LogicalCreateDatabase) Children() []LogicalPlan { return nil }
+
+func (*LogicalCreateDatabase) OutputColumns() []ColumnBinding { return nil }
+
+// LogicalDropDatabase represents a DROP DATABASE operation.
+type LogicalDropDatabase struct {
+	Name     string
+	IfExists bool
+}
+
+func (*LogicalDropDatabase) logicalPlanNode() {}
+
+func (*LogicalDropDatabase) Children() []LogicalPlan { return nil }
+
+func (*LogicalDropDatabase) OutputColumns() []ColumnBinding { return nil }
 
 // ---------- Set Operation Logical Plan Nodes ----------
 
