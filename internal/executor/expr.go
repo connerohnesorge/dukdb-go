@@ -213,6 +213,9 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundArrayExpr:
 		return e.evaluateArrayExpr(ctx, ex, row)
 
+	case *binder.BoundSelectStmt:
+		return e.evaluateScalarSubquery(ctx, ex, row)
+
 	case *binder.BoundSimilarToExpr:
 		leftVal, err := e.evaluateExpr(ctx, ex.Expr, row)
 		if err != nil {
@@ -5746,6 +5749,48 @@ func matchLikeWithEscape(s, pattern string, escapeChar byte) bool {
 		pi++
 	}
 	return pi == len(pattern)
+}
+
+// evaluateScalarSubquery evaluates a scalar subquery (a SELECT that returns a single value).
+// It executes the subquery and returns the first column of the first row.
+// If the subquery returns no rows, NULL is returned.
+func (e *Executor) evaluateScalarSubquery(
+	ctx *ExecutionContext,
+	stmt *binder.BoundSelectStmt,
+	row map[string]any,
+) (any, error) {
+	// Create a child execution context with correlated values from the current row
+	subCtx := &ExecutionContext{
+		Context:          ctx.Context,
+		Args:             ctx.Args,
+		CorrelatedValues: row,
+		conn:             ctx.conn,
+	}
+
+	// Plan and execute the subquery
+	plan, err := e.planner.Plan(stmt)
+	if err != nil {
+		return nil, err
+	}
+
+	subqueryResult, err := e.executeWithContext(subCtx, plan)
+	if err != nil {
+		return nil, err
+	}
+
+	// Scalar subquery returns NULL if no rows
+	if len(subqueryResult.Rows) == 0 {
+		return nil, nil
+	}
+
+	// Get the first row and return the first column value
+	firstRow := subqueryResult.Rows[0]
+	if len(subqueryResult.Columns) > 0 {
+		return firstRow[subqueryResult.Columns[0]], nil
+	}
+
+	// No columns means NULL result
+	return nil, nil
 }
 
 // evaluateSequenceCall evaluates a sequence function call (NEXTVAL or CURRVAL).

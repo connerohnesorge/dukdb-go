@@ -123,18 +123,7 @@ func isCorrelatedSubquery(stmt *binder.BoundSelectStmt) bool {
 	}
 
 	correlated := false
-	for _, col := range stmt.Columns {
-		rewrite.WalkExpr(col.Expr, func(expr binder.BoundExpr) {
-			if ref, ok := expr.(*binder.BoundColumnRef); ok {
-				if ref.Table != "" {
-					if _, ok := allowed[ref.Table]; !ok {
-						correlated = true
-					}
-				}
-			}
-		})
-	}
-	rewrite.WalkExpr(stmt.Where, func(expr binder.BoundExpr) {
+	checkRef := func(expr binder.BoundExpr) {
 		if ref, ok := expr.(*binder.BoundColumnRef); ok {
 			if ref.Table != "" {
 				if _, ok := allowed[ref.Table]; !ok {
@@ -142,7 +131,28 @@ func isCorrelatedSubquery(stmt *binder.BoundSelectStmt) bool {
 				}
 			}
 		}
-	})
+	}
+
+	// Walk SELECT columns
+	for _, col := range stmt.Columns {
+		rewrite.WalkExpr(col.Expr, checkRef)
+	}
+	// Walk WHERE clause
+	rewrite.WalkExpr(stmt.Where, checkRef)
+	// Walk HAVING clause
+	rewrite.WalkExpr(stmt.Having, checkRef)
+	// Walk ORDER BY expressions
+	for _, ob := range stmt.OrderBy {
+		if ob != nil {
+			rewrite.WalkExpr(ob.Expr, checkRef)
+		}
+	}
+	// Walk JOIN conditions
+	for _, join := range stmt.Joins {
+		if join != nil {
+			rewrite.WalkExpr(join.Condition, checkRef)
+		}
+	}
 	return correlated
 }
 
