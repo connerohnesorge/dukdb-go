@@ -239,6 +239,7 @@ func IsValidJSON(s string) bool {
 
 // ExtractByKey extracts a value from JSON by a single key.
 // This is used for the simple -> 'key' or ->> 'key' operators.
+// Supports JSONPath syntax: $.field, $.a.b.c, $[0], etc.
 func ExtractByKey(jsonStr string, key string) (any, error) {
 	if jsonStr == "" {
 		return nil, nil
@@ -247,6 +248,11 @@ func ExtractByKey(jsonStr string, key string) (any, error) {
 	var data any
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	// Handle JSONPath syntax (starts with $ or $.)
+	if strings.HasPrefix(key, "$") {
+		return extractPath(data, key)
 	}
 
 	switch d := data.(type) {

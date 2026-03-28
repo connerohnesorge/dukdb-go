@@ -382,8 +382,8 @@ func createFileWriter(
 
 	case fileio.FormatJSON:
 		opts := jsonio.DefaultWriterOptions()
+		opts.Format = jsonio.FormatNDJSON
 		applyJSONWriterOptions(opts, options)
-		opts.Format = jsonio.FormatArray
 		return jsonio.NewWriterToPath(path, opts)
 
 	case fileio.FormatNDJSON:
@@ -512,6 +512,12 @@ func applyJSONWriterOptions(opts *jsonio.WriterOptions, options map[string]any) 
 	if comp, ok := options["COMPRESSION"]; ok {
 		if compStr, isStr := comp.(string); isStr {
 			opts.Compression = parseCompression(compStr)
+		}
+	}
+	// Handle ARRAY option: ARRAY true switches output to JSON array format.
+	if arrayOpt, ok := options["ARRAY"]; ok {
+		if arrayBool, isBool := arrayOpt.(bool); isBool && arrayBool {
+			opts.Format = jsonio.FormatArray
 		}
 	}
 }
