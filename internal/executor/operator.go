@@ -2360,16 +2360,11 @@ func (e *Executor) executeInsert(
 			// Fill in default values for unspecified columns
 			for i, col := range plan.TableDef.Columns {
 				if !specifiedCols[i] && col.HasDefault {
-					if col.DefaultValue != nil {
-						values[i] = col.DefaultValue
-					} else if col.DefaultExprText != "" {
-						// Non-literal default expression (e.g., NEXTVAL('seq')): evaluate it now
-						val, err := e.evaluateDefaultExpr(ctx, col.DefaultExprText)
-						if err != nil {
-							return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
-						}
-						values[i] = val
+					val, err := e.resolveDefaultValue(ctx, col)
+					if err != nil {
+						return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
 					}
+					values[i] = val
 				}
 			}
 
@@ -2482,16 +2477,11 @@ func (e *Executor) executeInsert(
 			// Fill in default values for unspecified columns
 			for i, col := range plan.TableDef.Columns {
 				if !specifiedCols[i] && col.HasDefault {
-					if col.DefaultValue != nil {
-						values[i] = col.DefaultValue
-					} else if col.DefaultExprText != "" {
-						// Non-literal default expression (e.g., NEXTVAL('seq')): evaluate it now
-						val, err := e.evaluateDefaultExpr(ctx, col.DefaultExprText)
-						if err != nil {
-							return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
-						}
-						values[i] = val
+					val, err := e.resolveDefaultValue(ctx, col)
+					if err != nil {
+						return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
 					}
+					values[i] = val
 				}
 			}
 
