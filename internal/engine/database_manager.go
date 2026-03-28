@@ -130,6 +130,10 @@ func (dm *DatabaseManager) List() []*AttachedDatabase {
 // attached databases that are not the default (main) database.  The map keys
 // are lower-cased aliases and are suitable for passing to
 // binder.Binder.WithAttachedCatalogs.
+//
+// Performance note: AttachedCatalogs builds a new map on every call. For
+// hot paths (per-statement binder setup), consider caching the result and
+// invalidating on Attach/Detach/Create/Drop mutations.
 func (dm *DatabaseManager) AttachedCatalogs() map[string]*catalog.Catalog {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()

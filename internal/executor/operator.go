@@ -2883,9 +2883,11 @@ func (e *Executor) executeCreateTable(
 		columns := make([]wal.ColumnDef, len(plan.Columns))
 		for i, col := range plan.Columns {
 			columns[i] = wal.ColumnDef{
-				Name:     col.Name,
-				Type:     col.Type,
-				Nullable: col.Nullable,
+				Name:            col.Name,
+				Type:            col.Type,
+				Nullable:        col.Nullable,
+				HasDefault:      col.HasDefault,
+				DefaultExprText: col.DefaultExprText,
 			}
 		}
 		entry := &wal.CreateTableEntry{

@@ -9,10 +9,11 @@ import (
 
 // ColumnDef represents a column definition for WAL serialization.
 type ColumnDef struct {
-	Name       string
-	Type       dukdb.Type
-	Nullable   bool
-	HasDefault bool
+	Name            string
+	Type            dukdb.Type
+	Nullable        bool
+	HasDefault      bool
+	DefaultExprText string
 }
 
 // CreateTableEntry represents a CREATE TABLE WAL entry.
@@ -57,6 +58,11 @@ func (e *CreateTableEntry) Serialize(
 		if err := binary.Write(w, binary.LittleEndian, flags); err != nil {
 			return err
 		}
+		if col.HasDefault {
+			if err := writeString(w, col.DefaultExprText); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -93,6 +99,11 @@ func (e *CreateTableEntry) Deserialize(
 		}
 		e.Columns[i].Nullable = flags&0x01 != 0
 		e.Columns[i].HasDefault = flags&0x02 != 0
+		if e.Columns[i].HasDefault {
+			if e.Columns[i].DefaultExprText, err = readString(r); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

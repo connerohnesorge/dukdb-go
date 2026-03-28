@@ -509,7 +509,12 @@ func (r *Reader) replayCatalogEntry(
 	case *CreateTableEntry:
 		columns := make([]*catalog.ColumnDef, len(e.Columns))
 		for i, col := range e.Columns {
-			columns[i] = catalog.NewColumnDef(col.Name, col.Type).WithNullable(col.Nullable)
+			colDef := catalog.NewColumnDef(col.Name, col.Type).WithNullable(col.Nullable)
+			if col.HasDefault {
+				colDef.HasDefault = true
+				colDef.DefaultExprText = col.DefaultExprText
+			}
+			columns[i] = colDef
 		}
 		tableDef := catalog.NewTableDef(e.Name, columns)
 
