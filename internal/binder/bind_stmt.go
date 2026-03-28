@@ -4482,6 +4482,12 @@ func (b *Binder) bindExprWithSelectAliases(
 		return bound, nil
 	}
 
+	// Only fall through to alias resolution for "not found" errors.
+	// Preserve type errors, ambiguity errors, etc.
+	if !strings.Contains(strings.ToLower(err.Error()), "not found") {
+		return nil, err
+	}
+
 	// If there was an error, check if it was a "column not found" error on a bare column ref.
 	// In that case, try to resolve it as a SELECT alias.
 	colRef, isColRef := expr.(*parser.ColumnRef)
