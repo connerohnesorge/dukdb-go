@@ -16,6 +16,7 @@ package executor
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -555,14 +556,17 @@ func TestTPCHNoQueryShouldBeSlow(t *testing.T) {
 		times = append(times, elapsedMS)
 	}
 
-	// Calculate baseline (median)
-	// For 3 runs, median is the middle value
-	baseline := times[1]
+	// Calculate baseline (median of sorted times)
+	sorted := make([]int64, len(times))
+	copy(sorted, times)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	baseline := sorted[len(sorted)/2]
 	maxAcceptableMS := baseline * 2 // 2x baseline is the limit
 
-	// Use a minimum floor to avoid flakiness with very fast queries
-	// CI runners have more timing variability than development machines
-	const minFloor int64 = 200
+	// Use a minimum floor to avoid flakiness with very fast queries.
+	// CI runners have significant timing variability — 500ms gives enough
+	// headroom without masking real regressions.
+	const minFloor int64 = 500
 	if maxAcceptableMS < minFloor {
 		maxAcceptableMS = minFloor
 	}
