@@ -3689,7 +3689,6 @@ func extractAggregateAliases(
 			}
 		case *binder.BoundWindowExpr:
 			// Window expressions are handled separately, skip them
-			_ = e
 		case *binder.BoundFunctionCall:
 			if isAggregateFunction(e.Name) {
 				if numGroupBy+aggIdx < total {

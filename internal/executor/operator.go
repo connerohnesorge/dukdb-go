@@ -2364,11 +2364,7 @@ func (e *Executor) executeInsert(
 			}
 
 			// Fill in default values for unspecified columns
-			for i, col := range plan.TableDef.Columns {
-				if !specifiedCols[i] && col.HasDefault {
-					values[i] = col.DefaultValue
-				}
-			}
+			fillDefaultValues(values, plan.TableDef.Columns, specifiedCols)
 
 			// Evaluate generated column expressions
 			if err := e.evaluateGeneratedColumns(ctx, plan.TableDef, values); err != nil {
@@ -2477,11 +2473,7 @@ func (e *Executor) executeInsert(
 			}
 
 			// Fill in default values for unspecified columns
-			for i, col := range plan.TableDef.Columns {
-				if !specifiedCols[i] && col.HasDefault {
-					values[i] = col.DefaultValue
-				}
-			}
+			fillDefaultValues(values, plan.TableDef.Columns, specifiedCols)
 
 			// Evaluate generated column expressions
 			if err := e.evaluateGeneratedColumns(ctx, plan.TableDef, values); err != nil {
@@ -3217,6 +3209,16 @@ func formatValue(v any) string {
 	}
 
 	return fmt.Sprintf("%v", v)
+}
+
+// fillDefaultValues fills in default values for columns that were not specified
+// in the INSERT statement. This is used for both INSERT...VALUES and INSERT...SELECT paths.
+func fillDefaultValues(values []any, columns []*catalog.ColumnDef, specifiedCols map[int]bool) {
+	for i, col := range columns {
+		if !specifiedCols[i] && col.HasDefault {
+			values[i] = col.DefaultValue
+		}
+	}
 }
 
 func constraintErrorf(
