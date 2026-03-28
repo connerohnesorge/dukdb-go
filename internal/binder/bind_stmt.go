@@ -1255,9 +1255,15 @@ func (b *Binder) bindGenerateSeriesTableFunction(ref parser.TableRef, funcName s
 		options["step"] = stepExpr
 	}
 
+	// Determine output column name: use first column alias if provided, else funcName
+	colName := funcName
+	if len(tableFunc.ColumnAliases) > 0 {
+		colName = tableFunc.ColumnAliases[0]
+	}
+
 	// Create column definition for the output
 	columns := []*catalog.ColumnDef{
-		catalog.NewColumnDef(funcName, outputType),
+		catalog.NewColumnDef(colName, outputType),
 	}
 
 	// Create bound table function reference

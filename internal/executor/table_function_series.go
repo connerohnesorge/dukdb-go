@@ -46,6 +46,12 @@ func (e *Executor) executeGenerateSeries(
 		}
 	}
 
+	// Use column alias if provided (from AS alias(colName) syntax), else function name
+	colName := plan.FunctionName
+	if plan.TableFunction != nil && len(plan.TableFunction.Columns) > 0 {
+		colName = plan.TableFunction.Columns[0].Name
+	}
+
 	// Evaluate start and stop
 	startVal, err := e.evaluateExpr(ctx, startExpr, nil)
 	if err != nil {
@@ -60,7 +66,7 @@ func (e *Executor) executeGenerateSeries(
 	if startVal == nil || stopVal == nil {
 		return &ExecutionResult{
 			Rows:    make([]map[string]any, 0),
-			Columns: []string{plan.FunctionName},
+			Columns: []string{colName},
 		}, nil
 	}
 
@@ -81,12 +87,10 @@ func (e *Executor) executeGenerateSeries(
 		if stepVal == nil {
 			return &ExecutionResult{
 				Rows:    make([]map[string]any, 0),
-				Columns: []string{plan.FunctionName},
+				Columns: []string{colName},
 			}, nil
 		}
 	}
-
-	colName := plan.FunctionName
 
 	// Try date series first (dates stored as int32 days since epoch).
 	// This must be checked before the generic toInt64 path, because

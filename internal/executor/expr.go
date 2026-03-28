@@ -3050,6 +3050,31 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return nil, nil
 
+	case "LEN", "ARRAY_LENGTH", "LIST_LENGTH":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "LEN requires 1 argument",
+			}
+		}
+		if args[0] == nil {
+			return nil, nil
+		}
+		switch v := args[0].(type) {
+		case []any:
+			return int64(len(v)), nil
+		case string:
+			return int64(len(v)), nil
+		default:
+			if sl, ok := toSlice(args[0]); ok {
+				return int64(len(sl)), nil
+			}
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("LEN: unsupported type %T", args[0]),
+			}
+		}
+
 	case "LIST_CONTAINS", "ARRAY_CONTAINS", "LIST_HAS":
 		if len(args) < 2 {
 			return nil, &dukdb.Error{

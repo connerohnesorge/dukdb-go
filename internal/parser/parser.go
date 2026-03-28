@@ -389,16 +389,16 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			}
 			stmt.GroupBy = groupBy
 		}
+	}
 
-		// HAVING
-		if p.isKeyword("HAVING") {
-			p.advance()
-			having, err := p.parseExpr()
-			if err != nil {
-				return nil, err
-			}
-			stmt.Having = having
+	// HAVING (allowed with or without GROUP BY)
+	if p.isKeyword("HAVING") {
+		p.advance()
+		having, err := p.parseExpr()
+		if err != nil {
+			return nil, err
 		}
+		stmt.Having = having
 	}
 
 	// QUALIFY - filter rows after window function evaluation
@@ -1005,6 +1005,34 @@ func (p *parser) parseTableRef() (TableRef, error) {
 			}
 		} else {
 			ref.Alias = p.advance().value
+		}
+	}
+
+	// Optional column aliases: AS alias(col1, col2) or alias(col1, col2)
+	if ref.Alias != "" && p.current().typ == tokenLParen {
+		p.advance() // consume '('
+		var colAliases []string
+		for {
+			if p.current().typ != tokenIdent {
+				return ref, p.errorf("expected column alias name")
+			}
+			colAliases = append(colAliases, p.advance().value)
+			if p.current().typ == tokenComma {
+				p.advance() // consume ','
+				continue
+			}
+			break
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return ref, err
+		}
+		// Store in the appropriate place
+		if ref.ValuesRef != nil {
+			ref.ValuesRef.ColumnAliases = colAliases
+		} else if ref.TableFunction != nil {
+			ref.TableFunction.ColumnAliases = colAliases
+		} else {
+			ref.ColumnAliases = colAliases
 		}
 	}
 

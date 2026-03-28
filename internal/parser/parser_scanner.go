@@ -171,11 +171,13 @@ func (p *parser) scanString(quote byte) {
 	start := p.pos
 	p.pos++ // skip opening quote
 	terminated := false
+	var buf strings.Builder
 	for p.pos < len(p.input) {
 		if p.input[p.pos] == quote {
 			if p.pos+1 < len(p.input) &&
 				p.input[p.pos+1] == quote {
-				// Escaped quote
+				// Escaped quote ('' or "")
+				buf.WriteByte(quote)
 				p.pos += 2
 			} else {
 				p.pos++
@@ -184,6 +186,7 @@ func (p *parser) scanString(quote byte) {
 				break
 			}
 		} else {
+			buf.WriteByte(p.input[p.pos])
 			p.pos++
 		}
 	}
@@ -197,14 +200,27 @@ func (p *parser) scanString(quote byte) {
 			),
 		}
 	}
-	p.tokens = append(
-		p.tokens,
-		token{
-			tokenString,
-			p.input[start:p.pos],
-			start,
-		},
-	)
+	if quote == '"' {
+		// Double-quoted identifier: emit tokenIdent with unescaped content
+		p.tokens = append(
+			p.tokens,
+			token{
+				tokenIdent,
+				buf.String(),
+				start,
+			},
+		)
+	} else {
+		// Single-quoted string literal: keep raw representation for value extraction
+		p.tokens = append(
+			p.tokens,
+			token{
+				tokenString,
+				p.input[start:p.pos],
+				start,
+			},
+		)
+	}
 }
 
 func (p *parser) scanNumber() {

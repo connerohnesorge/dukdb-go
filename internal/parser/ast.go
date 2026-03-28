@@ -101,18 +101,19 @@ type ReplacementScan struct {
 
 // TableRef represents a table reference.
 type TableRef struct {
-	Catalog        string // Optional catalog name (e.g., "main")
-	Schema         string
-	TableName      string
-	Alias          string
-	Subquery       *SelectStmt
-	TableFunction  *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
+	Catalog         string // Optional catalog name (e.g., "main")
+	Schema          string
+	TableName       string
+	Alias           string
+	ColumnAliases   []string // Optional column aliases from AS alias(col1, col2)
+	Subquery        *SelectStmt
+	TableFunction   *TableFunctionRef // Table function call (e.g., read_csv('file.csv'))
 	ReplacementScan *ReplacementScan  // Replacement scan (e.g., SELECT * FROM 'file.csv')
-	PivotRef       *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
-	UnpivotRef     *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
-	ValuesRef      *ValuesClause     // VALUES clause (when VALUES is used in FROM clause)
-	Lateral        bool              // LATERAL join (subquery can reference columns from outer scope)
-	TimeTravel     *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
+	PivotRef        *PivotStmt        // PIVOT table reference (when PIVOT is used in FROM clause)
+	UnpivotRef      *UnpivotStmt      // UNPIVOT table reference (when UNPIVOT is used in FROM clause)
+	ValuesRef       *ValuesClause     // VALUES clause (when VALUES is used in FROM clause)
+	Lateral         bool              // LATERAL join (subquery can reference columns from outer scope)
+	TimeTravel      *TimeTravelClause // Time travel clause (AS OF TIMESTAMP, AS OF SNAPSHOT, etc.)
 }
 
 // TimeTravelType represents the type of time travel specification.
@@ -172,6 +173,8 @@ type TableFunctionRef struct {
 	Args []Expr
 	// NamedArgs are named arguments (key=value pairs).
 	NamedArgs map[string]Expr
+	// ColumnAliases are optional column aliases from AS alias(col1, col2).
+	ColumnAliases []string
 }
 
 // JoinClause represents a JOIN clause.
