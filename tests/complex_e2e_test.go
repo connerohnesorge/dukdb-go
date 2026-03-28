@@ -1249,10 +1249,15 @@ func ceToInt64(v any) int64 {
 		n := int64(0)
 		fmt.Sscan(string(x), &n)
 		return n
+	case nil:
+		return 0
+	default:
+		n := int64(0)
+		if _, err := fmt.Sscan(fmt.Sprintf("%v", v), &n); err != nil {
+			panic(fmt.Sprintf("ceToInt64: cannot convert %T(%v) to int64", v, v))
+		}
+		return n
 	}
-	n := int64(0)
-	fmt.Sscan(fmt.Sprintf("%v", v), &n)
-	return n
 }
 
 func ceToFloat64(v any) float64 {
@@ -1271,8 +1276,13 @@ func ceToFloat64(v any) float64 {
 		f := 0.0
 		fmt.Sscan(string(x), &f)
 		return f
+	case nil:
+		return 0
+	default:
+		f := 0.0
+		if _, err := fmt.Sscan(fmt.Sprintf("%v", v), &f); err != nil {
+			panic(fmt.Sprintf("ceToFloat64: cannot convert %T(%v) to float64", v, v))
+		}
+		return f
 	}
-	f := 0.0
-	fmt.Sscan(fmt.Sprintf("%v", v), &f)
-	return f
 }
