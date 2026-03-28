@@ -39,6 +39,12 @@ func (dm *DatabaseManager) Attach(name, path string, readOnly bool, cat *catalog
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 	n := strings.ToLower(name)
+	// Reject reserved database names. "main" is the primary database and "temp"
+	// is reserved for temporary objects. Allowing these would shadow the primary
+	// database or the temp schema, leading to confusing behavior.
+	if n == "main" || n == "temp" {
+		return fmt.Errorf("cannot attach database with reserved name %q", name)
+	}
 	if _, exists := dm.databases[n]; exists {
 		return fmt.Errorf("database %q is already attached", name)
 	}
@@ -117,6 +123,12 @@ func (dm *DatabaseManager) CreateDatabase(name string, ifNotExists bool) error {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 	n := strings.ToLower(name)
+	// Reject reserved database names. "main" is the primary database and "temp"
+	// is reserved for temporary objects. Allowing these would shadow the primary
+	// database or the temp schema, leading to confusing behavior.
+	if n == "main" || n == "temp" {
+		return fmt.Errorf("cannot attach database with reserved name %q", name)
+	}
 	if _, exists := dm.databases[n]; exists {
 		if ifNotExists {
 			return nil

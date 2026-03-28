@@ -4456,6 +4456,49 @@ func (b *Binder) bindQualifyWithSelectAliases(
 	return boundQualify, err
 }
 
+// bindExprWithSelectAliases tries to bind an expression normally first, then falls back
+// to resolving against SELECT column aliases if the error is a "not found" error.
+// This preserves type errors, ambiguity errors, and other meaningful errors while still
+// allowing alias resolution for missing column references.
+func (b *Binder) bindExprWithSelectAliases(
+	expr parser.Expr,
+	expectedType dukdb.Type,
+	boundColumns []*BoundSelectColumn,
+) (BoundExpr, error) {
+	// Try normal binding first.
+	bound, err := b.bindExpr(expr, expectedType)
+	if err == nil {
+		return bound, nil
+	}
+
+	// Only fall through to alias resolution for "not found" errors.
+	// Preserve type errors, ambiguity errors, etc.
+	if !strings.Contains(strings.ToLower(err.Error()), "not found") {
+		return nil, err
+	}
+
+	// Add SELECT column aliases to scope temporarily for fallback resolution.
+	selectAliasRef := &BoundTableRef{
+		Alias:   "__select_aliases__",
+		Columns: make([]*BoundColumn, 0, len(boundColumns)),
+	}
+	for i, col := range boundColumns {
+		if col.Alias != "" {
+			selectAliasRef.Columns = append(selectAliasRef.Columns, &BoundColumn{
+				Table:      "__select_aliases__",
+				Column:     col.Alias,
+				ColumnIdx:  i,
+				Type:       col.Expr.ResultType(),
+				SourceType: "select_alias",
+			})
+		}
+	}
+	b.scope.tables["__select_aliases__"] = selectAliasRef
+	defer delete(b.scope.tables, "__select_aliases__")
+
+	return b.bindExpr(expr, expectedType)
+}
+
 // resolveWindowDef resolves a named window definition, handling transitive references.
 // visited tracks the chain for cycle detection.
 func (b *Binder) resolveWindowDef(name string, visited []string) (*parser.WindowDef, error) {
