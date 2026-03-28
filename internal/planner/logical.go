@@ -458,6 +458,7 @@ type LogicalCreateTable struct {
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
 	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
+	AsSelect    *binder.BoundSelectStmt
 }
 
 func (*LogicalCreateTable) logicalPlanNode() {}

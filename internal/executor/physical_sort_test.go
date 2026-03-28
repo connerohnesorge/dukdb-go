@@ -309,14 +309,14 @@ func TestPhysicalSort_WithNulls(t *testing.T) {
 		}
 	}
 
-	// NULLs should come first (compareValues returns -1 for NULL)
-	// Expected: NULL, NULL, 1, 2, 5
+	// NULLs should come last for ASC (matching PostgreSQL/DuckDB default behavior)
+	// Expected: 1, 2, 5, NULL, NULL
 	assert.Equal(t, 5, len(allValues))
-	assert.Nil(t, allValues[0])
-	assert.Nil(t, allValues[1])
-	assert.Equal(t, int32(1), allValues[2])
-	assert.Equal(t, int32(2), allValues[3])
-	assert.Equal(t, int32(5), allValues[4])
+	assert.Equal(t, int32(1), allValues[0])
+	assert.Equal(t, int32(2), allValues[1])
+	assert.Equal(t, int32(5), allValues[2])
+	assert.Nil(t, allValues[3])
+	assert.Nil(t, allValues[4])
 }
 
 func TestPhysicalSort_EmptyInput(t *testing.T) {

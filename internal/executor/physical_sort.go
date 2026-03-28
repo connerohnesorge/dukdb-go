@@ -192,9 +192,9 @@ func (op *PhysicalSortOperator) compareRowData(
 			return 0, err
 		}
 
-		cmp := compareWithCollation(valA, valB, order.Collation)
+		cmp, isNull := compareOrderByValues(valA, valB, order.NullsFirst, order.Desc, order.Collation)
 		if cmp != 0 {
-			if order.Desc {
+			if order.Desc && !isNull {
 				return -cmp, nil
 			}
 

@@ -16,7 +16,7 @@ import (
 // setupArrowTest registers the mock backend for Arrow tests.
 func setupArrowTest(t *testing.T) {
 	t.Helper()
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 }
 
 func TestNewArrowFromConnInvalidType(

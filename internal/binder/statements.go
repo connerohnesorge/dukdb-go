@@ -55,9 +55,10 @@ type BoundJoin struct {
 
 // BoundOrderBy represents a bound ORDER BY expression.
 type BoundOrderBy struct {
-	Expr      BoundExpr
-	Desc      bool
-	Collation string // COLLATE collation_name (empty = default)
+	Expr       BoundExpr
+	Desc       bool
+	NullsFirst *bool  // nil = default (nulls last for ASC, nulls first for DESC), true = NULLS FIRST, false = NULLS LAST
+	Collation  string // COLLATE collation_name (empty = default)
 }
 
 // BoundOnConflictClause represents a bound ON CONFLICT clause.
@@ -103,6 +104,7 @@ type BoundUpdateStmt struct {
 	Table     string
 	TableDef  *catalog.TableDef
 	Set       []*BoundSetClause
+	From      []*BoundTableRef     // FROM clause tables for UPDATE...FROM
 	Where     BoundExpr
 	Returning []*BoundSelectColumn // RETURNING clause columns
 }
@@ -141,6 +143,7 @@ type BoundCreateTableStmt struct {
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
 	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
+	AsSelect    *BoundSelectStmt // For CREATE TABLE ... AS SELECT
 }
 
 func (*BoundCreateTableStmt) boundStmtNode() {}

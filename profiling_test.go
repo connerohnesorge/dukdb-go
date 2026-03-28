@@ -13,7 +13,7 @@ import (
 
 func setupProfilingTest(t *testing.T) {
 	t.Helper()
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 }
 
 func TestProfilingInfo_Structure(t *testing.T) {

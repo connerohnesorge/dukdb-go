@@ -489,11 +489,11 @@ func (s *PhysicalSort) OutputColumns() []ColumnBinding { return s.Child.OutputCo
 // PhysicalLimit represents a physical limit operation.
 type PhysicalLimit struct {
 	Child      PhysicalPlan
-	Limit      int64            // Static limit value (-1 means use LimitExpr)
-	Offset     int64            // Static offset value (-1 means use OffsetExpr)
-	LimitExpr  binder.BoundExpr // Dynamic limit expression (for LATERAL joins)
-	OffsetExpr binder.BoundExpr // Dynamic offset expression (for LATERAL joins)
-	WithTies   bool             // true when FETCH ... WITH TIES was used
+	Limit      int64                  // Static limit value (-1 means use LimitExpr)
+	Offset     int64                  // Static offset value (-1 means use OffsetExpr)
+	LimitExpr  binder.BoundExpr       // Dynamic limit expression (for LATERAL joins)
+	OffsetExpr binder.BoundExpr       // Dynamic offset expression (for LATERAL joins)
+	WithTies   bool                   // true when FETCH ... WITH TIES was used
 	OrderBy    []*binder.BoundOrderBy // ORDER BY columns for WITH TIES comparison
 }
 
@@ -537,8 +537,8 @@ type PhysicalInsert struct {
 	Columns    []int
 	Values     [][]binder.BoundExpr
 	Source     PhysicalPlan
-	OnConflict *binder.BoundOnConflictClause  // nil for plain INSERT
-	Returning  []*binder.BoundSelectColumn    // RETURNING clause columns
+	OnConflict *binder.BoundOnConflictClause // nil for plain INSERT
+	Returning  []*binder.BoundSelectColumn   // RETURNING clause columns
 }
 
 func (*PhysicalInsert) physicalPlanNode() {}
@@ -606,6 +606,7 @@ type PhysicalCreateTable struct {
 	Columns     []*catalog.ColumnDef
 	PrimaryKey  []string
 	Constraints []any // *catalog.UniqueConstraintDef, *catalog.CheckConstraintDef
+	AsSelect    *binder.BoundSelectStmt
 }
 
 func (*PhysicalCreateTable) physicalPlanNode() {}
@@ -845,21 +846,21 @@ func (*PhysicalDropSchema) OutputColumns() []ColumnBinding { return nil }
 
 // PhysicalAlterTable represents a physical ALTER TABLE operation.
 type PhysicalAlterTable struct {
-	Schema        string
-	Table         string
-	TableDef      *catalog.TableDef
-	Operation     int                // AlterTableOp from parser
-	IfExists      bool               // IF EXISTS modifier
-	NewTableName  string             // RENAME TO
-	OldColumn     string             // RENAME COLUMN
-	NewColumn     string             // RENAME COLUMN
-	DropColumn    string             // DROP COLUMN
+	Schema         string
+	Table          string
+	TableDef       *catalog.TableDef
+	Operation      int                     // AlterTableOp from parser
+	IfExists       bool                    // IF EXISTS modifier
+	NewTableName   string                  // RENAME TO
+	OldColumn      string                  // RENAME COLUMN
+	NewColumn      string                  // RENAME COLUMN
+	DropColumn     string                  // DROP COLUMN
 	AddColumn      *catalog.ColumnDef      // ADD COLUMN
 	AlterColumn    string                  // ALTER COLUMN TYPE
 	NewColumnType  dukdb.Type              // ALTER COLUMN TYPE
 	ConstraintName string                  // DROP CONSTRAINT
 	Constraint     *parser.TableConstraint // ADD CONSTRAINT
-	DefaultExpr    binder.BoundExpr       // SET DEFAULT expression
+	DefaultExpr    binder.BoundExpr        // SET DEFAULT expression
 }
 
 func (*PhysicalAlterTable) physicalPlanNode() {}
@@ -1752,11 +1753,49 @@ func (p *Planner) planSelect(
 		aggAliases := assignAggregateAliases(s.Columns, regularGroupBy, aggregates, groupingCalls)
 
 		// Build the full aliases list: [groupBy aliases..., agg aliases..., groupingCall aliases...]
-		aliases := buildFullAliases(s.Columns, regularGroupBy, aggregates, groupingCalls, aggAliases)
+		aliases := buildFullAliases(
+			s.Columns,
+			regularGroupBy,
+			aggregates,
+			groupingCalls,
+			aggAliases,
+		)
 
 		// Rewrite projection expressions to replace nested aggregate calls with
 		// BoundColumnRef nodes referencing the aggregate result columns.
-		projectionExprs = liftNestedAggregates(s.Columns, len(regularGroupBy), aggregates, aggAliases)
+		projectionExprs = liftNestedAggregates(
+			s.Columns,
+			len(regularGroupBy),
+			aggregates,
+			aggAliases,
+		)
+
+		// Extract aggregates from HAVING clause and add them to the aggregate list
+		// so the HAVING condition can reference pre-computed aggregate results.
+		var rewrittenHaving binder.BoundExpr
+		if s.Having != nil {
+			havingAggs, havingAggAliases := extractHavingAggregates(
+				s.Having,
+				aggregates,
+				aggAliases,
+			)
+			if len(havingAggs) > 0 {
+				aggregates = append(aggregates, havingAggs...)
+				aggAliases = append(aggAliases, havingAggAliases...)
+				aliases = buildFullAliases(
+					s.Columns,
+					regularGroupBy,
+					aggregates,
+					groupingCalls,
+					aggAliases,
+				)
+			}
+			aggToAlias := make(map[binder.BoundExpr]string, len(aggregates))
+			for i, agg := range aggregates {
+				aggToAlias[agg] = aggAliases[i]
+			}
+			rewrittenHaving = replaceAggregatesWithRefs(s.Having, aggToAlias)
+		}
 
 		plan = &LogicalAggregate{
 			Child:         plan,
@@ -1768,10 +1807,10 @@ func (p *Planner) planSelect(
 		}
 
 		// HAVING
-		if s.Having != nil {
+		if rewrittenHaving != nil {
 			plan = &LogicalFilter{
 				Child:     plan,
-				Condition: s.Having,
+				Condition: rewrittenHaving,
 			}
 		}
 	}
@@ -2034,6 +2073,7 @@ func (p *Planner) planCreateTable(
 		Columns:     s.Columns,
 		PrimaryKey:  s.PrimaryKey,
 		Constraints: s.Constraints,
+		AsSelect:    s.AsSelect,
 	}, nil
 }
 
@@ -2856,6 +2896,7 @@ func (p *Planner) createPhysicalPlan(
 			Columns:     l.Columns,
 			PrimaryKey:  l.PrimaryKey,
 			Constraints: l.Constraints,
+			AsSelect:    l.AsSelect,
 		}, nil
 
 	case *LogicalDropTable:
@@ -4022,15 +4063,14 @@ func replaceAggregatesWithRefs(
 		}
 	}
 
-	// For non-aggregate function calls, recursively replace in arguments
-	if fn, ok := expr.(*binder.BoundFunctionCall); ok {
-		if isAggregateFunction(fn.Name) {
-			// This aggregate wasn't in our map (shouldn't happen), leave as-is
+	// Recursively replace in compound expression types
+	switch e := expr.(type) {
+	case *binder.BoundFunctionCall:
+		if isAggregateFunction(e.Name) {
 			return expr
 		}
-		// Check if any argument contains an aggregate
 		hasAggArg := false
-		for _, arg := range fn.Args {
+		for _, arg := range e.Args {
 			if containsNestedAgg(arg, aggToAlias) {
 				hasAggArg = true
 				break
@@ -4039,16 +4079,50 @@ func replaceAggregatesWithRefs(
 		if !hasAggArg {
 			return expr
 		}
-		// Rebuild function call with transformed args
-		newArgs := make([]binder.BoundExpr, len(fn.Args))
-		for j, arg := range fn.Args {
+		newArgs := make([]binder.BoundExpr, len(e.Args))
+		for j, arg := range e.Args {
 			newArgs[j] = replaceAggregatesWithRefs(arg, aggToAlias)
 		}
 		return &binder.BoundFunctionCall{
-			Name:     fn.Name,
+			Name:     e.Name,
 			Args:     newArgs,
-			Distinct: fn.Distinct,
-			Star:     fn.Star,
+			Distinct: e.Distinct,
+			Star:     e.Star,
+		}
+
+	case *binder.BoundBinaryExpr:
+		newLeft := replaceAggregatesWithRefs(e.Left, aggToAlias)
+		newRight := replaceAggregatesWithRefs(e.Right, aggToAlias)
+		if newLeft == e.Left && newRight == e.Right {
+			return expr
+		}
+		return &binder.BoundBinaryExpr{
+			Left:    newLeft,
+			Op:      e.Op,
+			Right:   newRight,
+			ResType: e.ResType,
+		}
+
+	case *binder.BoundUnaryExpr:
+		newExpr := replaceAggregatesWithRefs(e.Expr, aggToAlias)
+		if newExpr == e.Expr {
+			return expr
+		}
+		return &binder.BoundUnaryExpr{
+			Op:      e.Op,
+			Expr:    newExpr,
+			ResType: e.ResType,
+		}
+
+	case *binder.BoundCastExpr:
+		newInner := replaceAggregatesWithRefs(e.Expr, aggToAlias)
+		if newInner == e.Expr {
+			return expr
+		}
+		return &binder.BoundCastExpr{
+			Expr:       newInner,
+			TargetType: e.TargetType,
+			TryCast:    e.TryCast,
 		}
 	}
 
@@ -4071,6 +4145,63 @@ func containsNestedAgg(expr binder.BoundExpr, aggToAlias map[binder.BoundExpr]st
 		}
 	}
 	return false
+}
+
+// extractHavingAggregates extracts aggregate expressions from a HAVING clause
+// that are not already present in the existing aggregates list. Returns the new
+// aggregates and their synthetic aliases.
+func extractHavingAggregates(
+	having binder.BoundExpr,
+	existingAggs []binder.BoundExpr,
+	_ []string,
+) ([]binder.BoundExpr, []string) {
+	var havingAggs []binder.BoundExpr
+	seen := make(map[binder.BoundExpr]bool)
+	collectHavingAggregatesRecursive(having, &havingAggs, seen)
+
+	if len(havingAggs) == 0 {
+		return nil, nil
+	}
+
+	var newAggs []binder.BoundExpr
+	var newAliases []string
+	syntheticIdx := len(existingAggs)
+	for _, agg := range havingAggs {
+		newAggs = append(newAggs, agg)
+		newAliases = append(newAliases, fmt.Sprintf("__having_agg_%d", syntheticIdx))
+		syntheticIdx++
+	}
+	return newAggs, newAliases
+}
+
+// collectHavingAggregatesRecursive collects aggregates from all expression types
+// including BoundBinaryExpr and BoundUnaryExpr.
+func collectHavingAggregatesRecursive(
+	expr binder.BoundExpr,
+	aggs *[]binder.BoundExpr,
+	seen map[binder.BoundExpr]bool,
+) {
+	if expr == nil || seen[expr] {
+		return
+	}
+	switch e := expr.(type) {
+	case *binder.BoundFunctionCall:
+		if isAggregateFunction(e.Name) {
+			seen[expr] = true
+			*aggs = append(*aggs, expr)
+			return
+		}
+		for _, arg := range e.Args {
+			collectHavingAggregatesRecursive(arg, aggs, seen)
+		}
+	case *binder.BoundBinaryExpr:
+		collectHavingAggregatesRecursive(e.Left, aggs, seen)
+		collectHavingAggregatesRecursive(e.Right, aggs, seen)
+	case *binder.BoundUnaryExpr:
+		collectHavingAggregatesRecursive(e.Expr, aggs, seen)
+	case *binder.BoundCastExpr:
+		collectHavingAggregatesRecursive(e.Expr, aggs, seen)
+	}
 }
 
 // extractWindowExprs extracts window expressions from SELECT columns.

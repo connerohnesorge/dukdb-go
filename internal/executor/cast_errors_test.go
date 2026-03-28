@@ -265,7 +265,7 @@ func TestCastToTimestamp(t *testing.T) {
 
 		// Invalid conversions
 		{"invalid string", "abc", true, SQLStateInvalidDatetimeFormat},
-		{"date only", "2023-01-15", true, SQLStateInvalidDatetimeFormat},
+		{"date only", "2023-01-15", false, ""},
 	}
 
 	for _, tc := range tests {

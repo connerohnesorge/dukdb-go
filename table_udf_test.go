@@ -14,7 +14,7 @@ import (
 
 func setupTableUDFTest(t *testing.T) {
 	t.Helper()
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 }
 
 // simpleRowSource is a test implementation of RowTableSource.

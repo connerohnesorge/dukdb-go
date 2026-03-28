@@ -155,7 +155,11 @@ func (m *testMockBackendStmt) NumInput() int {
 }
 
 // setupTestMockBackend registers a mock backend for testing.
-func setupTestMockBackend() *testMockBackend {
+// It saves and restores the original backend via t.Cleanup.
+func setupTestMockBackend(t *testing.T) *testMockBackend {
+	t.Helper()
+	savedBackend := GetBackend()
+	t.Cleanup(func() { RegisterBackend(savedBackend) })
 	backend := &testMockBackend{}
 	RegisterBackend(backend)
 
@@ -163,7 +167,7 @@ func setupTestMockBackend() *testMockBackend {
 }
 
 func TestDriverOpen(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	d := &Driver{}
 	conn, err := d.Open(":memory:")
@@ -183,7 +187,7 @@ func TestDriverOpen(t *testing.T) {
 }
 
 func TestDriverOpenConnector(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	d := &Driver{}
 	connector, err := d.OpenConnector(":memory:")
@@ -208,7 +212,7 @@ func TestDriverOpenConnector(t *testing.T) {
 }
 
 func TestConnectorConnect(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -242,7 +246,7 @@ func TestConnectorConnect(t *testing.T) {
 }
 
 func TestConnectorLazyInit(t *testing.T) {
-	backend := setupTestMockBackend()
+	backend := setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -311,7 +315,7 @@ func TestConnectorLazyInit(t *testing.T) {
 func TestConnectorContextCancellation(
 	t *testing.T,
 ) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -353,7 +357,7 @@ func TestConnectorContextCancellation(
 }
 
 func TestConnectorClose(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -404,7 +408,7 @@ func TestConnectorClose(t *testing.T) {
 }
 
 func TestConnPingIntegration(t *testing.T) {
-	backend := setupTestMockBackend()
+	backend := setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -454,7 +458,7 @@ func TestConnPingIntegration(t *testing.T) {
 }
 
 func TestConnResetSession(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -498,7 +502,7 @@ func TestConnResetSession(t *testing.T) {
 func TestConnResetSessionWithTransaction(
 	t *testing.T,
 ) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -554,7 +558,7 @@ func TestConnResetSessionWithTransaction(
 }
 
 func TestConnIsValid(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -603,7 +607,7 @@ func TestConnIsValid(t *testing.T) {
 }
 
 func TestConnInitCallback(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	initCalled := false
 	initFn := func(conn driver.ExecerContext) error {
@@ -644,7 +648,7 @@ func TestConnInitCallback(t *testing.T) {
 }
 
 func TestDriverThreadSafety(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	d := &Driver{}
 	var wg sync.WaitGroup
@@ -677,7 +681,7 @@ func TestDriverThreadSafety(t *testing.T) {
 }
 
 func TestConnectorThreadSafety(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -722,7 +726,7 @@ func TestConnectorThreadSafety(t *testing.T) {
 }
 
 func TestConnectionPooling(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -776,7 +780,7 @@ func TestConnectionPooling(t *testing.T) {
 }
 
 func TestHealthCheckWithPool(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -806,7 +810,7 @@ func TestHealthCheckWithPool(t *testing.T) {
 }
 
 func TestNewConnectorWithConfig(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	config := &Config{
 		Path:       "/test/path.db",
@@ -846,7 +850,7 @@ func TestNewConnectorWithConfig(t *testing.T) {
 }
 
 func TestNewConnectorWithNilConfig(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnectorWithConfig(
 		nil,
@@ -872,7 +876,7 @@ func TestNewConnectorWithNilConfig(t *testing.T) {
 }
 
 func TestConnPingAfterClose(t *testing.T) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",
@@ -911,7 +915,7 @@ func TestConnPingAfterClose(t *testing.T) {
 func TestConnResetSessionAfterClose(
 	t *testing.T,
 ) {
-	setupTestMockBackend()
+	setupTestMockBackend(t)
 
 	connector, err := NewConnector(
 		":memory:",

@@ -36,11 +36,9 @@ func TestDriverImplementsInterface(t *testing.T) {
 
 func TestDriverOpenWithoutBackend(t *testing.T) {
 	// Clear any registered backend first
+	savedBackend := GetBackend()
+	t.Cleanup(func() { RegisterBackend(savedBackend) })
 	RegisterBackend(nil)
-	defer func() {
-		// Restore the engine backend by importing the engine package
-		// The engine package auto-registers via init()
-	}()
 
 	// Without a backend registered, Open should fail
 	d := Driver{}
@@ -57,6 +55,8 @@ func TestDriverOpenConnectorWithoutBackend(
 	t *testing.T,
 ) {
 	// Clear any registered backend
+	savedBackend := GetBackend()
+	t.Cleanup(func() { RegisterBackend(savedBackend) })
 	RegisterBackend(nil)
 
 	d := Driver{}
@@ -80,6 +80,8 @@ func TestNewConnectorWithoutBackend(
 	t *testing.T,
 ) {
 	// Clear any registered backend
+	savedBackend := GetBackend()
+	t.Cleanup(func() { RegisterBackend(savedBackend) })
 	RegisterBackend(nil)
 
 	// With lazy initialization, NewConnector succeeds

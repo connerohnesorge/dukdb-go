@@ -889,6 +889,15 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return cbrtValue(args[0])
 
+	case "MOD":
+		if len(args) != 2 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "MOD requires 2 arguments",
+			}
+		}
+		return modValues(args[0], args[1])
+
 	case "POW", "POWER":
 		if len(args) != 2 {
 			return nil, &dukdb.Error{
@@ -5533,9 +5542,9 @@ func (e *Executor) compareRows(
 			return 0, err
 		}
 
-		cmp := compareWithCollation(valA, valB, order.Collation)
+		cmp, isNull := compareOrderByValues(valA, valB, order.NullsFirst, order.Desc, order.Collation)
 		if cmp != 0 {
-			if order.Desc {
+			if order.Desc && !isNull {
 				return -cmp, nil
 			}
 

@@ -449,7 +449,7 @@ func (e *Executor) executeWithContext(
 	case *planner.PhysicalDelete:
 		return e.executeDelete(execCtx, p)
 	case *planner.PhysicalCreateTable:
-		return e.executeCreateTable(execCtx, p)
+		return e.executeCreateTableWithCTAS(execCtx, p)
 	case *planner.PhysicalDropTable:
 		return e.executeDropTable(execCtx, p)
 	case *planner.PhysicalTruncate:
@@ -1290,10 +1290,13 @@ func (e *Executor) performJoin(
 		Rows:    make([]map[string]any, 0),
 	}
 
+	// Track which right rows have been matched (for RIGHT/FULL OUTER joins)
+	matchedRight := make(map[int]bool)
+
 	// Nested loop join
 	for _, leftRow := range left.Rows {
 		matched := false
-		for _, rightRow := range right.Rows {
+		for ri, rightRow := range right.Rows {
 			// Combine rows
 			combinedRow := make(map[string]any)
 			for k, v := range leftRow {
@@ -1319,6 +1322,7 @@ func (e *Executor) performJoin(
 			}
 
 			matched = true
+			matchedRight[ri] = true
 			// For SEMI join, only output left columns (no right columns)
 			if joinType == planner.JoinTypeSemi {
 				result.Rows = append(result.Rows, leftRow)
@@ -1348,8 +1352,21 @@ func (e *Executor) performJoin(
 		}
 	}
 
-	// Handle right outer join - track which right rows were matched
-	// For simplicity, we'll skip this for now
+	// Handle RIGHT/FULL OUTER join - emit unmatched right rows with NULLs for left
+	if joinType == planner.JoinTypeRight || joinType == planner.JoinTypeFull {
+		for ri, rightRow := range right.Rows {
+			if !matchedRight[ri] {
+				combinedRow := make(map[string]any)
+				for _, col := range left.Columns {
+					combinedRow[col] = nil
+				}
+				for k, v := range rightRow {
+					combinedRow[k] = v
+				}
+				result.Rows = append(result.Rows, combinedRow)
+			}
+		}
+	}
 
 	return result, nil
 }

@@ -249,9 +249,10 @@ func (b *Binder) bindSelect(
 		bound.OrderBy = append(
 			bound.OrderBy,
 			&BoundOrderBy{
-				Expr:      expr,
-				Desc:      o.Desc,
-				Collation: o.Collation,
+				Expr:       expr,
+				Desc:       o.Desc,
+				NullsFirst: o.NullsFirst,
+				Collation:  o.Collation,
 			},
 		)
 	}
@@ -576,6 +577,14 @@ func (b *Binder) bindTableRef(
 
 	// Fall back to regular table lookup (also checks attached database catalogs)
 	tableDef, ok := b.getTableInSchema(schema, ref.TableName)
+	if !ok && schema != "temp" {
+		// Check the "temp" schema as a fallback for temporary tables
+		tableDef, ok = b.getTableInSchema("temp", ref.TableName)
+		if ok {
+			schema = "temp"
+		}
+	}
+
 	if !ok {
 		return nil, b.errorf(
 			"table not found: %s",
@@ -3119,6 +3128,24 @@ func (b *Binder) bindUpdate(
 		TableDef: tableDef,
 	}
 
+	// Bind FROM clause tables into scope (for UPDATE...FROM syntax)
+	if s.From != nil {
+		for _, table := range s.From.Tables {
+			ref, err := b.bindTableRef(table)
+			if err != nil {
+				return nil, err
+			}
+			bound.From = append(bound.From, ref)
+		}
+		for _, join := range s.From.Joins {
+			joinRef, err := b.bindTableRef(join.Table)
+			if err != nil {
+				return nil, err
+			}
+			bound.From = append(bound.From, joinRef)
+		}
+	}
+
 	// Bind SET clauses with column types for parameter inference
 	for _, set := range s.Set {
 		idx, ok := tableDef.GetColumnIndex(
@@ -3402,6 +3429,30 @@ func (b *Binder) bindCreateTable(
 				OnDelete:   onDelete,
 				OnUpdate:   onUpdate,
 			})
+		}
+	}
+
+	// Handle CREATE TABLE ... AS SELECT
+	if s.AsSelect != nil {
+		boundSelect, err := b.bindSelect(s.AsSelect)
+		if err != nil {
+			return nil, err
+		}
+
+		bound.AsSelect = boundSelect
+
+		// If no columns were explicitly specified, derive them from the SELECT
+		if len(bound.Columns) == 0 {
+			for _, col := range boundSelect.Columns {
+				colName := col.Alias
+				if colName == "" {
+					colName = fmt.Sprintf("%v", col.Expr)
+				}
+
+				colDef := catalog.NewColumnDef(colName, col.Expr.ResultType())
+				colDef.Nullable = true
+				bound.Columns = append(bound.Columns, colDef)
+			}
 		}
 	}
 
@@ -3700,12 +3751,23 @@ func (b *Binder) bindMergeAction(
 
 	// Bind INSERT clauses
 	if action.Type == parser.MergeActionInsert {
-		for _, set := range action.Insert {
-			idx, ok := targetTableDef.GetColumnIndex(set.Column)
-			if !ok {
-				return nil, b.errorf("column not found: %s", set.Column)
+		for i, set := range action.Insert {
+			var idx int
+			var colType dukdb.Type
+			if set.Column != "" {
+				var ok bool
+				idx, ok = targetTableDef.GetColumnIndex(set.Column)
+				if !ok {
+					return nil, b.errorf("column not found: %s", set.Column)
+				}
+				colType = targetTableDef.Columns[idx].Type
+			} else {
+				if i >= len(targetTableDef.Columns) {
+					return nil, b.errorf("INSERT VALUES has more values than target table columns")
+				}
+				idx = i
+				colType = targetTableDef.Columns[i].Type
 			}
-			colType := targetTableDef.Columns[idx].Type
 			val, err := b.bindExpr(set.Value, colType)
 			if err != nil {
 				return nil, err
@@ -4367,9 +4429,10 @@ func (b *Binder) bindLateralSubquery(
 		bound.OrderBy = append(
 			bound.OrderBy,
 			&BoundOrderBy{
-				Expr:      expr,
-				Desc:      o.Desc,
-				Collation: o.Collation,
+				Expr:       expr,
+				Desc:       o.Desc,
+				NullsFirst: o.NullsFirst,
+				Collation:  o.Collation,
 			},
 		)
 	}

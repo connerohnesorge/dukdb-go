@@ -157,6 +157,16 @@ func (b *Binder) getTableInSchema(schemaName, tableName string) (*catalog.TableD
 			return tableDef, true
 		}
 	}
+	if schemaName != "temp" {
+		if tableDef, ok := b.catalog.GetTableInSchema("temp", tableName); ok {
+			return tableDef, true
+		}
+	}
+	if schemaName != "temp" {
+		if tableDef, ok := b.catalog.GetTableInSchema("temp", tableName); ok {
+			return tableDef, true
+		}
+	}
 	return nil, false
 }
 
