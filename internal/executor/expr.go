@@ -4219,6 +4219,17 @@ func stmtIsCorrelated(stmt *binder.BoundSelectStmt) bool {
 	if stmt.Where != nil {
 		rewrite.WalkExpr(stmt.Where, checkExpr)
 	}
+	if stmt.Having != nil {
+		rewrite.WalkExpr(stmt.Having, checkExpr)
+	}
+	for _, ob := range stmt.OrderBy {
+		rewrite.WalkExpr(ob.Expr, checkExpr)
+	}
+	for _, j := range stmt.Joins {
+		if j.Condition != nil {
+			rewrite.WalkExpr(j.Condition, checkExpr)
+		}
+	}
 	return correlated
 }
 
@@ -4298,13 +4309,6 @@ func (e *Executor) evaluateScalarSubquery(
 			colName := subqueryResult.Columns[0]
 			if val, ok := firstRow[colName]; ok {
 				result = val
-			}
-		}
-		if result == nil {
-			// Fallback: return first value in the row map
-			for _, v := range firstRow {
-				result = v
-				break
 			}
 		}
 	}

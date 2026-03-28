@@ -67,7 +67,10 @@ type ExecutionContext struct {
 	Context          context.Context
 	Args             []driver.NamedValue
 	CorrelatedValues map[string]any      // Values from outer scope for LATERAL/correlated subqueries
-	SubqueryCache    map[*binder.BoundSelectStmt]any // Cache for non-correlated scalar subquery results
+	// SubqueryCache caches results for non-correlated scalar subqueries keyed by
+	// the *BoundSelectStmt pointer. This relies on pointer identity: the same AST
+	// node pointer must be reused across evaluations (not cloned) for cache hits.
+	SubqueryCache map[*binder.BoundSelectStmt]any
 	conn             ConnectionInterface // Connection for accessing session-level settings
 }
 
