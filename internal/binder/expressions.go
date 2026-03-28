@@ -17,6 +17,19 @@ func (*BoundColumnRef) boundExprNode() {}
 
 func (c *BoundColumnRef) ResultType() dukdb.Type { return c.ColType }
 
+// BoundCorrelatedColumnRef represents a correlated column reference inside a subquery
+// that refers to a column from an outer (enclosing) query scope. The Depth field
+// indicates how many scope levels up the column was found (1 = immediately outer scope).
+// At execution time this is resolved via CorrelatedValues in the ExecutionContext.
+type BoundCorrelatedColumnRef struct {
+	BoundColumnRef        // promotes Table, Column, ColumnIdx, ColType
+	Depth          int    // how many outer scopes up
+}
+
+func (*BoundCorrelatedColumnRef) boundExprNode() {}
+
+func (c *BoundCorrelatedColumnRef) ResultType() dukdb.Type { return c.ColType }
+
 // BoundFieldAccess represents struct.field dot notation access.
 type BoundFieldAccess struct {
 	Struct  BoundExpr  // The struct-typed expression

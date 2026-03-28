@@ -490,6 +490,7 @@ type CreateViewStmt struct {
 	Schema      string
 	View        string
 	IfNotExists bool
+	OrReplace   bool
 	Query       *SelectStmt // The view definition
 }
 

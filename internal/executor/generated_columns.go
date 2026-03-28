@@ -8,6 +8,35 @@ import (
 	"github.com/dukdb/dukdb-go/internal/parser"
 )
 
+// parseAndEvalGeneratedExpr parses colExpr as an SQL expression and evaluates it
+// against rowMap, then casts the result to the column's declared type.
+func (e *Executor) parseAndEvalGeneratedExpr(
+	ctx *ExecutionContext,
+	col *catalog.ColumnDef,
+	rowMap map[string]any,
+) (any, error) {
+	wrapSQL := "SELECT " + col.GeneratedExpr
+	stmt, err := parser.Parse(wrapSQL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse generated column expression for %q: %w", col.Name, err)
+	}
+	selectStmt, ok := stmt.(*parser.SelectStmt)
+	if !ok || len(selectStmt.Columns) == 0 {
+		return nil, fmt.Errorf("invalid generated column expression for %q", col.Name)
+	}
+	result, err := e.evaluateExpr(ctx, selectStmt.Columns[0].Expr, rowMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate generated column %q: %w", col.Name, err)
+	}
+	if result != nil {
+		result, err = castValue(result, col.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to cast generated column %q value: %w", col.Name, err)
+		}
+	}
+	return result, nil
+}
+
 // evaluateGeneratedColumns evaluates all generated column expressions for a row.
 // It builds a row map from the current values and evaluates each generated column's
 // stored SQL expression using the existing expression evaluation infrastructure.
@@ -37,66 +66,51 @@ func (e *Executor) evaluateGeneratedColumns(
 	for i, col := range tableDef.Columns {
 		if i < len(values) {
 			rowMap[col.Name] = values[i]
-			// Also add lowercase version for case-insensitive matching
 			rowMap[strings.ToLower(col.Name)] = values[i]
 		}
 	}
 
-	// Evaluate each generated column
 	for i, col := range tableDef.Columns {
 		if !col.IsGenerated || col.GeneratedExpr == "" {
 			continue
 		}
-
-		// Parse the generated expression by wrapping in SELECT
-		wrapSQL := "SELECT " + col.GeneratedExpr
-		stmt, err := parser.Parse(wrapSQL)
+		result, err := e.parseAndEvalGeneratedExpr(ctx, col, rowMap)
 		if err != nil {
-			return fmt.Errorf(
-				"failed to parse generated column expression for %q: %w",
-				col.Name, err,
-			)
+			return err
 		}
-		selectStmt, ok := stmt.(*parser.SelectStmt)
-		if !ok || len(selectStmt.Columns) == 0 {
-			return fmt.Errorf(
-				"invalid generated column expression for %q",
-				col.Name,
-			)
-		}
-
-		// Evaluate the expression using the row values
-		result, err := e.evaluateExpr(ctx, selectStmt.Columns[0].Expr, rowMap)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to evaluate generated column %q: %w",
-				col.Name, err,
-			)
-		}
-
-		// Cast the result to the column type
-		if result != nil {
-			castedValue, castErr := castValue(result, col.Type)
-			if castErr != nil {
-				return fmt.Errorf(
-					"failed to cast generated column %q value: %w",
-					col.Name, castErr,
-				)
-			}
-			result = castedValue
-		}
-
-		// Set the computed value
 		if i < len(values) {
 			values[i] = result
 		}
-
-		// Update the row map for subsequent generated columns that might reference this one
 		rowMap[col.Name] = result
 		rowMap[strings.ToLower(col.Name)] = result
 	}
 
 	return nil
+}
+
+// evaluateDefaultExpr evaluates a non-literal default expression (e.g., NEXTVAL('seq'))
+// by parsing the expression text and evaluating it.
+func (e *Executor) evaluateDefaultExpr(
+	ctx *ExecutionContext,
+	exprText string,
+) (any, error) {
+	// Wrap in SELECT to parse as an expression
+	wrapSQL := "SELECT " + exprText
+	stmt, err := parser.Parse(wrapSQL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse default expression %q: %w", exprText, err)
+	}
+	selectStmt, ok := stmt.(*parser.SelectStmt)
+	if !ok || len(selectStmt.Columns) == 0 {
+		return nil, fmt.Errorf("invalid default expression %q", exprText)
+	}
+
+	// Evaluate the expression (no row context needed for sequence calls etc.)
+	result, err := e.evaluateExpr(ctx, selectStmt.Columns[0].Expr, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate default expression %q: %w", exprText, err)
+	}
+	return result, nil
 }
 
 // recomputeGeneratedColumnsForUpdate re-evaluates all generated columns after
@@ -116,49 +130,11 @@ func (e *Executor) recomputeGeneratedColumnsForUpdate(
 		if !col.IsGenerated || col.GeneratedExpr == "" {
 			continue
 		}
-
-		// Parse the generated expression by wrapping in SELECT
-		wrapSQL := "SELECT " + col.GeneratedExpr
-		stmt, err := parser.Parse(wrapSQL)
+		result, err := e.parseAndEvalGeneratedExpr(ctx, col, rowMap)
 		if err != nil {
-			return fmt.Errorf(
-				"failed to parse generated column expression for %q: %w",
-				col.Name, err,
-			)
+			return err
 		}
-		selectStmt, ok := stmt.(*parser.SelectStmt)
-		if !ok || len(selectStmt.Columns) == 0 {
-			return fmt.Errorf(
-				"invalid generated column expression for %q",
-				col.Name,
-			)
-		}
-
-		// Evaluate the expression using the updated row values
-		result, err := e.evaluateExpr(ctx, selectStmt.Columns[0].Expr, rowMap)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to evaluate generated column %q: %w",
-				col.Name, err,
-			)
-		}
-
-		// Cast the result to the column type
-		if result != nil {
-			castedValue, castErr := castValue(result, col.Type)
-			if castErr != nil {
-				return fmt.Errorf(
-					"failed to cast generated column %q value: %w",
-					col.Name, castErr,
-				)
-			}
-			result = castedValue
-		}
-
-		// Add computed value to the update map
 		columnValues[i] = result
-
-		// Update the row map for subsequent generated columns
 		rowMap[col.Name] = result
 		rowMap[strings.ToLower(col.Name)] = result
 	}

@@ -17,6 +17,7 @@ import (
 	geomutil "github.com/dukdb/dukdb-go/internal/io/geometry"
 	jsonutil "github.com/dukdb/dukdb-go/internal/io/json"
 	"github.com/dukdb/dukdb-go/internal/parser"
+	"github.com/dukdb/dukdb-go/internal/planner/rewrite"
 	"github.com/dukdb/dukdb-go/internal/wal"
 	"github.com/google/uuid"
 	"golang.org/x/text/encoding/charmap"
@@ -337,6 +338,29 @@ func (e *Executor) evaluateExpr(
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  "lambda expressions cannot be evaluated directly",
 		}
+
+	case *binder.BoundCorrelatedColumnRef:
+		// Correlated column references come from outer query scopes.
+		// At execution time, the outer row values are passed via CorrelatedValues.
+		if ctx.CorrelatedValues != nil {
+			if ex.Table != "" {
+				key := ex.Table + "." + ex.Column
+				if val, ok := ctx.CorrelatedValues[key]; ok {
+					return val, nil
+				}
+			}
+			if val, ok := ctx.CorrelatedValues[ex.Column]; ok {
+				return val, nil
+			}
+		}
+		return nil, nil
+
+	case *binder.BoundExistsExpr:
+		return e.evaluateExistsExpr(ctx, ex, row)
+
+	case *binder.BoundSelectStmt:
+		// Scalar subquery: execute and return the single value
+		return e.evaluateScalarSubquery(ctx, ex, row)
 
 	default:
 		return nil, &dukdb.Error{
@@ -3759,6 +3783,54 @@ func (e *Executor) evaluateFunctionCall(
 		}
 		return stripEnumQuotes(typeEntry.EnumValues[len(typeEntry.EnumValues)-1]), nil
 
+	// Sequence functions called via raw function call path (e.g., from DEFAULT expressions).
+	// Note: when called via binder, BoundSequenceCall is used instead; this handles
+	// the *parser.FunctionCall -> BoundFunctionCall path used by default expression evaluation.
+	case "NEXTVAL", "CURRVAL":
+		if len(args) != 1 {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("%s requires 1 argument (sequence name)", fn.Name),
+			}
+		}
+		seqName, ok := args[0].(string)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("%s argument must be a string sequence name", fn.Name),
+			}
+		}
+		// Look up the sequence in default schema "main"
+		schemaName := "main"
+		seq, seqOk := e.catalog.GetSequenceInSchema(schemaName, seqName)
+		if !seqOk {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("sequence not found: %s.%s", schemaName, seqName),
+			}
+		}
+		if fn.Name == "NEXTVAL" {
+			val, err := seq.NextVal()
+			if err != nil {
+				return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: err.Error()}
+			}
+			if e.wal != nil {
+				entry := &wal.SequenceValueEntry{
+					Schema:     schemaName,
+					Name:       seqName,
+					CurrentVal: seq.GetCurrentVal(),
+				}
+				_ = e.wal.WriteEntry(entry)
+			}
+			return val, nil
+		}
+		// CURRVAL
+		val, err := seq.CurrVal()
+		if err != nil {
+			return nil, &dukdb.Error{Type: dukdb.ErrorTypeExecutor, Msg: err.Error()}
+		}
+		return val, nil
+
 	default:
 		// For aggregate functions called in scalar context, return NULL
 		// The main fix for aggregate functions in projections is in executeProject
@@ -4004,11 +4076,9 @@ func (e *Executor) evaluateInSubqueryExpr(
 		return nil, err
 	}
 
-	subqueryResult, err := e.Execute(
-		ctx.Context,
-		plan,
-		ctx.Args,
-	)
+	// Pass the current row as correlated values for correlated subqueries
+	correlatedCtx := makeCorrelatedCtx(ctx, row)
+	subqueryResult, err := e.executeWithContext(correlatedCtx, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -4051,12 +4121,13 @@ func (e *Executor) evaluateQuantifiedComparison(
 		return nil, nil // NULL op ANY/ALL -> NULL
 	}
 
-	// Execute subquery
+	// Execute subquery with correlated values from the current outer row
 	plan, err := e.planner.Plan(expr.Subquery)
 	if err != nil {
 		return nil, err
 	}
-	subqueryResult, err := e.Execute(ctx.Context, plan, ctx.Args)
+	correlatedCtx := makeCorrelatedCtx(ctx, row)
+	subqueryResult, err := e.executeWithContext(correlatedCtx, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -4105,6 +4176,146 @@ func (e *Executor) evaluateQuantifiedComparison(
 		return nil, nil
 	}
 	return true, nil
+}
+
+// makeCorrelatedCtx creates a new execution context that merges the current row's
+// values into CorrelatedValues so that inner subqueries can resolve correlated
+// column references (e.g. outer table alias references in WHERE EXISTS / scalar subqueries).
+func makeCorrelatedCtx(parent *ExecutionContext, row map[string]any) *ExecutionContext {
+	merged := make(map[string]any)
+	// Copy existing correlated values (for nested subqueries)
+	for k, v := range parent.CorrelatedValues {
+		merged[k] = v
+	}
+	// Merge in the current row values
+	for k, v := range row {
+		merged[k] = v
+	}
+	return &ExecutionContext{
+		Context:          parent.Context,
+		Args:             parent.Args,
+		CorrelatedValues: merged,
+		SubqueryCache:    parent.SubqueryCache, // Propagate cache to inner contexts
+		conn:             parent.conn,
+	}
+}
+
+// stmtIsCorrelated returns true if the given BoundSelectStmt contains any
+// BoundCorrelatedColumnRef nodes, indicating it references an outer scope.
+func stmtIsCorrelated(stmt *binder.BoundSelectStmt) bool {
+	if stmt == nil {
+		return false
+	}
+	correlated := false
+	// Walk all expressions in SELECT list and WHERE clause
+	checkExpr := func(expr binder.BoundExpr) {
+		if _, ok := expr.(*binder.BoundCorrelatedColumnRef); ok {
+			correlated = true
+		}
+	}
+	for _, col := range stmt.Columns {
+		rewrite.WalkExpr(col.Expr, checkExpr)
+	}
+	if stmt.Where != nil {
+		rewrite.WalkExpr(stmt.Where, checkExpr)
+	}
+	return correlated
+}
+
+// evaluateExistsExpr evaluates an EXISTS or NOT EXISTS subquery expression.
+// The current row is passed as correlated values so the subquery can reference
+// outer table aliases (e.g. WHERE EXISTS (SELECT 1 FROM orders WHERE customer_id = c.id)).
+func (e *Executor) evaluateExistsExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundExistsExpr,
+	row map[string]any,
+) (any, error) {
+	plan, err := e.planner.Plan(expr.Subquery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute with correlated values from the current outer row
+	correlatedCtx := makeCorrelatedCtx(ctx, row)
+	subqueryResult, err := e.executeWithContext(correlatedCtx, plan)
+	if err != nil {
+		return nil, err
+	}
+
+	hasRows := len(subqueryResult.Rows) > 0
+	if expr.Not {
+		return !hasRows, nil
+	}
+	return hasRows, nil
+}
+
+// evaluateScalarSubquery evaluates a scalar subquery (a SELECT statement used as an
+// expression). The subquery must return at most one row with one column; if it returns
+// no rows the result is NULL. The current row is passed as correlated values.
+//
+// For non-correlated subqueries (no BoundCorrelatedColumnRef), the result is cached
+// in ctx.SubqueryCache to avoid redundant executions (one per outer row).
+func (e *Executor) evaluateScalarSubquery(
+	ctx *ExecutionContext,
+	stmt *binder.BoundSelectStmt,
+	row map[string]any,
+) (any, error) {
+	// For non-correlated subqueries, check the cache to avoid O(N^2) re-evaluation.
+	isCorrelated := stmtIsCorrelated(stmt)
+	if !isCorrelated && ctx.SubqueryCache != nil {
+		if cached, ok := ctx.SubqueryCache[stmt]; ok {
+			return cached, nil
+		}
+	}
+
+	plan, err := e.planner.Plan(stmt)
+	if err != nil {
+		return nil, err
+	}
+
+	var subqueryResult *ExecutionResult
+	if isCorrelated {
+		// Execute with correlated values from the current outer row
+		correlatedCtx := makeCorrelatedCtx(ctx, row)
+		subqueryResult, err = e.executeWithContext(correlatedCtx, plan)
+	} else {
+		// Non-correlated: execute with a clean context (no outer row values needed)
+		cleanCtx := &ExecutionContext{
+			Context: ctx.Context,
+			Args:    ctx.Args,
+			conn:    ctx.conn,
+		}
+		subqueryResult, err = e.executeWithContext(cleanCtx, plan)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var result any
+	if len(subqueryResult.Rows) > 0 {
+		firstRow := subqueryResult.Rows[0]
+		if len(subqueryResult.Columns) > 0 {
+			colName := subqueryResult.Columns[0]
+			if val, ok := firstRow[colName]; ok {
+				result = val
+			}
+		}
+		if result == nil {
+			// Fallback: return first value in the row map
+			for _, v := range firstRow {
+				result = v
+				break
+			}
+		}
+	}
+	// nil means NULL (subquery with no rows)
+
+	// Cache result for non-correlated subqueries
+	if !isCorrelated && ctx.SubqueryCache != nil {
+		ctx.SubqueryCache[stmt] = result
+	}
+
+	return result, nil
 }
 
 // applyComparisonOp applies a comparison operator to a compareValues result.
@@ -5145,6 +5356,41 @@ func (e *Executor) computeAggregate(
 		}
 		return computeRegrSXY(yValues, xValues)
 
+	case "APPROX_COUNT_DISTINCT":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeApproxCountDistinct(values)
+
+	case "APPROX_QUANTILE":
+		if len(fn.Args) < 2 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		qVal, err := e.evaluateExpr(ctx, fn.Args[1], nil)
+		if err != nil {
+			return nil, err
+		}
+		q := toFloat64Value(qVal)
+		return computeApproxQuantile(values, q)
+
+	case "APPROX_MEDIAN":
+		if len(fn.Args) == 0 {
+			return nil, nil
+		}
+		values, err := e.collectAggValues(ctx, fn.Args[0], rows)
+		if err != nil {
+			return nil, err
+		}
+		return computeApproxMedian(values)
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -5505,6 +5751,18 @@ func addIntervalToTemporal(temporal any, interval Interval) (any, error) {
 	case int64: // TIMESTAMP (microseconds since epoch)
 		t := timestampToTime(v)
 		result := addInterval(t, interval)
+		return timeToTimestamp(result), nil
+	case string:
+		// Coerce string to time.Time
+		t, err := parseTimeString(v)
+		if err != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("cannot add interval: cannot parse %q as time", v),
+			}
+		}
+		result := addInterval(t, interval)
+		// Return as timestamp (int64 microseconds) since we don't know if it was date or timestamp
 		return timeToTimestamp(result), nil
 	default:
 		return nil, &dukdb.Error{

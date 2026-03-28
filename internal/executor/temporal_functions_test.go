@@ -172,8 +172,13 @@ func TestEvalYear(t *testing.T) {
 			hasError: true,
 		},
 		{
-			name:     "unsupported type",
+			name:     "string date input",
 			args:     []any{"2024-01-01"},
+			expected: int32(2024),
+		},
+		{
+			name:     "unsupported type",
+			args:     []any{true},
 			hasError: true,
 		},
 	}

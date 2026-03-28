@@ -123,26 +123,28 @@ func isCorrelatedSubquery(stmt *binder.BoundSelectStmt) bool {
 	}
 
 	correlated := false
-	for _, col := range stmt.Columns {
-		rewrite.WalkExpr(col.Expr, func(expr binder.BoundExpr) {
-			if ref, ok := expr.(*binder.BoundColumnRef); ok {
-				if ref.Table != "" {
-					if _, ok := allowed[ref.Table]; !ok {
-						correlated = true
-					}
-				}
-			}
-		})
-	}
-	rewrite.WalkExpr(stmt.Where, func(expr binder.BoundExpr) {
-		if ref, ok := expr.(*binder.BoundColumnRef); ok {
+
+	// checkCorrelated inspects a single expression node for any reference that
+	// escapes the subquery's own table set, indicating a correlated reference.
+	checkCorrelated := func(expr binder.BoundExpr) {
+		switch ref := expr.(type) {
+		case *binder.BoundCorrelatedColumnRef:
+			// BoundCorrelatedColumnRef is always a correlated reference
+			_ = ref
+			correlated = true
+		case *binder.BoundColumnRef:
 			if ref.Table != "" {
 				if _, ok := allowed[ref.Table]; !ok {
 					correlated = true
 				}
 			}
 		}
-	})
+	}
+
+	for _, col := range stmt.Columns {
+		rewrite.WalkExpr(col.Expr, checkCorrelated)
+	}
+	rewrite.WalkExpr(stmt.Where, checkCorrelated)
 	return correlated
 }
 

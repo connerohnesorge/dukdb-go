@@ -223,7 +223,8 @@ func (c *EngineConn) Execute(
 	}
 
 	// Bind the statement
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return 0, err
@@ -767,7 +768,8 @@ func (c *EngineConn) describeTable(tableName, schemaName string, columns []strin
 // describeQuery returns column metadata for a query by binding it and extracting
 // output column names and types without executing the query.
 func (c *EngineConn) describeQuery(query parser.Statement, columns []string) ([]map[string]any, []string, error) {
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(query)
 	if err != nil {
 		return nil, nil, err
@@ -1136,7 +1138,8 @@ func (c *EngineConn) buildExecArgs(params []parser.Expr, expectedCount int) ([]d
 
 // executeInnerStmt binds, plans, and executes a statement (Exec path).
 func (c *EngineConn) executeInnerStmt(ctx context.Context, stmt parser.Statement, args []driver.NamedValue) (int64, error) {
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return 0, err
@@ -1181,7 +1184,8 @@ func (c *EngineConn) executeInnerStmt(ctx context.Context, stmt parser.Statement
 
 // queryInnerStmt binds, plans, and executes a statement (Query path).
 func (c *EngineConn) queryInnerStmt(ctx context.Context, stmt parser.Statement, args []driver.NamedValue) ([]map[string]any, []string, error) {
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return nil, nil, err
@@ -1422,7 +1426,8 @@ func (c *EngineConn) Query(
 	}
 
 	// Bind the statement
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return nil, nil, err
@@ -2085,7 +2090,8 @@ func (c *EngineConn) Prepare(
 	}
 
 	// Bind the statement to get parameter types and column metadata
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, bindErr := b.Bind(stmt)
 	if bindErr == nil {
 		// Extract inferred parameter types from binder
@@ -2690,7 +2696,8 @@ func (c *EngineConn) QueryStreaming(
 	}
 
 	// Bind the statement
-	b := binder.NewBinder(c.engine.catalog)
+	b := binder.NewBinder(c.engine.catalog).
+		WithAttachedCatalogs(c.engine.dbManager.AttachedCatalogs())
 	boundStmt, err := b.Bind(stmt)
 	if err != nil {
 		return nil, nil, err

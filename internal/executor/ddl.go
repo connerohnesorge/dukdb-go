@@ -25,9 +25,16 @@ func (e *Executor) executeCreateView(
 		if plan.IfNotExists {
 			return &ExecutionResult{RowsAffected: 0}, nil
 		}
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeCatalog,
-			Msg:  fmt.Sprintf("view %s.%s already exists", plan.Schema, plan.View),
+		if plan.OrReplace {
+			// DROP the existing view before recreating it
+			if err := e.catalog.DropViewInSchema(plan.Schema, plan.View); err != nil {
+				return nil, fmt.Errorf("failed to drop existing view for OR REPLACE: %w", err)
+			}
+		} else {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeCatalog,
+				Msg:  fmt.Sprintf("view %s.%s already exists", plan.Schema, plan.View),
+			}
 		}
 	}
 

@@ -67,6 +67,7 @@ type ExecutionContext struct {
 	Context          context.Context
 	Args             []driver.NamedValue
 	CorrelatedValues map[string]any      // Values from outer scope for LATERAL/correlated subqueries
+	SubqueryCache    map[*binder.BoundSelectStmt]any // Cache for non-correlated scalar subquery results
 	conn             ConnectionInterface // Connection for accessing session-level settings
 }
 
@@ -213,6 +214,9 @@ type DatabaseManager interface {
 	Use(database string) error
 	CreateDatabase(name string, ifNotExists bool) error
 	DropDatabase(name string, ifExists bool) error
+	// GetAttached returns the catalog and storage for an attached database by name.
+	// Returns false if no database with that name is attached.
+	GetAttached(name string) (*catalog.Catalog, *storage.Storage, bool)
 }
 
 // SecretManager is an interface for managing secrets.
@@ -390,9 +394,10 @@ func (e *Executor) Execute(
 	args []driver.NamedValue,
 ) (*ExecutionResult, error) {
 	execCtx := &ExecutionContext{
-		Context: ctx,
-		Args:    args,
-		conn:    e.conn,
+		Context:       ctx,
+		Args:          args,
+		SubqueryCache: make(map[*binder.BoundSelectStmt]any),
+		conn:          e.conn,
 	}
 	return e.executeWithContext(execCtx, plan)
 }
@@ -618,7 +623,9 @@ func (e *Executor) executeScan(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalScan,
 ) (*ExecutionResult, error) {
-	table, ok := e.storage.GetTable(
+	// Resolve to attached database storage if schema matches an attached DB
+	_, scanStor, _ := e.resolveSchemaTarget(plan.Schema)
+	table, ok := scanStor.GetTable(
 		plan.TableName,
 	)
 	if !ok {
@@ -1165,11 +1172,7 @@ func (e *Executor) executeLateralJoin(
 	plan *planner.PhysicalLateralJoin,
 ) (*ExecutionResult, error) {
 	// Execute left side first
-	leftResult, err := e.Execute(
-		ctx.Context,
-		plan.Left,
-		ctx.Args,
-	)
+	leftResult, err := e.executeWithContext(ctx, plan.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -1497,11 +1500,7 @@ func (e *Executor) executeHashAggregate(
 	plan *planner.PhysicalHashAggregate,
 ) (*ExecutionResult, error) {
 	// Execute child
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -1921,11 +1920,7 @@ func (e *Executor) executeDistinct(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalDistinct,
 ) (*ExecutionResult, error) {
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -1959,11 +1954,7 @@ func (e *Executor) executeDistinctOn(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalDistinctOn,
 ) (*ExecutionResult, error) {
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -2025,12 +2016,15 @@ func (e *Executor) executeInsert(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalInsert,
 ) (*ExecutionResult, error) {
+	// Resolve catalog and storage (may redirect to an attached database)
+	_, insertStor, _ := e.resolveSchemaTarget(plan.Schema)
+
 	// Get or create storage table
-	table, ok := e.storage.GetTable(plan.Table)
+	table, ok := insertStor.GetTable(plan.Table)
 	if !ok {
 		// Create table in storage
 		var err error
-		table, err = e.storage.CreateTable(
+		table, err = insertStor.CreateTable(
 			plan.Table,
 			plan.TableDef.ColumnTypes(),
 		)
@@ -2366,7 +2360,16 @@ func (e *Executor) executeInsert(
 			// Fill in default values for unspecified columns
 			for i, col := range plan.TableDef.Columns {
 				if !specifiedCols[i] && col.HasDefault {
-					values[i] = col.DefaultValue
+					if col.DefaultValue != nil {
+						values[i] = col.DefaultValue
+					} else if col.DefaultExprText != "" {
+						// Non-literal default expression (e.g., NEXTVAL('seq')): evaluate it now
+						val, err := e.evaluateDefaultExpr(ctx, col.DefaultExprText)
+						if err != nil {
+							return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
+						}
+						values[i] = val
+					}
 				}
 			}
 
@@ -2479,7 +2482,16 @@ func (e *Executor) executeInsert(
 			// Fill in default values for unspecified columns
 			for i, col := range plan.TableDef.Columns {
 				if !specifiedCols[i] && col.HasDefault {
-					values[i] = col.DefaultValue
+					if col.DefaultValue != nil {
+						values[i] = col.DefaultValue
+					} else if col.DefaultExprText != "" {
+						// Non-literal default expression (e.g., NEXTVAL('seq')): evaluate it now
+						val, err := e.evaluateDefaultExpr(ctx, col.DefaultExprText)
+						if err != nil {
+							return nil, fmt.Errorf("evaluating default for column %q: %w", col.Name, err)
+						}
+						values[i] = val
+					}
 				}
 			}
 
@@ -2722,6 +2734,20 @@ func (e *Executor) updateIndexesForInsert(
 	return nil
 }
 
+// resolveSchemaTarget resolves a schema name to its catalog and storage.
+// When the schema name matches an attached database name, the attached
+// database's catalog and storage are returned with the schema rewritten to
+// "main".  Otherwise the executor's own catalog and storage are returned
+// unchanged.
+func (e *Executor) resolveSchemaTarget(schema string) (cat *catalog.Catalog, stor *storage.Storage, resolvedSchema string) {
+	if e.dbManager != nil && schema != "" && schema != "main" && schema != "temp" {
+		if attachedCat, attachedStor, ok := e.dbManager.GetAttached(schema); ok {
+			return attachedCat, attachedStor, "main"
+		}
+	}
+	return e.catalog, e.storage, schema
+}
+
 func (e *Executor) executeCreateTable(
 	ctx *ExecutionContext,
 	plan *planner.PhysicalCreateTable,
@@ -2746,24 +2772,27 @@ func (e *Executor) executeCreateTable(
 		}
 	}
 
+	// Resolve schema to attached database catalog/storage if needed
+	cat, stor, schema := e.resolveSchemaTarget(schema)
+
 	// OR REPLACE: drop existing table first
 	if plan.OrReplace {
-		_, exists := e.catalog.GetTableInSchema(schema, plan.Table)
+		_, exists := cat.GetTableInSchema(schema, plan.Table)
 		if exists {
 			// Drop from storage first
-			if err := e.storage.DropTable(plan.Table); err != nil &&
+			if err := stor.DropTable(plan.Table); err != nil &&
 				err != dukdb.ErrTableNotFound {
 				return nil, err
 			}
 			// Drop from catalog
-			if err := e.catalog.DropTableInSchema(schema, plan.Table); err != nil {
+			if err := cat.DropTableInSchema(schema, plan.Table); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	// Check if table already exists
-	_, exists := e.catalog.GetTableInSchema(
+	_, exists := cat.GetTableInSchema(
 		schema,
 		plan.Table,
 	)
@@ -2800,10 +2829,10 @@ func (e *Executor) executeCreateTable(
 			continue
 		}
 		// Validate parent table exists
-		parentDef, exists := e.catalog.GetTableInSchema(schema, fk.RefTable)
+		parentDef, exists := cat.GetTableInSchema(schema, fk.RefTable)
 		if !exists {
 			// Try default schema
-			parentDef, exists = e.catalog.GetTable(fk.RefTable)
+			parentDef, exists = cat.GetTable(fk.RefTable)
 			if !exists {
 				return nil, &dukdb.Error{
 					Type: dukdb.ErrorTypeConstraint,
@@ -2837,7 +2866,7 @@ func (e *Executor) executeCreateTable(
 	}
 
 	// Add to catalog
-	if err := e.catalog.CreateTableInSchema(schema, tableDef); err != nil {
+	if err := cat.CreateTableInSchema(schema, tableDef); err != nil {
 		return nil, err
 	}
 
@@ -2846,9 +2875,9 @@ func (e *Executor) executeCreateTable(
 	for i, col := range plan.Columns {
 		types[i] = col.Type
 	}
-	if _, err := e.storage.CreateTable(plan.Table, types); err != nil {
+	if _, err := stor.CreateTable(plan.Table, types); err != nil {
 		// Rollback catalog change
-		_ = e.catalog.DropTableInSchema(
+		_ = cat.DropTableInSchema(
 			schema,
 			plan.Table,
 		)
@@ -2856,8 +2885,8 @@ func (e *Executor) executeCreateTable(
 		return nil, err
 	}
 
-	// Write WAL entry for CREATE TABLE
-	if e.wal != nil {
+	// Write WAL entry for CREATE TABLE (only for the main database WAL)
+	if e.wal != nil && cat == e.catalog {
 		columns := make([]wal.ColumnDef, len(plan.Columns))
 		for i, col := range plan.Columns {
 			columns[i] = wal.ColumnDef{
@@ -2873,8 +2902,8 @@ func (e *Executor) executeCreateTable(
 		}
 		if err := e.wal.WriteEntry(entry); err != nil {
 			// Rollback catalog and storage changes
-			_ = e.catalog.DropTableInSchema(schema, plan.Table)
-			_ = e.storage.DropTable(plan.Table)
+			_ = cat.DropTableInSchema(schema, plan.Table)
+			_ = stor.DropTable(plan.Table)
 			return nil, fmt.Errorf("WAL append failed: %w", err)
 		}
 	}
@@ -3024,11 +3053,7 @@ func (e *Executor) executeWindow(
 	plan *planner.PhysicalWindow,
 ) (*ExecutionResult, error) {
 	// First execute child
-	childResult, err := e.Execute(
-		ctx.Context,
-		plan.Child,
-		ctx.Args,
-	)
+	childResult, err := e.executeWithContext(ctx, plan.Child)
 	if err != nil {
 		return nil, err
 	}

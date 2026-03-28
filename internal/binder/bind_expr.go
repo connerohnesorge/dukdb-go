@@ -69,7 +69,11 @@ func (b *Binder) bindExpr(
 	case *parser.ColumnsExpr:
 		return b.bindColumnsExpr(e)
 	case *parser.SelectStmt:
-		return b.bindSelect(e)
+		// Scalar subquery: push outer scope so correlated column references resolve correctly.
+		pop := b.pushOuterScope()
+		result, err := b.bindSelect(e)
+		pop()
+		return result, err
 	case *parser.ExtractExpr:
 		return b.bindExtractExpr(e)
 	case *parser.IntervalLiteral:
@@ -139,7 +143,7 @@ func (b *Binder) bindColumnRef(
 			)
 		}
 
-		// Table not found -- try as struct_column.field_name
+		// Table not found in current scope -- try as struct_column.field_name
 		// We check for TYPE_STRUCT or TYPE_ANY (since CTAS may not preserve struct type info)
 		for _, tRef := range b.scope.tables {
 			for _, col := range tRef.Columns {
@@ -159,6 +163,26 @@ func (b *Binder) bindColumnRef(
 						Field:   ref.Column,
 						ResType: dukdb.TYPE_ANY,
 					}, nil
+				}
+			}
+		}
+
+		// Correlated column resolution: search outer scopes (innermost first)
+		for i := len(b.outerScopes) - 1; i >= 0; i-- {
+			outerScope := b.outerScopes[i]
+			if outerTableRef, ok := outerScope.tables[ref.Table]; ok {
+				for _, col := range outerTableRef.Columns {
+					if strings.EqualFold(col.Column, ref.Column) {
+						return &BoundCorrelatedColumnRef{
+							BoundColumnRef: BoundColumnRef{
+								Table:     ref.Table,
+								Column:    col.Column,
+								ColumnIdx: col.ColumnIdx,
+								ColType:   col.Type,
+							},
+							Depth: len(b.outerScopes) - i,
+						}, nil
+					}
 				}
 			}
 		}
@@ -655,7 +679,10 @@ func (b *Binder) bindInSubqueryExpr(
 		return nil, err
 	}
 
+	// Push outer scope so the subquery can see correlated columns from the outer query.
+	pop := b.pushOuterScope()
 	subquery, err := b.bindSelect(e.Subquery)
+	pop()
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +702,10 @@ func (b *Binder) bindQuantifiedComparisonExpr(
 		return nil, err
 	}
 
+	// Push outer scope so the subquery can see correlated columns from the outer query.
+	pop := b.pushOuterScope()
 	subquery, err := b.bindSelect(e.Subquery)
+	pop()
 	if err != nil {
 		return nil, err
 	}
@@ -691,7 +721,10 @@ func (b *Binder) bindQuantifiedComparisonExpr(
 func (b *Binder) bindExistsExpr(
 	e *parser.ExistsExpr,
 ) (*BoundExistsExpr, error) {
+	// Push outer scope so the subquery can see correlated columns from the outer query.
+	pop := b.pushOuterScope()
 	subquery, err := b.bindSelect(e.Subquery)
+	pop()
 	if err != nil {
 		return nil, err
 	}
