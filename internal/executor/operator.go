@@ -2860,11 +2860,22 @@ func (e *Executor) executeCreateTable(
 	if e.wal != nil {
 		columns := make([]wal.ColumnDef, len(plan.Columns))
 		for i, col := range plan.Columns {
-			columns[i] = wal.ColumnDef{
-				Name:     col.Name,
-				Type:     col.Type,
-				Nullable: col.Nullable,
+			walCol := wal.ColumnDef{
+				Name:       col.Name,
+				Type:       col.Type,
+				Nullable:   col.Nullable,
+				HasDefault: col.HasDefault,
 			}
+			// Preserve non-literal default expression text (e.g. NEXTVAL('seq'))
+			// so crash recovery can faithfully reconstruct the column definition.
+			if col.HasDefault {
+				if s, ok := col.DefaultValue.(string); ok {
+					walCol.DefaultExprText = s
+				} else if col.DefaultValue != nil {
+					walCol.DefaultExprText = fmt.Sprintf("%v", col.DefaultValue)
+				}
+			}
+			columns[i] = walCol
 		}
 		entry := &wal.CreateTableEntry{
 			Schema:  schema,

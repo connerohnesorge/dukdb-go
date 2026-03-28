@@ -509,7 +509,16 @@ func (r *Reader) replayCatalogEntry(
 	case *CreateTableEntry:
 		columns := make([]*catalog.ColumnDef, len(e.Columns))
 		for i, col := range e.Columns {
-			columns[i] = catalog.NewColumnDef(col.Name, col.Type).WithNullable(col.Nullable)
+			cd := catalog.NewColumnDef(col.Name, col.Type).WithNullable(col.Nullable)
+			if col.HasDefault {
+				// Restore the default value from the WAL expression text.
+				// For literal defaults the text is the string representation of the value;
+				// for expression defaults (e.g. NEXTVAL('seq')) this preserves the SQL text
+				// so the executor can re-evaluate it at insert time.
+				cd.HasDefault = true
+				cd.DefaultValue = col.DefaultExprText
+			}
+			columns[i] = cd
 		}
 		tableDef := catalog.NewTableDef(e.Name, columns)
 

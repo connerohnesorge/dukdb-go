@@ -13,6 +13,9 @@ type ColumnDef struct {
 	Type       dukdb.Type
 	Nullable   bool
 	HasDefault bool
+	// DefaultExprText stores the SQL text of non-literal default expressions
+	// (e.g., "NEXTVAL('seq')") so crash recovery can restore them faithfully.
+	DefaultExprText string
 }
 
 // CreateTableEntry represents a CREATE TABLE WAL entry.
@@ -57,6 +60,13 @@ func (e *CreateTableEntry) Serialize(
 		if err := binary.Write(w, binary.LittleEndian, flags); err != nil {
 			return err
 		}
+		// Write default expression text when the column has a default.
+		// This preserves non-literal defaults like NEXTVAL('seq') across crash recovery.
+		if col.HasDefault {
+			if err := writeString(w, col.DefaultExprText); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -93,6 +103,12 @@ func (e *CreateTableEntry) Deserialize(
 		}
 		e.Columns[i].Nullable = flags&0x01 != 0
 		e.Columns[i].HasDefault = flags&0x02 != 0
+		// Read default expression text when the column has a default
+		if e.Columns[i].HasDefault {
+			if e.Columns[i].DefaultExprText, err = readString(r); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

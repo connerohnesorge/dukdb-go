@@ -19,6 +19,12 @@ type AttachedDatabase struct {
 }
 
 // DatabaseManager maintains a registry of attached databases.
+//
+// Performance note: if an AttachedCatalogs() helper is added that builds a
+// map[string]*catalog.Catalog from the databases map, callers should be aware
+// that it allocates a new map on every call. For hot paths (e.g., per-statement
+// binder setup) consider caching the result and invalidating when Attach,
+// Detach, CreateDatabase, or DropDatabase mutate the registry.
 type DatabaseManager struct {
 	mu        sync.RWMutex
 	databases map[string]*AttachedDatabase
