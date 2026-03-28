@@ -3872,10 +3872,8 @@ func collectNestedAggregates(
 	}
 	if fn, ok := expr.(*binder.BoundFunctionCall); ok {
 		if isAggregateFunction(fn.Name) {
-			if !seen[expr] {
-				seen[expr] = true
-				*aggs = append(*aggs, expr)
-			}
+			seen[expr] = true
+			*aggs = append(*aggs, expr)
 			return // Don't recurse into aggregate arguments
 		}
 		// Non-aggregate function: recurse into args
@@ -4091,7 +4089,6 @@ func extractWindowExprs(
 	}
 	return windowExprs
 }
-
 
 // extractGroupingSets extracts grouping sets from GROUP BY expressions.
 // It returns the expanded grouping sets and the regular GROUP BY columns.

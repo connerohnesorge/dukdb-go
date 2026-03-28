@@ -130,7 +130,6 @@ func isCorrelatedSubquery(stmt *binder.BoundSelectStmt) bool {
 		switch ref := expr.(type) {
 		case *binder.BoundCorrelatedColumnRef:
 			// BoundCorrelatedColumnRef is always a correlated reference
-			_ = ref
 			correlated = true
 		case *binder.BoundColumnRef:
 			if ref.Table != "" {

@@ -113,6 +113,21 @@ func (e *Executor) evaluateDefaultExpr(
 	return result, nil
 }
 
+// resolveDefaultValue returns the default value for a column, evaluating
+// non-literal default expressions (e.g., NEXTVAL('seq')) at runtime.
+func (e *Executor) resolveDefaultValue(
+	ctx *ExecutionContext,
+	col *catalog.ColumnDef,
+) (any, error) {
+	if col.DefaultValue != nil {
+		return col.DefaultValue, nil
+	}
+	if col.DefaultExprText != "" {
+		return e.evaluateDefaultExpr(ctx, col.DefaultExprText)
+	}
+	return nil, nil
+}
+
 // recomputeGeneratedColumnsForUpdate re-evaluates all generated columns after
 // base columns have been updated. It uses the rowMap (which already has updated
 // base column values) and adds computed values to columnValues map.
