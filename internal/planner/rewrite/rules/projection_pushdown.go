@@ -111,6 +111,9 @@ func requiredColumns(exprs []binder.BoundExpr, filterExpr binder.BoundExpr, colu
 
 	for _, expr := range exprs {
 		collect(expr)
+		// Also collect outer columns referenced by correlated subqueries embedded in the
+		// project expressions (e.g. scalar subqueries with BoundCorrelatedColumnRef).
+		collectCorrelatedFromSubquery(expr, columns, nameCounts, needed)
 	}
 	if filterExpr != nil {
 		collect(filterExpr)
@@ -126,6 +129,53 @@ func requiredColumns(exprs []binder.BoundExpr, filterExpr binder.BoundExpr, colu
 	}
 	sort.Ints(result)
 	return result, true
+}
+
+// collectCorrelatedFromSubquery walks a BoundSelectStmt embedded as an expression
+// (scalar subquery) and collects any BoundCorrelatedColumnRef nodes that reference
+// outer-scope columns. These columns must be present in the outer scan's projection.
+func collectCorrelatedFromSubquery(expr binder.BoundExpr, columns []rewrite.Column, nameCounts map[string]int, needed map[int]struct{}) {
+	stmt, ok := expr.(*binder.BoundSelectStmt)
+	if !ok {
+		return
+	}
+	visitCorrelated := func(node binder.BoundExpr) {
+		ref, okRef := node.(*binder.BoundCorrelatedColumnRef)
+		if !okRef {
+			return
+		}
+		// Find the outer column that this correlated ref points to
+		for _, col := range columns {
+			if ref.Table != "" {
+				if col.Table == ref.Table && col.Column == ref.Column {
+					needed[col.ColumnIdx] = struct{}{}
+					return
+				}
+			} else if nameCounts[ref.Column] == 1 && col.Column == ref.Column {
+				needed[col.ColumnIdx] = struct{}{}
+				return
+			}
+		}
+	}
+	// Walk the subquery's WHERE clause and SELECT expressions for correlated refs
+	walkSubqueryExprs(stmt, visitCorrelated)
+}
+
+// walkSubqueryExprs walks expressions inside a BoundSelectStmt (WHERE, SELECT columns,
+// JOINs) using the rewrite.WalkExpr visitor.
+func walkSubqueryExprs(stmt *binder.BoundSelectStmt, visit func(binder.BoundExpr)) {
+	if stmt == nil {
+		return
+	}
+	if stmt.Where != nil {
+		rewrite.WalkExpr(stmt.Where, visit)
+	}
+	for _, col := range stmt.Columns {
+		rewrite.WalkExpr(col.Expr, visit)
+	}
+	if stmt.Having != nil {
+		rewrite.WalkExpr(stmt.Having, visit)
+	}
 }
 
 func findColumnIndex(ref *binder.BoundColumnRef, columns []rewrite.Column, nameCounts map[string]int) (int, bool) {

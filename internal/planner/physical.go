@@ -733,6 +733,7 @@ type PhysicalCreateView struct {
 	Schema      string
 	View        string
 	IfNotExists bool
+	OrReplace   bool
 	Query       *binder.BoundSelectStmt
 	QueryText   string
 }
@@ -1728,6 +1729,13 @@ func (p *Planner) planSelect(
 	}
 
 	// GROUP BY / Aggregates (only non-window aggregates)
+	// projectionExprs holds the final expressions for the PROJECT node (may be
+	// rewritten to replace nested aggregate calls with column references).
+	projectionExprs := make([]binder.BoundExpr, len(s.Columns))
+	for i, col := range s.Columns {
+		projectionExprs[i] = col.Expr
+	}
+
 	if len(s.GroupBy) > 0 ||
 		hasNonWindowAggregates(s.Columns) {
 		// Extract grouping sets if present
@@ -1738,8 +1746,17 @@ func (p *Planner) planSelect(
 		// Extract GROUPING() function calls from the select columns
 		groupingCalls := extractGroupingCalls(s.Columns)
 
-		// Extract aliases reordered to match internal layout [groupby..., aggregates..., groupingCalls...]
-		aliases := extractAggregateAliases(s.Columns, len(regularGroupBy), len(aggregates), len(groupingCalls))
+		// Assign aliases for each aggregate expression.
+		// For direct aggregates (top-level expr is the agg), use the column alias.
+		// For nested aggregates (agg inside wrapper like ROUND), use a synthetic alias.
+		aggAliases := assignAggregateAliases(s.Columns, regularGroupBy, aggregates, groupingCalls)
+
+		// Build the full aliases list: [groupBy aliases..., agg aliases..., groupingCall aliases...]
+		aliases := buildFullAliases(s.Columns, regularGroupBy, aggregates, groupingCalls, aggAliases)
+
+		// Rewrite projection expressions to replace nested aggregate calls with
+		// BoundColumnRef nodes referencing the aggregate result columns.
+		projectionExprs = liftNestedAggregates(s.Columns, len(regularGroupBy), aggregates, aggAliases)
 
 		plan = &LogicalAggregate{
 			Child:         plan,
@@ -1760,8 +1777,18 @@ func (p *Planner) planSelect(
 	}
 
 	// WINDOW - detect and add window expressions
-	// Window goes AFTER aggregation/filter, BEFORE projection
+	// Window goes AFTER aggregation/filter, BEFORE projection.
+	// We must also include any window functions embedded directly in the QUALIFY clause
+	// (e.g., "QUALIFY RANK() OVER (...) = 1") so that their results are computed and
+	// available when the QUALIFY filter is applied.
 	windowExprs := extractWindowExprs(s.Columns)
+	if s.Qualify != nil {
+		rewrite.WalkExpr(s.Qualify, func(expr binder.BoundExpr) {
+			if we, ok := expr.(*binder.BoundWindowExpr); ok {
+				windowExprs = append(windowExprs, we)
+			}
+		})
+	}
 	if len(windowExprs) > 0 {
 		plan = &LogicalWindow{
 			Child:       plan,
@@ -1779,20 +1806,15 @@ func (p *Planner) planSelect(
 	}
 
 	// PROJECT
-	expressions := make(
-		[]binder.BoundExpr,
-		len(s.Columns),
-	)
-	aliases := make([]string, len(s.Columns))
+	projAliases := make([]string, len(s.Columns))
 	for i, col := range s.Columns {
-		expressions[i] = col.Expr
-		aliases[i] = col.Alias
+		projAliases[i] = col.Alias
 	}
 
 	plan = &LogicalProject{
 		Child:       plan,
-		Expressions: expressions,
-		Aliases:     aliases,
+		Expressions: projectionExprs,
+		Aliases:     projAliases,
 	}
 
 	// DISTINCT ON - keep first row per group of DISTINCT ON columns
@@ -2071,6 +2093,7 @@ func (p *Planner) planCreateView(
 		Schema:      s.Schema,
 		View:        s.View,
 		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
 		Query:       s.Query,
 		QueryText:   s.QueryText,
 	}, nil
@@ -2895,6 +2918,7 @@ func (p *Planner) createPhysicalPlan(
 			Schema:      l.Schema,
 			View:        l.View,
 			IfNotExists: l.IfNotExists,
+			OrReplace:   l.OrReplace,
 			Query:       l.Query,
 			QueryText:   l.QueryText,
 		}, nil
@@ -3793,7 +3817,8 @@ func hasNonWindowAggregates(
 	return false
 }
 
-// containsNonWindowAggregate checks if an expression is a non-window aggregate.
+// containsNonWindowAggregate checks if an expression contains a non-window aggregate,
+// including aggregates nested inside non-aggregate function calls (e.g., ROUND(AVG(x), 2)).
 func containsNonWindowAggregate(
 	expr binder.BoundExpr,
 ) bool {
@@ -3803,28 +3828,251 @@ func containsNonWindowAggregate(
 	}
 	switch e := expr.(type) {
 	case *binder.BoundFunctionCall:
-		return isAggregateFunction(e.Name)
+		if isAggregateFunction(e.Name) {
+			return true
+		}
+		// Recursively check arguments for nested aggregates (e.g., ROUND(AVG(x), 2))
+		for _, arg := range e.Args {
+			if containsNonWindowAggregate(arg) {
+				return true
+			}
+		}
 	}
 	return false
 }
 
 // extractNonWindowAggregates extracts non-window aggregate expressions from columns.
+// It handles both direct aggregates (AVG(x)) and nested aggregates (ROUND(AVG(x), 2)).
 func extractNonWindowAggregates(
 	columns []*binder.BoundSelectColumn,
 ) []binder.BoundExpr {
 	var aggs []binder.BoundExpr
+	seen := make(map[binder.BoundExpr]bool)
 	for _, col := range columns {
 		// Skip window expressions
 		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
 			continue
 		}
+		collectNestedAggregates(col.Expr, &aggs, seen)
+	}
+	return aggs
+}
+
+// collectNestedAggregates recursively collects all aggregate function calls from an expression.
+func collectNestedAggregates(
+	expr binder.BoundExpr,
+	aggs *[]binder.BoundExpr,
+	seen map[binder.BoundExpr]bool,
+) {
+	if expr == nil || seen[expr] {
+		return
+	}
+	if _, ok := expr.(*binder.BoundWindowExpr); ok {
+		return
+	}
+	if fn, ok := expr.(*binder.BoundFunctionCall); ok {
+		if isAggregateFunction(fn.Name) {
+			if !seen[expr] {
+				seen[expr] = true
+				*aggs = append(*aggs, expr)
+			}
+			return // Don't recurse into aggregate arguments
+		}
+		// Non-aggregate function: recurse into args
+		for _, arg := range fn.Args {
+			collectNestedAggregates(arg, aggs, seen)
+		}
+	}
+}
+
+// assignAggregateAliases assigns an alias to each aggregate expression.
+// For a direct aggregate (top-level column expr is the agg), the column's alias is used.
+// For nested aggregates (agg inside a wrapper like ROUND), a synthetic alias is generated.
+func assignAggregateAliases(
+	columns []*binder.BoundSelectColumn,
+	groupBy []binder.BoundExpr,
+	aggregates []binder.BoundExpr,
+	groupingCalls []*binder.BoundGroupingCall,
+) []string {
+	// Build a map from aggregate expression pointer -> column alias (for direct aggs)
+	directAggAlias := make(map[binder.BoundExpr]string)
+	for _, col := range columns {
+		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			continue
+		}
 		if fn, ok := col.Expr.(*binder.BoundFunctionCall); ok {
 			if isAggregateFunction(fn.Name) {
-				aggs = append(aggs, col.Expr)
+				directAggAlias[col.Expr] = col.Alias
 			}
 		}
 	}
-	return aggs
+
+	aliases := make([]string, len(aggregates))
+	syntheticIdx := 0
+	for i, agg := range aggregates {
+		if alias, ok := directAggAlias[agg]; ok && alias != "" {
+			aliases[i] = alias
+		} else {
+			// Synthetic alias for nested aggregates
+			aliases[i] = fmt.Sprintf("__agg_%d", syntheticIdx)
+			syntheticIdx++
+		}
+	}
+	return aliases
+}
+
+// buildFullAliases builds the aliases array for the aggregate node in the layout:
+// [groupBy aliases..., aggregate aliases..., groupingCall aliases...]
+func buildFullAliases(
+	columns []*binder.BoundSelectColumn,
+	groupBy []binder.BoundExpr,
+	aggregates []binder.BoundExpr,
+	groupingCalls []*binder.BoundGroupingCall,
+	aggAliases []string,
+) []string {
+	numGroupBy := len(groupBy)
+	numAgg := len(aggregates)
+	numGC := len(groupingCalls)
+	total := numGroupBy + numAgg + numGC
+	aliases := make([]string, total)
+
+	// Group-by aliases: use column aliases for columns that reference group-by exprs
+	gbIdx := 0
+	gcIdx := 0
+	for _, col := range columns {
+		if _, ok := col.Expr.(*binder.BoundWindowExpr); ok {
+			continue
+		}
+		if _, ok := col.Expr.(*binder.BoundGroupingCall); ok {
+			if numGroupBy+numAgg+gcIdx < total {
+				aliases[numGroupBy+numAgg+gcIdx] = col.Alias
+				gcIdx++
+			}
+			continue
+		}
+		if fn, ok := col.Expr.(*binder.BoundFunctionCall); ok {
+			if isAggregateFunction(fn.Name) {
+				continue // aggregate aliases already handled via aggAliases
+			}
+		}
+		// If this column is not an aggregate and not a window expr, it's likely a group-by column
+		if containsNonWindowAggregate(col.Expr) {
+			continue // contains nested agg, handled separately
+		}
+		if gbIdx < numGroupBy {
+			aliases[gbIdx] = col.Alias
+			gbIdx++
+		}
+	}
+
+	// Aggregate aliases
+	for i, alias := range aggAliases {
+		if numGroupBy+i < total {
+			aliases[numGroupBy+i] = alias
+		}
+	}
+
+	return aliases
+}
+
+// liftNestedAggregates transforms column expressions so that nested aggregate calls
+// are replaced with BoundColumnRef references to the aggregate result columns.
+// For example, ROUND(AVG(value), 4) becomes ROUND(__agg_N, 4) where __agg_N is the
+// internal column name for AVG(value) in the aggregate output.
+//
+// Parameters:
+//   - columns: SELECT column list
+//   - groupByAliases: aliases for the GROUP BY columns (index 0..numGroupBy-1)
+//   - aggAliases: aliases assigned to each aggregate in extractNonWindowAggregates order
+//   - aggregates: the list of aggregate expressions (from extractNonWindowAggregates)
+//
+// Returns the transformed projection expressions (one per SELECT column).
+func liftNestedAggregates(
+	columns []*binder.BoundSelectColumn,
+	numGroupBy int,
+	aggregates []binder.BoundExpr,
+	aggAliases []string,
+) []binder.BoundExpr {
+	// Build a map from aggregate expression pointer -> column alias in aggregate output
+	aggToAlias := make(map[binder.BoundExpr]string, len(aggregates))
+	for i, agg := range aggregates {
+		aggToAlias[agg] = aggAliases[i]
+	}
+
+	result := make([]binder.BoundExpr, len(columns))
+	for i, col := range columns {
+		result[i] = replaceAggregatesWithRefs(col.Expr, aggToAlias)
+	}
+	return result
+}
+
+// replaceAggregatesWithRefs replaces aggregate function calls in an expression
+// with BoundColumnRef nodes that reference the pre-computed aggregate result columns.
+func replaceAggregatesWithRefs(
+	expr binder.BoundExpr,
+	aggToAlias map[binder.BoundExpr]string,
+) binder.BoundExpr {
+	if expr == nil {
+		return nil
+	}
+
+	// Check if this expression IS a known aggregate
+	if alias, ok := aggToAlias[expr]; ok {
+		return &binder.BoundColumnRef{
+			Column:  alias,
+			ColType: expr.ResultType(),
+		}
+	}
+
+	// For non-aggregate function calls, recursively replace in arguments
+	if fn, ok := expr.(*binder.BoundFunctionCall); ok {
+		if isAggregateFunction(fn.Name) {
+			// This aggregate wasn't in our map (shouldn't happen), leave as-is
+			return expr
+		}
+		// Check if any argument contains an aggregate
+		hasAggArg := false
+		for _, arg := range fn.Args {
+			if containsNestedAgg(arg, aggToAlias) {
+				hasAggArg = true
+				break
+			}
+		}
+		if !hasAggArg {
+			return expr
+		}
+		// Rebuild function call with transformed args
+		newArgs := make([]binder.BoundExpr, len(fn.Args))
+		for j, arg := range fn.Args {
+			newArgs[j] = replaceAggregatesWithRefs(arg, aggToAlias)
+		}
+		return &binder.BoundFunctionCall{
+			Name:     fn.Name,
+			Args:     newArgs,
+			Distinct: fn.Distinct,
+			Star:     fn.Star,
+		}
+	}
+
+	return expr
+}
+
+// containsNestedAgg checks if an expression contains a reference to a known aggregate.
+func containsNestedAgg(expr binder.BoundExpr, aggToAlias map[binder.BoundExpr]string) bool {
+	if expr == nil {
+		return false
+	}
+	if _, ok := aggToAlias[expr]; ok {
+		return true
+	}
+	if fn, ok := expr.(*binder.BoundFunctionCall); ok {
+		for _, arg := range fn.Args {
+			if containsNestedAgg(arg, aggToAlias) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // extractWindowExprs extracts window expressions from SELECT columns.
@@ -3843,6 +4091,7 @@ func extractWindowExprs(
 	}
 	return windowExprs
 }
+
 
 // extractGroupingSets extracts grouping sets from GROUP BY expressions.
 // It returns the expanded grouping sets and the regular GROUP BY columns.

@@ -29,7 +29,10 @@ func (b *Binder) bindCreateView(
 				IfNotExists: true,
 			}, nil
 		}
-		return nil, b.errorf("view already exists: %s.%s", schema, s.View)
+		if !s.OrReplace {
+			return nil, b.errorf("view already exists: %s.%s", schema, s.View)
+		}
+		// OR REPLACE - fall through to recreate the view
 	}
 
 	// Bind the SELECT query
@@ -46,6 +49,7 @@ func (b *Binder) bindCreateView(
 		Schema:      schema,
 		View:        s.View,
 		IfNotExists: s.IfNotExists,
+		OrReplace:   s.OrReplace,
 		Query:       boundQuery,
 		QueryText:   queryText,
 	}, nil

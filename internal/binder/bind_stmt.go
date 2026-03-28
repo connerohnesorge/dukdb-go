@@ -205,9 +205,9 @@ func (b *Binder) bindSelect(
 		}
 	}
 
-	// Bind GROUP BY
+	// Bind GROUP BY - SELECT aliases are visible in GROUP BY (DuckDB/PostgreSQL semantics)
 	for _, g := range s.GroupBy {
-		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
+		expr, err := b.bindExprWithSelectAliases(g, dukdb.TYPE_ANY, bound.Columns)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,8 @@ func (b *Binder) bindSelect(
 	}
 
 	// Bind QUALIFY clause (filter after window functions)
-	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias)
+	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias).
+	// FROM-clause columns take precedence over SELECT aliases to avoid ambiguity.
 	if s.Qualify != nil {
 		qualify, err := b.bindQualifyWithSelectAliases(s.Qualify, bound.Columns)
 		if err != nil {
@@ -239,12 +240,9 @@ func (b *Binder) bindSelect(
 		bound.Qualify = qualify
 	}
 
-	// Bind ORDER BY
+	// Bind ORDER BY - SELECT aliases are visible in ORDER BY (DuckDB/PostgreSQL semantics)
 	for _, o := range s.OrderBy {
-		expr, err := b.bindExpr(
-			o.Expr,
-			dukdb.TYPE_ANY,
-		)
+		expr, err := b.bindExprWithSelectAliases(o.Expr, dukdb.TYPE_ANY, bound.Columns)
 		if err != nil {
 			return nil, err
 		}
@@ -576,11 +574,8 @@ func (b *Binder) bindTableRef(
 		return b.bindViewRef(viewDef, alias)
 	}
 
-	// Fall back to regular table lookup
-	tableDef, ok := b.catalog.GetTableInSchema(
-		schema,
-		ref.TableName,
-	)
+	// Fall back to regular table lookup (also checks attached database catalogs)
+	tableDef, ok := b.getTableInSchema(schema, ref.TableName)
 	if !ok {
 		return nil, b.errorf(
 			"table not found: %s",
@@ -2820,10 +2815,7 @@ func (b *Binder) bindInsert(
 		schema = "main"
 	}
 
-	tableDef, ok := b.catalog.GetTableInSchema(
-		schema,
-		s.Table,
-	)
+	tableDef, ok := b.getTableInSchema(schema, s.Table)
 	if !ok {
 		return nil, b.errorf(
 			"table not found: %s",
@@ -3320,6 +3312,10 @@ func (b *Binder) bindCreateTable(
 			// Extract literal value from default expression if possible
 			if lit, ok := col.Default.(*parser.Literal); ok {
 				colDef.DefaultValue = lit.Value
+			} else {
+				// Non-literal default (e.g., NEXTVAL('seq')): store as expression text
+				// to be evaluated at row-insert time.
+				colDef.DefaultExprText = serializeExpr(col.Default)
 			}
 		}
 		if col.IsGenerated {
@@ -4321,9 +4317,9 @@ func (b *Binder) bindLateralSubquery(
 		}
 	}
 
-	// Bind GROUP BY
+	// Bind GROUP BY - SELECT aliases are visible in GROUP BY (DuckDB/PostgreSQL semantics)
 	for _, g := range s.GroupBy {
-		expr, err := b.bindExpr(g, dukdb.TYPE_ANY)
+		expr, err := b.bindExprWithSelectAliases(g, dukdb.TYPE_ANY, bound.Columns)
 		if err != nil {
 			return nil, err
 		}
@@ -4346,7 +4342,8 @@ func (b *Binder) bindLateralSubquery(
 	}
 
 	// Bind QUALIFY clause (filter after window functions)
-	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias)
+	// QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias).
+	// FROM-clause columns take precedence over SELECT aliases to avoid ambiguity.
 	if s.Qualify != nil {
 		qualify, err := b.bindQualifyWithSelectAliases(s.Qualify, bound.Columns)
 		if err != nil {
@@ -4355,12 +4352,9 @@ func (b *Binder) bindLateralSubquery(
 		bound.Qualify = qualify
 	}
 
-	// Bind ORDER BY
+	// Bind ORDER BY - SELECT aliases are visible in ORDER BY (DuckDB/PostgreSQL semantics)
 	for _, o := range s.OrderBy {
-		expr, err := b.bindExpr(
-			o.Expr,
-			dukdb.TYPE_ANY,
-		)
+		expr, err := b.bindExprWithSelectAliases(o.Expr, dukdb.TYPE_ANY, bound.Columns)
 		if err != nil {
 			return nil, err
 		}
@@ -4422,18 +4416,34 @@ func (b *Binder) bindLateralSubquery(
 // bindQualifyWithSelectAliases binds a QUALIFY expression with access to SELECT column aliases.
 // QUALIFY can reference SELECT column aliases (e.g., "QUALIFY rn <= 2" where rn is a window function alias).
 // This function temporarily adds SELECT column aliases to the scope before binding QUALIFY.
+// Only aliases that do NOT shadow an existing FROM-clause column are added to avoid ambiguity
+// (FROM columns take precedence, matching DuckDB/PostgreSQL semantics for QUALIFY).
 func (b *Binder) bindQualifyWithSelectAliases(
 	qualify parser.Expr,
 	boundColumns []*BoundSelectColumn,
 ) (BoundExpr, error) {
-	// Add SELECT column aliases to scope temporarily
-	// Create a virtual table reference for SELECT column aliases
+	// Build the set of column names that already exist in the FROM scope so we can
+	// skip aliases that would create an ambiguity.
+	fromCols := make(map[string]bool)
+	for tableName, tableRef := range b.scope.tables {
+		if tableName == "__select_aliases__" {
+			continue
+		}
+		for _, col := range tableRef.Columns {
+			fromCols[strings.ToLower(col.Column)] = true
+		}
+	}
+
+	// Add SELECT column aliases to scope temporarily, but only those that are not
+	// already present as FROM-clause columns.  This allows "QUALIFY rn = 1" to work
+	// (rn is a pure SELECT alias) while letting "QUALIFY dept = 'eng'" resolve to
+	// the base-table column without triggering the ambiguity check.
 	selectAliasRef := &BoundTableRef{
 		Alias:   "__select_aliases__",
 		Columns: make([]*BoundColumn, 0, len(boundColumns)),
 	}
 	for i, col := range boundColumns {
-		if col.Alias != "" {
+		if col.Alias != "" && !fromCols[strings.ToLower(col.Alias)] {
 			selectAliasRef.Columns = append(selectAliasRef.Columns, &BoundColumn{
 				Table:      "__select_aliases__",
 				Column:     col.Alias,
@@ -4454,6 +4464,47 @@ func (b *Binder) bindQualifyWithSelectAliases(
 	delete(b.scope.tables, "__select_aliases__")
 
 	return boundQualify, err
+}
+
+// bindExprWithSelectAliases binds an expression with access to SELECT column aliases.
+// This is used for ORDER BY and GROUP BY which can reference SELECT list aliases
+// in DuckDB/PostgreSQL semantics. The resolution precedence is:
+//  1. FROM clause columns (tried first via normal bindExpr)
+//  2. SELECT aliases (tried as fallback when normal binding fails with "column not found")
+func (b *Binder) bindExprWithSelectAliases(
+	expr parser.Expr,
+	expectedType dukdb.Type,
+	boundColumns []*BoundSelectColumn,
+) (BoundExpr, error) {
+	// First try to bind normally (FROM clause columns take precedence)
+	bound, err := b.bindExpr(expr, expectedType)
+	if err == nil {
+		return bound, nil
+	}
+
+	// If there was an error, check if it was a "column not found" error on a bare column ref.
+	// In that case, try to resolve it as a SELECT alias.
+	colRef, isColRef := expr.(*parser.ColumnRef)
+	if !isColRef || colRef.Table != "" {
+		// Not a bare column reference, so we can't try SELECT alias resolution
+		return nil, err
+	}
+
+	// Build alias map from SELECT list
+	for i, col := range boundColumns {
+		if col.Alias != "" && strings.EqualFold(col.Alias, colRef.Column) {
+			// Found a matching SELECT alias - resolve to output column reference
+			return &BoundColumnRef{
+				Table:     "__select_output__",
+				Column:    col.Alias,
+				ColumnIdx: i,
+				ColType:   col.Expr.ResultType(),
+			}, nil
+		}
+	}
+
+	// No alias match found, return the original error
+	return nil, err
 }
 
 // resolveWindowDef resolves a named window definition, handling transitive references.

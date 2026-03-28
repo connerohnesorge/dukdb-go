@@ -2096,7 +2096,7 @@ func (p *parser) parseCreate() (Statement, error) {
 	if p.isKeyword("TABLE") {
 		return p.parseCreateTable(orReplace, temporary)
 	} else if p.isKeyword("VIEW") {
-		return p.parseCreateView()
+		return p.parseCreateView(orReplace)
 	} else if p.isKeyword("INDEX") {
 		return p.parseCreateIndex()
 	} else if p.isKeyword("SEQUENCE") {
@@ -5192,6 +5192,26 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 		return p.parseExtract()
 	case "INTERVAL":
 		return p.parseInterval()
+	case "DATE", "TIME", "TIMESTAMP":
+		// SQL standard type-prefixed string literals: DATE '2024-01-01', TIMESTAMP '2024-01-01 00:00:00'
+		if p.current().typ == tokenString {
+			strTok := p.advance()
+			// Strip surrounding quotes and unescape
+			raw := strTok.value
+			if len(raw) >= 2 &&
+				((raw[0] == '\'' && raw[len(raw)-1] == '\'') ||
+					(raw[0] == '"' && raw[len(raw)-1] == '"')) {
+				raw = raw[1 : len(raw)-1]
+				raw = strings.ReplaceAll(raw, "''", "'")
+			}
+			targetType := parseTypeName(strings.ToUpper(name))
+			return &CastExpr{
+				Expr:    &Literal{Value: raw, Type: dukdb.TYPE_VARCHAR},
+				TargetType: targetType,
+			}, nil
+		}
+		// Fall through to parseFunctionCall if followed by '(' (e.g. DATE(...))
+
 	case "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP":
 		// SQL standard: these keywords work without parentheses
 		if p.current().typ != tokenLParen {

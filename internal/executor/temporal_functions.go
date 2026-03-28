@@ -139,21 +139,14 @@ func evalYear(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t := dateToTime(v)
-		return int32(t.Year()), nil
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t := timestampToTime(v)
-		return int32(t.Year()), nil
-	case time.Time:
-		return int32(v.Year()), nil
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("YEAR: unsupported type %T", args[0]),
 		}
 	}
+	return int32(t.Year()), nil
 }
 
 // evalMonth extracts the month (1-12) from a DATE or TIMESTAMP value.
@@ -170,21 +163,14 @@ func evalMonth(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t := dateToTime(v)
-		return int32(t.Month()), nil
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t := timestampToTime(v)
-		return int32(t.Month()), nil
-	case time.Time:
-		return int32(v.Month()), nil
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("MONTH: unsupported type %T", args[0]),
 		}
 	}
+	return int32(t.Month()), nil
 }
 
 // evalDay extracts the day of month (1-31) from a DATE or TIMESTAMP value.
@@ -201,193 +187,82 @@ func evalDay(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t := dateToTime(v)
-		return int32(t.Day()), nil
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t := timestampToTime(v)
-		return int32(t.Day()), nil
-	case time.Time:
-		return int32(v.Day()), nil
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("DAY: unsupported type %T", args[0]),
 		}
 	}
+	return int32(t.Day()), nil
 }
 
-// evalHour extracts the hour (0-23) from a TIMESTAMP or TIME value.
-// Returns int32 for the hour, or nil for NULL input.
+// resolveTimeArg validates arg count, propagates NULL, and converts the single
+// argument to time.Time using toTime. Returns (zero, true, nil) for NULL input.
+func resolveTimeArg(fn string, args []any) (t time.Time, isNull bool, err error) {
+	if len(args) != 1 {
+		return time.Time{}, false, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fn + " requires exactly 1 argument",
+		}
+	}
+	if args[0] == nil {
+		return time.Time{}, true, nil
+	}
+	t, err = toTime(args[0])
+	if err != nil {
+		return time.Time{}, false, &dukdb.Error{
+			Type: dukdb.ErrorTypeExecutor,
+			Msg:  fmt.Sprintf("%s: %v", fn, err),
+		}
+	}
+	return t, false, nil
+}
+
+// evalHour extracts the hour (0-23) from a TIMESTAMP, TIME, or DATE value.
 func evalHour(args []any) (any, error) {
-	if len(args) != 1 {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "HOUR requires exactly 1 argument",
-		}
+	t, isNull, err := resolveTimeArg("HOUR", args)
+	if err != nil || isNull {
+		return nil, err
 	}
-
-	if args[0] == nil {
-		return nil, nil // NULL propagation
-	}
-
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch) - hour is always 0
-		return int32(0), nil
-	case int64:
-		// Could be TIMESTAMP (microseconds since epoch) or TIME (microseconds since midnight)
-		// For TIMESTAMP values (large numbers), convert to time.Time
-		// For TIME values (smaller numbers < 24*60*60*1_000_000), extract hour directly
-		if v < 24*60*60*1_000_000 {
-			// Treat as TIME (microseconds since midnight)
-			hour, _, _, _ := timeToComponents(v)
-			return int32(hour), nil
-		}
-		// Treat as TIMESTAMP
-		t := timestampToTime(v)
-		return int32(t.Hour()), nil
-	case time.Time:
-		return int32(v.Hour()), nil
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("HOUR: unsupported type %T", args[0]),
-		}
-	}
+	return int32(t.Hour()), nil
 }
 
-// evalMinute extracts the minute (0-59) from a TIMESTAMP or TIME value.
-// Returns int32 for the minute, or nil for NULL input.
+// evalMinute extracts the minute (0-59) from a TIMESTAMP, TIME, or DATE value.
 func evalMinute(args []any) (any, error) {
-	if len(args) != 1 {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "MINUTE requires exactly 1 argument",
-		}
+	t, isNull, err := resolveTimeArg("MINUTE", args)
+	if err != nil || isNull {
+		return nil, err
 	}
-
-	if args[0] == nil {
-		return nil, nil // NULL propagation
-	}
-
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch) - minute is always 0
-		return int32(0), nil
-	case int64:
-		// Could be TIMESTAMP or TIME
-		if v < 24*60*60*1_000_000 {
-			// Treat as TIME (microseconds since midnight)
-			_, minute, _, _ := timeToComponents(v)
-			return int32(minute), nil
-		}
-		// Treat as TIMESTAMP
-		t := timestampToTime(v)
-		return int32(t.Minute()), nil
-	case time.Time:
-		return int32(v.Minute()), nil
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MINUTE: unsupported type %T", args[0]),
-		}
-	}
+	return int32(t.Minute()), nil
 }
 
-// evalSecond extracts the second (0-59.999...) from a TIMESTAMP or TIME value.
-// Returns float64 for the second including fractional microseconds, or nil for NULL input.
+// evalSecond extracts the second (0-59.999...) from a TIMESTAMP, TIME, or DATE value.
+// Returns float64 including fractional microseconds.
 func evalSecond(args []any) (any, error) {
-	if len(args) != 1 {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "SECOND requires exactly 1 argument",
-		}
+	t, isNull, err := resolveTimeArg("SECOND", args)
+	if err != nil || isNull {
+		return nil, err
 	}
-
-	if args[0] == nil {
-		return nil, nil // NULL propagation
-	}
-
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch) - second is always 0
-		return float64(0), nil
-	case int64:
-		// Could be TIMESTAMP or TIME
-		if v < 24*60*60*1_000_000 {
-			// Treat as TIME (microseconds since midnight)
-			_, _, second, frac := timeToComponents(v)
-			return float64(second) + frac, nil
-		}
-		// Treat as TIMESTAMP
-		t := timestampToTime(v)
-		// Include nanoseconds for fractional seconds
-		return float64(t.Second()) + float64(t.Nanosecond())/1e9, nil
-	case time.Time:
-		return float64(v.Second()) + float64(v.Nanosecond())/1e9, nil
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("SECOND: unsupported type %T", args[0]),
-		}
-	}
+	return float64(t.Second()) + float64(t.Nanosecond())/1e9, nil
 }
 
 // evalMillisecond extracts the millisecond component (0-999) from a TIMESTAMP or TIME value.
 func evalMillisecond(args []any) (any, error) {
-	if len(args) != 1 {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "MILLISECOND requires exactly 1 argument",
-		}
+	t, isNull, err := resolveTimeArg("MILLISECOND", args)
+	if err != nil || isNull {
+		return nil, err
 	}
-
-	if args[0] == nil {
-		return nil, nil
-	}
-
-	switch v := args[0].(type) {
-	case int32: // DATE - millisecond is always 0
-		return int32(0), nil
-	case int64:
-		t := timestampToTime(v)
-		return int32(t.Nanosecond() / 1_000_000), nil
-	case time.Time:
-		return int32(v.Nanosecond() / 1_000_000), nil
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MILLISECOND: unsupported type %T", args[0]),
-		}
-	}
+	return int32(t.Nanosecond() / 1_000_000), nil
 }
 
 // evalMicrosecond extracts the microsecond component (0-999999) from a TIMESTAMP or TIME value.
 func evalMicrosecond(args []any) (any, error) {
-	if len(args) != 1 {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "MICROSECOND requires exactly 1 argument",
-		}
+	t, isNull, err := resolveTimeArg("MICROSECOND", args)
+	if err != nil || isNull {
+		return nil, err
 	}
-
-	if args[0] == nil {
-		return nil, nil
-	}
-
-	switch v := args[0].(type) {
-	case int32: // DATE - microsecond is always 0
-		return int32(0), nil
-	case int64:
-		t := timestampToTime(v)
-		return int32(t.Nanosecond() / 1_000), nil
-	case time.Time:
-		return int32(v.Nanosecond() / 1_000), nil
-	default:
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("MICROSECOND: unsupported type %T", args[0]),
-		}
-	}
+	return int32(t.Nanosecond() / 1_000), nil
 }
 
 // evalDayOfWeek extracts the day of week from a DATE or TIMESTAMP value.
@@ -404,15 +279,8 @@ func evalDayOfWeek(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	var t time.Time
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t = dateToTime(v)
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t = timestampToTime(v)
-	case time.Time:
-		t = v
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("DAYOFWEEK: unsupported type %T", args[0]),
@@ -437,15 +305,8 @@ func evalDayOfYear(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	var t time.Time
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t = dateToTime(v)
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t = timestampToTime(v)
-	case time.Time:
-		t = v
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("DAYOFYEAR: unsupported type %T", args[0]),
@@ -469,15 +330,8 @@ func evalWeek(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	var t time.Time
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t = dateToTime(v)
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t = timestampToTime(v)
-	case time.Time:
-		t = v
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("WEEK: unsupported type %T", args[0]),
@@ -503,15 +357,8 @@ func evalQuarter(args []any) (any, error) {
 		return nil, nil // NULL propagation
 	}
 
-	var t time.Time
-	switch v := args[0].(type) {
-	case int32: // DATE (days since epoch)
-		t = dateToTime(v)
-	case int64: // TIMESTAMP (microseconds since epoch)
-		t = timestampToTime(v)
-	case time.Time:
-		t = v
-	default:
+	t, err := toTime(args[0])
+	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
 			Msg:  fmt.Sprintf("QUARTER: unsupported type %T", args[0]),
@@ -617,6 +464,17 @@ func evalDateAdd(args []any) (any, error) {
 		result := addInterval(v, interval)
 		return result, nil
 
+	case string:
+		t, parseErr := parseTimeString(v)
+		if parseErr != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("DATE_ADD: cannot parse %q as time", v),
+			}
+		}
+		result := addInterval(t, interval)
+		return result, nil
+
 	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -667,6 +525,17 @@ func evalDateSub(args []any) (any, error) {
 
 	case time.Time:
 		result := addInterval(v, negInterval)
+		return result, nil
+
+	case string:
+		t, parseErr := parseTimeString(v)
+		if parseErr != nil {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  fmt.Sprintf("DATE_SUB: cannot parse %q as time", v),
+			}
+		}
+		result := addInterval(t, negInterval)
 		return result, nil
 
 	default:
@@ -726,35 +595,51 @@ func toInterval(v any) (Interval, error) {
 
 // evalDateDiff calculates the difference between two dates in the specified units.
 // Returns BIGINT (int64).
+// Supports 2-arg form DATEDIFF(start, end) which defaults to 'day' unit,
+// and 3-arg form DATEDIFF(part, start, end).
 func evalDateDiff(args []any) (any, error) {
-	if len(args) != 3 {
+	var part DatePart
+	var startArg, endArg any
+
+	switch len(args) {
+	case 2:
+		// 2-arg form: DATEDIFF(start, end) — default to days
+		part = DatePartDay
+		startArg = args[0]
+		endArg = args[1]
+		// NULL propagation
+		if startArg == nil || endArg == nil {
+			return nil, nil
+		}
+	case 3:
+		// 3-arg form: DATEDIFF(part, start, end)
+		// NULL propagation for any arg
+		if args[0] == nil || args[1] == nil || args[2] == nil {
+			return nil, nil
+		}
+		partStr, ok := args[0].(string)
+		if !ok {
+			return nil, &dukdb.Error{
+				Type: dukdb.ErrorTypeExecutor,
+				Msg:  "DATE_DIFF: first argument must be a string (part specifier)",
+			}
+		}
+		var err error
+		part, err = parseDatePart(partStr)
+		if err != nil {
+			return nil, err
+		}
+		startArg = args[1]
+		endArg = args[2]
+	default:
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "DATE_DIFF requires exactly 3 arguments (part, start, end)",
+			Msg:  "DATE_DIFF requires 2 or 3 arguments",
 		}
-	}
-
-	// NULL propagation
-	if args[0] == nil || args[1] == nil || args[2] == nil {
-		return nil, nil
-	}
-
-	// Parse the part specifier
-	partStr, ok := args[0].(string)
-	if !ok {
-		return nil, &dukdb.Error{
-			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "DATE_DIFF: first argument must be a string (part specifier)",
-		}
-	}
-
-	part, err := parseDatePart(partStr)
-	if err != nil {
-		return nil, err
 	}
 
 	// Get the start and end times
-	startTime, err := toTime(args[1])
+	startTime, err := toTime(startArg)
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -762,7 +647,7 @@ func evalDateDiff(args []any) (any, error) {
 		}
 	}
 
-	endTime, err := toTime(args[2])
+	endTime, err := toTime(endArg)
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
@@ -775,6 +660,26 @@ func evalDateDiff(args []any) (any, error) {
 	return diff, nil
 }
 
+// timeParseFormats lists the common datetime string formats tried during string→time.Time coercion.
+var timeParseFormats = []string{
+	time.RFC3339,
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02",
+}
+
+// parseTimeString tries to parse a string into a time.Time using common formats.
+func parseTimeString(s string) (time.Time, error) {
+	for _, layout := range timeParseFormats {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("cannot parse %q as time", s)
+}
+
 // toTime converts a value to time.Time.
 func toTime(v any) (time.Time, error) {
 	switch val := v.(type) {
@@ -784,6 +689,8 @@ func toTime(v any) (time.Time, error) {
 		return timestampToTime(val), nil
 	case time.Time:
 		return val, nil
+	case string:
+		return parseTimeString(val)
 	default:
 		return time.Time{}, fmt.Errorf("cannot convert %T to time.Time", v)
 	}
@@ -1758,12 +1665,13 @@ func formatSpecifier(t time.Time, spec byte) string {
 
 // evalStrftime formats a timestamp according to a format string.
 // Returns VARCHAR (string).
-// STRFTIME(format, timestamp) -> VARCHAR
+// Supports both DuckDB convention STRFTIME(timestamp, format) and
+// strftime convention STRFTIME(format, timestamp).
 func evalStrftime(args []any) (any, error) {
 	if len(args) != 2 {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  "STRFTIME requires exactly 2 arguments (format, timestamp)",
+			Msg:  "STRFTIME requires exactly 2 arguments",
 		}
 	}
 
@@ -1772,17 +1680,36 @@ func evalStrftime(args []any) (any, error) {
 		return nil, nil
 	}
 
-	// Get the format string
-	formatStr, ok := args[0].(string)
-	if !ok {
+	// Determine argument order: detect which arg is the format string.
+	// A format string is a string containing '%'; the timestamp can be any
+	// temporal type (int32/int64/time.Time/string parseable as time).
+	var formatStr string
+	var tsArg any
+
+	s0, isStr0 := args[0].(string)
+	s1, isStr1 := args[1].(string)
+
+	if isStr0 && strings.Contains(s0, "%") {
+		// args[0] looks like a format, args[1] is the timestamp
+		formatStr = s0
+		tsArg = args[1]
+	} else if isStr1 && strings.Contains(s1, "%") {
+		// DuckDB convention: args[0] is the timestamp, args[1] is the format
+		formatStr = s1
+		tsArg = args[0]
+	} else if isStr0 {
+		// Default: treat first string as format
+		formatStr = s0
+		tsArg = args[1]
+	} else {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,
-			Msg:  fmt.Sprintf("STRFTIME: format must be a string, got %T", args[0]),
+			Msg:  fmt.Sprintf("STRFTIME: cannot determine format string from arguments %T, %T", args[0], args[1]),
 		}
 	}
 
 	// Get the timestamp
-	t, err := toTime(args[1])
+	t, err := toTime(tsArg)
 	if err != nil {
 		return nil, &dukdb.Error{
 			Type: dukdb.ErrorTypeExecutor,

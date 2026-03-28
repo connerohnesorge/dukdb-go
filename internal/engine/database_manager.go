@@ -92,6 +92,19 @@ func (dm *DatabaseManager) Get(name string) (*AttachedDatabase, bool) {
 	return db, ok
 }
 
+// GetAttached returns the catalog and storage for an attached database by name.
+// Returns false if no database with that name is attached.
+// This satisfies the executor.DatabaseManager interface.
+func (dm *DatabaseManager) GetAttached(name string) (*catalog.Catalog, *storage.Storage, bool) {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	db, ok := dm.databases[strings.ToLower(name)]
+	if !ok {
+		return nil, nil, false
+	}
+	return db.Catalog, db.Storage, true
+}
+
 // Default returns the name of the default database.
 func (dm *DatabaseManager) Default() string {
 	dm.mu.RLock()
@@ -106,6 +119,24 @@ func (dm *DatabaseManager) List() []*AttachedDatabase {
 	result := make([]*AttachedDatabase, 0, len(dm.databases))
 	for _, db := range dm.databases {
 		result = append(result, db)
+	}
+	return result
+}
+
+// AttachedCatalogs returns a snapshot map of database-alias → catalog for all
+// attached databases that are not the default (main) database.  The map keys
+// are lower-cased aliases and are suitable for passing to
+// binder.Binder.WithAttachedCatalogs.
+func (dm *DatabaseManager) AttachedCatalogs() map[string]*catalog.Catalog {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	defaultLower := strings.ToLower(dm.defaultDB)
+	result := make(map[string]*catalog.Catalog, len(dm.databases))
+	for name, db := range dm.databases {
+		if name == defaultLower {
+			continue // skip the primary/default database
+		}
+		result[name] = db.Catalog
 	}
 	return result
 }

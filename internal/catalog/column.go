@@ -25,6 +25,10 @@ type ColumnDef struct {
 	// HasDefault indicates whether a default value is set.
 	HasDefault bool
 
+	// DefaultExprText is the SQL expression text for non-literal defaults (e.g., NEXTVAL('seq')).
+	// When set, this expression is evaluated at row-insert time to compute the default value.
+	DefaultExprText string
+
 	// Comment is an optional user-defined comment for the column.
 	Comment string
 
@@ -79,6 +83,7 @@ func (c *ColumnDef) Clone() *ColumnDef {
 		Nullable:        c.Nullable,
 		DefaultValue:    c.DefaultValue,
 		HasDefault:      c.HasDefault,
+		DefaultExprText: c.DefaultExprText,
 		IsGenerated:     c.IsGenerated,
 		GeneratedExpr:   c.GeneratedExpr,
 		GeneratedStored: c.GeneratedStored,

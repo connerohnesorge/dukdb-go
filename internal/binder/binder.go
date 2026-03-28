@@ -3,6 +3,7 @@ package binder
 
 import (
 	"fmt"
+	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/catalog"
@@ -11,10 +12,12 @@ import (
 
 // Binder resolves names and checks types in parsed statements.
 type Binder struct {
-	catalog     *catalog.Catalog
-	scope       *BindScope
-	udfResolver ScalarUDFResolver
-	windowDefs  map[string]*parser.WindowDef // Named window definitions from WINDOW clause
+	catalog          *catalog.Catalog
+	attachedCatalogs map[string]*catalog.Catalog // attached database name -> catalog (for cross-DB references)
+	scope            *BindScope
+	outerScopes      []*BindScope                  // Stack of outer scopes for correlated subquery resolution
+	udfResolver      ScalarUDFResolver
+	windowDefs       map[string]*parser.WindowDef // Named window definitions from WINDOW clause
 }
 
 // BindScope represents the current binding scope with available tables and columns.
@@ -117,6 +120,46 @@ func (b *Binder) WithUDFResolver(
 	return b
 }
 
+// WithAttachedCatalogs registers a map of attached database catalogs.
+// When a two-part table reference (db.table) is resolved and the schema name
+// does not match any local schema, the binder will check the attached catalogs
+// and look up the table in the "main" schema of the matching catalog.
+func (b *Binder) WithAttachedCatalogs(cats map[string]*catalog.Catalog) *Binder {
+	b.attachedCatalogs = cats
+	return b
+}
+
+// resolveTableInAttachedDB checks whether schemaName is an attached database
+// alias and, if so, returns the table definition from that database's "main"
+// schema.  Returns nil, false when no attached database matches.
+func (b *Binder) resolveTableInAttachedDB(schemaName, tableName string) (*catalog.TableDef, bool) {
+	if b.attachedCatalogs == nil {
+		return nil, false
+	}
+	attachedCat, ok := b.attachedCatalogs[strings.ToLower(schemaName)]
+	if !ok {
+		return nil, false
+	}
+	tableDef, found := attachedCat.GetTableInSchema("main", tableName)
+	return tableDef, found
+}
+
+// getTableInSchema looks up a table first in the local catalog and, if not
+// found and schema is non-empty, falls back to checking attached database
+// catalogs.  When the schema matches an attached database name, the table is
+// looked up in the "main" schema of that database.
+func (b *Binder) getTableInSchema(schemaName, tableName string) (*catalog.TableDef, bool) {
+	if tableDef, ok := b.catalog.GetTableInSchema(schemaName, tableName); ok {
+		return tableDef, true
+	}
+	if schemaName != "" && schemaName != "main" {
+		if tableDef, ok := b.resolveTableInAttachedDB(schemaName, tableName); ok {
+			return tableDef, true
+		}
+	}
+	return nil, false
+}
+
 func newBindScope(parent *BindScope) *BindScope {
 	return &BindScope{
 		parent:  parent,
@@ -157,6 +200,16 @@ func newLateralScope(parent *BindScope) *BindScope {
 	}
 
 	return scope
+}
+
+// pushOuterScope saves the current scope onto the outer scope stack before
+// entering a subquery, enabling correlated column resolution.
+// Returns a function that pops the scope (suitable for use with defer).
+func (b *Binder) pushOuterScope() func() {
+	b.outerScopes = append(b.outerScopes, b.scope)
+	return func() {
+		b.outerScopes = b.outerScopes[:len(b.outerScopes)-1]
+	}
 }
 
 // getCTE looks up a CTE by name in this scope or parent scopes.

@@ -573,6 +573,7 @@ type LogicalCreateView struct {
 	Schema      string
 	View        string
 	IfNotExists bool
+	OrReplace   bool
 	Query       *binder.BoundSelectStmt
 	QueryText   string
 }

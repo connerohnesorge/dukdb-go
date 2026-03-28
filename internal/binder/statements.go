@@ -220,6 +220,7 @@ type BoundCreateViewStmt struct {
 	Schema      string
 	View        string
 	IfNotExists bool
+	OrReplace   bool
 	Query       *BoundSelectStmt // The bound view query
 	QueryText   string           // The original query text for storage
 }

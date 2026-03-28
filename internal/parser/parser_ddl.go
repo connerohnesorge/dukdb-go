@@ -6,14 +6,15 @@ import (
 )
 
 // parseCreateView parses a CREATE VIEW statement.
-// Syntax: CREATE VIEW [IF NOT EXISTS] [schema.]view AS select_statement
-func (p *parser) parseCreateView() (*CreateViewStmt, error) {
+// Syntax: CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [schema.]view AS select_statement
+func (p *parser) parseCreateView(orReplace bool) (*CreateViewStmt, error) {
 	if err := p.expectKeyword("VIEW"); err != nil {
 		return nil, err
 	}
 
 	stmt := &CreateViewStmt{
-		Schema: "main", // default schema
+		Schema:    "main", // default schema
+		OrReplace: orReplace,
 	}
 
 	// IF NOT EXISTS
