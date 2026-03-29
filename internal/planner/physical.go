@@ -1352,6 +1352,12 @@ type PhysicalPivot struct {
 
 func (*PhysicalPivot) physicalPlanNode() {}
 
+// ResetColumns clears the cached output columns so they are recomputed.
+// This is needed when InValues are discovered at execution time.
+func (p *PhysicalPivot) ResetColumns() {
+	p.columns = nil
+}
+
 func (p *PhysicalPivot) Children() []PhysicalPlan { return []PhysicalPlan{p.Source} }
 
 func (p *PhysicalPivot) OutputColumns() []ColumnBinding {

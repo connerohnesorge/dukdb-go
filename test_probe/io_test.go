@@ -701,21 +701,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("struct_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("creation", func(t *testing.T) {
-			t.Skip("not yet implemented: struct literal syntax")
 			var r string
 			err := db.QueryRow("SELECT {'name': 'alice', 'age': 30}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("struct creation: %v", err)
+				t.Errorf("struct creation: %v", err)
 			} else {
 				t.Logf("struct: %s", r)
 			}
 		})
 		t.Run("field_access", func(t *testing.T) {
-			t.Skip("not yet implemented: struct field dot notation")
 			var name string
 			err := db.QueryRow("SELECT s.name FROM (SELECT {'name': 'bob', 'age': 25} AS s) sub").Scan(&name)
 			if err != nil {
-				t.Logf("struct field access not yet supported: %v", err)
+				t.Errorf("struct field access: %v", err)
 			} else if name != "bob" {
 				t.Errorf("expected bob, got %q", name)
 			} else {
@@ -728,21 +726,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("map_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("creation", func(t *testing.T) {
-			t.Skip("not yet implemented: MAP type literal syntax")
 			var r string
 			err := db.QueryRow("SELECT MAP {'a': 1, 'b': 2}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("MAP creation: %v", err)
+				t.Errorf("MAP creation: %v", err)
 			} else {
 				t.Logf("MAP: %s", r)
 			}
 		})
 		t.Run("extract", func(t *testing.T) {
-			t.Skip("not yet implemented: MAP type subscript extraction")
 			var v int64
 			err := db.QueryRow("SELECT MAP {'x': 10, 'y': 20}['x']").Scan(&v)
 			if err != nil {
-				t.Logf("MAP extract not yet supported: %v", err)
+				t.Errorf("MAP extract: %v", err)
 			} else if v != 10 {
 				t.Errorf("expected 10, got %d", v)
 			} else {
@@ -755,21 +751,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("nested_complex_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("list_of_structs", func(t *testing.T) {
-			t.Skip("not yet implemented: nested complex types (list of structs)")
 			var r string
 			err := db.QueryRow("SELECT [{'name': 'a', 'val': 1}, {'name': 'b', 'val': 2}]::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("list of structs: %v", err)
+				t.Errorf("list of structs: %v", err)
 			} else {
 				t.Logf("list of structs: %s", r)
 			}
 		})
 		t.Run("struct_with_list", func(t *testing.T) {
-			t.Skip("not yet implemented: nested complex types (struct with list)")
 			var r string
 			err := db.QueryRow("SELECT {'items': [1, 2, 3], 'label': 'test'}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("struct with list: %v", err)
+				t.Errorf("struct with list: %v", err)
 			} else {
 				t.Logf("struct with list: %s", r)
 			}
@@ -780,7 +774,6 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("pivot_unpivot", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("pivot", func(t *testing.T) {
-			t.Skip("not yet implemented: PIVOT as standalone statement")
 			_, _ = db.Exec(`CREATE TABLE pivot_data (product VARCHAR, quarter VARCHAR, revenue INTEGER)`)
 			_, _ = db.Exec(`INSERT INTO pivot_data VALUES ('Widget','Q1',100),('Widget','Q2',200),('Gadget','Q1',150),('Gadget','Q2',250)`)
 			rows, err := db.Query(`PIVOT pivot_data ON quarter USING SUM(revenue) GROUP BY product`)
@@ -797,7 +790,6 @@ func TestAdvancedSQL(t *testing.T) {
 			t.Logf("PIVOT: %d rows, cols=%v", n, cols)
 		})
 		t.Run("unpivot", func(t *testing.T) {
-			t.Skip("not yet implemented: UNPIVOT as standalone statement")
 			_, _ = db.Exec(`CREATE TABLE unpivot_data (product VARCHAR, q1_rev INTEGER, q2_rev INTEGER)`)
 			_, _ = db.Exec(`INSERT INTO unpivot_data VALUES ('Widget',100,200),('Gadget',150,250)`)
 			rows, err := db.Query(`UNPIVOT unpivot_data ON q1_rev, q2_rev INTO NAME quarter VALUE revenue`)
@@ -846,7 +838,7 @@ func TestAdvancedSQL(t *testing.T) {
 
 	// 9. SAMPLE clause
 	t.Run("sample_clause", func(t *testing.T) {
-		t.Skip("not yet implemented: USING SAMPLE clause")
+		// USING SAMPLE clause is now implemented
 		db := openDB(t)
 		_, _ = db.Exec(`CREATE TABLE sample_src (id INTEGER)`)
 		_, _ = db.Exec(`INSERT INTO sample_src SELECT generate_series FROM generate_series(1, 1000)`)
@@ -903,11 +895,10 @@ func TestAdvancedSQL(t *testing.T) {
 			}
 		})
 		t.Run("list_indexing", func(t *testing.T) {
-			t.Skip("not yet implemented: array indexing with [n] subscript syntax")
 			var v int64
 			err := db.QueryRow("SELECT [10, 20, 30][2]").Scan(&v)
 			if err != nil {
-				t.Logf("list indexing not yet supported: %v", err)
+				t.Errorf("list indexing failed: %v", err)
 			} else if v != 20 {
 				t.Errorf("expected 20, got %d", v)
 			} else {

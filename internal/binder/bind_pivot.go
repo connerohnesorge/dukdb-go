@@ -38,12 +38,8 @@ func (b *Binder) bindPivot(s *parser.PivotStmt) (*BoundPivotStmt, error) {
 		}
 	}
 
-	// Validate that we have IN values
-	if len(s.PivotOn) == 0 {
-		return nil, b.errorf("PIVOT requires at least one IN value")
-	}
-
 	// Bind the IN values (these become column names)
+	// If PivotOn is empty, InValues will be auto-discovered at execution time.
 	var inValues []any
 	for _, expr := range s.PivotOn {
 		val, err := b.bindExpr(expr, dukdb.TYPE_ANY)
