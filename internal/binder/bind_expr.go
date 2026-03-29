@@ -88,6 +88,8 @@ func (b *Binder) bindExpr(
 		return b.bindCubeExpr(e)
 	case *parser.ArrayExpr:
 		return b.bindArrayExpr(e)
+	case *parser.SubscriptExpr:
+		return b.bindSubscriptExpr(e)
 	case *parser.LambdaExpr:
 		// Lambda expressions store the raw parser body for runtime evaluation.
 		// Lambda params are not real columns -- they are bound at execution time.
@@ -1396,6 +1398,33 @@ func (b *Binder) bindArrayExpr(e *parser.ArrayExpr) (*BoundArrayExpr, error) {
 
 	return &BoundArrayExpr{
 		Elements: elements,
+		ElemType: elemType,
+	}, nil
+}
+
+// bindSubscriptExpr binds a subscript expression: expr[index].
+// The base expression must evaluate to a list/array type, and the index must be an integer.
+// DuckDB uses 1-based indexing.
+func (b *Binder) bindSubscriptExpr(e *parser.SubscriptExpr) (BoundExpr, error) {
+	base, err := b.bindExpr(e.Base, dukdb.TYPE_ANY)
+	if err != nil {
+		return nil, err
+	}
+
+	index, err := b.bindExpr(e.Index, dukdb.TYPE_INTEGER)
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the element type from the base expression
+	elemType := dukdb.TYPE_ANY
+	if arrayExpr, ok := base.(*BoundArrayExpr); ok {
+		elemType = arrayExpr.ElemType
+	}
+
+	return &BoundSubscriptExpr{
+		Base:     base,
+		Index:    index,
 		ElemType: elemType,
 	}, nil
 }

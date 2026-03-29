@@ -214,6 +214,9 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundArrayExpr:
 		return e.evaluateArrayExpr(ctx, ex, row)
 
+	case *binder.BoundSubscriptExpr:
+		return e.evaluateSubscriptExpr(ctx, ex, row)
+
 	case *binder.BoundSimilarToExpr:
 		leftVal, err := e.evaluateExpr(ctx, ex.Expr, row)
 		if err != nil {
@@ -4082,6 +4085,52 @@ func (e *Executor) evaluateArrayExpr(
 	}
 
 	return result, nil
+}
+
+// evaluateSubscriptExpr evaluates a subscript/index expression: expr[index].
+// DuckDB uses 1-based indexing. Returns NULL for out-of-bounds or NULL inputs.
+func (e *Executor) evaluateSubscriptExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundSubscriptExpr,
+	row map[string]any,
+) (any, error) {
+	// Evaluate the base expression
+	baseVal, err := e.evaluateExpr(ctx, expr.Base, row)
+	if err != nil {
+		return nil, err
+	}
+	if baseVal == nil {
+		return nil, nil // NULL propagation
+	}
+
+	// Evaluate the index expression
+	indexVal, err := e.evaluateExpr(ctx, expr.Index, row)
+	if err != nil {
+		return nil, err
+	}
+	if indexVal == nil {
+		return nil, nil // NULL propagation
+	}
+
+	// Convert index to int
+	idx, ok := toInt64(indexVal)
+	if !ok {
+		return nil, nil // Non-integer index returns NULL
+	}
+
+	// Get the array as a slice
+	arr, ok := baseVal.([]any)
+	if !ok {
+		return nil, nil // Not an array, return NULL
+	}
+
+	// DuckDB uses 1-based indexing
+	zeroIdx := idx - 1
+	if zeroIdx < 0 || zeroIdx >= int64(len(arr)) {
+		return nil, nil // Out of bounds returns NULL
+	}
+
+	return arr[zeroIdx], nil
 }
 
 func (e *Executor) evaluateInSubqueryExpr(

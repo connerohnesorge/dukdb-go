@@ -905,11 +905,10 @@ func TestAdvancedSQL(t *testing.T) {
 			}
 		})
 		t.Run("list_indexing", func(t *testing.T) {
-			t.Skip("not yet implemented: array indexing with [n] subscript syntax")
 			var v int64
 			err := db.QueryRow("SELECT [10, 20, 30][2]").Scan(&v)
 			if err != nil {
-				t.Logf("list indexing not yet supported: %v", err)
+				t.Errorf("list indexing failed: %v", err)
 			} else if v != 20 {
 				t.Errorf("expected 20, got %d", v)
 			} else {

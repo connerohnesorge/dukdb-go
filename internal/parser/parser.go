@@ -4982,40 +4982,61 @@ func (p *parser) parsePostfixExpr() (Expr, error) {
 		return nil, err
 	}
 
-	// Loop to handle chained casts like '123'::text::integer
-	for p.current().typ == tokenOperator && p.current().value == "::" {
-		p.advance() // consume ::
+	// Loop to handle chained postfix operators: :: (cast) and [] (subscript)
+	for {
+		if p.current().typ == tokenOperator && p.current().value == "::" {
+			p.advance() // consume ::
 
-		// Parse the type name
-		if p.current().typ != tokenIdent {
-			return nil, p.errorf("expected type name after ::")
-		}
-		typeName := strings.ToUpper(p.advance().value)
-		targetType := parseTypeName(typeName)
+			// Parse the type name
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected type name after ::")
+			}
+			typeName := strings.ToUpper(p.advance().value)
+			targetType := parseTypeName(typeName)
 
-		// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
-		if p.current().typ == tokenLParen {
-			p.advance()
-			depth := 1
-			for depth > 0 && p.current().typ != tokenEOF {
-				if p.current().typ == tokenLParen {
-					depth++
-				} else if p.current().typ == tokenRParen {
-					depth--
+			// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
+			if p.current().typ == tokenLParen {
+				p.advance()
+				depth := 1
+				for depth > 0 && p.current().typ != tokenEOF {
+					if p.current().typ == tokenLParen {
+						depth++
+					} else if p.current().typ == tokenRParen {
+						depth--
+					}
+					if depth > 0 {
+						p.advance()
+					}
 				}
-				if depth > 0 {
-					p.advance()
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
 				}
 			}
-			if _, err := p.expect(tokenRParen); err != nil {
+
+			expr = &CastExpr{
+				Expr:       expr,
+				TargetType: targetType,
+				TryCast:    false,
+			}
+		} else if p.current().typ == tokenLBracket {
+			// Subscript operator: expr[index]
+			p.advance() // consume [
+
+			indexExpr, err := p.parseExpr()
+			if err != nil {
 				return nil, err
 			}
-		}
 
-		expr = &CastExpr{
-			Expr:       expr,
-			TargetType: targetType,
-			TryCast:    false,
+			if _, err := p.expect(tokenRBracket); err != nil {
+				return nil, err
+			}
+
+			expr = &SubscriptExpr{
+				Base:  expr,
+				Index: indexExpr,
+			}
+		} else {
+			break
 		}
 	}
 

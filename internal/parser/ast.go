@@ -935,6 +935,16 @@ type ArrayExpr struct {
 
 func (*ArrayExpr) exprNode() {}
 
+// SubscriptExpr represents a subscript/index expression: expr[index].
+// DuckDB uses 1-based indexing (index 1 = first element).
+// Example: [10, 20, 30][2] returns 20
+type SubscriptExpr struct {
+	Base  Expr // The expression being indexed (e.g., an array literal or column)
+	Index Expr // The index expression (1-based integer)
+}
+
+func (*SubscriptExpr) exprNode() {}
+
 // InSubqueryExpr represents an IN expression with a subquery.
 type InSubqueryExpr struct {
 	Expr     Expr
