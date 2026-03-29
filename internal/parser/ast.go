@@ -935,6 +935,30 @@ type ArrayExpr struct {
 
 func (*ArrayExpr) exprNode() {}
 
+// MapLiteralEntry represents a single key-value pair in a MAP literal.
+type MapLiteralEntry struct {
+	Key   Expr
+	Value Expr
+}
+
+// MapLiteralExpr represents a MAP literal expression.
+// Syntax: MAP {'key1': val1, 'key2': val2}
+type MapLiteralExpr struct {
+	Entries []MapLiteralEntry
+}
+
+func (*MapLiteralExpr) exprNode() {}
+
+// SubscriptExpr represents a subscript/index expression: expr[index].
+// DuckDB uses 1-based indexing (index 1 = first element).
+// Example: [10, 20, 30][2] returns 20
+type SubscriptExpr struct {
+	Base  Expr // The expression being indexed (e.g., an array literal or column)
+	Index Expr // The index expression (1-based integer)
+}
+
+func (*SubscriptExpr) exprNode() {}
+
 // InSubqueryExpr represents an IN expression with a subquery.
 type InSubqueryExpr struct {
 	Expr     Expr

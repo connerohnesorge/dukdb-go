@@ -214,6 +214,12 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundArrayExpr:
 		return e.evaluateArrayExpr(ctx, ex, row)
 
+	case *binder.BoundMapLiteralExpr:
+		return e.evaluateMapLiteralExpr(ctx, ex, row)
+
+	case *binder.BoundSubscriptExpr:
+		return e.evaluateSubscriptExpr(ctx, ex, row)
+
 	case *binder.BoundSimilarToExpr:
 		leftVal, err := e.evaluateExpr(ctx, ex.Expr, row)
 		if err != nil {
@@ -4084,6 +4090,86 @@ func (e *Executor) evaluateArrayExpr(
 	return result, nil
 }
 
+// evaluateMapLiteralExpr evaluates a MAP literal expression.
+// Returns a map[string]any containing the evaluated key-value pairs.
+func (e *Executor) evaluateMapLiteralExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundMapLiteralExpr,
+	row map[string]any,
+) (any, error) {
+	result := make(map[string]any, len(expr.Entries))
+
+	for _, entry := range expr.Entries {
+		key, err := e.evaluateExpr(ctx, entry.Key, row)
+		if err != nil {
+			return nil, err
+		}
+		val, err := e.evaluateExpr(ctx, entry.Value, row)
+		if err != nil {
+			return nil, err
+		}
+		result[toString(key)] = val
+	}
+
+	return result, nil
+}
+
+// evaluateSubscriptExpr evaluates a subscript/index expression: expr[index].
+// DuckDB uses 1-based indexing. Returns NULL for out-of-bounds or NULL inputs.
+func (e *Executor) evaluateSubscriptExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundSubscriptExpr,
+	row map[string]any,
+) (any, error) {
+	// Evaluate the base expression
+	baseVal, err := e.evaluateExpr(ctx, expr.Base, row)
+	if err != nil {
+		return nil, err
+	}
+	if baseVal == nil {
+		return nil, nil // NULL propagation
+	}
+
+	// Evaluate the index expression
+	indexVal, err := e.evaluateExpr(ctx, expr.Index, row)
+	if err != nil {
+		return nil, err
+	}
+	if indexVal == nil {
+		return nil, nil // NULL propagation
+	}
+
+	// Convert index to int
+	idx, ok := toInt64(indexVal)
+	if !ok {
+		// For map types, try string-based key lookup
+		if m, mok := baseVal.(map[string]any); mok {
+			key := toString(indexVal)
+			return m[key], nil
+		}
+		return nil, nil // Non-integer index returns NULL
+	}
+
+	// Get the array as a slice
+	arr, ok := baseVal.([]any)
+	if !ok {
+		// For map types, try string-based key lookup
+		if m, mok := baseVal.(map[string]any); mok {
+			key := toString(indexVal)
+			return m[key], nil
+		}
+		return nil, nil // Not an array, return NULL
+	}
+
+	// DuckDB uses 1-based indexing
+	zeroIdx := idx - 1
+	if zeroIdx < 0 || zeroIdx >= int64(len(arr)) {
+		return nil, nil // Out of bounds returns NULL
+	}
+
+	return arr[zeroIdx], nil
+}
+
 func (e *Executor) evaluateInSubqueryExpr(
 	ctx *ExecutionContext,
 	expr *binder.BoundInSubqueryExpr,
@@ -5600,7 +5686,58 @@ func toString(v any) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%v", v)
+	switch val := v.(type) {
+	case map[string]any:
+		return structToString(val)
+	case []any:
+		return sliceToString(val)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// structToString formats a struct (map[string]any) in DuckDB-style output.
+// Example: {'name': alice, 'age': 30}
+func structToString(m map[string]any) string {
+	if len(m) == 0 {
+		return "{}"
+	}
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf strings.Builder
+	buf.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteByte('\'')
+		buf.WriteString(k)
+		buf.WriteByte('\'')
+		buf.WriteString(": ")
+		buf.WriteString(toString(m[k]))
+	}
+	buf.WriteByte('}')
+	return buf.String()
+}
+
+// sliceToString formats a list ([]any) in DuckDB-style output.
+// Example: [1, 2, 3]
+func sliceToString(s []any) string {
+	var buf strings.Builder
+	buf.WriteByte('[')
+	for i, elem := range s {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(toString(elem))
+	}
+	buf.WriteByte(']')
+	return buf.String()
 }
 
 func toInt64Value(v any) int64 {

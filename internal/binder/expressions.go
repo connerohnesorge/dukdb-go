@@ -188,6 +188,37 @@ func (*BoundArrayExpr) boundExprNode() {}
 
 func (a *BoundArrayExpr) ResultType() dukdb.Type { return dukdb.TYPE_LIST }
 
+// BoundMapLiteralEntry represents a bound key-value pair in a MAP literal.
+type BoundMapLiteralEntry struct {
+	Key   BoundExpr
+	Value BoundExpr
+}
+
+// BoundMapLiteralExpr represents a bound MAP literal expression.
+// Syntax: MAP {'key1': val1, 'key2': val2}
+type BoundMapLiteralExpr struct {
+	Entries   []BoundMapLiteralEntry
+	KeyType   dukdb.Type
+	ValueType dukdb.Type
+}
+
+func (*BoundMapLiteralExpr) boundExprNode() {}
+
+func (m *BoundMapLiteralExpr) ResultType() dukdb.Type { return dukdb.TYPE_MAP }
+
+// BoundSubscriptExpr represents a bound subscript/index expression: expr[index].
+// DuckDB uses 1-based indexing (index 1 = first element).
+// Returns NULL for out-of-bounds access.
+type BoundSubscriptExpr struct {
+	Base     BoundExpr  // The expression being indexed (must be LIST type)
+	Index    BoundExpr  // The index expression (must be integer type)
+	ElemType dukdb.Type // The element type of the list
+}
+
+func (*BoundSubscriptExpr) boundExprNode() {}
+
+func (s *BoundSubscriptExpr) ResultType() dukdb.Type { return s.ElemType }
+
 // BoundInSubqueryExpr represents a bound IN expression with a subquery.
 type BoundInSubqueryExpr struct {
 	Expr     BoundExpr

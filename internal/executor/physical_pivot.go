@@ -37,6 +37,26 @@ func (e *Executor) executePivotPlan(
 		return nil, err
 	}
 
+	// If no InValues provided, auto-discover unique values from the FOR column
+	if len(p.InValues) == 0 && p.ForColumn != nil {
+		seen := make(map[string]bool)
+		var discovered []any
+		for _, row := range sourceResult.Rows {
+			val, err := e.evaluateExpr(ctx, p.ForColumn, row)
+			if err != nil {
+				return nil, err
+			}
+			key := formatValue(val)
+			if !seen[key] {
+				seen[key] = true
+				discovered = append(discovered, val)
+			}
+		}
+		p.InValues = discovered
+		// Reset cached columns so OutputColumns() regenerates with discovered values
+		p.ResetColumns()
+	}
+
 	// Build output column metadata
 	outCols := p.OutputColumns()
 	columns := make([]string, len(outCols))

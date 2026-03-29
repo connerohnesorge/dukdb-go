@@ -272,6 +272,15 @@ func exprUsesVolatile(expr binder.BoundExpr) bool {
 			}
 		}
 		return false
+	case *binder.BoundMapLiteralExpr:
+		for _, entry := range e.Entries {
+			if exprUsesVolatile(entry.Key) || exprUsesVolatile(entry.Value) {
+				return true
+			}
+		}
+		return false
+	case *binder.BoundSubscriptExpr:
+		return exprUsesVolatile(e.Base) || exprUsesVolatile(e.Index)
 	case *binder.BoundInSubqueryExpr:
 		if exprUsesVolatile(e.Expr) {
 			return true

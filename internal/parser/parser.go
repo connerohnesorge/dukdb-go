@@ -125,6 +125,10 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseSummarize()
 	case p.isKeyword("CALL"):
 		stmt, err = p.parseCall()
+	case p.isKeyword("PIVOT"):
+		stmt, err = p.parseStandalonePivot()
+	case p.isKeyword("UNPIVOT"):
+		stmt, err = p.parseStandaloneUnpivot()
 	default:
 		tok := p.current()
 		suggestion := suggestKeyword(tok.value)
@@ -520,6 +524,30 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 			stmt.FetchWithTies = true
 		} else {
 			return nil, p.errorf("expected ONLY or WITH TIES in FETCH clause")
+		}
+	}
+
+	// USING SAMPLE clause (DuckDB extension, appears after LIMIT/OFFSET/FETCH)
+	// Syntax:
+	//   USING SAMPLE n%
+	//   USING SAMPLE n PERCENT
+	//   USING SAMPLE n ROWS
+	//   USING SAMPLE method(n%)
+	//   USING SAMPLE method(n PERCENT)
+	//   USING SAMPLE method(n ROWS)
+	if stmt.Sample == nil && p.isKeyword("USING") {
+		// Peek ahead to see if next token is SAMPLE
+		saved := p.tokPos
+		p.advance() // consume USING
+		if p.isKeyword("SAMPLE") {
+			sample, err := p.parseUsingSample()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Sample = sample
+		} else {
+			// Not USING SAMPLE, revert
+			p.tokPos = saved
 		}
 	}
 
@@ -994,7 +1022,8 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 		!p.isKeyword("WINDOW") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
-		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
+		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") &&
+		!p.isKeyword("USING") {
 		// Check if this looks like a keyword typo - if so, don't consume it as an alias
 		tok := p.current()
 		if isProbableKeywordTypo(tok.value) {
@@ -1243,6 +1272,140 @@ func (p *parser) parseTablesample() (*SampleOptions, error) {
 	}
 
 	return sample, nil
+}
+
+// parseUsingSample parses a USING SAMPLE clause (DuckDB extension).
+// The USING keyword has already been consumed.
+// Syntax:
+//   - USING SAMPLE n%
+//   - USING SAMPLE n PERCENT
+//   - USING SAMPLE n ROWS
+//   - USING SAMPLE method(n%)
+//   - USING SAMPLE method(n PERCENT)
+//   - USING SAMPLE method(n ROWS)
+//   - USING SAMPLE n% (SEED n)
+func (p *parser) parseUsingSample() (*SampleOptions, error) {
+	if err := p.expectKeyword("SAMPLE"); err != nil {
+		return nil, err
+	}
+
+	sample := &SampleOptions{}
+
+	// Check if next token is a method name (BERNOULLI, SYSTEM, RESERVOIR)
+	// followed by '(' -- that distinguishes method(value) from plain number
+	if p.current().typ == tokenIdent {
+		methodName := strings.ToUpper(p.current().value)
+		if methodName == "BERNOULLI" || methodName == "SYSTEM" || methodName == "RESERVOIR" {
+			// Check if next token after method name is '('
+			if p.tokPos+1 < len(p.tokens) && p.tokens[p.tokPos+1].typ == tokenLParen {
+				p.advance() // consume method name
+				switch methodName {
+				case "BERNOULLI":
+					sample.Method = SampleBernoulli
+				case "SYSTEM":
+					sample.Method = SampleSystem
+				case "RESERVOIR":
+					sample.Method = SampleReservoir
+				}
+				// Parse (value [%|PERCENT|ROWS])
+				if _, err := p.expect(tokenLParen); err != nil {
+					return nil, err
+				}
+				if err := p.parseSampleValue(sample); err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
+				}
+				// Check for (SEED n) clause
+				p.parseSampleSeed(sample)
+				return sample, nil
+			}
+		}
+	}
+
+	// No method specified, default to BERNOULLI and parse value directly
+	sample.Method = SampleBernoulli
+	if err := p.parseSampleValue(sample); err != nil {
+		return nil, err
+	}
+	// Check for (SEED n) clause
+	p.parseSampleSeed(sample)
+	return sample, nil
+}
+
+// parseSampleValue parses the numeric value and optional unit (%, PERCENT, ROWS)
+// in a SAMPLE clause.
+func (p *parser) parseSampleValue(sample *SampleOptions) error {
+	if p.current().typ != tokenNumber {
+		return p.errorf("expected numeric value for sample size")
+	}
+	valueStr := p.advance().value
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return p.errorf("invalid sample value: %s", valueStr)
+	}
+
+	// Check for % operator or PERCENT/ROWS keyword
+	if p.current().typ == tokenOperator && p.current().value == "%" {
+		p.advance() // consume %
+		sample.Percentage = value
+	} else if p.isKeyword("PERCENT") {
+		p.advance() // consume PERCENT
+		sample.Percentage = value
+	} else if p.isKeyword("ROWS") {
+		p.advance() // consume ROWS
+		sample.Rows = int(value)
+		if sample.Method == SampleBernoulli {
+			// Row-count sampling defaults to reservoir
+			sample.Method = SampleReservoir
+		}
+	} else {
+		// No unit specified, treat as percentage
+		sample.Percentage = value
+	}
+	return nil
+}
+
+// parseSampleSeed parses an optional (SEED n) clause for SAMPLE.
+func (p *parser) parseSampleSeed(sample *SampleOptions) {
+	// DuckDB syntax: ... (SEED n) or REPEATABLE(n)
+	if p.isKeyword("REPEATABLE") {
+		p.advance()
+		if p.current().typ == tokenLParen {
+			p.advance() // consume (
+			if p.current().typ == tokenNumber {
+				seedStr := p.advance().value
+				seed, err := strconv.ParseInt(seedStr, 10, 64)
+				if err == nil {
+					sample.Seed = &seed
+				}
+			}
+			if p.current().typ == tokenRParen {
+				p.advance() // consume )
+			}
+		}
+	} else if p.current().typ == tokenLParen {
+		// Check for (SEED n) syntax
+		saved := p.tokPos
+		p.advance() // consume (
+		if p.isKeyword("SEED") {
+			p.advance() // consume SEED
+			if p.current().typ == tokenNumber {
+				seedStr := p.advance().value
+				seed, err := strconv.ParseInt(seedStr, 10, 64)
+				if err == nil {
+					sample.Seed = &seed
+				}
+			}
+			if p.current().typ == tokenRParen {
+				p.advance() // consume )
+			}
+		} else {
+			// Not a SEED clause, revert
+			p.tokPos = saved
+		}
+	}
 }
 
 // parseTableFunction parses a table function call in a FROM clause.
@@ -4077,6 +4240,216 @@ func (p *parser) parseUnpivot(source TableRef) (*UnpivotStmt, error) {
 	return unpivot, nil
 }
 
+// parseStandalonePivot parses a standalone PIVOT statement.
+// Syntax: PIVOT table_name ON for_column [IN (v1, v2, ...)] USING agg(expr) [, agg(expr)] [GROUP BY col, ...]
+// Example: PIVOT sales ON quarter USING SUM(revenue) GROUP BY product
+func (p *parser) parseStandalonePivot() (*PivotStmt, error) {
+	if err := p.expectKeyword("PIVOT"); err != nil {
+		return nil, err
+	}
+
+	pivot := &PivotStmt{}
+
+	// Parse source table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name after PIVOT")
+	}
+	tableName := p.advance().value
+
+	// Check for schema-qualified name
+	var schema string
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after dot")
+		}
+		schema = tableName
+		tableName = p.advance().value
+	}
+
+	pivot.Source = TableRef{
+		TableName: tableName,
+		Schema:    schema,
+	}
+
+	// Parse ON for_column
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected column name after ON")
+	}
+	pivot.ForColumn = p.advance().value
+
+	// Parse optional IN (v1, v2, ...)
+	if p.isKeyword("IN") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		for {
+			val, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			pivot.PivotOn = append(pivot.PivotOn, val)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// Parse USING aggregate(s)
+	if err := p.expectKeyword("USING"); err != nil {
+		return nil, err
+	}
+
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected aggregate function name after USING")
+		}
+		funcName := strings.ToUpper(p.advance().value)
+
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+
+		aggExpr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		agg := PivotAggregate{
+			Function: funcName,
+			Expr:     aggExpr,
+		}
+
+		// Check for optional alias
+		if p.isKeyword("AS") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected alias after AS")
+			}
+			agg.Alias = p.advance().value
+		}
+
+		pivot.Using = append(pivot.Using, agg)
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	// Parse optional GROUP BY
+	if p.isKeyword("GROUP") {
+		p.advance()
+		if err := p.expectKeyword("BY"); err != nil {
+			return nil, err
+		}
+		for {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			pivot.GroupBy = append(pivot.GroupBy, expr)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+	}
+
+	return pivot, nil
+}
+
+// parseStandaloneUnpivot parses a standalone UNPIVOT statement.
+// Syntax: UNPIVOT table_name ON col1, col2, ... INTO NAME name_col VALUE val_col
+// Example: UNPIVOT sales ON q1_rev, q2_rev INTO NAME quarter VALUE revenue
+func (p *parser) parseStandaloneUnpivot() (*UnpivotStmt, error) {
+	if err := p.expectKeyword("UNPIVOT"); err != nil {
+		return nil, err
+	}
+
+	unpivot := &UnpivotStmt{}
+
+	// Parse source table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name after UNPIVOT")
+	}
+	tableName := p.advance().value
+
+	// Check for schema-qualified name
+	var schema string
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after dot")
+		}
+		schema = tableName
+		tableName = p.advance().value
+	}
+
+	unpivot.Source = TableRef{
+		TableName: tableName,
+		Schema:    schema,
+	}
+
+	// Parse ON col1, col2, ...
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name after ON")
+		}
+		unpivot.Using = append(unpivot.Using, p.advance().value)
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+		// Stop if we hit INTO keyword
+		if p.isKeyword("INTO") {
+			break
+		}
+	}
+
+	// Parse INTO NAME name_col VALUE val_col
+	if err := p.expectKeyword("INTO"); err != nil {
+		return nil, err
+	}
+
+	if err := p.expectKeyword("NAME"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected name column identifier")
+	}
+	unpivot.For = p.advance().value
+
+	if err := p.expectKeyword("VALUE"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected value column identifier")
+	}
+	unpivot.Into = p.advance().value
+
+	return unpivot, nil
+}
+
 // parseGroupByList parses a GROUP BY clause, handling special grouping constructs
 // like ROLLUP, CUBE, and GROUPING SETS before falling back to expression parsing.
 func (p *parser) parseGroupByList() ([]Expr, error) {
@@ -4982,40 +5355,61 @@ func (p *parser) parsePostfixExpr() (Expr, error) {
 		return nil, err
 	}
 
-	// Loop to handle chained casts like '123'::text::integer
-	for p.current().typ == tokenOperator && p.current().value == "::" {
-		p.advance() // consume ::
+	// Loop to handle chained postfix operators: :: (cast) and [] (subscript)
+	for {
+		if p.current().typ == tokenOperator && p.current().value == "::" {
+			p.advance() // consume ::
 
-		// Parse the type name
-		if p.current().typ != tokenIdent {
-			return nil, p.errorf("expected type name after ::")
-		}
-		typeName := strings.ToUpper(p.advance().value)
-		targetType := parseTypeName(typeName)
+			// Parse the type name
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected type name after ::")
+			}
+			typeName := strings.ToUpper(p.advance().value)
+			targetType := parseTypeName(typeName)
 
-		// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
-		if p.current().typ == tokenLParen {
-			p.advance()
-			depth := 1
-			for depth > 0 && p.current().typ != tokenEOF {
-				if p.current().typ == tokenLParen {
-					depth++
-				} else if p.current().typ == tokenRParen {
-					depth--
+			// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
+			if p.current().typ == tokenLParen {
+				p.advance()
+				depth := 1
+				for depth > 0 && p.current().typ != tokenEOF {
+					if p.current().typ == tokenLParen {
+						depth++
+					} else if p.current().typ == tokenRParen {
+						depth--
+					}
+					if depth > 0 {
+						p.advance()
+					}
 				}
-				if depth > 0 {
-					p.advance()
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
 				}
 			}
-			if _, err := p.expect(tokenRParen); err != nil {
+
+			expr = &CastExpr{
+				Expr:       expr,
+				TargetType: targetType,
+				TryCast:    false,
+			}
+		} else if p.current().typ == tokenLBracket {
+			// Subscript operator: expr[index]
+			p.advance() // consume [
+
+			indexExpr, err := p.parseExpr()
+			if err != nil {
 				return nil, err
 			}
-		}
 
-		expr = &CastExpr{
-			Expr:       expr,
-			TargetType: targetType,
-			TryCast:    false,
+			if _, err := p.expect(tokenRBracket); err != nil {
+				return nil, err
+			}
+
+			expr = &SubscriptExpr{
+				Base:  expr,
+				Index: indexExpr,
+			}
+		} else {
+			break
 		}
 	}
 
@@ -5076,6 +5470,10 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 		// Array literal: ['file1.csv', 'file2.csv']
 		return p.parseArrayLiteral()
 
+	case tokenLBrace:
+		// Struct literal: {'key': value, ...}
+		return p.parseStructLiteral()
+
 	case tokenIdent:
 		return p.parseIdentExpr()
 
@@ -5135,6 +5533,135 @@ func (p *parser) parseArrayLiteral() (Expr, error) {
 	}
 
 	return &ArrayExpr{Elements: elements}, nil
+}
+
+// parseStructLiteral parses a struct literal expression: {'key': value, ...}
+// This is DuckDB syntax for creating struct values inline.
+// It is parsed into a STRUCT_PACK function call with named arguments.
+func (p *parser) parseStructLiteral() (Expr, error) {
+	// Consume the opening brace
+	if _, err := p.expect(tokenLBrace); err != nil {
+		return nil, err
+	}
+
+	fn := &FunctionCall{
+		Name:      "STRUCT_PACK",
+		NamedArgs: make(map[string]Expr),
+	}
+
+	// Check for empty struct
+	if p.current().typ == tokenRBrace {
+		p.advance()
+		return fn, nil
+	}
+
+	// Parse key-value pairs separated by commas
+	for {
+		// Parse the key: must be a string literal (e.g., 'name') or identifier
+		var keyName string
+		switch p.current().typ {
+		case tokenString:
+			tok := p.advance()
+			// Strip quotes
+			raw := tok.value[1 : len(tok.value)-1]
+			raw = strings.ReplaceAll(raw, "''", "'")
+			keyName = raw
+		case tokenIdent:
+			keyName = p.advance().value
+		default:
+			return nil, p.errorf("expected field name (string or identifier) in struct literal, got %s", p.current().value)
+		}
+
+		// Expect colon separator
+		if p.current().typ != tokenOperator || p.current().value != ":" {
+			return nil, p.errorf("expected ':' after field name in struct literal, got %s", p.current().value)
+		}
+		p.advance()
+
+		// Parse the value expression
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		fn.NamedArgs[keyName] = val
+
+		// Check for comma or closing brace
+		if p.current().typ == tokenComma {
+			p.advance()
+			// Allow trailing comma
+			if p.current().typ == tokenRBrace {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	// Expect closing brace
+	if _, err := p.expect(tokenRBrace); err != nil {
+		return nil, err
+	}
+
+	return fn, nil
+}
+
+// parseMapLiteral parses a MAP literal expression: MAP {'key1': val1, 'key2': val2}
+// The MAP keyword has already been consumed. This expects { key: val, ... }.
+func (p *parser) parseMapLiteral() (Expr, error) {
+	// Consume the opening brace
+	if _, err := p.expect(tokenLBrace); err != nil {
+		return nil, err
+	}
+
+	var entries []MapLiteralEntry
+
+	// Check for empty map
+	if p.current().typ == tokenRBrace {
+		p.advance()
+		return &MapLiteralExpr{Entries: entries}, nil
+	}
+
+	// Parse key-value pairs separated by commas
+	for {
+		// Parse key expression
+		key, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		// Expect colon separator between key and value
+		if p.current().typ != tokenOperator || p.current().value != ":" {
+			return nil, p.errorf("expected ':' in MAP literal, got %s", p.current().value)
+		}
+		p.advance() // consume ':'
+
+		// Parse value expression
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, MapLiteralEntry{Key: key, Value: val})
+
+		// Check for comma or closing brace
+		if p.current().typ == tokenComma {
+			p.advance()
+			// Allow trailing comma
+			if p.current().typ == tokenRBrace {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	// Expect closing brace
+	if _, err := p.expect(tokenRBrace); err != nil {
+		return nil, err
+	}
+
+	return &MapLiteralExpr{Entries: entries}, nil
 }
 
 func (p *parser) parseNumber(
@@ -5246,6 +5773,13 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 			return &FunctionCall{Name: strings.ToUpper(name)}, nil
 		}
 		// Fall through to parseFunctionCall for CURRENT_DATE() syntax
+	case "MAP":
+		// MAP { 'key': val, ... } literal syntax
+		if p.current().typ == tokenLBrace {
+			return p.parseMapLiteral()
+		}
+		// Fall through to treat MAP as function call or identifier
+
 	case "COLUMNS":
 		if p.current().typ == tokenLParen {
 			p.advance()
