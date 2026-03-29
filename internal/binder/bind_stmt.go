@@ -24,8 +24,12 @@ import (
 )
 
 func (b *Binder) bindSelect(
-	s *parser.SelectStmt,
+	stmt *parser.SelectStmt,
 ) (*BoundSelectStmt, error) {
+	// Rewrite SELECT UNNEST(arr) into SELECT * FROM UNNEST(arr)
+	// This allows UNNEST to work as a set-returning function in SELECT lists.
+	s := b.rewriteUnnestInSelect(stmt)
+
 	bound := &BoundSelectStmt{
 		Distinct:        s.Distinct,
 		RecursionOption: s.Options,
@@ -1044,6 +1048,96 @@ func (b *Binder) bindSystemTableFunction(ref parser.TableRef) (*BoundTableRef, e
 	b.scope.aliases[alias] = tableFunc.Name
 
 	return boundRef, nil
+}
+
+// rewriteUnnestInSelect rewrites SELECT UNNEST(arr) into SELECT * FROM UNNEST(arr).
+// This allows UNNEST to be used as a set-returning function in SELECT lists,
+// matching PostgreSQL/DuckDB behavior where UNNEST in SELECT expands arrays into rows.
+// If the SELECT already has a FROM clause or doesn't contain UNNEST, it is returned unchanged.
+func (*Binder) rewriteUnnestInSelect(s *parser.SelectStmt) *parser.SelectStmt {
+	// Only rewrite when there is no FROM clause already
+	if s.From != nil && len(s.From.Tables) > 0 {
+		return s
+	}
+
+	// Look for UNNEST function calls in SELECT columns
+	unnestIdx := -1
+	for i, col := range s.Columns {
+		if col.Star {
+			continue
+		}
+
+		fn, ok := col.Expr.(*parser.FunctionCall)
+		if !ok {
+			continue
+		}
+
+		if len(fn.Args) == 1 && strings.EqualFold(fn.Name, "unnest") {
+			unnestIdx = i
+
+			break
+		}
+	}
+
+	if unnestIdx < 0 {
+		return s
+	}
+
+	// Rewrite the UNNEST call into a FROM UNNEST(...) table function.
+	fn, ok := s.Columns[unnestIdx].Expr.(*parser.FunctionCall)
+	if !ok {
+		return s
+	}
+
+	// The UNNEST table function always produces a column named "unnest"
+	const unnestName = "unnest"
+
+	newSelect := &parser.SelectStmt{
+		CTEs:       s.CTEs,
+		Distinct:   s.Distinct,
+		DistinctOn: s.DistinctOn,
+		Where:      s.Where,
+		GroupBy:    s.GroupBy,
+		GroupByAll: s.GroupByAll,
+		Having:     s.Having,
+		Qualify:    s.Qualify,
+		Windows:    s.Windows,
+		OrderBy:    s.OrderBy,
+		Limit:      s.Limit,
+		Offset:     s.Offset,
+		Sample:     s.Sample,
+		Options:    s.Options,
+		IsSubquery: s.IsSubquery,
+		SetOp:      s.SetOp,
+		Right:      s.Right,
+	}
+
+	// Replace the UNNEST column with a column reference to the output
+	newCols := make([]parser.SelectColumn, len(s.Columns))
+	copy(newCols, s.Columns)
+	newCols[unnestIdx] = parser.SelectColumn{
+		Expr: &parser.ColumnRef{
+			Table:  unnestName,
+			Column: unnestName,
+		},
+		Alias: s.Columns[unnestIdx].Alias,
+	}
+	newSelect.Columns = newCols
+
+	// Add FROM UNNEST(arg)
+	newSelect.From = &parser.FromClause{
+		Tables: []parser.TableRef{
+			{
+				Alias: unnestName,
+				TableFunction: &parser.TableFunctionRef{
+					Name: unnestName,
+					Args: fn.Args,
+				},
+			},
+		},
+	}
+
+	return newSelect
 }
 
 // bindUnnestTableFunction binds an UNNEST table function call.

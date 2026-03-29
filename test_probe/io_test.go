@@ -623,7 +623,6 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("unnest", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("basic_list", func(t *testing.T) {
-			t.Skip("not yet implemented: UNNEST as scalar function in SELECT list")
 			rows, err := db.Query("SELECT UNNEST([1, 2, 3, 4, 5])")
 			if err != nil {
 				t.Logf("UNNEST not yet supported: %v", err)
@@ -641,7 +640,6 @@ func TestAdvancedSQL(t *testing.T) {
 			}
 		})
 		t.Run("string_list", func(t *testing.T) {
-			t.Skip("not yet implemented: UNNEST as scalar function in SELECT list")
 			rows, err := db.Query("SELECT UNNEST(['a', 'b', 'c'])")
 			if err != nil {
 				t.Logf("UNNEST strings not yet supported: %v", err)
