@@ -703,21 +703,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("struct_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("creation", func(t *testing.T) {
-			t.Skip("not yet implemented: struct literal syntax")
 			var r string
 			err := db.QueryRow("SELECT {'name': 'alice', 'age': 30}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("struct creation: %v", err)
+				t.Errorf("struct creation: %v", err)
 			} else {
 				t.Logf("struct: %s", r)
 			}
 		})
 		t.Run("field_access", func(t *testing.T) {
-			t.Skip("not yet implemented: struct field dot notation")
 			var name string
 			err := db.QueryRow("SELECT s.name FROM (SELECT {'name': 'bob', 'age': 25} AS s) sub").Scan(&name)
 			if err != nil {
-				t.Logf("struct field access not yet supported: %v", err)
+				t.Errorf("struct field access: %v", err)
 			} else if name != "bob" {
 				t.Errorf("expected bob, got %q", name)
 			} else {
@@ -757,21 +755,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("nested_complex_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("list_of_structs", func(t *testing.T) {
-			t.Skip("not yet implemented: nested complex types (list of structs)")
 			var r string
 			err := db.QueryRow("SELECT [{'name': 'a', 'val': 1}, {'name': 'b', 'val': 2}]::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("list of structs: %v", err)
+				t.Errorf("list of structs: %v", err)
 			} else {
 				t.Logf("list of structs: %s", r)
 			}
 		})
 		t.Run("struct_with_list", func(t *testing.T) {
-			t.Skip("not yet implemented: nested complex types (struct with list)")
 			var r string
 			err := db.QueryRow("SELECT {'items': [1, 2, 3], 'label': 'test'}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("struct with list: %v", err)
+				t.Errorf("struct with list: %v", err)
 			} else {
 				t.Logf("struct with list: %s", r)
 			}

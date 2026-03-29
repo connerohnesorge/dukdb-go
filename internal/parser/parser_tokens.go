@@ -28,6 +28,10 @@ const (
 	// Array literal tokens
 	tokenLBracket // [ (left square bracket)
 	tokenRBracket // ] (right square bracket)
+
+	// Struct literal tokens
+	tokenLBrace // { (left curly brace)
+	tokenRBrace // } (right curly brace)
 )
 
 type token struct {

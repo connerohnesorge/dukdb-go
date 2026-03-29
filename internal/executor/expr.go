@@ -5600,7 +5600,58 @@ func toString(v any) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%v", v)
+	switch val := v.(type) {
+	case map[string]any:
+		return structToString(val)
+	case []any:
+		return sliceToString(val)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// structToString formats a struct (map[string]any) in DuckDB-style output.
+// Example: {'name': alice, 'age': 30}
+func structToString(m map[string]any) string {
+	if len(m) == 0 {
+		return "{}"
+	}
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf strings.Builder
+	buf.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteByte('\'')
+		buf.WriteString(k)
+		buf.WriteByte('\'')
+		buf.WriteString(": ")
+		buf.WriteString(toString(m[k]))
+	}
+	buf.WriteByte('}')
+	return buf.String()
+}
+
+// sliceToString formats a list ([]any) in DuckDB-style output.
+// Example: [1, 2, 3]
+func sliceToString(s []any) string {
+	var buf strings.Builder
+	buf.WriteByte('[')
+	for i, elem := range s {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(toString(elem))
+	}
+	buf.WriteByte(']')
+	return buf.String()
 }
 
 func toInt64Value(v any) int64 {

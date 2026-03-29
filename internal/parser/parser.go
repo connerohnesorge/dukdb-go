@@ -5076,6 +5076,10 @@ func (p *parser) parsePrimaryExpr() (Expr, error) {
 		// Array literal: ['file1.csv', 'file2.csv']
 		return p.parseArrayLiteral()
 
+	case tokenLBrace:
+		// Struct literal: {'key': value, ...}
+		return p.parseStructLiteral()
+
 	case tokenIdent:
 		return p.parseIdentExpr()
 
@@ -5135,6 +5139,77 @@ func (p *parser) parseArrayLiteral() (Expr, error) {
 	}
 
 	return &ArrayExpr{Elements: elements}, nil
+}
+
+// parseStructLiteral parses a struct literal expression: {'key': value, ...}
+// This is DuckDB syntax for creating struct values inline.
+// It is parsed into a STRUCT_PACK function call with named arguments.
+func (p *parser) parseStructLiteral() (Expr, error) {
+	// Consume the opening brace
+	if _, err := p.expect(tokenLBrace); err != nil {
+		return nil, err
+	}
+
+	fn := &FunctionCall{
+		Name:      "STRUCT_PACK",
+		NamedArgs: make(map[string]Expr),
+	}
+
+	// Check for empty struct
+	if p.current().typ == tokenRBrace {
+		p.advance()
+		return fn, nil
+	}
+
+	// Parse key-value pairs separated by commas
+	for {
+		// Parse the key: must be a string literal (e.g., 'name') or identifier
+		var keyName string
+		switch p.current().typ {
+		case tokenString:
+			tok := p.advance()
+			// Strip quotes
+			raw := tok.value[1 : len(tok.value)-1]
+			raw = strings.ReplaceAll(raw, "''", "'")
+			keyName = raw
+		case tokenIdent:
+			keyName = p.advance().value
+		default:
+			return nil, p.errorf("expected field name (string or identifier) in struct literal, got %s", p.current().value)
+		}
+
+		// Expect colon separator
+		if p.current().typ != tokenOperator || p.current().value != ":" {
+			return nil, p.errorf("expected ':' after field name in struct literal, got %s", p.current().value)
+		}
+		p.advance()
+
+		// Parse the value expression
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		fn.NamedArgs[keyName] = val
+
+		// Check for comma or closing brace
+		if p.current().typ == tokenComma {
+			p.advance()
+			// Allow trailing comma
+			if p.current().typ == tokenRBrace {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	// Expect closing brace
+	if _, err := p.expect(tokenRBrace); err != nil {
+		return nil, err
+	}
+
+	return fn, nil
 }
 
 func (p *parser) parseNumber(
