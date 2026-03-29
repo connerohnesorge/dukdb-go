@@ -1,6 +1,10 @@
 package executor
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	dukdb "github.com/dukdb/dukdb-go"
 	"github.com/dukdb/dukdb-go/internal/binder"
 	"github.com/dukdb/dukdb-go/internal/planner"
@@ -22,17 +26,21 @@ type PhysicalHashJoinOperator struct {
 	ctx          *ExecutionContext
 	types        []dukdb.TypeInfo
 
-	// Hash table state
-	hashTable      map[string][]map[string]any // key -> list of matching right rows
+	// Hash table state - stores rows as []any slices for direct index access
+	hashTable      map[string][][]any // key -> list of matching right rows (as value arrays)
 	hashTableBuilt bool
 
 	// Probe state
 	leftChunk       *storage.DataChunk
 	leftRowIdx      int
-	currentLeftRow  map[string]any
-	currentMatches  []map[string]any
+	currentLeftVals []any           // current left row values (direct array)
+	currentLeftMap  map[string]any  // reusable map for left row expression eval
+	currentMatches  [][]any         // matched right rows (value arrays)
 	currentMatchIdx int
 	finished        bool
+
+	// Reusable map for expression evaluation (avoids allocation per row)
+	reusableRowMap map[string]any
 }
 
 // NewPhysicalHashJoinOperator creates a new PhysicalHashJoinOperator.
@@ -76,6 +84,12 @@ func NewPhysicalHashJoinOperator(
 		}
 	}
 
+	// Pre-size the reusable map
+	mapSize := numLeft
+	if numRight > mapSize {
+		mapSize = numRight
+	}
+
 	return &PhysicalHashJoinOperator{
 		left:         left,
 		right:        right,
@@ -87,12 +101,13 @@ func NewPhysicalHashJoinOperator(
 		ctx:          ctx,
 		types:        types,
 		hashTable: make(
-			map[string][]map[string]any,
+			map[string][][]any,
 		),
 		hashTableBuilt:  false,
 		currentMatches:  nil,
 		currentMatchIdx: 0,
 		finished:        false,
+		reusableRowMap:  make(map[string]any, mapSize*2),
 	}, nil
 }
 
@@ -130,49 +145,22 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 		storage.StandardVectorSize,
 	)
 
+	// Reusable output row to avoid allocation per match
+	outputRow := make([]any, numLeft+numRight)
+
 	for {
 		// Try to emit from current matches
 		if op.currentMatches != nil &&
-			op.currentMatchIdx < len(
-				op.currentMatches,
-			) {
+			op.currentMatchIdx < len(op.currentMatches) {
 			// Get current left row and right match
-			rightRow := op.currentMatches[op.currentMatchIdx]
+			rightVals := op.currentMatches[op.currentMatchIdx]
 			op.currentMatchIdx++
 
-			// Combine rows and append to output
-			values := make(
-				[]any,
-				numLeft+numRight,
-			)
-			for i, col := range op.leftColumns {
-				colKey := col.Column
-				if col.Table != "" {
-					qualifiedKey := col.Table + "." + col.Column
-					if val, ok := op.currentLeftRow[qualifiedKey]; ok {
-						values[i] = val
-					} else {
-						values[i] = op.currentLeftRow[colKey]
-					}
-				} else {
-					values[i] = op.currentLeftRow[colKey]
-				}
-			}
-			for i, col := range op.rightColumns {
-				colKey := col.Column
-				if col.Table != "" {
-					qualifiedKey := col.Table + "." + col.Column
-					if val, ok := rightRow[qualifiedKey]; ok {
-						values[numLeft+i] = val
-					} else {
-						values[numLeft+i] = rightRow[colKey]
-					}
-				} else {
-					values[numLeft+i] = rightRow[colKey]
-				}
-			}
+			// Combine rows: direct array copy, no map lookups
+			copy(outputRow[:numLeft], op.currentLeftVals)
+			copy(outputRow[numLeft:], rightVals)
 
-			outputChunk.AppendRow(values)
+			outputChunk.AppendRow(outputRow)
 
 			// If output chunk is full, return it
 			if outputChunk.Count() >= outputChunk.Capacity() {
@@ -205,17 +193,21 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 
 		// Probe hash table with current left row
 		if op.leftRowIdx < op.leftChunk.Count() {
-			op.currentLeftRow = op.rowMapFromChunk(
-				op.leftChunk,
-				op.leftRowIdx,
-				op.leftColumns,
-			)
+			// Extract left row values directly (no map)
+			if op.currentLeftVals == nil || len(op.currentLeftVals) != numLeft {
+				op.currentLeftVals = make([]any, numLeft)
+			}
+			for colIdx := 0; colIdx < op.leftChunk.ColumnCount() && colIdx < numLeft; colIdx++ {
+				op.currentLeftVals[colIdx] = op.leftChunk.GetValue(op.leftRowIdx, colIdx)
+			}
+
+			// Build map only for join key extraction (reuse the map)
+			op.populateRowMap(op.reusableRowMap, op.currentLeftVals, op.leftColumns)
+
 			op.leftRowIdx++
 
 			// Extract join key from left row
-			joinKey, err := op.extractJoinKey(
-				op.currentLeftRow,
-			)
+			joinKey, err := op.extractJoinKey(op.reusableRowMap)
 			if err != nil {
 				return nil, err
 			}
@@ -234,21 +226,9 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 			if op.joinType == planner.JoinTypeSemi {
 				if len(op.currentMatches) > 0 {
 					// Emit left row only (no right columns for semi-join)
-					values := make([]any, numLeft)
-					for i, col := range op.leftColumns {
-						colKey := col.Column
-						if col.Table != "" {
-							qualifiedKey := col.Table + "." + col.Column
-							if val, ok := op.currentLeftRow[qualifiedKey]; ok {
-								values[i] = val
-							} else {
-								values[i] = op.currentLeftRow[colKey]
-							}
-						} else {
-							values[i] = op.currentLeftRow[colKey]
-						}
-					}
-					outputChunk.AppendRow(values)
+					semiRow := make([]any, numLeft)
+					copy(semiRow, op.currentLeftVals)
+					outputChunk.AppendRow(semiRow)
 
 					if outputChunk.Count() >= outputChunk.Capacity() {
 						return outputChunk, nil
@@ -267,27 +247,11 @@ func (op *PhysicalHashJoinOperator) Next() (*storage.DataChunk, error) {
 			// If no matches but it's a LEFT join, emit left row with NULLs for right
 			if len(op.currentMatches) == 0 &&
 				op.joinType == planner.JoinTypeLeft {
-				values := make(
-					[]any,
-					numLeft+numRight,
-				)
-				for i, col := range op.leftColumns {
-					colKey := col.Column
-					if col.Table != "" {
-						qualifiedKey := col.Table + "." + col.Column
-						if val, ok := op.currentLeftRow[qualifiedKey]; ok {
-							values[i] = val
-						} else {
-							values[i] = op.currentLeftRow[colKey]
-						}
-					} else {
-						values[i] = op.currentLeftRow[colKey]
-					}
-				}
+				copy(outputRow[:numLeft], op.currentLeftVals)
 				for i := range op.rightColumns {
-					values[numLeft+i] = nil
+					outputRow[numLeft+i] = nil
 				}
-				outputChunk.AppendRow(values)
+				outputChunk.AppendRow(outputRow)
 
 				if outputChunk.Count() >= outputChunk.Capacity() {
 					return outputChunk, nil
@@ -306,28 +270,31 @@ func (op *PhysicalHashJoinOperator) GetTypes() []dukdb.TypeInfo {
 
 // buildHashTable consumes all rows from the right child and builds the hash table.
 func (op *PhysicalHashJoinOperator) buildHashTable() error {
+	numRight := len(op.rightColumns)
+	rowMap := make(map[string]any, numRight*2)
+
 	for {
 		chunk, err := op.right.Next()
 		if err != nil {
 			return err
 		}
 		if chunk == nil {
-			// No more right rows
 			break
 		}
 
 		// Process each row in the chunk
 		for rowIdx := 0; rowIdx < chunk.Count(); rowIdx++ {
-			rowMap := op.rowMapFromChunk(
-				chunk,
-				rowIdx,
-				op.rightColumns,
-			)
+			// Extract row values as a flat slice (no map allocation per row)
+			rowVals := make([]any, numRight)
+			for colIdx := 0; colIdx < chunk.ColumnCount() && colIdx < numRight; colIdx++ {
+				rowVals[colIdx] = chunk.GetValue(rowIdx, colIdx)
+			}
+
+			// Populate reusable map for join key extraction
+			op.populateRowMap(rowMap, rowVals, op.rightColumns)
 
 			// Extract join key
-			joinKey, err := op.extractJoinKey(
-				rowMap,
-			)
+			joinKey, err := op.extractJoinKey(rowMap)
 			if err != nil {
 				return err
 			}
@@ -337,15 +304,40 @@ func (op *PhysicalHashJoinOperator) buildHashTable() error {
 				continue
 			}
 
-			// Add to hash table
+			// Add to hash table (store flat []any, not map)
 			op.hashTable[joinKey] = append(
 				op.hashTable[joinKey],
-				rowMap,
+				rowVals,
 			)
 		}
 	}
 
 	return nil
+}
+
+// populateRowMap fills an existing map with column values, avoiding allocation.
+// The map is cleared and repopulated each time.
+func (op *PhysicalHashJoinOperator) populateRowMap(
+	rowMap map[string]any,
+	vals []any,
+	columns []planner.ColumnBinding,
+) {
+	// Clear existing entries
+	for k := range rowMap {
+		delete(rowMap, k)
+	}
+
+	for colIdx := 0; colIdx < len(vals) && colIdx < len(columns); colIdx++ {
+		value := vals[colIdx]
+		col := columns[colIdx]
+
+		if col.Column != "" {
+			rowMap[col.Column] = value
+		}
+		if col.Table != "" && col.Column != "" {
+			rowMap[col.Table+"."+col.Column] = value
+		}
+	}
 }
 
 // extractJoinKey extracts the join key from a row based on the join condition.
@@ -369,15 +361,13 @@ func (op *PhysicalHashJoinOperator) extractJoinKey(
 	}
 
 	// Try to evaluate both sides of the join condition
-	// For a.id = b.id, when building hash table from b, we get b.id
-	// When probing from a, we get a.id
 	leftVal, leftErr := op.executor.evaluateExpr(
 		op.ctx,
 		binExpr.Left,
 		row,
 	)
 	if leftErr == nil && leftVal != nil {
-		return formatValue(leftVal), nil
+		return fastFormatValue(leftVal), nil
 	}
 
 	rightVal, rightErr := op.executor.evaluateExpr(
@@ -386,31 +376,66 @@ func (op *PhysicalHashJoinOperator) extractJoinKey(
 		row,
 	)
 	if rightErr == nil && rightVal != nil {
-		return formatValue(rightVal), nil
+		return fastFormatValue(rightVal), nil
 	}
 
 	// Both sides failed or returned nil
 	return "", nil
 }
 
+// fastFormatValue converts a value to a string key efficiently,
+// avoiding fmt.Sprintf for common types.
+func fastFormatValue(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return "<null>"
+	case int:
+		return strconv.Itoa(val)
+	case int32:
+		return strconv.FormatInt(int64(val), 10)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case float64:
+		return strconv.FormatFloat(val, 'g', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(val), 'g', -1, 32)
+	case string:
+		return val
+	case bool:
+		if val {
+			return "T"
+		}
+		return "F"
+	case []byte:
+		// Use a strings.Builder for byte slices
+		var b strings.Builder
+		b.Grow(len(val) * 2)
+		for _, by := range val {
+			b.WriteByte("0123456789abcdef"[by>>4])
+			b.WriteByte("0123456789abcdef"[by&0x0f])
+		}
+		return b.String()
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 // rowMapFromChunk extracts a row from a DataChunk into a map[string]any.
+// Kept for backward compatibility.
 func (op *PhysicalHashJoinOperator) rowMapFromChunk(
 	chunk *storage.DataChunk,
 	rowIdx int,
 	columns []planner.ColumnBinding,
 ) map[string]any {
-	rowMap := make(map[string]any)
+	rowMap := make(map[string]any, len(columns)*2)
 
 	for colIdx := 0; colIdx < chunk.ColumnCount() && colIdx < len(columns); colIdx++ {
 		value := chunk.GetValue(rowIdx, colIdx)
 		col := columns[colIdx]
 
-		// Add column by simple name
 		if col.Column != "" {
 			rowMap[col.Column] = value
 		}
-
-		// Add column by table-qualified name
 		if col.Table != "" && col.Column != "" {
 			qualifiedName := col.Table + "." + col.Column
 			rowMap[qualifiedName] = value

@@ -75,10 +75,17 @@ func (op *PhysicalSortOperator) GetTypes() []dukdb.TypeInfo {
 	return op.types
 }
 
+// sortableRow holds a row's data along with pre-extracted sort key values.
+// By caching sort keys upfront, we avoid rebuilding maps during comparisons.
+type sortableRow struct {
+	data     []any   // original column values
+	sortKeys []any   // pre-extracted ORDER BY expression values
+}
+
 // collectAndSort collects all input chunks, sorts all rows, and creates output chunks.
 func (op *PhysicalSortOperator) collectAndSort() error {
 	// Collect all rows from child operator
-	var allRows []rowWithData
+	var allRows []sortableRow
 	var columnTypes []dukdb.Type
 
 	for {
@@ -87,7 +94,6 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 			return err
 		}
 		if inputChunk == nil {
-			// No more input
 			break
 		}
 
@@ -110,7 +116,7 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 			}
 			allRows = append(
 				allRows,
-				rowWithData{data: rowData},
+				sortableRow{data: rowData},
 			)
 		}
 	}
@@ -118,26 +124,24 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 	// If no rows, return empty
 	if len(allRows) == 0 {
 		op.sorted = []*storage.DataChunk{}
-
 		return nil
 	}
 
-	// Sort the rows using Go's sort.Slice
-	sort.Slice(allRows, func(i, j int) bool {
-		cmp, err := op.compareRowData(
-			allRows[i].data,
-			allRows[j].data,
-		)
-		if err != nil {
-			// In case of error, maintain original order
-			return false
-		}
+	// Pre-extract sort keys for all rows (once, not per-comparison)
+	if err := op.extractSortKeys(allRows); err != nil {
+		return err
+	}
 
+	// Sort using pre-extracted keys - no map allocations during comparison
+	sort.Slice(allRows, func(i, j int) bool {
+		cmp := op.compareSortKeys(
+			allRows[i].sortKeys,
+			allRows[j].sortKeys,
+		)
 		return cmp < 0
 	})
 
 	// Re-chunk sorted data into output DataChunks
-	// Use standard chunk size (e.g., 2048 rows per chunk)
 	const chunkSize = 2048
 	numChunks := (len(allRows) + chunkSize - 1) / chunkSize
 	op.sorted = make(
@@ -165,8 +169,47 @@ func (op *PhysicalSortOperator) collectAndSort() error {
 	return nil
 }
 
+// extractSortKeys evaluates ORDER BY expressions once per row and caches the results.
+// This turns O(n log n) map allocations + expression evaluations into O(n).
+func (op *PhysicalSortOperator) extractSortKeys(rows []sortableRow) error {
+	numKeys := len(op.orderBy)
+	for i := range rows {
+		rowMap := op.buildRowMap(rows[i].data)
+		keys := make([]any, numKeys)
+		for k, order := range op.orderBy {
+			val, err := op.executor.evaluateExpr(op.ctx, order.Expr, rowMap)
+			if err != nil {
+				// Treat evaluation errors as NULL for sorting purposes
+				val = nil
+			}
+			keys[k] = val
+		}
+		rows[i].sortKeys = keys
+	}
+	return nil
+}
+
+// compareSortKeys compares two rows using pre-extracted sort key values.
+// No map allocations or expression evaluation happen here.
+func (op *PhysicalSortOperator) compareSortKeys(a, b []any) int {
+	for k, order := range op.orderBy {
+		valA := a[k]
+		valB := b[k]
+
+		cmp, isNull := compareOrderByValues(valA, valB, order.NullsFirst, order.Desc, order.Collation)
+		if cmp != 0 {
+			if order.Desc && !isNull {
+				return -cmp
+			}
+			return cmp
+		}
+	}
+	return 0
+}
+
 // compareRowData compares two rows using ORDER BY expressions.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
+// Kept for backward compatibility with callers that don't use pre-extracted keys.
 func (op *PhysicalSortOperator) compareRowData(
 	a, b []any,
 ) (int, error) {
@@ -209,7 +252,7 @@ func (op *PhysicalSortOperator) compareRowData(
 func (op *PhysicalSortOperator) buildRowMap(
 	data []any,
 ) map[string]any {
-	rowMap := make(map[string]any)
+	rowMap := make(map[string]any, len(data))
 
 	if len(op.childColumns) > 0 {
 		// Use column bindings if available

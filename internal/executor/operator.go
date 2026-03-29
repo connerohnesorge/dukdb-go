@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"sort"
 	"strings"
 
 	dukdb "github.com/dukdb/dukdb-go"
@@ -1290,10 +1291,17 @@ func (e *Executor) performJoin(
 		Rows:    make([]map[string]any, 0),
 	}
 
+	// Try hash join optimization for equi-join conditions
+	if condition != nil && joinType != planner.JoinTypeFull {
+		if pairs := extractAllEquiJoinKeys(condition); len(pairs) > 0 {
+			return e.performHashJoin(ctx, left, right, joinType, condition, columns, pairs)
+		}
+	}
+
 	// Track which right rows have been matched (for RIGHT/FULL OUTER joins)
 	matchedRight := make(map[int]bool)
 
-	// Nested loop join
+	// Nested loop join (fallback for non-equi conditions)
 	for _, leftRow := range left.Rows {
 		matched := false
 		for ri, rightRow := range right.Rows {
@@ -1357,6 +1365,232 @@ func (e *Executor) performJoin(
 		for ri, rightRow := range right.Rows {
 			if !matchedRight[ri] {
 				combinedRow := make(map[string]any)
+				for _, col := range left.Columns {
+					combinedRow[col] = nil
+				}
+				for k, v := range rightRow {
+					combinedRow[k] = v
+				}
+				result.Rows = append(result.Rows, combinedRow)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// equiJoinPair represents a single column equality in a join condition.
+type equiJoinPair struct {
+	leftKey    string
+	rightKey   string
+	leftTable  string // table qualifier for disambiguation
+	rightTable string
+}
+
+// extractAllEquiJoinKeys extracts all column equality pairs from a join condition.
+// Handles both simple (a = b) and compound (a = b AND c = d) conditions.
+func extractAllEquiJoinKeys(condition interface{}) []equiJoinPair {
+	binExpr, ok := condition.(*binder.BoundBinaryExpr)
+	if !ok {
+		return nil
+	}
+
+	if binExpr.Op == parser.OpEq {
+		leftRef, leftOk := binExpr.Left.(*binder.BoundColumnRef)
+		rightRef, rightOk := binExpr.Right.(*binder.BoundColumnRef)
+		if leftOk && rightOk {
+			return []equiJoinPair{{
+				leftKey: leftRef.Column, rightKey: rightRef.Column,
+				leftTable: leftRef.Table, rightTable: rightRef.Table,
+			}}
+		}
+		return nil
+	}
+
+	if binExpr.Op == parser.OpAnd {
+		left := extractAllEquiJoinKeys(binExpr.Left)
+		right := extractAllEquiJoinKeys(binExpr.Right)
+		return append(left, right...)
+	}
+
+	return nil
+}
+
+// extractEquiJoinKeys extracts the first column equality pair. Used for simple hash join decision.
+func extractEquiJoinKeys(condition interface{}) (string, string) {
+	pairs := extractAllEquiJoinKeys(condition)
+	if len(pairs) > 0 {
+		return pairs[0].leftKey, pairs[0].rightKey
+	}
+	return "", ""
+}
+
+// lookupKeyValue looks up a column value in a row, handling qualified and unqualified names.
+// For qualified names (containing "."), it tries exact match only.
+// For unqualified names, it tries exact match first, then suffix match for disambiguation.
+func lookupKeyValue(row map[string]any, keyName string) (any, bool) {
+	// Try exact match first
+	if v, ok := row[keyName]; ok {
+		return v, true
+	}
+	// If keyName is already qualified (contains "."), don't do suffix matching
+	if strings.Contains(keyName, ".") {
+		return nil, false
+	}
+	// Unqualified: try suffix match
+	for k, v := range row {
+		if strings.HasSuffix(k, "."+keyName) {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
+// buildCompositeKey builds a composite hash key from multiple column values in a row.
+func buildCompositeKey(row map[string]any, keys []string) (string, bool) {
+	if len(keys) == 1 {
+		// Fast path: single key
+		v, ok := lookupKeyValue(row, keys[0])
+		if !ok || v == nil {
+			return "", false
+		}
+		return fmt.Sprintf("%v", v), true
+	}
+	// Composite key: concatenate with separator
+	var buf strings.Builder
+	for i, keyName := range keys {
+		if i > 0 {
+			buf.WriteByte('|')
+		}
+		v, ok := lookupKeyValue(row, keyName)
+		if !ok || v == nil {
+			return "", false
+		}
+		fmt.Fprintf(&buf, "%v", v)
+	}
+	return buf.String(), true
+}
+
+// performHashJoin implements a hash join for equi-join conditions.
+// Instead of O(n*m) nested loop, builds a hash table on the right side for O(n+m).
+func (e *Executor) performHashJoin(
+	ctx *ExecutionContext,
+	left, right *ExecutionResult,
+	joinType planner.JoinType,
+	condition interface{},
+	columns []string,
+	pairs []equiJoinPair,
+) (*ExecutionResult, error) {
+	result := &ExecutionResult{
+		Columns: columns,
+		Rows:    make([]map[string]any, 0),
+	}
+
+	// Extract key column names for left and right sides, using qualified names when available
+	leftKeys := make([]string, len(pairs))
+	rightKeys := make([]string, len(pairs))
+	for i, p := range pairs {
+		if p.leftTable != "" {
+			leftKeys[i] = p.leftTable + "." + p.leftKey
+		} else {
+			leftKeys[i] = p.leftKey
+		}
+		if p.rightTable != "" {
+			rightKeys[i] = p.rightTable + "." + p.rightKey
+		} else {
+			rightKeys[i] = p.rightKey
+		}
+	}
+
+	// Detect if the condition's left/right don't match the operator's left/right children.
+	// This can happen when the planner swaps children (e.g., in multi-table joins).
+	// If the "left" key is found in the right result and vice versa, swap them.
+	if len(left.Rows) > 0 && len(right.Rows) > 0 && len(leftKeys) > 0 {
+		_, leftInLeft := lookupKeyValue(left.Rows[0], leftKeys[0])
+		_, leftInRight := lookupKeyValue(right.Rows[0], leftKeys[0])
+		if !leftInLeft && leftInRight {
+			leftKeys, rightKeys = rightKeys, leftKeys
+		}
+	}
+
+	// Build hash table from right side using composite keys
+	type indexedRow struct {
+		idx int
+		row map[string]any
+	}
+	hashTable := make(map[string][]indexedRow, len(right.Rows))
+	for ri, rightRow := range right.Rows {
+		key, ok := buildCompositeKey(rightRow, rightKeys)
+		if !ok {
+			continue
+		}
+		hashTable[key] = append(hashTable[key], indexedRow{idx: ri, row: rightRow})
+	}
+
+	matchedRight := make(map[int]bool)
+	// Track whether we need full condition check beyond the equi keys
+	// If equi-keys cover the entire condition, we can skip re-evaluation
+	allKeysAreEqui := len(pairs) > 0
+
+	// Probe phase: for each left row, look up matches in hash table
+	for _, leftRow := range left.Rows {
+		key, ok := buildCompositeKey(leftRow, leftKeys)
+
+		matched := false
+		if ok {
+			if matches, found := hashTable[key]; found {
+				for _, m := range matches {
+					// Combine rows
+					combinedRow := make(map[string]any, len(leftRow)+len(m.row))
+					for k, v := range leftRow {
+						combinedRow[k] = v
+					}
+					for k, v := range m.row {
+						combinedRow[k] = v
+					}
+
+					// If condition has non-equi parts, verify full condition
+					if !allKeysAreEqui && condition != nil {
+						passes, err := e.evaluateExprAsBool(ctx, condition, combinedRow)
+						if err != nil {
+							return nil, err
+						}
+						if !passes {
+							continue
+						}
+					}
+
+					matched = true
+					matchedRight[m.idx] = true
+
+					if joinType == planner.JoinTypeSemi {
+						result.Rows = append(result.Rows, leftRow)
+						break
+					} else {
+						result.Rows = append(result.Rows, combinedRow)
+					}
+				}
+			}
+		}
+
+		// Handle LEFT outer join
+		if !matched && joinType == planner.JoinTypeLeft {
+			combinedRow := make(map[string]any, len(leftRow)+len(right.Columns))
+			for k, v := range leftRow {
+				combinedRow[k] = v
+			}
+			for _, col := range right.Columns {
+				combinedRow[col] = nil
+			}
+			result.Rows = append(result.Rows, combinedRow)
+		}
+	}
+
+	// Handle RIGHT outer join
+	if joinType == planner.JoinTypeRight {
+		for ri, rightRow := range right.Rows {
+			if !matchedRight[ri] {
+				combinedRow := make(map[string]any, len(left.Columns)+len(rightRow))
 				for _, col := range left.Columns {
 					combinedRow[col] = nil
 				}
@@ -1816,25 +2050,58 @@ func (e *Executor) executeSort(
 		return nil, err
 	}
 
-	// Sort rows using insertion sort for simplicity
 	rows := childResult.Rows
-	for i := 1; i < len(rows); i++ {
-		for j := i; j > 0; j-- {
-			cmp, err := e.compareRows(
-				ctx,
-				rows[j-1],
-				rows[j],
-				plan.OrderBy,
-			)
-			if err != nil {
-				return nil, err
-			}
-			if cmp <= 0 {
-				break
-			}
-			rows[j-1], rows[j] = rows[j], rows[j-1]
-		}
+	if len(rows) <= 1 {
+		return &ExecutionResult{
+			Rows:    rows,
+			Columns: childResult.Columns,
+		}, nil
 	}
+
+	// Pre-extract sort keys for all rows (O(n), done once)
+	// This avoids evaluating ORDER BY expressions during O(n log n) comparisons.
+	numKeys := len(plan.OrderBy)
+	type indexedSortRow struct {
+		idx  int
+		keys []any
+	}
+	indexed := make([]indexedSortRow, len(rows))
+	for i, row := range rows {
+		keys := make([]any, numKeys)
+		for k, order := range plan.OrderBy {
+			val, evalErr := e.evaluateExpr(ctx, order.Expr, row)
+			if evalErr != nil {
+				val = nil
+			}
+			keys[k] = val
+		}
+		indexed[i] = indexedSortRow{idx: i, keys: keys}
+	}
+
+	// Sort indices using O(n log n) stable algorithm with pre-extracted keys.
+	// No map lookups or expression evaluation happen during comparison.
+	// Stable sort preserves original row order for equal keys.
+	sort.SliceStable(indexed, func(i, j int) bool {
+		keysA := indexed[i].keys
+		keysB := indexed[j].keys
+		for k, order := range plan.OrderBy {
+			cmp, isNull := compareOrderByValues(keysA[k], keysB[k], order.NullsFirst, order.Desc, order.Collation)
+			if cmp != 0 {
+				if order.Desc && !isNull {
+					return -cmp < 0
+				}
+				return cmp < 0
+			}
+		}
+		return false
+	})
+
+	// Reorder rows according to sorted indices
+	sorted := make([]map[string]any, len(rows))
+	for i, ir := range indexed {
+		sorted[i] = rows[ir.idx]
+	}
+	rows = sorted
 
 	return &ExecutionResult{
 		Rows:    rows,

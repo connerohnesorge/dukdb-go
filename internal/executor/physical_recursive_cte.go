@@ -839,6 +839,13 @@ func (e *Executor) executeCTEScan(
 		}
 	}
 
+	// Determine the table qualifier for qualified column names
+	// This is needed so joins can reference CTE columns as alias.column
+	tableQualifier := plan.Alias
+	if tableQualifier == "" {
+		tableQualifier = plan.CTEName
+	}
+
 	for {
 		chunk, err := op.Next()
 		if err != nil {
@@ -852,7 +859,13 @@ func (e *Executor) executeCTEScan(
 		for i := 0; i < chunk.Count(); i++ {
 			row := make(map[string]any)
 			for j, col := range result.Columns {
-				row[col] = chunk.GetValue(i, j)
+				val := chunk.GetValue(i, j)
+				// Store with unqualified name
+				row[col] = val
+				// Also store with qualified name (alias.column) for join resolution
+				if tableQualifier != "" {
+					row[tableQualifier+"."+col] = val
+				}
 			}
 			result.Rows = append(result.Rows, row)
 		}

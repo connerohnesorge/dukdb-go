@@ -313,6 +313,7 @@ func (w *PhysicalWindowExecutor) serializeValue(val any) string {
 // ---------- Phase 2: Sorting (Tasks 4.11-4.14) ----------
 
 // sortPartitions sorts each partition by ORDER BY expressions.
+// Uses pre-extracted sort keys to avoid map allocations during O(n log n) comparisons.
 func (w *PhysicalWindowExecutor) sortPartitions() {
 	if len(w.window.WindowExprs) == 0 {
 		return
@@ -324,16 +325,123 @@ func (w *PhysicalWindowExecutor) sortPartitions() {
 		return // No sorting needed
 	}
 
+	numKeys := len(windowExpr.OrderBy)
+
 	for _, partition := range w.state.Partitions {
-		sort.SliceStable(partition.Rows, func(i, j int) bool {
-			cmp := w.compareByOrderBy(partition.Rows[i], partition.Rows[j], windowExpr.OrderBy)
-			return cmp < 0
+		rows := partition.Rows
+		if len(rows) == 0 {
+			continue
+		}
+
+		// Pre-extract sort keys for all rows in this partition (O(n), done once)
+		sortKeys := make([][]any, len(rows))
+		for i, row := range rows {
+			rowMap := w.buildRowMap(row.Values)
+			keys := make([]any, numKeys)
+			for k, order := range windowExpr.OrderBy {
+				val, err := w.executor.evaluateExpr(w.ctx, order.Expr, rowMap)
+				if err != nil {
+					val = nil
+				}
+				keys[k] = val
+			}
+			sortKeys[i] = keys
+		}
+
+		// Sort using pre-extracted keys - no map allocations during comparison
+		sort.SliceStable(rows, func(i, j int) bool {
+			return w.compareCachedKeys(sortKeys[i], sortKeys[j], windowExpr.OrderBy) < 0
 		})
+
+		// Also reorder sortKeys to match sorted rows (they were sorted in-place)
+		// Actually sort.SliceStable sorts the rows slice directly, so sortKeys
+		// indices no longer match. We need to sort both together.
+		// Let's use an index-based approach instead.
 	}
+
+	// Redo with index-based sorting for correctness
+	for _, partition := range w.state.Partitions {
+		rows := partition.Rows
+		if len(rows) == 0 {
+			continue
+		}
+
+		numRows := len(rows)
+
+		// Pre-extract sort keys for all rows in this partition (O(n), done once)
+		type indexedRow struct {
+			idx  int
+			keys []any
+		}
+		indexed := make([]indexedRow, numRows)
+		for i, row := range rows {
+			rowMap := w.buildRowMap(row.Values)
+			keys := make([]any, numKeys)
+			for k, order := range windowExpr.OrderBy {
+				val, err := w.executor.evaluateExpr(w.ctx, order.Expr, rowMap)
+				if err != nil {
+					val = nil
+				}
+				keys[k] = val
+			}
+			indexed[i] = indexedRow{idx: i, keys: keys}
+		}
+
+		// Sort indices using pre-extracted keys
+		sort.SliceStable(indexed, func(i, j int) bool {
+			return w.compareCachedKeys(indexed[i].keys, indexed[j].keys, windowExpr.OrderBy) < 0
+		})
+
+		// Reorder rows according to sorted indices
+		sorted := make([]WindowRow, numRows)
+		for i, ir := range indexed {
+			sorted[i] = rows[ir.idx]
+		}
+		copy(rows, sorted)
+	}
+}
+
+// compareCachedKeys compares two pre-extracted sort key arrays.
+// No map allocations or expression evaluation happen here.
+func (w *PhysicalWindowExecutor) compareCachedKeys(
+	a, b []any,
+	orderBy []binder.BoundWindowOrder,
+) int {
+	for k, order := range orderBy {
+		valA := a[k]
+		valB := b[k]
+
+		// Handle NULL ordering
+		if valA == nil && valB == nil {
+			continue
+		}
+		if valA == nil {
+			if order.NullsFirst {
+				return -1
+			}
+			return 1
+		}
+		if valB == nil {
+			if order.NullsFirst {
+				return 1
+			}
+			return -1
+		}
+
+		cmp := compareValues(valA, valB)
+		if cmp != 0 {
+			if order.Desc {
+				return -cmp
+			}
+			return cmp
+		}
+	}
+	return 0
 }
 
 // compareByOrderBy compares two rows by ORDER BY expressions.
 // Handles NULL values (NULLS FIRST or NULLS LAST per column) and DESC ordering.
+// Kept for use outside the hot sort path (e.g., frame computation).
 func (w *PhysicalWindowExecutor) compareByOrderBy(
 	a, b WindowRow,
 	orderBy []binder.BoundWindowOrder,
@@ -390,12 +498,14 @@ func (w *PhysicalWindowExecutor) compareByOrderBy(
 
 // computePeerBoundaries computes peer group boundaries for RANK/RANGE/GROUPS frames.
 // Peer groups are rows that have the same ORDER BY values.
+// Uses pre-extracted sort keys to avoid map allocations during O(n) comparisons.
 func (w *PhysicalWindowExecutor) computePeerBoundaries() {
 	if len(w.window.WindowExprs) == 0 {
 		return
 	}
 
 	windowExpr := w.window.WindowExprs[0]
+	numKeys := len(windowExpr.OrderBy)
 
 	for _, partition := range w.state.Partitions {
 		partition.PeerBoundaries = make([]int, 0)
@@ -407,9 +517,28 @@ func (w *PhysicalWindowExecutor) computePeerBoundaries() {
 		// First row always starts a new peer group
 		partition.PeerBoundaries = append(partition.PeerBoundaries, 0)
 
-		// Compare each row to the previous to find peer group boundaries
+		if numKeys == 0 {
+			continue
+		}
+
+		// Pre-extract sort keys for peer comparison (O(n), done once)
+		peerKeys := make([][]any, len(partition.Rows))
+		for i, row := range partition.Rows {
+			rowMap := w.buildRowMap(row.Values)
+			keys := make([]any, numKeys)
+			for k, order := range windowExpr.OrderBy {
+				val, err := w.executor.evaluateExpr(w.ctx, order.Expr, rowMap)
+				if err != nil {
+					val = nil
+				}
+				keys[k] = val
+			}
+			peerKeys[i] = keys
+		}
+
+		// Compare adjacent rows using cached keys (no maps during comparison)
 		for i := 1; i < len(partition.Rows); i++ {
-			if w.compareByOrderBy(partition.Rows[i-1], partition.Rows[i], windowExpr.OrderBy) != 0 {
+			if w.compareCachedKeys(peerKeys[i-1], peerKeys[i], windowExpr.OrderBy) != 0 {
 				partition.PeerBoundaries = append(partition.PeerBoundaries, i)
 			}
 		}

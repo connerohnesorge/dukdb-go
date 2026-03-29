@@ -99,25 +99,27 @@ func (op *PhysicalLimitOperator) Next() (*storage.DataChunk, error) {
 			return nil, nil
 		}
 
-		// Create output chunk with selected rows
+		// Fast path: if we're taking the entire chunk from the start, just return it
+		if startIdx == 0 && rowsToEmit == inputChunk.Count() {
+			op.emitted += int64(rowsToEmit)
+			return inputChunk, nil
+		}
+
+		// Create output chunk and copy rows using a reusable buffer
 		outputChunk := storage.NewDataChunkWithCapacity(
 			inputChunk.Types(),
 			rowsToEmit,
 		)
 
+		numCols := inputChunk.ColumnCount()
+		rowBuf := make([]any, numCols)
+
 		for i := range rowsToEmit {
 			rowIdx := startIdx + i
-			values := make(
-				[]any,
-				inputChunk.ColumnCount(),
-			)
-			for colIdx := 0; colIdx < inputChunk.ColumnCount(); colIdx++ {
-				values[colIdx] = inputChunk.GetValue(
-					rowIdx,
-					colIdx,
-				)
+			for colIdx := 0; colIdx < numCols; colIdx++ {
+				rowBuf[colIdx] = inputChunk.GetValue(rowIdx, colIdx)
 			}
-			outputChunk.AppendRow(values)
+			outputChunk.AppendRow(rowBuf)
 		}
 
 		// Update emitted count
