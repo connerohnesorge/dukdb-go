@@ -125,6 +125,10 @@ func (p *parser) parse() (Statement, error) {
 		stmt, err = p.parseSummarize()
 	case p.isKeyword("CALL"):
 		stmt, err = p.parseCall()
+	case p.isKeyword("PIVOT"):
+		stmt, err = p.parseStandalonePivot()
+	case p.isKeyword("UNPIVOT"):
+		stmt, err = p.parseStandaloneUnpivot()
 	default:
 		tok := p.current()
 		suggestion := suggestKeyword(tok.value)
@@ -4073,6 +4077,216 @@ func (p *parser) parseUnpivot(source TableRef) (*UnpivotStmt, error) {
 	if _, err := p.expect(tokenRParen); err != nil {
 		return nil, err
 	}
+
+	return unpivot, nil
+}
+
+// parseStandalonePivot parses a standalone PIVOT statement.
+// Syntax: PIVOT table_name ON for_column [IN (v1, v2, ...)] USING agg(expr) [, agg(expr)] [GROUP BY col, ...]
+// Example: PIVOT sales ON quarter USING SUM(revenue) GROUP BY product
+func (p *parser) parseStandalonePivot() (*PivotStmt, error) {
+	if err := p.expectKeyword("PIVOT"); err != nil {
+		return nil, err
+	}
+
+	pivot := &PivotStmt{}
+
+	// Parse source table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name after PIVOT")
+	}
+	tableName := p.advance().value
+
+	// Check for schema-qualified name
+	var schema string
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after dot")
+		}
+		schema = tableName
+		tableName = p.advance().value
+	}
+
+	pivot.Source = TableRef{
+		TableName: tableName,
+		Schema:    schema,
+	}
+
+	// Parse ON for_column
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected column name after ON")
+	}
+	pivot.ForColumn = p.advance().value
+
+	// Parse optional IN (v1, v2, ...)
+	if p.isKeyword("IN") {
+		p.advance()
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+		for {
+			val, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			pivot.PivotOn = append(pivot.PivotOn, val)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+	}
+
+	// Parse USING aggregate(s)
+	if err := p.expectKeyword("USING"); err != nil {
+		return nil, err
+	}
+
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected aggregate function name after USING")
+		}
+		funcName := strings.ToUpper(p.advance().value)
+
+		if _, err := p.expect(tokenLParen); err != nil {
+			return nil, err
+		}
+
+		aggExpr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := p.expect(tokenRParen); err != nil {
+			return nil, err
+		}
+
+		agg := PivotAggregate{
+			Function: funcName,
+			Expr:     aggExpr,
+		}
+
+		// Check for optional alias
+		if p.isKeyword("AS") {
+			p.advance()
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected alias after AS")
+			}
+			agg.Alias = p.advance().value
+		}
+
+		pivot.Using = append(pivot.Using, agg)
+
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+	}
+
+	// Parse optional GROUP BY
+	if p.isKeyword("GROUP") {
+		p.advance()
+		if err := p.expectKeyword("BY"); err != nil {
+			return nil, err
+		}
+		for {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			pivot.GroupBy = append(pivot.GroupBy, expr)
+			if p.current().typ != tokenComma {
+				break
+			}
+			p.advance()
+		}
+	}
+
+	return pivot, nil
+}
+
+// parseStandaloneUnpivot parses a standalone UNPIVOT statement.
+// Syntax: UNPIVOT table_name ON col1, col2, ... INTO NAME name_col VALUE val_col
+// Example: UNPIVOT sales ON q1_rev, q2_rev INTO NAME quarter VALUE revenue
+func (p *parser) parseStandaloneUnpivot() (*UnpivotStmt, error) {
+	if err := p.expectKeyword("UNPIVOT"); err != nil {
+		return nil, err
+	}
+
+	unpivot := &UnpivotStmt{}
+
+	// Parse source table name
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected table name after UNPIVOT")
+	}
+	tableName := p.advance().value
+
+	// Check for schema-qualified name
+	var schema string
+	if p.current().typ == tokenDot {
+		p.advance()
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected table name after dot")
+		}
+		schema = tableName
+		tableName = p.advance().value
+	}
+
+	unpivot.Source = TableRef{
+		TableName: tableName,
+		Schema:    schema,
+	}
+
+	// Parse ON col1, col2, ...
+	if err := p.expectKeyword("ON"); err != nil {
+		return nil, err
+	}
+
+	for {
+		if p.current().typ != tokenIdent {
+			return nil, p.errorf("expected column name after ON")
+		}
+		unpivot.Using = append(unpivot.Using, p.advance().value)
+		if p.current().typ != tokenComma {
+			break
+		}
+		p.advance()
+		// Stop if we hit INTO keyword
+		if p.isKeyword("INTO") {
+			break
+		}
+	}
+
+	// Parse INTO NAME name_col VALUE val_col
+	if err := p.expectKeyword("INTO"); err != nil {
+		return nil, err
+	}
+
+	if err := p.expectKeyword("NAME"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected name column identifier")
+	}
+	unpivot.For = p.advance().value
+
+	if err := p.expectKeyword("VALUE"); err != nil {
+		return nil, err
+	}
+
+	if p.current().typ != tokenIdent {
+		return nil, p.errorf("expected value column identifier")
+	}
+	unpivot.Into = p.advance().value
 
 	return unpivot, nil
 }

@@ -782,7 +782,6 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("pivot_unpivot", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("pivot", func(t *testing.T) {
-			t.Skip("not yet implemented: PIVOT as standalone statement")
 			_, _ = db.Exec(`CREATE TABLE pivot_data (product VARCHAR, quarter VARCHAR, revenue INTEGER)`)
 			_, _ = db.Exec(`INSERT INTO pivot_data VALUES ('Widget','Q1',100),('Widget','Q2',200),('Gadget','Q1',150),('Gadget','Q2',250)`)
 			rows, err := db.Query(`PIVOT pivot_data ON quarter USING SUM(revenue) GROUP BY product`)
@@ -799,7 +798,6 @@ func TestAdvancedSQL(t *testing.T) {
 			t.Logf("PIVOT: %d rows, cols=%v", n, cols)
 		})
 		t.Run("unpivot", func(t *testing.T) {
-			t.Skip("not yet implemented: UNPIVOT as standalone statement")
 			_, _ = db.Exec(`CREATE TABLE unpivot_data (product VARCHAR, q1_rev INTEGER, q2_rev INTEGER)`)
 			_, _ = db.Exec(`INSERT INTO unpivot_data VALUES ('Widget',100,200),('Gadget',150,250)`)
 			rows, err := db.Query(`UNPIVOT unpivot_data ON q1_rev, q2_rev INTO NAME quarter VALUE revenue`)
