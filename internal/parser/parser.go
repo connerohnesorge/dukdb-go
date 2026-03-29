@@ -523,6 +523,30 @@ func (p *parser) parseSelect() (*SelectStmt, error) {
 		}
 	}
 
+	// USING SAMPLE clause (DuckDB extension, appears after LIMIT/OFFSET/FETCH)
+	// Syntax:
+	//   USING SAMPLE n%
+	//   USING SAMPLE n PERCENT
+	//   USING SAMPLE n ROWS
+	//   USING SAMPLE method(n%)
+	//   USING SAMPLE method(n PERCENT)
+	//   USING SAMPLE method(n ROWS)
+	if stmt.Sample == nil && p.isKeyword("USING") {
+		// Peek ahead to see if next token is SAMPLE
+		saved := p.tokPos
+		p.advance() // consume USING
+		if p.isKeyword("SAMPLE") {
+			sample, err := p.parseUsingSample()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Sample = sample
+		} else {
+			// Not USING SAMPLE, revert
+			p.tokPos = saved
+		}
+	}
+
 	// Check for set operations (UNION, INTERSECT, EXCEPT)
 	if p.isKeyword("UNION") || p.isKeyword("INTERSECT") || p.isKeyword("EXCEPT") {
 		var setOp SetOpType
@@ -994,7 +1018,8 @@ func (p *parser) parseTableRef() (TableRef, error) {
 		!p.isKeyword("ON") && !p.isKeyword("HAVING") && !p.isKeyword("QUALIFY") &&
 		!p.isKeyword("WINDOW") &&
 		!p.isKeyword("UNION") && !p.isKeyword("INTERSECT") && !p.isKeyword("EXCEPT") &&
-		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") {
+		!p.isKeyword("RETURNING") && !p.isKeyword("TABLESAMPLE") && !p.isKeyword("AT") &&
+		!p.isKeyword("USING") {
 		// Check if this looks like a keyword typo - if so, don't consume it as an alias
 		tok := p.current()
 		if isProbableKeywordTypo(tok.value) {
@@ -1243,6 +1268,140 @@ func (p *parser) parseTablesample() (*SampleOptions, error) {
 	}
 
 	return sample, nil
+}
+
+// parseUsingSample parses a USING SAMPLE clause (DuckDB extension).
+// The USING keyword has already been consumed.
+// Syntax:
+//   - USING SAMPLE n%
+//   - USING SAMPLE n PERCENT
+//   - USING SAMPLE n ROWS
+//   - USING SAMPLE method(n%)
+//   - USING SAMPLE method(n PERCENT)
+//   - USING SAMPLE method(n ROWS)
+//   - USING SAMPLE n% (SEED n)
+func (p *parser) parseUsingSample() (*SampleOptions, error) {
+	if err := p.expectKeyword("SAMPLE"); err != nil {
+		return nil, err
+	}
+
+	sample := &SampleOptions{}
+
+	// Check if next token is a method name (BERNOULLI, SYSTEM, RESERVOIR)
+	// followed by '(' -- that distinguishes method(value) from plain number
+	if p.current().typ == tokenIdent {
+		methodName := strings.ToUpper(p.current().value)
+		if methodName == "BERNOULLI" || methodName == "SYSTEM" || methodName == "RESERVOIR" {
+			// Check if next token after method name is '('
+			if p.tokPos+1 < len(p.tokens) && p.tokens[p.tokPos+1].typ == tokenLParen {
+				p.advance() // consume method name
+				switch methodName {
+				case "BERNOULLI":
+					sample.Method = SampleBernoulli
+				case "SYSTEM":
+					sample.Method = SampleSystem
+				case "RESERVOIR":
+					sample.Method = SampleReservoir
+				}
+				// Parse (value [%|PERCENT|ROWS])
+				if _, err := p.expect(tokenLParen); err != nil {
+					return nil, err
+				}
+				if err := p.parseSampleValue(sample); err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
+				}
+				// Check for (SEED n) clause
+				p.parseSampleSeed(sample)
+				return sample, nil
+			}
+		}
+	}
+
+	// No method specified, default to BERNOULLI and parse value directly
+	sample.Method = SampleBernoulli
+	if err := p.parseSampleValue(sample); err != nil {
+		return nil, err
+	}
+	// Check for (SEED n) clause
+	p.parseSampleSeed(sample)
+	return sample, nil
+}
+
+// parseSampleValue parses the numeric value and optional unit (%, PERCENT, ROWS)
+// in a SAMPLE clause.
+func (p *parser) parseSampleValue(sample *SampleOptions) error {
+	if p.current().typ != tokenNumber {
+		return p.errorf("expected numeric value for sample size")
+	}
+	valueStr := p.advance().value
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return p.errorf("invalid sample value: %s", valueStr)
+	}
+
+	// Check for % operator or PERCENT/ROWS keyword
+	if p.current().typ == tokenOperator && p.current().value == "%" {
+		p.advance() // consume %
+		sample.Percentage = value
+	} else if p.isKeyword("PERCENT") {
+		p.advance() // consume PERCENT
+		sample.Percentage = value
+	} else if p.isKeyword("ROWS") {
+		p.advance() // consume ROWS
+		sample.Rows = int(value)
+		if sample.Method == SampleBernoulli {
+			// Row-count sampling defaults to reservoir
+			sample.Method = SampleReservoir
+		}
+	} else {
+		// No unit specified, treat as percentage
+		sample.Percentage = value
+	}
+	return nil
+}
+
+// parseSampleSeed parses an optional (SEED n) clause for SAMPLE.
+func (p *parser) parseSampleSeed(sample *SampleOptions) {
+	// DuckDB syntax: ... (SEED n) or REPEATABLE(n)
+	if p.isKeyword("REPEATABLE") {
+		p.advance()
+		if p.current().typ == tokenLParen {
+			p.advance() // consume (
+			if p.current().typ == tokenNumber {
+				seedStr := p.advance().value
+				seed, err := strconv.ParseInt(seedStr, 10, 64)
+				if err == nil {
+					sample.Seed = &seed
+				}
+			}
+			if p.current().typ == tokenRParen {
+				p.advance() // consume )
+			}
+		}
+	} else if p.current().typ == tokenLParen {
+		// Check for (SEED n) syntax
+		saved := p.tokPos
+		p.advance() // consume (
+		if p.isKeyword("SEED") {
+			p.advance() // consume SEED
+			if p.current().typ == tokenNumber {
+				seedStr := p.advance().value
+				seed, err := strconv.ParseInt(seedStr, 10, 64)
+				if err == nil {
+					sample.Seed = &seed
+				}
+			}
+			if p.current().typ == tokenRParen {
+				p.advance() // consume )
+			}
+		} else {
+			// Not a SEED clause, revert
+			p.tokPos = saved
+		}
+	}
 }
 
 // parseTableFunction parses a table function call in a FROM clause.

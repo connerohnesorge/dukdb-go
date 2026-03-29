@@ -848,7 +848,7 @@ func TestAdvancedSQL(t *testing.T) {
 
 	// 9. SAMPLE clause
 	t.Run("sample_clause", func(t *testing.T) {
-		t.Skip("not yet implemented: USING SAMPLE clause")
+		// USING SAMPLE clause is now implemented
 		db := openDB(t)
 		_, _ = db.Exec(`CREATE TABLE sample_src (id INTEGER)`)
 		_, _ = db.Exec(`INSERT INTO sample_src SELECT generate_series FROM generate_series(1, 1000)`)
