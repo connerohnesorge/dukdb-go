@@ -214,6 +214,9 @@ func (e *Executor) evaluateExpr(
 	case *binder.BoundArrayExpr:
 		return e.evaluateArrayExpr(ctx, ex, row)
 
+	case *binder.BoundMapLiteralExpr:
+		return e.evaluateMapLiteralExpr(ctx, ex, row)
+
 	case *binder.BoundSimilarToExpr:
 		leftVal, err := e.evaluateExpr(ctx, ex.Expr, row)
 		if err != nil {
@@ -4084,6 +4087,30 @@ func (e *Executor) evaluateArrayExpr(
 	return result, nil
 }
 
+// evaluateMapLiteralExpr evaluates a MAP literal expression.
+// Returns a map[string]any containing the evaluated key-value pairs.
+func (e *Executor) evaluateMapLiteralExpr(
+	ctx *ExecutionContext,
+	expr *binder.BoundMapLiteralExpr,
+	row map[string]any,
+) (any, error) {
+	result := make(map[string]any, len(expr.Entries))
+
+	for _, entry := range expr.Entries {
+		key, err := e.evaluateExpr(ctx, entry.Key, row)
+		if err != nil {
+			return nil, err
+		}
+		val, err := e.evaluateExpr(ctx, entry.Value, row)
+		if err != nil {
+			return nil, err
+		}
+		result[toString(key)] = val
+	}
+
+	return result, nil
+}
+
 func (e *Executor) evaluateInSubqueryExpr(
 	ctx *ExecutionContext,
 	expr *binder.BoundInSubqueryExpr,
@@ -5598,6 +5625,15 @@ func toBool(v any) bool {
 func toString(v any) string {
 	if v == nil {
 		return ""
+	}
+
+	// Format map[string]any as DuckDB-style {key=value, ...}
+	if m, ok := v.(map[string]any); ok {
+		parts := make([]string, 0, len(m))
+		for k, val := range m {
+			parts = append(parts, fmt.Sprintf("%s=%v", k, val))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
 	}
 
 	return fmt.Sprintf("%v", v)

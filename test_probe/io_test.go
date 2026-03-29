@@ -730,21 +730,19 @@ func TestAdvancedSQL(t *testing.T) {
 	t.Run("map_types", func(t *testing.T) {
 		db := openDB(t)
 		t.Run("creation", func(t *testing.T) {
-			t.Skip("not yet implemented: MAP type literal syntax")
 			var r string
 			err := db.QueryRow("SELECT MAP {'a': 1, 'b': 2}::VARCHAR").Scan(&r)
 			if err != nil {
-				t.Logf("MAP creation: %v", err)
+				t.Errorf("MAP creation: %v", err)
 			} else {
 				t.Logf("MAP: %s", r)
 			}
 		})
 		t.Run("extract", func(t *testing.T) {
-			t.Skip("not yet implemented: MAP type subscript extraction")
 			var v int64
 			err := db.QueryRow("SELECT MAP {'x': 10, 'y': 20}['x']").Scan(&v)
 			if err != nil {
-				t.Logf("MAP extract not yet supported: %v", err)
+				t.Errorf("MAP extract not yet supported: %v", err)
 			} else if v != 10 {
 				t.Errorf("expected 10, got %d", v)
 			} else {

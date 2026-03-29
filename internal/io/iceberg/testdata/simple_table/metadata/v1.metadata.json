@@ -6,7 +6,7 @@
   "last-column-id": 3,
   "last-partition-id": 999,
   "last-updated-ms": 1700000000000,
-  "location": "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/iceberg/testdata/simple_table",
+  "location": "/home/connerohnesorge/Documents/001Repos/dukdb-go/.claude/worktrees/agent-a9711240/internal/io/iceberg/testdata/simple_table",
   "partition-specs": [
     {
       "fields": [],
@@ -56,7 +56,7 @@
   ],
   "snapshots": [
     {
-      "manifest-list": "/home/connerohnesorge/Documents/001Repos/dukdb-go/internal/io/iceberg/testdata/simple_table/metadata/snap-1000000001-manifest-list.avro",
+      "manifest-list": "/home/connerohnesorge/Documents/001Repos/dukdb-go/.claude/worktrees/agent-a9711240/internal/io/iceberg/testdata/simple_table/metadata/snap-1000000001-manifest-list.avro",
       "schema-id": 0,
       "sequence-number": 1,
       "snapshot-id": 1000000001,

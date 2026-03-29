@@ -4982,40 +4982,58 @@ func (p *parser) parsePostfixExpr() (Expr, error) {
 		return nil, err
 	}
 
-	// Loop to handle chained casts like '123'::text::integer
-	for p.current().typ == tokenOperator && p.current().value == "::" {
-		p.advance() // consume ::
+	// Loop to handle chained casts and subscript access
+	for {
+		if p.current().typ == tokenOperator && p.current().value == "::" {
+			p.advance() // consume ::
 
-		// Parse the type name
-		if p.current().typ != tokenIdent {
-			return nil, p.errorf("expected type name after ::")
-		}
-		typeName := strings.ToUpper(p.advance().value)
-		targetType := parseTypeName(typeName)
+			// Parse the type name
+			if p.current().typ != tokenIdent {
+				return nil, p.errorf("expected type name after ::")
+			}
+			typeName := strings.ToUpper(p.advance().value)
+			targetType := parseTypeName(typeName)
 
-		// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
-		if p.current().typ == tokenLParen {
-			p.advance()
-			depth := 1
-			for depth > 0 && p.current().typ != tokenEOF {
-				if p.current().typ == tokenLParen {
-					depth++
-				} else if p.current().typ == tokenRParen {
-					depth--
+			// Skip optional type parameters like (100) for varchar(100) or (10,2) for numeric(10,2)
+			if p.current().typ == tokenLParen {
+				p.advance()
+				depth := 1
+				for depth > 0 && p.current().typ != tokenEOF {
+					if p.current().typ == tokenLParen {
+						depth++
+					} else if p.current().typ == tokenRParen {
+						depth--
+					}
+					if depth > 0 {
+						p.advance()
+					}
 				}
-				if depth > 0 {
-					p.advance()
+				if _, err := p.expect(tokenRParen); err != nil {
+					return nil, err
 				}
 			}
-			if _, err := p.expect(tokenRParen); err != nil {
+
+			expr = &CastExpr{
+				Expr:       expr,
+				TargetType: targetType,
+				TryCast:    false,
+			}
+		} else if p.current().typ == tokenLBracket {
+			// Subscript access: expr[key] -> rewrite to ELEMENT_AT(expr, key)
+			p.advance() // consume [
+			keyExpr, err := p.parseExpr()
+			if err != nil {
 				return nil, err
 			}
-		}
-
-		expr = &CastExpr{
-			Expr:       expr,
-			TargetType: targetType,
-			TryCast:    false,
+			if _, err := p.expect(tokenRBracket); err != nil {
+				return nil, err
+			}
+			expr = &FunctionCall{
+				Name: "ELEMENT_AT",
+				Args: []Expr{expr, keyExpr},
+			}
+		} else {
+			break
 		}
 	}
 
@@ -5137,6 +5155,64 @@ func (p *parser) parseArrayLiteral() (Expr, error) {
 	return &ArrayExpr{Elements: elements}, nil
 }
 
+// parseMapLiteral parses a MAP literal expression: MAP {'key1': val1, 'key2': val2}
+// The MAP keyword has already been consumed. This expects { key: val, ... }.
+func (p *parser) parseMapLiteral() (Expr, error) {
+	// Consume the opening brace
+	if _, err := p.expect(tokenLBrace); err != nil {
+		return nil, err
+	}
+
+	var entries []MapLiteralEntry
+
+	// Check for empty map
+	if p.current().typ == tokenRBrace {
+		p.advance()
+		return &MapLiteralExpr{Entries: entries}, nil
+	}
+
+	// Parse key-value pairs separated by commas
+	for {
+		// Parse key expression
+		key, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		// Expect colon separator between key and value
+		if p.current().typ != tokenOperator || p.current().value != ":" {
+			return nil, p.errorf("expected ':' in MAP literal, got %s", p.current().value)
+		}
+		p.advance() // consume ':'
+
+		// Parse value expression
+		val, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, MapLiteralEntry{Key: key, Value: val})
+
+		// Check for comma or closing brace
+		if p.current().typ == tokenComma {
+			p.advance()
+			// Allow trailing comma
+			if p.current().typ == tokenRBrace {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	// Expect closing brace
+	if _, err := p.expect(tokenRBrace); err != nil {
+		return nil, err
+	}
+
+	return &MapLiteralExpr{Entries: entries}, nil
+}
+
 func (p *parser) parseNumber(
 	s string,
 ) (Expr, error) {
@@ -5246,6 +5322,13 @@ func (p *parser) parseIdentExpr() (Expr, error) {
 			return &FunctionCall{Name: strings.ToUpper(name)}, nil
 		}
 		// Fall through to parseFunctionCall for CURRENT_DATE() syntax
+	case "MAP":
+		// MAP { 'key': val, ... } literal syntax
+		if p.current().typ == tokenLBrace {
+			return p.parseMapLiteral()
+		}
+		// Fall through to treat MAP as function call or identifier
+
 	case "COLUMNS":
 		if p.current().typ == tokenLParen {
 			p.advance()

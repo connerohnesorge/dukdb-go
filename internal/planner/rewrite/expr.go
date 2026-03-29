@@ -103,6 +103,21 @@ func RewriteExpr(expr binder.BoundExpr, rewriter ExprRewriter) (binder.BoundExpr
 			changed = true
 			expr = &binder.BoundArrayExpr{Elements: elems, ElemType: node.ElemType}
 		}
+	case *binder.BoundMapLiteralExpr:
+		anyChanged := false
+		entries := make([]binder.BoundMapLiteralEntry, len(node.Entries))
+		for i, entry := range node.Entries {
+			k, kc := RewriteExpr(entry.Key, rewriter)
+			v, vc := RewriteExpr(entry.Value, rewriter)
+			if kc || vc {
+				anyChanged = true
+			}
+			entries[i] = binder.BoundMapLiteralEntry{Key: k, Value: v}
+		}
+		if anyChanged {
+			changed = true
+			expr = &binder.BoundMapLiteralExpr{Entries: entries, KeyType: node.KeyType, ValueType: node.ValueType}
+		}
 	case *binder.BoundSimilarToExpr:
 		exprNode, exprChanged := RewriteExpr(node.Expr, rewriter)
 		patNode, patChanged := RewriteExpr(node.Pattern, rewriter)
@@ -188,6 +203,11 @@ func WalkExpr(expr binder.BoundExpr, visit func(binder.BoundExpr)) {
 	case *binder.BoundArrayExpr:
 		for _, elem := range node.Elements {
 			WalkExpr(elem, visit)
+		}
+	case *binder.BoundMapLiteralExpr:
+		for _, entry := range node.Entries {
+			WalkExpr(entry.Key, visit)
+			WalkExpr(entry.Value, visit)
 		}
 	case *binder.BoundSimilarToExpr:
 		WalkExpr(node.Expr, visit)

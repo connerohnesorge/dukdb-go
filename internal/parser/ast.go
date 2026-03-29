@@ -935,6 +935,20 @@ type ArrayExpr struct {
 
 func (*ArrayExpr) exprNode() {}
 
+// MapLiteralEntry represents a single key-value pair in a MAP literal.
+type MapLiteralEntry struct {
+	Key   Expr
+	Value Expr
+}
+
+// MapLiteralExpr represents a MAP literal expression.
+// Syntax: MAP {'key1': val1, 'key2': val2}
+type MapLiteralExpr struct {
+	Entries []MapLiteralEntry
+}
+
+func (*MapLiteralExpr) exprNode() {}
+
 // InSubqueryExpr represents an IN expression with a subquery.
 type InSubqueryExpr struct {
 	Expr     Expr

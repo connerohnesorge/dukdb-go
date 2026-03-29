@@ -88,6 +88,8 @@ func (b *Binder) bindExpr(
 		return b.bindCubeExpr(e)
 	case *parser.ArrayExpr:
 		return b.bindArrayExpr(e)
+	case *parser.MapLiteralExpr:
+		return b.bindMapLiteralExpr(e)
 	case *parser.LambdaExpr:
 		// Lambda expressions store the raw parser body for runtime evaluation.
 		// Lambda params are not real columns -- they are bound at execution time.
@@ -1397,5 +1399,49 @@ func (b *Binder) bindArrayExpr(e *parser.ArrayExpr) (*BoundArrayExpr, error) {
 	return &BoundArrayExpr{
 		Elements: elements,
 		ElemType: elemType,
+	}, nil
+}
+
+// bindMapLiteralExpr binds a MAP literal expression.
+// MAP {'key1': val1, 'key2': val2}
+func (b *Binder) bindMapLiteralExpr(e *parser.MapLiteralExpr) (*BoundMapLiteralExpr, error) {
+	entries := make([]BoundMapLiteralEntry, 0, len(e.Entries))
+	keyType := dukdb.TYPE_SQLNULL
+	valueType := dukdb.TYPE_SQLNULL
+
+	for _, entry := range e.Entries {
+		boundKey, err := b.bindExpr(entry.Key, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		boundValue, err := b.bindExpr(entry.Value, dukdb.TYPE_ANY)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, BoundMapLiteralEntry{Key: boundKey, Value: boundValue})
+
+		if keyType == dukdb.TYPE_SQLNULL {
+			keyType = boundKey.ResultType()
+		} else {
+			keyType = promoteType(keyType, boundKey.ResultType())
+		}
+		if valueType == dukdb.TYPE_SQLNULL {
+			valueType = boundValue.ResultType()
+		} else {
+			valueType = promoteType(valueType, boundValue.ResultType())
+		}
+	}
+
+	if keyType == dukdb.TYPE_SQLNULL {
+		keyType = dukdb.TYPE_VARCHAR
+	}
+	if valueType == dukdb.TYPE_SQLNULL {
+		valueType = dukdb.TYPE_VARCHAR
+	}
+
+	return &BoundMapLiteralExpr{
+		Entries:   entries,
+		KeyType:   keyType,
+		ValueType: valueType,
 	}, nil
 }
